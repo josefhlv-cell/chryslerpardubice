@@ -25,14 +25,14 @@ const BottomNav = () => {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all duration-200",
+                "flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all duration-200",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon className={cn("w-5 h-5", isActive && "drop-shadow-[0_0_8px_hsl(25,95%,55%)]")} />
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <item.icon className={cn("w-5 h-5 transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
             </button>
           );
         })}

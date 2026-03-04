@@ -6,11 +6,11 @@ import { Calendar, Fuel, Gauge, Heart, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 const mockVehicles = [
-  { id: "1", brand: "Chrysler", model: "300C", year: 2021, price: 890000, mileage: 45000, fuel: "Benzín", power: "292 HP", condition: "Výborný", engine: "3.6L V6 Pentastar", transmission: "Automatická 8st", color: "Phantom Black", vin: "2C3CCARG5MH123456", description: "Plně servisované vozidlo v perfektním stavu. Výbava Touring – kožené sedačky, vyhřívání, navigace, kamera." },
-  { id: "2", brand: "Jeep", model: "Grand Cherokee L", year: 2023, price: 1650000, mileage: 12000, fuel: "Diesel", power: "264 HP", condition: "Nový", engine: "3.0L V6 EcoDiesel", transmission: "Automatická 8st", color: "Silver Zynith", vin: "1C4RJKBG5P8123456", description: "7místný Grand Cherokee L ve výbavě Overland. Vzduchový podvozek, panorama, audio Harman Kardon." },
-  { id: "3", brand: "Dodge", model: "Challenger R/T", year: 2022, price: 1450000, mileage: 8500, fuel: "Benzín", power: "375 HP", condition: "Výborný", engine: "5.7L V8 HEMI", transmission: "Manuální 6st", color: "TorRed", vin: "2C3CDZBT5NH123456", description: "Ikonický muscle car s motorem HEMI V8. Sériový stav, servisní kniha." },
-  { id: "4", brand: "RAM", model: "1500 Laramie", year: 2023, price: 1890000, mileage: 5000, fuel: "Diesel", power: "264 HP", condition: "Nový", engine: "3.0L V6 EcoDiesel", transmission: "Automatická 8st", color: "Patriot Blue", vin: "1C6SRFJT5PN123456", description: "Full-size pickup ve výbavě Laramie. Vzduchový podvozek, kožená výbava, 12\" displej." },
-  { id: "5", brand: "Jeep", model: "Wrangler Rubicon", year: 2020, price: 1250000, mileage: 32000, fuel: "Benzín", power: "285 HP", condition: "Velmi dobrý", engine: "3.6L V6 Pentastar", transmission: "Automatická 8st", color: "Sarge Green", vin: "1C4HJXCG5LW123456", description: "Rubicon s off-road paketem, lanovým navijákem a LED přídavnými světly." },
+  { id: "1", brand: "Dodge", model: "Grand Caravan 3.6 SXT", year: 2018, price: 385000, mileage: 82582, fuel: "Benzín", power: "283 HP", condition: "Výborný", engine: "3.6L V6 Pentastar", transmission: "Automatická 6st", color: "Černá", vin: "2C4RDGCG5JR123456", description: "SXT S type Crew – 7 míst, kožené sedačky, zadní kamera, dvouzónová klimatizace. Servisní kniha.", image: "/images/vehicles/dodge-grand-caravan.jpg" },
+  { id: "2", brand: "Chrysler", model: "Pacifica 3.6 Touring", year: 2017, price: 398000, mileage: 207798, fuel: "Benzín", power: "287 HP", condition: "Dobrý", engine: "3.6L V6 Pentastar", transmission: "Automatická 9st", color: "Bílá", vin: "2C4RC1BG5HR123456", description: "Touring – 8 míst, Stow'n Go sedadla, touchscreen 8.4\", Apple CarPlay.", image: "/images/vehicles/chrysler-pacifica.jpg" },
+  { id: "3", brand: "Dodge", model: "Durango 5.7 HEMI RT AWD", year: 2021, price: 860000, mileage: 150140, fuel: "Benzín", power: "360 HP", condition: "Výborný", engine: "5.7L V8 HEMI MDS", transmission: "Automatická 8st", color: "Šedá metalíza", vin: "1C4SDJCT5MC123456", description: "RT AWD 4x4 – Limitovaná edice, kožená výbava, Uconnect 10.1\", vzduchový podvozek, tažné.", image: "/images/vehicles/dodge-durango.jpg" },
+  { id: "4", brand: "Chrysler", model: "Town & Country 3.6 LPG", year: 2014, price: 398000, mileage: 115729, fuel: "LPG", power: "283 HP", condition: "Dobrý", engine: "3.6L V6 Pentastar + LPG", transmission: "Automatická 6st", color: "Stříbrná", vin: "2C4RC1CG5ER123456", description: "Limited – DVD pro zadní cestující, kožené sedačky, navigace, Stow'n Go.", image: "/images/vehicles/chrysler-town-country.jpg" },
+  { id: "5", brand: "Dodge", model: "Grand Caravan 3.6 RT LPG", year: 2014, price: 389000, mileage: 178000, fuel: "LPG", power: "283 HP", condition: "Dobrý", engine: "3.6L V6 Pentastar + LPG", transmission: "Automatická 6st", color: "Černá", vin: "2C4RDGCG5ER789012", description: "RT – sportovní paket, 7 míst, LPG přestavba, dvouzónová klimatizace.", image: "/images/vehicles/dodge-grand-caravan-rt.jpg" },
 ];
 
 const VehicleDetail = () => {
@@ -31,25 +31,29 @@ const VehicleDetail = () => {
     <div className="min-h-screen pb-24">
       <PageHeader title={`${vehicle.brand} ${vehicle.model}`} showBack />
 
-      {/* Hero image placeholder */}
-      <div className="h-56 bg-secondary flex items-center justify-center">
-        <span className="text-5xl font-display font-bold text-muted-foreground/20">{vehicle.brand}</span>
+      {/* Hero image */}
+      <div className="relative h-56 overflow-hidden">
+        <img
+          src={vehicle.image}
+          alt={`${vehicle.brand} ${vehicle.model}`}
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
       </div>
 
-      <div className="p-4 space-y-4 max-w-lg mx-auto">
+      <div className="p-4 space-y-4 max-w-lg mx-auto -mt-8 relative z-10">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-display font-bold">{vehicle.brand} {vehicle.model}</h1>
+              <h1 className="text-xl font-display font-bold">{vehicle.brand} {vehicle.model}</h1>
               <span className="text-sm text-muted-foreground">{vehicle.condition} · {vehicle.year}</span>
             </div>
             <span className="text-2xl font-display font-bold text-gradient">
-              {(vehicle.price / 1000).toFixed(0)}tis&nbsp;Kč
+              {(vehicle.price / 1000).toFixed(0)}tis Kč
             </span>
           </div>
         </motion.div>
 
-        {/* Stats */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <div className="grid grid-cols-4 gap-2">
             {[
@@ -59,14 +63,13 @@ const VehicleDetail = () => {
               { label: "Výkon", value: vehicle.power },
             ].map((stat, i) => (
               <div key={i} className="glass-card p-3 text-center">
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <p className="text-sm font-semibold mt-0.5">{stat.value}</p>
+                <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                <p className="text-xs font-semibold mt-0.5">{String(stat.value)}</p>
               </div>
             ))}
           </div>
         </motion.div>
 
-        {/* Technical */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="glass-card p-4 space-y-2">
           <h3 className="font-display font-semibold text-sm mb-3">Technické údaje</h3>
           {[
@@ -77,19 +80,17 @@ const VehicleDetail = () => {
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{label}</span>
-              <span>{value}</span>
+              <span className="text-right">{value}</span>
             </div>
           ))}
         </motion.div>
 
-        {/* Description */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-4">
           <h3 className="font-display font-semibold text-sm mb-2">Popis</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">{vehicle.description}</p>
         </motion.div>
       </div>
 
-      {/* Fixed bottom CTA */}
       <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t border-border">
         <div className="flex gap-3 max-w-lg mx-auto">
           <Button variant="outline" size="lg" className="shrink-0" onClick={() => toast.success("Přidáno do oblíbených")}>

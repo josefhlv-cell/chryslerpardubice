@@ -8,7 +8,6 @@ import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
 import Landing from "./pages/Landing";
 import Shop from "./pages/Shop";
-import UsedPart from "./pages/UsedPart";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import Service from "./pages/Service";
@@ -31,7 +30,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/shop" element={<Shop />} />
-            <Route path="/parts/used" element={<UsedPart />} />
+            {/* Used parts are now integrated in Shop page */}
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/service" element={<Service />} />
