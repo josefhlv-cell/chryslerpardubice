@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.catalog-probe]
 verify_jwt = false
+
+[functions.catalog-fetch]
+verify_jwt = false
