@@ -143,6 +143,15 @@ const CatalogImport = () => {
           Oddělovač: čárka nebo středník.
         </p>
 
+        <a
+          href="/test-catalog.csv"
+          download="test-catalog.csv"
+          className="inline-flex items-center gap-1 text-xs text-primary underline hover:no-underline"
+        >
+          <FileSpreadsheet className="w-3 h-3" />
+          Stáhnout ukázkový CSV (15 dílů)
+        </a>
+
         <div className="flex items-center gap-2">
           <Input ref={fileRef} type="file" accept=".csv,.txt" onChange={handleFile} className="text-xs" />
           <Button variant="outline" size="sm" onClick={loadCount}>
