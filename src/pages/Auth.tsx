@@ -28,7 +28,7 @@ const Auth = () => {
         await signUp(email, password, fullName);
         toast.success("Registrace úspěšná! Zkontrolujte email.");
       }
-      navigate("/parts");
+      navigate("/shop");
     } catch (err: any) {
       toast.error(err.message || "Chyba při přihlášení");
     } finally {
