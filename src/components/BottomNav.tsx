@@ -1,11 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, Wrench, Car, User } from "lucide-react";
+import { Search, Wrench, Car, User, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { path: "/shop", label: "Díly", icon: Search },
   { path: "/service", label: "Servis", icon: Wrench },
   { path: "/vehicles", label: "Vozy", icon: Car },
+  { path: "/contact", label: "Kontakt", icon: Phone },
   { path: "/account", label: "Účet", icon: User },
 ];
 
