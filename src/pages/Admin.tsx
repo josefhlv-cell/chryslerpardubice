@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet } from "lucide-react";
+import CatalogImport from "@/components/admin/CatalogImport";
 
 type Order = {
   id: string;
@@ -259,11 +260,12 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="orders">
-          <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="orders" className="text-xs gap-1"><ShoppingCart className="w-3 h-3" />Objednávky</TabsTrigger>
+          <TabsList className="w-full grid grid-cols-5">
+            <TabsTrigger value="orders" className="text-xs gap-1"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
             <TabsTrigger value="used" className="text-xs gap-1"><Package className="w-3 h-3" />Použité</TabsTrigger>
             <TabsTrigger value="service" className="text-xs gap-1"><Wrench className="w-3 h-3" />Servis</TabsTrigger>
             <TabsTrigger value="inquiries" className="text-xs gap-1"><Car className="w-3 h-3" />Poptávky</TabsTrigger>
+            <TabsTrigger value="catalog" className="text-xs gap-1"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>
           </TabsList>
 
           {/* ORDERS */}
@@ -367,6 +369,13 @@ const Admin = () => {
                   </Card>
                 </motion.div>
               ))}
+            </div>
+          </TabsContent>
+
+          {/* CATALOG IMPORT */}
+          <TabsContent value="catalog">
+            <div className="mt-2">
+              <CatalogImport />
             </div>
           </TabsContent>
         </Tabs>

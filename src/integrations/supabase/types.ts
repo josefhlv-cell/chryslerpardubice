@@ -71,6 +71,42 @@ export type Database = {
         }
         Relationships: []
       }
+      parts_catalog: {
+        Row: {
+          available: boolean
+          brand: string | null
+          category: string | null
+          created_at: string
+          id: string
+          name: string
+          oem_code: string
+          price: number
+          updated_at: string
+        }
+        Insert: {
+          available?: boolean
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          oem_code: string
+          price?: number
+          updated_at?: string
+        }
+        Update: {
+          available?: boolean
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          oem_code?: string
+          price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
