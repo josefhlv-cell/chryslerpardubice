@@ -6,33 +6,33 @@
 
 @layer base {
   :root {
-    --background: 220 20% 10%;
+    --background: 216 28% 7%;
     --foreground: 210 20% 95%;
 
-    --card: 220 18% 14%;
+    --card: 216 25% 11%;
     --card-foreground: 210 20% 95%;
 
-    --popover: 220 18% 14%;
+    --popover: 216 25% 11%;
     --popover-foreground: 210 20% 95%;
 
-    --primary: 25 95% 55%;
+    --primary: 213 70% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 20%;
+    --secondary: 216 20% 16%;
     --secondary-foreground: 210 20% 90%;
 
-    --muted: 220 15% 18%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 216 18% 14%;
+    --muted-foreground: 215 15% 50%;
 
-    --accent: 25 95% 55%;
+    --accent: 38 92% 50%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 22%;
-    --input: 220 15% 22%;
-    --ring: 25 95% 55%;
+    --border: 216 18% 18%;
+    --input: 216 18% 18%;
+    --ring: 213 70% 45%;
 
     --radius: 0.75rem;
 
@@ -42,14 +42,14 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --sidebar-background: 220 20% 8%;
+    --sidebar-background: 216 28% 5%;
     --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 25 95% 55%;
+    --sidebar-primary: 213 70% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent: 216 18% 14%;
     --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 220 15% 22%;
-    --sidebar-ring: 25 95% 55%;
+    --sidebar-border: 216 18% 18%;
+    --sidebar-ring: 213 70% 45%;
 
     --font-display: 'Outfit', sans-serif;
     --font-body: 'Inter', sans-serif;
@@ -79,15 +79,26 @@
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(25, 95%, 55%), hsl(35, 95%, 60%));
+    background: linear-gradient(135deg, hsl(213, 70%, 45%), hsl(213, 70%, 55%));
+  }
+
+  .gradient-accent {
+    background: linear-gradient(135deg, hsl(38, 92%, 50%), hsl(30, 95%, 55%));
   }
 
   .gradient-dark {
-    background: linear-gradient(180deg, hsl(220, 20%, 12%), hsl(220, 20%, 8%));
+    background: linear-gradient(180deg, hsl(216, 28%, 9%), hsl(216, 28%, 5%));
   }
 
   .text-gradient {
-    background: linear-gradient(135deg, hsl(25, 95%, 55%), hsl(35, 95%, 65%));
+    background: linear-gradient(135deg, hsl(213, 70%, 50%), hsl(213, 70%, 65%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-accent {
+    background: linear-gradient(135deg, hsl(38, 92%, 50%), hsl(30, 95%, 58%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -100,4 +111,14 @@
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
   }
+
+  .shimmer {
+    background: linear-gradient(90deg, transparent, hsl(213, 70%, 45% / 0.08), transparent);
+    animation: shimmer 2s infinite;
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }

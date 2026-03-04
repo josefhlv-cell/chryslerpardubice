@@ -1,60 +1,101 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Car, Search, ShoppingCart } from "lucide-react";
+import { Search, ShoppingCart, Wrench } from "lucide-react";
 
 const Landing = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 gradient-dark">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="flex flex-col items-center gap-8 w-full max-w-sm"
-      >
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-20 h-20 rounded-2xl gradient-primary flex items-center justify-center shadow-lg">
-            <Car className="w-10 h-10 text-primary-foreground" />
-          </div>
-          <h1 className="text-3xl font-display font-bold text-gradient">Chrysler CZ</h1>
-          <p className="text-muted-foreground text-sm text-center">
-            Náhradní díly · Servis · Vozy k prodeji
-          </p>
+    <div className="min-h-screen flex flex-col gradient-dark overflow-hidden">
+      {/* Hero */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 relative">
+        {/* Background glow */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl" />
         </div>
 
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="w-full glass-card p-6 space-y-4"
+          transition={{ duration: 0.7 }}
+          className="flex flex-col items-center gap-6 w-full max-w-sm relative z-10"
         >
-          <div className="flex items-center gap-3">
-            <Search className="w-5 h-5 text-primary" />
-            <span className="text-sm">Tisíce originálních dílů skladem</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <ShoppingCart className="w-5 h-5 text-primary" />
-            <span className="text-sm">Objednávka na 2 kliknutí</span>
-          </div>
-        </motion.div>
+          {/* Logo */}
+          <motion.img
+            src="/images/logo_chrysler.webp"
+            alt="Chrysler CZ"
+            className="h-20 object-contain drop-shadow-2xl"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          />
 
-        <div className="flex flex-col gap-3 w-full mt-2">
-          <Button variant="hero" size="lg" className="w-full h-12 text-base" onClick={() => navigate("/auth")}>
-            Přihlásit se
-          </Button>
-          <Button variant="outline-primary" size="lg" className="w-full h-12 text-base" onClick={() => navigate("/auth?mode=register")}>
-            Registrace
-          </Button>
-          <button
-            onClick={() => navigate("/shop")}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors mt-1"
+          <div className="text-center">
+            <p className="text-muted-foreground text-sm tracking-widest uppercase">
+              Originální díly · Servis · Prodej vozů
+            </p>
+          </div>
+
+          {/* Feature cards */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="w-full space-y-2"
           >
-            Pokračovat jako host →
-          </button>
-        </div>
-      </motion.div>
+            {[
+              { icon: Search, text: "Nové i použité originální díly" },
+              { icon: ShoppingCart, text: "Online objednávka na 2 kliknutí" },
+              { icon: Wrench, text: "Značkový autoservis" },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.5 + i * 0.1 }}
+                className="glass-card px-4 py-3 flex items-center gap-3"
+              >
+                <item.icon className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm">{item.text}</span>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Brand logos */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="flex items-center gap-6 py-2"
+          >
+            {["/images/chrysler-wings.webp", "/images/dodge-logo.webp", "/images/ram-logo.webp"].map((src, i) => (
+              <img key={i} src={src} alt="" className="h-8 object-contain opacity-40" />
+            ))}
+          </motion.div>
+
+          {/* CTA */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9 }}
+            className="flex flex-col gap-3 w-full"
+          >
+            <Button variant="hero" size="lg" className="w-full h-12 text-base" onClick={() => navigate("/auth")}>
+              Přihlásit se
+            </Button>
+            <Button variant="outline-primary" size="lg" className="w-full h-12 text-base" onClick={() => navigate("/auth?mode=register")}>
+              Registrace
+            </Button>
+            <button
+              onClick={() => navigate("/shop")}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors mt-1 text-center"
+            >
+              Pokračovat jako host →
+            </button>
+          </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };
