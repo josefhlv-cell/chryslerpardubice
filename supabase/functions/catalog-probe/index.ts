@@ -12,31 +12,41 @@ Deno.serve(async (req) => {
     const { action, url } = await req.json();
     const password = Deno.env.get('CATALOG_PASS');
     const catalogUrl = 'https://www.vernostsevyplaci.cz/cnd/';
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-    // Step 1: Login with correct field name "password" + "submit-password"
-    const loginResponse = await fetch(catalogUrl, {
+    // Step 1: GET to establish session
+    const initResp = await fetch(catalogUrl, {
+      headers: { 'User-Agent': ua },
+    });
+    const initCookies = initResp.headers.getSetCookie?.() || [];
+    const sessionCookie = initCookies.map(c => c.split(';')[0]).join('; ');
+    await initResp.text(); // consume body
+
+    // Step 2: POST login with session cookie
+    const loginResp = await fetch(catalogUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': ua,
+        'Cookie': sessionCookie,
+        'Referer': catalogUrl,
+        'Origin': 'https://www.vernostsevyplaci.cz',
       },
       body: `password=${encodeURIComponent(password || '')}&submit-password=${encodeURIComponent('Přihlásit')}`,
       redirect: 'manual',
     });
 
-    const cookies = loginResponse.headers.getSetCookie?.() || [];
-    const cookieHeader = cookies.map(c => c.split(';')[0]).join('; ');
-    const loginStatus = loginResponse.status;
-    const locationHeader = loginResponse.headers.get('location');
-    const loginBody = await loginResponse.text();
+    const loginCookies = loginResp.headers.getSetCookie?.() || [];
+    const allCookies = [...initCookies, ...loginCookies].map(c => c.split(';')[0]);
+    const cookieHeader = [...new Set(allCookies)].join('; ');
+    const loginStatus = loginResp.status;
+    const locationHeader = loginResp.headers.get('location');
+    const loginBody = await loginResp.text();
 
-    // Step 2: Follow redirect or fetch page with session
-    const targetUrl = action === 'explore_page' && url ? url : (locationHeader || catalogUrl);
-    const pageResp = await fetch(targetUrl, {
-      headers: {
-        'Cookie': cookieHeader,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
+    // Step 3: Follow redirect or GET with cookies
+    const targetUrl = locationHeader || (action === 'explore_page' && url ? url : catalogUrl);
+    const pageResp = await fetch(targetUrl.startsWith('http') ? targetUrl : `https://www.vernostsevyplaci.cz${targetUrl}`, {
+      headers: { 'Cookie': cookieHeader, 'User-Agent': ua },
       redirect: 'follow',
     });
     const pageHtml = await pageResp.text();
@@ -49,42 +59,43 @@ Deno.serve(async (req) => {
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Extract all links
+    // Extract links
     const linkMatches = pageHtml.matchAll(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi);
     const links = [];
     for (const m of linkMatches) {
-      const linkText = m[2].replace(/<[^>]+>/g, '').trim();
-      if (linkText && m[1] && !m[1].startsWith('javascript') && !m[1].startsWith('#')) {
-        links.push({ href: m[1], text: linkText.substring(0, 80) });
+      const t = m[2].replace(/<[^>]+>/g, '').trim();
+      if (t && m[1] && !m[1].startsWith('javascript') && !m[1].startsWith('#')) {
+        links.push({ href: m[1], text: t.substring(0, 80) });
       }
     }
 
     // Extract forms
     const formMatches = pageHtml.matchAll(/<form[^>]*>([\s\S]*?)<\/form>/gi);
     const forms = [];
-    for (const m of formMatches) {
-      forms.push(m[0].substring(0, 800));
-    }
+    for (const m of formMatches) forms.push(m[0].substring(0, 800));
 
-    // Look for select/option elements (brand selectors etc)
+    // Selects
     const selectMatches = pageHtml.matchAll(/<select[^>]*>([\s\S]*?)<\/select>/gi);
     const selects = [];
-    for (const m of selectMatches) {
-      selects.push(m[0].substring(0, 1000));
-    }
+    for (const m of selectMatches) selects.push(m[0].substring(0, 1000));
+
+    // Check if still on login page
+    const stillOnLogin = pageHtml.includes('name="password"') && pageHtml.includes('submit-password');
 
     return new Response(
       JSON.stringify({
         loginStatus,
         locationHeader,
-        cookies: cookies.map(c => c.split(';')[0]),
+        initCookies: initCookies.map(c => c.split(';')[0]),
+        loginCookies: loginCookies.map(c => c.split(';')[0]),
+        stillOnLogin,
         pageUrl: pageResp.url,
         pageStatus: pageResp.status,
         textContentPreview: textContent.substring(0, 6000),
-        linksCount: links.length,
-        links: links.slice(0, 30),
+        links: links.slice(0, 40),
         forms,
         selects,
+        loginBodySnippet: loginBody.substring(0, 500),
       }, null, 2),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
