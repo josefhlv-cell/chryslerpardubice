@@ -3,11 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, ShoppingCart, Package, Send, Sparkles } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const brands = ["Chrysler", "Jeep", "Dodge", "RAM", "Fiat", "Lancia"];
@@ -20,14 +20,6 @@ interface PartResult {
   price: number;
   available: boolean;
 }
-
-const mockResults: PartResult[] = [
-  { id: "p1", name: "Brzdové destičky přední", oem: "68225170AA", price: 2450, available: true },
-  { id: "p2", name: "Olejový filtr", oem: "68191349AC", price: 380, available: true },
-  { id: "p3", name: "Vzduchový filtr", oem: "04861756AA", price: 650, available: false },
-  { id: "p4", name: "Řemen rozvodu", oem: "68258275AA", price: 1200, available: true },
-  { id: "p5", name: "Zapalovací svíčky sada", oem: "SPLZFR5C11", price: 890, available: true },
-];
 
 type PartType = "new" | "used";
 
@@ -48,23 +40,41 @@ const Shop = () => {
   const [usedNote, setUsedNote] = useState("");
   const [usedSubmitted, setUsedSubmitted] = useState(false);
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!query && !brand) {
-      toast.error("Zadejte název dílu nebo vyberte značku");
+      toast.error("Zadejte název dílu nebo OEM kód");
       return;
     }
     setSearching(true);
-    setTimeout(() => {
-      const filtered = query
-        ? mockResults.filter(
-            (p) =>
-              p.name.toLowerCase().includes(query.toLowerCase()) ||
-              p.oem.toLowerCase().includes(query.toLowerCase())
-          )
-        : mockResults;
-      setResults(filtered);
+    try {
+      let q = supabase.from("parts_catalog").select("id, name, oem_code, price, available");
+
+      if (query) {
+        // Search by OEM code or name
+        q = q.or(`oem_code.ilike.%${query}%,name.ilike.%${query}%`);
+      }
+      if (brand) {
+        q = q.ilike("brand", `%${brand}%`);
+      }
+
+      const { data, error } = await q.limit(50);
+      if (error) throw error;
+
+      setResults(
+        (data || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          oem: p.oem_code,
+          price: Number(p.price),
+          available: p.available,
+        }))
+      );
+    } catch (err: any) {
+      toast.error("Chyba při vyhledávání: " + err.message);
+      setResults([]);
+    } finally {
       setSearching(false);
-    }, 600);
+    }
   };
 
   const handleAdd = (part: PartResult) => {
