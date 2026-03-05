@@ -8,6 +8,12 @@ interface Profile {
   full_name: string | null;
   email: string | null;
   phone: string | null;
+  account_type: string;
+  status: string;
+  company_name: string | null;
+  ico: string | null;
+  dic: string | null;
+  discount_percent: number;
   loyalty_active: boolean;
 }
 
@@ -17,9 +23,21 @@ interface AuthContextType {
   profile: Profile | null;
   isAdmin: boolean;
   isLoading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  isPendingBusiness: boolean;
+  canPlaceOrder: boolean;
+  signUp: (email: string, password: string, meta: SignUpMeta) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+}
+
+interface SignUpMeta {
+  full_name: string;
+  account_type: "private" | "business";
+  company_name?: string;
+  ico?: string;
+  dic?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,6 +66,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .eq("role", "admin")
       .maybeSingle();
     setIsAdmin(!!data);
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id);
+    }
   };
 
   useEffect(() => {
@@ -81,12 +105,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const isPendingBusiness = profile?.account_type === "business" && profile?.status === "pending";
+  const canPlaceOrder = !!profile && profile.status === "active";
+
+  const signUp = async (email: string, password: string, meta: SignUpMeta) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: meta.full_name,
+          account_type: meta.account_type,
+          company_name: meta.company_name || null,
+          ico: meta.ico || null,
+          dic: meta.dic || null,
+        },
         emailRedirectTo: window.location.origin,
       },
     });
@@ -102,8 +135,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, isLoading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{
+      user, session, profile, isAdmin, isLoading,
+      isPendingBusiness, canPlaceOrder,
+      signUp, signIn, signOut, refreshProfile, resetPassword,
+    }}>
       {children}
     </AuthContext.Provider>
   );

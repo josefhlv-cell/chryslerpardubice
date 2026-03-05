@@ -18,6 +18,7 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import Contact from "./pages/Contact";
+import ResetPassword from "./pages/ResetPassword";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/account" element={<Account />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
