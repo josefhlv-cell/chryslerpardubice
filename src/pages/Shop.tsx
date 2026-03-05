@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingCart, Package, Send, Sparkles } from "lucide-react";
-import { useCart } from "@/contexts/CartContext";
+import { Search, ShoppingCart, Package, Send, Sparkles, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const brands = ["Chrysler", "Jeep", "Dodge", "RAM", "Fiat", "Lancia"];
@@ -16,16 +16,19 @@ const years = Array.from({ length: 30 }, (_, i) => (2025 - i).toString());
 interface PartResult {
   id: string;
   name: string;
-  oem: string;
-  price: number;
-  available: boolean;
+  oem_number: string;
+  internal_code: string | null;
+  price_without_vat: number;
+  price_with_vat: number;
+  category: string | null;
+  family: string | null;
 }
 
 type PartType = "new" | "used";
 
 const Shop = () => {
   const navigate = useNavigate();
-  const { addItem, totalItems } = useCart();
+  const { user, profile, isPendingBusiness, canPlaceOrder } = useAuth();
 
   const [partType, setPartType] = useState<PartType>("new");
   const [brand, setBrand] = useState("");
@@ -40,6 +43,10 @@ const Shop = () => {
   const [usedNote, setUsedNote] = useState("");
   const [usedSubmitted, setUsedSubmitted] = useState(false);
 
+  // Discount info from profile
+  const isBusinessActive = profile?.account_type === "business" && profile?.status === "active";
+  const discountPercent = isBusinessActive ? (profile?.discount_percent ?? 0) : 0;
+
   const handleSearch = async () => {
     if (!query && !brand) {
       toast.error("Zadejte název dílu nebo OEM kód");
@@ -47,28 +54,18 @@ const Shop = () => {
     }
     setSearching(true);
     try {
-      let q = supabase.from("parts_catalog").select("id, name, oem_code, price, available");
+      let q = supabase.from("parts_new").select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family");
 
       if (query) {
-        // Search by OEM code or name
-        q = q.or(`oem_code.ilike.%${query}%,name.ilike.%${query}%`);
-      }
-      if (brand) {
-        q = q.ilike("brand", `%${brand}%`);
+        // Strip leading zeros for OEM search flexibility
+        const cleanQuery = query.replace(/^0+/, "");
+        q = q.or(`oem_number.ilike.%${query}%,oem_number.ilike.%${cleanQuery}%,name.ilike.%${query}%`);
       }
 
       const { data, error } = await q.limit(50);
       if (error) throw error;
 
-      setResults(
-        (data || []).map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          oem: p.oem_code,
-          price: Number(p.price),
-          available: p.available,
-        }))
-      );
+      setResults(data || []);
     } catch (err: any) {
       toast.error("Chyba při vyhledávání: " + err.message);
       setResults([]);
@@ -77,18 +74,67 @@ const Shop = () => {
     }
   };
 
-  const handleAdd = (part: PartResult) => {
-    addItem({ id: part.id, name: part.name, oem: part.oem, price: part.price, type: "new", brand });
-    toast.success(`${part.name} přidán do košíku`);
-  };
-
-  const handleUsedSubmit = () => {
-    if (!brand || !query) {
-      toast.error("Vyplňte značku a název dílu");
+  const handleOrderNew = async (part: PartResult) => {
+    if (!user) {
+      toast.error("Pro objednávku se musíte přihlásit");
+      navigate("/auth");
       return;
     }
-    setUsedSubmitted(true);
-    toast.success("Poptávka odeslána! Ozveme se vám s cenou a dostupností.");
+    if (!canPlaceOrder) {
+      toast.error("Váš účet zatím nebyl schválen.");
+      return;
+    }
+    try {
+      const { error } = await supabase.from("orders").insert({
+        user_id: user.id,
+        part_id: part.id,
+        order_type: "new" as const,
+        quantity: 1,
+        unit_price: part.price_without_vat,
+        part_name: part.name,
+        oem_number: part.oem_number,
+      });
+      if (error) throw error;
+      toast.success(`Objednávka "${part.name}" vytvořena!`);
+    } catch (err: any) {
+      toast.error(err.message || "Chyba při vytváření objednávky");
+    }
+  };
+
+  const handleUsedSubmit = async () => {
+    if (!query) {
+      toast.error("Vyplňte název dílu");
+      return;
+    }
+    if (!user) {
+      toast.error("Pro poptávku se musíte přihlásit");
+      navigate("/auth");
+      return;
+    }
+    if (!canPlaceOrder) {
+      toast.error("Váš účet zatím nebyl schválen.");
+      return;
+    }
+    try {
+      const { error } = await supabase.from("orders").insert({
+        user_id: user.id,
+        order_type: "used" as const,
+        quantity: 1,
+        part_name: query,
+        customer_note: [
+          brand && `Značka: ${brand}`,
+          model && `Model: ${model}`,
+          year && `Rok: ${year}`,
+          motor && `Motor: ${motor}`,
+          usedNote,
+        ].filter(Boolean).join("\n"),
+      });
+      if (error) throw error;
+      setUsedSubmitted(true);
+      toast.success("Poptávka odeslána!");
+    } catch (err: any) {
+      toast.error(err.message || "Chyba při odesílání poptávky");
+    }
   };
 
   const resetUsed = () => {
@@ -101,6 +147,12 @@ const Shop = () => {
     setUsedNote("");
   };
 
+  const calculateDiscountedPrice = (priceWithoutVat: number) => {
+    const discounted = priceWithoutVat * (1 - discountPercent / 100);
+    const withVat = discounted * 1.21;
+    return { discounted: Math.round(discounted * 100) / 100, withVat: Math.round(withVat * 100) / 100 };
+  };
+
   return (
     <div className="min-h-screen pb-20">
       <div className="p-4 space-y-4 max-w-lg mx-auto">
@@ -108,6 +160,18 @@ const Shop = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="font-display text-2xl font-bold">Náhradní díly</h1>
         </motion.div>
+
+        {/* Pending business warning */}
+        {isPendingBusiness && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-card px-4 py-3 border-l-4 border-yellow-500">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-yellow-500 shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Váš firemní účet čeká na schválení. Zatím nelze vytvářet objednávky.
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* New / Used Toggle */}
         <motion.div
@@ -154,7 +218,7 @@ const Shop = () => {
           </p>
         </motion.div>
 
-        {/* Search form – same for both */}
+        {/* Search form */}
         <AnimatePresence mode="wait">
           {partType === "used" && usedSubmitted ? (
             <motion.div
@@ -234,7 +298,7 @@ const Shop = () => {
                 variant="hero"
                 className="w-full h-11"
                 onClick={partType === "new" ? handleSearch : handleUsedSubmit}
-                disabled={searching}
+                disabled={searching || (partType === "used" && isPendingBusiness)}
               >
                 {partType === "new" ? (
                   <>
@@ -259,43 +323,90 @@ const Shop = () => {
               <h2 className="font-display font-semibold text-sm text-muted-foreground">
                 {results.length} {results.length === 1 ? "výsledek" : "výsledků"}
               </h2>
-              {totalItems > 0 && (
-                <Button size="sm" variant="outline-primary" onClick={() => navigate("/cart")}>
-                  <ShoppingCart className="w-3.5 h-3.5 mr-1" />
-                  Košík ({totalItems})
-                </Button>
-              )}
             </div>
 
-            {results.map((part, i) => (
-              <motion.div
-                key={part.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="glass-card p-4 flex items-center gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold truncate">{part.name}</h3>
-                  <p className="text-xs text-muted-foreground">OEM: {part.oem}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-base font-display font-bold text-gradient">{part.price.toLocaleString("cs")} Kč</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${part.available ? "bg-success/20 text-success" : "bg-destructive/20 text-destructive"}`}>
-                      {part.available ? "Skladem" : "Na obj."}
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant={part.available ? "hero" : "secondary"}
-                  onClick={() => handleAdd(part)}
-                  disabled={!part.available}
-                  className="shrink-0"
+            {results.map((part, i) => {
+              const discounted = discountPercent > 0 ? calculateDiscountedPrice(part.price_without_vat) : null;
+
+              return (
+                <motion.div
+                  key={part.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="glass-card p-4 space-y-2"
                 >
-                  <ShoppingCart className="w-4 h-4" />
-                </Button>
-              </motion.div>
-            ))}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-semibold truncate">{part.name}</h3>
+                      <p className="text-xs text-muted-foreground">OEM: {part.oem_number}</p>
+                      {part.internal_code && (
+                        <p className="text-xs text-muted-foreground">Kód: {part.internal_code}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pricing */}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-muted-foreground">Bez DPH:</span>
+                      <span className="font-semibold">{part.price_without_vat.toLocaleString("cs")} Kč</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-muted-foreground">S DPH:</span>
+                      <span className="font-semibold">{part.price_with_vat.toLocaleString("cs")} Kč</span>
+                    </div>
+                    {discounted && discountPercent > 0 && (
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-muted-foreground">Po slevě ({discountPercent}%):</span>
+                        <span className="font-bold text-gradient">
+                          {discounted.discounted.toLocaleString("cs")} Kč bez DPH / {discounted.withVat.toLocaleString("cs")} Kč s DPH
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      variant="hero"
+                      className="flex-1 text-xs"
+                      onClick={() => handleOrderNew(part)}
+                      disabled={isPendingBusiness}
+                    >
+                      <ShoppingCart className="w-3.5 h-3.5 mr-1" />
+                      Objednat nový
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline-primary"
+                      className="flex-1 text-xs"
+                      onClick={async () => {
+                        if (!user) { navigate("/auth"); return; }
+                        if (!canPlaceOrder) { toast.error("Účet není schválen."); return; }
+                        try {
+                          await supabase.from("orders").insert({
+                            user_id: user.id,
+                            order_type: "used" as const,
+                            quantity: 1,
+                            part_name: part.name,
+                            oem_number: part.oem_number,
+                          });
+                          toast.success("Poptávka na použitý díl odeslána!");
+                        } catch (err: any) {
+                          toast.error(err.message);
+                        }
+                      }}
+                      disabled={isPendingBusiness}
+                    >
+                      <Package className="w-3.5 h-3.5 mr-1" />
+                      Poptat použitý
+                    </Button>
+                  </div>
+                </motion.div>
+              );
+            })}
           </motion.div>
         )}
       </div>
