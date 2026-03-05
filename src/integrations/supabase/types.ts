@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      cars_for_sale: {
+        Row: {
+          brand: string
+          created_at: string
+          description: string | null
+          fuel: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          mileage: number | null
+          model: string
+          price: number
+          transmission: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          description?: string | null
+          fuel?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          mileage?: number | null
+          model: string
+          price: number
+          transmission?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          description?: string | null
+          fuel?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          mileage?: number | null
+          model?: string
+          price?: number
+          transmission?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       new_part_orders: {
         Row: {
           admin_note: string | null
@@ -71,6 +119,71 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          admin_note: string | null
+          created_at: string
+          customer_note: string | null
+          discount_percent: number | null
+          discounted_price: number | null
+          id: string
+          oem_number: string | null
+          order_type: Database["public"]["Enums"]["order_type"]
+          part_id: string | null
+          part_name: string | null
+          price_with_vat: number | null
+          quantity: number
+          status: Database["public"]["Enums"]["order_status_v2"]
+          unit_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          created_at?: string
+          customer_note?: string | null
+          discount_percent?: number | null
+          discounted_price?: number | null
+          id?: string
+          oem_number?: string | null
+          order_type: Database["public"]["Enums"]["order_type"]
+          part_id?: string | null
+          part_name?: string | null
+          price_with_vat?: number | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["order_status_v2"]
+          unit_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          created_at?: string
+          customer_note?: string | null
+          discount_percent?: number | null
+          discounted_price?: number | null
+          id?: string
+          oem_number?: string | null
+          order_type?: Database["public"]["Enums"]["order_type"]
+          part_id?: string | null
+          part_name?: string | null
+          price_with_vat?: number | null
+          quantity?: number
+          status?: Database["public"]["Enums"]["order_status_v2"]
+          unit_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parts_catalog: {
         Row: {
           available: boolean
@@ -107,34 +220,97 @@ export type Database = {
         }
         Relationships: []
       }
+      parts_new: {
+        Row: {
+          category: string | null
+          currency: string
+          family: string | null
+          id: string
+          internal_code: string | null
+          name: string
+          oem_number: string
+          packaging: string | null
+          price_with_vat: number
+          price_without_vat: number
+          segment: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          currency?: string
+          family?: string | null
+          id?: string
+          internal_code?: string | null
+          name: string
+          oem_number: string
+          packaging?: string | null
+          price_with_vat?: number
+          price_without_vat?: number
+          segment?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          currency?: string
+          family?: string | null
+          id?: string
+          internal_code?: string | null
+          name?: string
+          oem_number?: string
+          packaging?: string | null
+          price_with_vat?: number
+          price_without_vat?: number
+          segment?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          account_type: string
+          company_name: string | null
           created_at: string
+          dic: string | null
+          discount_percent: number
           email: string | null
           full_name: string | null
+          ico: string | null
           id: string
           loyalty_active: boolean
           phone: string | null
+          status: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_type?: string
+          company_name?: string | null
           created_at?: string
+          dic?: string | null
+          discount_percent?: number
           email?: string | null
           full_name?: string | null
+          ico?: string | null
           id?: string
           loyalty_active?: boolean
           phone?: string | null
+          status?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_type?: string
+          company_name?: string | null
           created_at?: string
+          dic?: string | null
+          discount_percent?: number
           email?: string | null
           full_name?: string | null
+          ico?: string | null
           id?: string
           loyalty_active?: boolean
           phone?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
         }
@@ -381,6 +557,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_discounted_price: {
+        Args: {
+          _discount_percent: number
+          _price_without_vat: number
+          _vat_rate?: number
+        }
+        Returns: {
+          discounted_price: number
+          price_with_vat: number
+        }[]
+      }
+      can_place_order: { Args: { _user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -403,6 +591,8 @@ export type Database = {
         | "shipped"
         | "delivered"
         | "cancelled"
+      order_status_v2: "nova" | "zpracovava_se" | "vyrizena" | "zrusena"
+      order_type: "new" | "used"
       request_status:
         | "pending"
         | "quoted"
@@ -551,6 +741,8 @@ export const Constants = {
         "delivered",
         "cancelled",
       ],
+      order_status_v2: ["nova", "zpracovava_se", "vyrizena", "zrusena"],
+      order_type: ["new", "used"],
       request_status: [
         "pending",
         "quoted",
