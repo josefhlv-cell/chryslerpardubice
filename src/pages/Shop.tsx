@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingCart, Package, Send, Sparkles, AlertTriangle } from "lucide-react";
+import { Search, ShoppingCart, Package, Send, Sparkles, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const brands = ["Chrysler", "Jeep", "Dodge", "RAM", "Fiat", "Lancia"];
 const years = Array.from({ length: 30 }, (_, i) => (2025 - i).toString());
+const PAGE_SIZE = 20;
 
 interface PartResult {
   id: string;
@@ -36,8 +37,11 @@ const Shop = () => {
   const [year, setYear] = useState("");
   const [motor, setMotor] = useState("");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<PartResult[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(0);
 
   // Used part request
   const [usedNote, setUsedNote] = useState("");
@@ -47,32 +51,57 @@ const Shop = () => {
   const isBusinessActive = profile?.account_type === "business" && profile?.status === "active";
   const discountPercent = isBusinessActive ? (profile?.discount_percent ?? 0) : 0;
 
-  const handleSearch = async () => {
-    if (!query && !brand) {
-      toast.error("Zadejte název dílu nebo OEM kód");
-      return;
-    }
+  // Debounce search input (400ms)
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
+
+  const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
+    if (!searchQuery && !brand) return;
     setSearching(true);
     try {
-      let q = supabase.from("parts_new").select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family");
+      const cleanQuery = searchQuery.replace(/^0+/, "");
+      let q = supabase
+        .from("parts_new")
+        .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family", { count: "exact" });
 
-      if (query) {
-        // Strip leading zeros for OEM search flexibility
-        const cleanQuery = query.replace(/^0+/, "");
-        q = q.or(`oem_number.ilike.%${query}%,oem_number.ilike.%${cleanQuery}%,name.ilike.%${query}%`);
+      if (searchQuery) {
+        q = q.or(`oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${cleanQuery}%,name.ilike.%${searchQuery}%`);
       }
 
-      const { data, error } = await q.limit(50);
+      const from = pageNum * PAGE_SIZE;
+      const { data, error, count } = await q.range(from, from + PAGE_SIZE - 1);
       if (error) throw error;
 
       setResults(data || []);
+      setTotalCount(count ?? 0);
     } catch (err: any) {
       toast.error("Chyba při vyhledávání: " + err.message);
       setResults([]);
     } finally {
       setSearching(false);
     }
+  }, [brand]);
+
+  // Auto-search on debounced query change or page change
+  const hasSearched = useRef(false);
+  useEffect(() => {
+    if (partType === "new" && debouncedQuery) {
+      hasSearched.current = true;
+      doSearch(debouncedQuery, page);
+    }
+  }, [debouncedQuery, page, partType, doSearch]);
+
+  const handleSearch = () => {
+    setPage(0);
+    doSearch(query, 0);
   };
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const handleOrderNew = async (part: PartResult) => {
     if (!user) {
@@ -181,7 +210,7 @@ const Shop = () => {
           className="flex rounded-xl bg-secondary p-1 gap-1"
         >
           <button
-            onClick={() => { setPartType("new"); setResults(null); setUsedSubmitted(false); }}
+            onClick={() => { setPartType("new"); setResults(null); setUsedSubmitted(false); setPage(0); }}
             className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
               partType === "new"
                 ? "gradient-primary text-primary-foreground shadow-md"
@@ -256,7 +285,7 @@ const Shop = () => {
                   placeholder={partType === "new" ? "Název dílu nebo OEM číslo..." : "Jaký díl hledáte?"}
                   className="pl-11 h-12 text-base rounded-xl"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => { setQuery(e.target.value); setPage(0); }}
                   onKeyDown={(e) => e.key === "Enter" && (partType === "new" ? handleSearch() : handleUsedSubmit())}
                 />
               </div>
@@ -321,8 +350,13 @@ const Shop = () => {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="font-display font-semibold text-sm text-muted-foreground">
-                {results.length} {results.length === 1 ? "výsledek" : "výsledků"}
+                {totalCount} {totalCount === 1 ? "výsledek" : "výsledků"}
               </h2>
+              {totalPages > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  Strana {page + 1} / {totalPages}
+                </span>
+              )}
             </div>
 
             {results.map((part, i) => {
@@ -407,6 +441,51 @@ const Shop = () => {
                 </motion.div>
               );
             })}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 pt-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i;
+                  } else if (page < 3) {
+                    pageNum = i;
+                  } else if (page > totalPages - 4) {
+                    pageNum = totalPages - 5 + i;
+                  } else {
+                    pageNum = page - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={pageNum}
+                      size="sm"
+                      variant={pageNum === page ? "default" : "outline"}
+                      className="w-9 h-9 p-0"
+                      onClick={() => setPage(pageNum)}
+                    >
+                      {pageNum + 1}
+                    </Button>
+                  );
+                })}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page >= totalPages - 1}
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
           </motion.div>
         )}
       </div>
