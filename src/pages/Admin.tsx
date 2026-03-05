@@ -10,42 +10,43 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle } from "lucide-react";
 import CatalogImport from "@/components/admin/CatalogImport";
 
-type Order = {
+// ---- Types ----
+
+type Profile = {
   id: string;
-  brand: string;
-  model: string | null;
-  year: number | null;
-  engine: string | null;
-  part_name: string;
-  oem_number: string | null;
-  quantity: number;
-  unit_price: number | null;
-  discount_amount: number | null;
-  total_price: number | null;
-  status: string;
-  admin_note: string | null;
   user_id: string;
+  full_name: string | null;
+  email: string | null;
+  company_name: string | null;
+  ico: string | null;
+  dic: string | null;
+  account_type: string;
+  status: string;
+  discount_percent: number;
   created_at: string;
 };
 
-type UsedRequest = {
+type OrderRow = {
   id: string;
-  brand: string;
-  model: string | null;
-  year: string | null;
-  part_name: string;
-  note: string | null;
+  user_id: string;
+  part_id: string | null;
+  part_name: string | null;
+  oem_number: string | null;
+  order_type: string;
+  quantity: number;
+  unit_price: number | null;
+  discount_percent: number | null;
+  discounted_price: number | null;
+  price_with_vat: number | null;
   status: string;
   admin_note: string | null;
-  admin_price: number | null;
-  admin_available: boolean | null;
-  user_id: string;
+  customer_note: string | null;
   created_at: string;
 };
 
@@ -93,6 +94,11 @@ const statusColors: Record<string, string> = {
   rejected: "bg-red-100 text-red-800 border-red-300",
   fulfilled: "bg-green-100 text-green-800 border-green-300",
   new: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  nova: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  zpracovava_se: "bg-blue-100 text-blue-800 border-blue-300",
+  vyrizena: "bg-green-100 text-green-800 border-green-300",
+  zrusena: "bg-red-100 text-red-800 border-red-300",
+  active: "bg-green-100 text-green-800 border-green-300",
 };
 
 const statusLabel: Record<string, string> = {
@@ -108,28 +114,36 @@ const statusLabel: Record<string, string> = {
   rejected: "Odmítnuto",
   fulfilled: "Splněno",
   new: "Nový",
+  nova: "Nová",
+  zpracovava_se: "Zpracovává se",
+  vyrizena: "Vyřízena",
+  zrusena: "Zrušena",
+  active: "Aktivní",
 };
 
 const Admin = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [usedRequests, setUsedRequests] = useState<UsedRequest[]>([]);
+  // Data
+  const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filters
+  const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "new" | "used">("all");
+
   // Edit dialogs
-  const [editOrder, setEditOrder] = useState<Order | null>(null);
-  const [editUsed, setEditUsed] = useState<UsedRequest | null>(null);
+  const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
+  const [editProfile, setEditProfile] = useState<Profile | null>(null);
 
   // Form state
   const [formNote, setFormNote] = useState("");
   const [formStatus, setFormStatus] = useState("");
-  const [formPrice, setFormPrice] = useState("");
-  const [formAvailable, setFormAvailable] = useState("");
+  const [formDiscount, setFormDiscount] = useState("");
   const [formConfirmedDate, setFormConfirmedDate] = useState("");
   const [formEstimatedPrice, setFormEstimatedPrice] = useState("");
   const [formFinalPrice, setFormFinalPrice] = useState("");
@@ -143,16 +157,16 @@ const Admin = () => {
 
   const fetchAll = async () => {
     setLoading(true);
-    const [o, u, b, i] = await Promise.all([
-      supabase.from("new_part_orders").select("*").order("created_at", { ascending: false }),
-      supabase.from("used_part_requests").select("*").order("created_at", { ascending: false }),
+    const [profilesRes, ordersRes, bookingsRes, inquiriesRes] = await Promise.all([
+      supabase.from("profiles").select("*").eq("account_type", "business").order("created_at", { ascending: false }),
+      supabase.from("orders").select("*").order("created_at", { ascending: false }),
       supabase.from("service_bookings").select("*").order("created_at", { ascending: false }),
       supabase.from("vehicle_inquiries").select("*").order("created_at", { ascending: false }),
     ]);
-    setOrders((o.data as Order[]) || []);
-    setUsedRequests((u.data as UsedRequest[]) || []);
-    setBookings((b.data as Booking[]) || []);
-    setInquiries((i.data as Inquiry[]) || []);
+    setPendingProfiles((profilesRes.data as Profile[]) || []);
+    setOrders((ordersRes.data as OrderRow[]) || []);
+    setBookings((bookingsRes.data as Booking[]) || []);
+    setInquiries((inquiriesRes.data as Inquiry[]) || []);
     setLoading(false);
   };
 
@@ -160,8 +174,36 @@ const Admin = () => {
     if (isAdmin) fetchAll();
   }, [isAdmin]);
 
-  // -- Order update --
-  const openOrderEdit = (o: Order) => {
+  // ---- Profile approval ----
+  const approveProfile = async (profileId: string, discount: number) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "active", discount_percent: discount })
+      .eq("id", profileId);
+    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Firma schválena" });
+    setEditProfile(null);
+    fetchAll();
+  };
+
+  const rejectProfile = async (profileId: string) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ status: "rejected" })
+      .eq("id", profileId);
+    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Firma zamítnuta" });
+    setEditProfile(null);
+    fetchAll();
+  };
+
+  const openProfileEdit = (p: Profile) => {
+    setEditProfile(p);
+    setFormDiscount(p.discount_percent.toString());
+  };
+
+  // ---- Order edit ----
+  const openOrderEdit = (o: OrderRow) => {
     setEditOrder(o);
     setFormStatus(o.status);
     setFormNote(o.admin_note || "");
@@ -170,7 +212,7 @@ const Admin = () => {
   const saveOrder = async () => {
     if (!editOrder) return;
     const { error } = await supabase
-      .from("new_part_orders")
+      .from("orders")
       .update({ status: formStatus as any, admin_note: formNote })
       .eq("id", editOrder.id);
     if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
@@ -179,33 +221,7 @@ const Admin = () => {
     fetchAll();
   };
 
-  // -- Used request update --
-  const openUsedEdit = (r: UsedRequest) => {
-    setEditUsed(r);
-    setFormStatus(r.status);
-    setFormNote(r.admin_note || "");
-    setFormPrice(r.admin_price?.toString() || "");
-    setFormAvailable(r.admin_available === null ? "" : r.admin_available ? "yes" : "no");
-  };
-
-  const saveUsed = async () => {
-    if (!editUsed) return;
-    const { error } = await supabase
-      .from("used_part_requests")
-      .update({
-        status: formStatus as any,
-        admin_note: formNote,
-        admin_price: formPrice ? parseFloat(formPrice) : null,
-        admin_available: formAvailable === "" ? null : formAvailable === "yes",
-      })
-      .eq("id", editUsed.id);
-    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Uloženo" });
-    setEditUsed(null);
-    fetchAll();
-  };
-
-  // -- Booking update --
+  // ---- Booking edit ----
   const openBookingEdit = (b: Booking) => {
     setEditBooking(b);
     setFormStatus(b.status);
@@ -247,71 +263,143 @@ const Admin = () => {
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("cs-CZ");
 
+  const pendingOnly = pendingProfiles.filter(p => p.status === "pending");
+  const allBusiness = pendingProfiles;
+
+  const filteredOrders = orderTypeFilter === "all"
+    ? orders
+    : orders.filter(o => o.order_type === orderTypeFilter);
+
   return (
     <div className="min-h-screen pb-20">
       <PageHeader title="Admin panel" />
       <div className="p-4 max-w-4xl mx-auto">
         <div className="flex items-center gap-2 mb-4">
           <Shield className="w-5 h-5 text-primary" />
-          <span className="text-sm text-muted-foreground">Správa objednávek a požadavků</span>
+          <span className="text-sm text-muted-foreground">Správa firem, objednávek a požadavků</span>
           <Button size="sm" variant="outline" className="ml-auto" onClick={fetchAll}>
             <RefreshCw className="w-4 h-4 mr-1" /> Obnovit
           </Button>
         </div>
 
-        <Tabs defaultValue="orders">
+        <Tabs defaultValue="firms">
           <TabsList className="w-full grid grid-cols-5">
+            <TabsTrigger value="firms" className="text-xs gap-1">
+              <Users className="w-3 h-3" />
+              Firmy
+              {pendingOnly.length > 0 && (
+                <span className="ml-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-bold">
+                  {pendingOnly.length}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="orders" className="text-xs gap-1"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
-            <TabsTrigger value="used" className="text-xs gap-1"><Package className="w-3 h-3" />Použité</TabsTrigger>
             <TabsTrigger value="service" className="text-xs gap-1"><Wrench className="w-3 h-3" />Servis</TabsTrigger>
-            <TabsTrigger value="inquiries" className="text-xs gap-1"><Car className="w-3 h-3" />Poptávky</TabsTrigger>
+            <TabsTrigger value="inquiries" className="text-xs gap-1"><Car className="w-3 h-3" />Vozy</TabsTrigger>
             <TabsTrigger value="catalog" className="text-xs gap-1"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>
           </TabsList>
 
-          {/* ORDERS */}
-          <TabsContent value="orders">
+          {/* FIRMS / PENDING BUSINESS */}
+          <TabsContent value="firms">
             <div className="space-y-3 mt-2">
-              {orders.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné objednávky</p>}
-              {orders.map((o) => (
-                <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openOrderEdit(o)}>
+              {pendingOnly.length > 0 && (
+                <h3 className="text-sm font-semibold text-destructive">Čeká na schválení ({pendingOnly.length})</h3>
+              )}
+              {pendingOnly.map((p) => (
+                <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <Card className="border-yellow-300">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-semibold text-sm">{o.part_name}</p>
-                          <p className="text-xs text-muted-foreground">{o.brand} {o.model} {o.year} · {o.quantity}×</p>
-                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)} · {o.id.slice(0, 8)}</p>
+                          <p className="font-semibold text-sm">{p.company_name || "Bez názvu"}</p>
+                          <p className="text-xs text-muted-foreground">{p.full_name} · {p.email}</p>
+                          <p className="text-xs text-muted-foreground">IČO: {p.ico || "–"} · DIČ: {p.dic || "–"}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(p.created_at)}</p>
                         </div>
-                        <div className="text-right">
-                          <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
-                          {o.total_price && <p className="text-sm font-semibold mt-1">{o.total_price.toLocaleString("cs")} Kč</p>}
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="outline" onClick={() => openProfileEdit(p)}>
+                            <CheckCircle className="w-4 h-4 mr-1 text-green-600" />
+                            Schválit
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => rejectProfile(p.id)}>
+                            <XCircle className="w-4 h-4 text-destructive" />
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
                   </Card>
                 </motion.div>
               ))}
+
+              {allBusiness.filter(p => p.status !== "pending").length > 0 && (
+                <>
+                  <h3 className="text-sm font-semibold text-muted-foreground mt-4">Schválené / zamítnuté firmy</h3>
+                  {allBusiness.filter(p => p.status !== "pending").map((p) => (
+                    <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                      <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openProfileEdit(p)}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-semibold text-sm">{p.company_name || "Bez názvu"}</p>
+                              <p className="text-xs text-muted-foreground">{p.full_name} · {p.email}</p>
+                              <p className="text-xs text-muted-foreground">Sleva: {p.discount_percent}%</p>
+                            </div>
+                            <Badge className={statusColors[p.status] || ""}>{statusLabel[p.status] || p.status}</Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </>
+              )}
+
+              {allBusiness.length === 0 && (
+                <p className="text-muted-foreground text-sm text-center py-8">Žádné firemní účty</p>
+              )}
             </div>
           </TabsContent>
 
-          {/* USED PARTS */}
-          <TabsContent value="used">
+          {/* ORDERS */}
+          <TabsContent value="orders">
             <div className="space-y-3 mt-2">
-              {usedRequests.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné poptávky</p>}
-              {usedRequests.map((r) => (
-                <motion.div key={r.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openUsedEdit(r)}>
+              {/* Type filter */}
+              <div className="flex gap-1">
+                {(["all", "new", "used"] as const).map((t) => (
+                  <Button
+                    key={t}
+                    size="sm"
+                    variant={orderTypeFilter === t ? "default" : "outline"}
+                    onClick={() => setOrderTypeFilter(t)}
+                    className="text-xs"
+                  >
+                    {t === "all" ? "Vše" : t === "new" ? "Nové díly" : "Použité díly"}
+                  </Button>
+                ))}
+              </div>
+
+              {filteredOrders.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné objednávky</p>}
+              {filteredOrders.map((o) => (
+                <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openOrderEdit(o)}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="font-semibold text-sm">{r.part_name}</p>
-                          <p className="text-xs text-muted-foreground">{r.brand} {r.model} {r.year}</p>
-                          {r.note && <p className="text-xs text-muted-foreground mt-1 italic">"{r.note}"</p>}
-                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(r.created_at)} · {r.id.slice(0, 8)}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-sm">{o.part_name || "–"}</p>
+                            <Badge variant="outline" className="text-[10px]">
+                              {o.order_type === "new" ? "Nový" : "Použitý"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "–"} · {o.quantity}×</p>
+                          {o.customer_note && <p className="text-xs text-muted-foreground italic mt-1">"{o.customer_note}"</p>}
+                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)} · {o.id.slice(0, 8)}</p>
                         </div>
                         <div className="text-right">
-                          <Badge className={statusColors[r.status] || ""}>{statusLabel[r.status] || r.status}</Badge>
-                          {r.admin_price && <p className="text-sm font-semibold mt-1">{r.admin_price.toLocaleString("cs")} Kč</p>}
+                          <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
+                          {o.price_with_vat != null && <p className="text-sm font-semibold mt-1">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
+                          {o.discount_percent != null && o.discount_percent > 0 && (
+                            <p className="text-[10px] text-muted-foreground">sleva {o.discount_percent}%</p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -381,72 +469,81 @@ const Admin = () => {
         </Tabs>
       </div>
 
-      {/* ORDER EDIT DIALOG */}
-      <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
+      {/* PROFILE APPROVAL DIALOG */}
+      <Dialog open={!!editProfile} onOpenChange={() => setEditProfile(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Upravit objednávku</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Status</label>
-              <Select value={formStatus} onValueChange={setFormStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["pending", "confirmed", "shipped", "delivered", "cancelled"].map(s => (
-                    <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <DialogHeader><DialogTitle>Správa firemního účtu</DialogTitle></DialogHeader>
+          {editProfile && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm"><span className="font-medium">Firma:</span> {editProfile.company_name}</p>
+                <p className="text-sm"><span className="font-medium">Kontakt:</span> {editProfile.full_name} · {editProfile.email}</p>
+                <p className="text-sm"><span className="font-medium">IČO:</span> {editProfile.ico || "–"}</p>
+                <p className="text-sm"><span className="font-medium">DIČ:</span> {editProfile.dic || "–"}</p>
+                <p className="text-sm"><span className="font-medium">Status:</span> {statusLabel[editProfile.status] || editProfile.status}</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Sleva (%)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formDiscount}
+                  onChange={(e) => setFormDiscount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Poznámka admina</label>
-              <Textarea value={formNote} onChange={e => setFormNote(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOrder(null)}>Zrušit</Button>
-            <Button onClick={saveOrder}>Uložit</Button>
+          )}
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setEditProfile(null)}>Zavřít</Button>
+            {editProfile?.status === "pending" && (
+              <Button variant="destructive" onClick={() => editProfile && rejectProfile(editProfile.id)}>
+                <XCircle className="w-4 h-4 mr-1" />Zamítnout
+              </Button>
+            )}
+            <Button onClick={() => editProfile && approveProfile(editProfile.id, parseFloat(formDiscount) || 0)}>
+              <CheckCircle className="w-4 h-4 mr-1" />
+              {editProfile?.status === "pending" ? "Schválit" : "Uložit slevu"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* USED REQUEST EDIT DIALOG */}
-      <Dialog open={!!editUsed} onOpenChange={() => setEditUsed(null)}>
+      {/* ORDER EDIT DIALOG */}
+      <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Nacenit použitý díl</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Status</label>
-              <Select value={formStatus} onValueChange={setFormStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["pending", "quoted", "accepted", "rejected", "fulfilled"].map(s => (
-                    <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <DialogHeader><DialogTitle>Upravit objednávku</DialogTitle></DialogHeader>
+          {editOrder && (
+            <div className="space-y-3">
+              <div className="space-y-1 text-sm">
+                <p><span className="font-medium">Díl:</span> {editOrder.part_name}</p>
+                <p><span className="font-medium">OEM:</span> {editOrder.oem_number || "–"}</p>
+                <p><span className="font-medium">Typ:</span> {editOrder.order_type === "new" ? "Nový" : "Použitý"}</p>
+                {editOrder.unit_price != null && <p><span className="font-medium">Cena bez DPH:</span> {editOrder.unit_price.toLocaleString("cs")} Kč</p>}
+                {editOrder.price_with_vat != null && <p><span className="font-medium">Cena s DPH:</span> {editOrder.price_with_vat.toLocaleString("cs")} Kč</p>}
+                {editOrder.customer_note && <p><span className="font-medium">Poznámka zákazníka:</span> {editOrder.customer_note}</p>}
+              </div>
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <Select value={formStatus} onValueChange={setFormStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["nova", "zpracovava_se", "vyrizena", "zrusena"].map(s => (
+                      <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Poznámka admina</label>
+                <Textarea value={formNote} onChange={e => setFormNote(e.target.value)} />
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium">Dostupný?</label>
-              <Select value={formAvailable} onValueChange={setFormAvailable}>
-                <SelectTrigger><SelectValue placeholder="Vyberte" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="yes">Ano</SelectItem>
-                  <SelectItem value="no">Ne</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Cena (Kč)</label>
-              <Input type="number" value={formPrice} onChange={e => setFormPrice(e.target.value)} placeholder="0" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Poznámka admina</label>
-              <Textarea value={formNote} onChange={e => setFormNote(e.target.value)} />
-            </div>
-          </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditUsed(null)}>Zrušit</Button>
-            <Button onClick={saveUsed}>Uložit</Button>
+            <Button variant="outline" onClick={() => setEditOrder(null)}>Zrušit</Button>
+            <Button onClick={saveOrder}>Uložit</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
