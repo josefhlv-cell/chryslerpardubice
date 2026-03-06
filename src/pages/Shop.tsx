@@ -103,7 +103,10 @@ const Shop = () => {
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
+  const [submitting, setSubmitting] = useState(false);
+
   const handleOrderNew = async (part: PartResult) => {
+    if (submitting) return;
     if (!user) {
       toast.error("Pro objednávku se musíte přihlásit");
       navigate("/auth");
@@ -113,6 +116,7 @@ const Shop = () => {
       toast.error("Váš účet zatím nebyl schválen.");
       return;
     }
+    setSubmitting(true);
     try {
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
@@ -127,6 +131,8 @@ const Shop = () => {
       toast.success(`Objednávka "${part.name}" vytvořena!`);
     } catch (err: any) {
       toast.error(err.message || "Chyba při vytváření objednávky");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -346,7 +352,22 @@ const Shop = () => {
         </AnimatePresence>
 
         {/* Results – only for new parts */}
-        {partType === "new" && results && (
+        {partType === "new" && searching && (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="ml-3 text-sm text-muted-foreground">Hledám v katalogu...</span>
+          </div>
+        )}
+
+        {partType === "new" && !searching && results && results.length === 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-8">
+            <Search className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Žádné výsledky</p>
+            <p className="text-xs text-muted-foreground mt-1">Zkuste upravit hledaný výraz</p>
+          </motion.div>
+        )}
+
+        {partType === "new" && !searching && results && results.length > 0 && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
             <div className="flex items-center justify-between">
               <h2 className="font-display font-semibold text-sm text-muted-foreground">
@@ -407,7 +428,7 @@ const Shop = () => {
                       variant="hero"
                       className="flex-1 text-xs"
                       onClick={() => handleOrderNew(part)}
-                      disabled={isPendingBusiness}
+                      disabled={isPendingBusiness || submitting}
                     >
                       <ShoppingCart className="w-3.5 h-3.5 mr-1" />
                       Objednat nový
@@ -432,7 +453,7 @@ const Shop = () => {
                           toast.error(err.message);
                         }
                       }}
-                      disabled={isPendingBusiness}
+                      disabled={isPendingBusiness || submitting}
                     >
                       <Package className="w-3.5 h-3.5 mr-1" />
                       Poptat použitý

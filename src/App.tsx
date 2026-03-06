@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import Admin from "./pages/Admin";
 import Contact from "./pages/Contact";
 import ResetPassword from "./pages/ResetPassword";
+import MyOrders from "./pages/MyOrders";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="/vehicles" element={<Vehicles />} />
               <Route path="/vehicles/:id" element={<VehicleDetail />} />
               <Route path="/account" element={<Account />} />
+              <Route path="/orders" element={<MyOrders />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
