@@ -13,8 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History } from "lucide-react";
 import CatalogImport from "@/components/admin/CatalogImport";
+import AdminNotifications from "@/components/admin/AdminNotifications";
+import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
 
 // ---- Types ----
 
@@ -283,7 +285,7 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="firms">
-          <TabsList className="w-full grid grid-cols-5">
+          <TabsList className="w-full grid grid-cols-7">
             <TabsTrigger value="firms" className="text-xs gap-1">
               <Users className="w-3 h-3" />
               Firmy
@@ -297,6 +299,8 @@ const Admin = () => {
             <TabsTrigger value="service" className="text-xs gap-1"><Wrench className="w-3 h-3" />Servis</TabsTrigger>
             <TabsTrigger value="inquiries" className="text-xs gap-1"><Car className="w-3 h-3" />Vozy</TabsTrigger>
             <TabsTrigger value="catalog" className="text-xs gap-1"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs gap-1"><History className="w-3 h-3" />Knížka</TabsTrigger>
+            <TabsTrigger value="notifications" className="text-xs gap-1"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -464,6 +468,18 @@ const Admin = () => {
           <TabsContent value="catalog">
             <div className="mt-2">
               <CatalogImport />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history">
+            <div className="mt-2">
+              <AdminServiceHistory />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <div className="mt-2">
+              <AdminNotifications />
             </div>
           </TabsContent>
         </Tabs>
