@@ -119,6 +119,33 @@ export type Database = {
         }
         Relationships: []
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          is_read: boolean
+          message: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           admin_note: string | null
@@ -278,6 +305,7 @@ export type Database = {
           id: string
           loyalty_active: boolean
           phone: string | null
+          service_history_enabled: boolean
           status: string
           updated_at: string
           user_id: string
@@ -294,6 +322,7 @@ export type Database = {
           id?: string
           loyalty_active?: boolean
           phone?: string | null
+          service_history_enabled?: boolean
           status?: string
           updated_at?: string
           user_id: string
@@ -310,6 +339,7 @@ export type Database = {
           id?: string
           loyalty_active?: boolean
           phone?: string | null
+          service_history_enabled?: boolean
           status?: string
           updated_at?: string
           user_id?: string
@@ -375,6 +405,53 @@ export type Database = {
           wants_replacement_vehicle?: boolean
         }
         Relationships: []
+      }
+      service_history: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          mileage: number | null
+          parts_used: string | null
+          price: number | null
+          service_date: string
+          service_type: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mileage?: number | null
+          parts_used?: string | null
+          price?: number | null
+          service_date: string
+          service_type: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          mileage?: number | null
+          parts_used?: string | null
+          price?: number | null
+          service_date?: string
+          service_type?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "user_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       used_part_requests: {
         Row: {
@@ -442,6 +519,42 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_vehicles: {
+        Row: {
+          brand: string
+          created_at: string
+          engine: string | null
+          id: string
+          license_plate: string | null
+          model: string
+          user_id: string
+          vin: string | null
+          year: number | null
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          license_plate?: string | null
+          model: string
+          user_id: string
+          vin?: string | null
+          year?: number | null
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          license_plate?: string | null
+          model?: string
+          user_id?: string
+          vin?: string | null
+          year?: number | null
         }
         Relationships: []
       }

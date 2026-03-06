@@ -20,6 +20,8 @@ import Admin from "./pages/Admin";
 import Contact from "./pages/Contact";
 import ResetPassword from "./pages/ResetPassword";
 import MyOrders from "./pages/MyOrders";
+import MyVehicles from "./pages/MyVehicles";
+import Notifications from "./pages/Notifications";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -43,6 +45,8 @@ const App = () => (
               <Route path="/vehicles/:id" element={<VehicleDetail />} />
               <Route path="/account" element={<Account />} />
               <Route path="/orders" element={<MyOrders />} />
+              <Route path="/my-vehicles" element={<MyVehicles />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />

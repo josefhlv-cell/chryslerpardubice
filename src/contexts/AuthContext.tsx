@@ -15,6 +15,7 @@ interface Profile {
   dic: string | null;
   discount_percent: number;
   loyalty_active: boolean;
+  service_history_enabled: boolean;
 }
 
 interface AuthContextType {

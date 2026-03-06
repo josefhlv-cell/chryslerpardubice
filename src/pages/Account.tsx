@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle } from "lucide-react";
+import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Account = () => {
@@ -86,6 +86,14 @@ const Account = () => {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="space-y-1">
           <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/orders")}>
             <span className="flex items-center gap-2"><ShoppingCart className="w-4 h-4" />Moje objednávky</span>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/my-vehicles")}>
+            <span className="flex items-center gap-2"><Car className="w-4 h-4" />Moje vozidla</span>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/notifications")}>
+            <span className="flex items-center gap-2"><Bell className="w-4 h-4" />Oznámení</span>
             <ChevronRight className="w-4 h-4" />
           </Button>
           <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/service")}>
