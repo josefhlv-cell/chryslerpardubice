@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
 
     // Step 2: POST login if needed
     if (isLoginPage) {
-      console.log('Step 2: POST login');
+      console.log('Step 2: POST login with password length:', password.length);
       const loginResp = await fetch(CATALOG_URL, {
         method: 'POST',
         headers: {
@@ -79,29 +79,31 @@ Deno.serve(async (req) => {
           'Referer': CATALOG_URL,
         },
         body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
-        redirect: 'manual',
+        redirect: 'follow',
       });
       collectCookies(loginResp);
-      const loginLocation = loginResp.headers.get('location');
+      const loginBody = await loginResp.text();
+      const loginOk = !loginBody.includes('submit-password') || loginBody.includes('Zadejte kód');
+      console.log('Login status:', loginResp.status, 'URL:', loginResp.url, 'loginOk:', loginOk);
+      console.log('Cookies after login:', Object.keys(cookieJar).join(', '));
 
-      if (loginLocation) {
-        const redirectUrl = loginLocation.startsWith('http')
-          ? loginLocation
-          : `https://www.vernostsevyplaci.cz${loginLocation}`;
-        const pageResp = await fetch(redirectUrl, {
-          headers: { ...browserHeaders, 'Cookie': getCookieHeader(), 'Referer': CATALOG_URL },
-          redirect: 'follow',
-        });
-        collectCookies(pageResp);
-        await pageResp.text();
-      } else {
-        // No redirect, try GET again
+      if (!loginOk) {
+        // Try GET again with cookies
         const getResp = await fetch(CATALOG_URL, {
           headers: { ...browserHeaders, 'Cookie': getCookieHeader(), 'Referer': CATALOG_URL },
           redirect: 'follow',
         });
         collectCookies(getResp);
-        await getResp.text();
+        const getBody = await getResp.text();
+        const getOk = !getBody.includes('submit-password') || getBody.includes('Zadejte kód');
+        console.log('GET after login ok:', getOk, 'URL:', getResp.url);
+        
+        if (!getOk) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Login to catalog failed. Check CATALOG_PASS secret.' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
     }
 
