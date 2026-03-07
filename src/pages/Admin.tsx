@@ -13,12 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign } from "lucide-react";
 import CatalogImport from "@/components/admin/CatalogImport";
 import AdminNotifications from "@/components/admin/AdminNotifications";
 import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
 import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
 import AdminFaultReports from "@/components/admin/AdminFaultReports";
+import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
 
 // ---- Types ----
 
@@ -305,6 +306,7 @@ const Admin = () => {
             <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>
             <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
             <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>
+            <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -496,6 +498,12 @@ const Admin = () => {
           <TabsContent value="faults">
             <div className="mt-2">
               <AdminFaultReports />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="prices">
+            <div className="mt-2">
+              <AdminPriceManagement />
             </div>
           </TabsContent>
         </Tabs>
