@@ -23,6 +23,7 @@ import MyOrders from "./pages/MyOrders";
 import MyVehicles from "./pages/MyVehicles";
 import Notifications from "./pages/Notifications";
 import AiMechanic from "./pages/AiMechanic";
+import Terms from "./pages/Terms";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/ai-mechanic" element={<AiMechanic />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

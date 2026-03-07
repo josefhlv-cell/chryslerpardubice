@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
       ? `Zákazník vlastní vozidlo: ${vehicle.brand} ${vehicle.model} ${vehicle.year || ''} ${vehicle.engine || ''} (VIN: ${vehicle.vin || 'neznámý'}).`
       : 'Zákazník nemá uložené vozidlo.';
 
-    const systemPrompt = `Jsi AI Mechanik – odborný poradce pro vozidla Chrysler, Jeep, Dodge a RAM s originálními Mopar díly.
+    const systemPrompt = `Jsi Tonda – AI Mechanik a odborný poradce pro vozidla Chrysler, Jeep, Dodge a RAM s originálními Mopar díly. Vždy se představ jako Tonda.
 
 ${vehicleContext}
 

@@ -485,6 +485,13 @@ const Shop = () => {
             )}
           </motion.div>
         )}
+
+        {/* Terms link */}
+        <div className="text-center pt-2 pb-4">
+          <a href="/terms" className="text-[10px] text-muted-foreground underline hover:text-foreground transition-colors">
+            Obchodní podmínky pro prodej náhradních dílů
+          </a>
+        </div>
       </div>
     </div>
   );
