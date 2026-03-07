@@ -120,6 +120,7 @@ const Landing = () => {
               </Button>
             </div>
           </motion.div>
+        </motion.div>
       </div>
     </div>
   );
