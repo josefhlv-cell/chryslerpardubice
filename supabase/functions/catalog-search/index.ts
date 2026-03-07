@@ -214,16 +214,34 @@ async function loginToCatalog(password: string): Promise<Session> {
     return { loggedIn, cookies };
   }
 
-  // If 200, check the body
+  // If 200, the login response might not contain the search form
+  // We need to do a GET to get the actual catalog page
   const loginBody = await loginResp.text();
-  const loggedIn = !loginBody.includes('name="password"') || loginBody.includes('Zadejte kód') || loginBody.includes('submit-search');
-  console.log('Login body check - logged in:', loggedIn, 'body length:', loginBody.length);
-  
-  // Log a snippet of the response to see what we got
-  const bodySnippet = loginBody.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
-  console.log('Login body snippet:', bodySnippet);
+  const hasPasswordForm = loginBody.includes('name="password"');
+  const hasSearchForm = loginBody.includes('name="code"') || loginBody.includes('submit-search');
+  console.log('Login body - has password form:', hasPasswordForm, 'has search form:', hasSearchForm, 'body length:', loginBody.length);
 
-  return { loggedIn, cookies };
+  if (hasPasswordForm) {
+    // Login failed - still showing password form
+    console.log('Login FAILED - password form still showing');
+    return { loggedIn: false, cookies };
+  }
+
+  // Login succeeded. Do a GET to load the search page
+  console.log('Step 3: GET catalog page after login');
+  const catalogResp = await fetch(CATALOG_URL, {
+    headers: { ...headers, 'Cookie': cookieHeader(cookies) },
+    redirect: 'follow',
+  });
+  collectCookies(catalogResp, cookies);
+  const catalogBody = await catalogResp.text();
+  const catalogHasSearch = catalogBody.includes('name="code"') || catalogBody.includes('submit-search') || catalogBody.includes('VYHLEDAT');
+  console.log('Catalog page - has search form:', catalogHasSearch, 'body length:', catalogBody.length);
+  
+  const bodySnippet = catalogBody.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
+  console.log('Catalog snippet:', bodySnippet);
+
+  return { loggedIn: catalogHasSearch || !catalogBody.includes('name="password"'), cookies };
 }
 
 async function searchCatalog(
