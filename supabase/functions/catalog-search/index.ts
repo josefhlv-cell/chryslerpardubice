@@ -344,9 +344,12 @@ function parseSearchResult(html: string, oem: string): {
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
-  // Strategy 1: Parse table rows
+  // Strategy 1: Parse table rows - log all rows with multiple cells
   const tableRowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let match;
+  let rowIndex = 0;
+
+  const candidateRows: Array<{ cells: string[]; rowIndex: number }> = [];
 
   while ((match = tableRowRegex.exec(cleanHtml)) !== null) {
     const rowHtml = match[1];
@@ -356,26 +359,42 @@ function parseSearchResult(html: string, oem: string): {
     while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
       cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
     }
+    rowIndex++;
 
-    if (cells.length < 2) continue;
+    if (cells.length >= 2) {
+      console.log(`Table row #${rowIndex} (${cells.length} cells):`, JSON.stringify(cells));
+      candidateRows.push({ cells, rowIndex });
+    }
+  }
 
+  // Find the row that looks like a price result (has numeric values that could be prices)
+  for (const row of candidateRows) {
+    const { cells } = row;
+    
+    // Look for cells with price-like values (> 10, typical for auto parts)
     const priceValues: number[] = [];
     let nameCandidate = '';
+    let codeCandidate = '';
 
     for (const cell of cells) {
-      const priceStr = cell.replace(/\s/g, '').replace(',', '.');
-      const priceNum = parseFloat(priceStr);
-      if (!isNaN(priceNum) && priceNum > 0 && priceNum < 1000000) {
-        priceValues.push(priceNum);
-      } else if (cell.length > 2 && !cell.match(/^\d+$/) && !nameCandidate) {
-        nameCandidate = cell;
+      const cleaned = cell.replace(/\s/g, '').replace(',', '.');
+      const num = parseFloat(cleaned);
+      
+      // Price should be > 10 for auto parts
+      if (!isNaN(num) && num > 10 && num < 1000000) {
+        priceValues.push(num);
+      } else if (cell.length > 3 && !cell.match(/^\d+$/) && cell.match(/[a-záčďéěíňóřšťúůýž]/i)) {
+        // Name contains Czech characters
+        if (!nameCandidate) nameCandidate = cell;
+      } else if (cell.match(/^[A-Z0-9K]{5,}/)) {
+        codeCandidate = cell;
       }
     }
 
     if (priceValues.length >= 1) {
       const priceWithout = priceValues[0];
       const priceWith = priceValues.length >= 2 ? priceValues[1] : Math.round(priceWithout * 1.21 * 100) / 100;
-      console.log('Found price:', priceWithout, 'with VAT:', priceWith, 'name:', nameCandidate);
+      console.log('Found price:', priceWithout, 'with VAT:', priceWith, 'name:', nameCandidate, 'code:', codeCandidate);
       return {
         found: true,
         name: nameCandidate || `Díl ${oem}`,
