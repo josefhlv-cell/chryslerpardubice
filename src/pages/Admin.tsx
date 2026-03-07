@@ -17,6 +17,7 @@ import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet,
 import CatalogImport from "@/components/admin/CatalogImport";
 import AdminNotifications from "@/components/admin/AdminNotifications";
 import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
+import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
 
 // ---- Types ----
 
@@ -285,8 +286,8 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="firms">
-          <TabsList className="w-full grid grid-cols-7">
-            <TabsTrigger value="firms" className="text-xs gap-1">
+          <TabsList className="w-full flex overflow-x-auto">
+            <TabsTrigger value="firms" className="text-xs gap-1 shrink-0">
               <Users className="w-3 h-3" />
               Firmy
               {pendingOnly.length > 0 && (
@@ -295,12 +296,13 @@ const Admin = () => {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="orders" className="text-xs gap-1"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
-            <TabsTrigger value="service" className="text-xs gap-1"><Wrench className="w-3 h-3" />Servis</TabsTrigger>
-            <TabsTrigger value="inquiries" className="text-xs gap-1"><Car className="w-3 h-3" />Vozy</TabsTrigger>
-            <TabsTrigger value="catalog" className="text-xs gap-1"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>
-            <TabsTrigger value="history" className="text-xs gap-1"><History className="w-3 h-3" />Knížka</TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs gap-1"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
+            <TabsTrigger value="orders" className="text-xs gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
+            <TabsTrigger value="service" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>
+            <TabsTrigger value="inquiries" className="text-xs gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>
+            <TabsTrigger value="catalog" className="text-xs gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>
+            <TabsTrigger value="settings" className="text-xs gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>
+            <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -468,6 +470,12 @@ const Admin = () => {
           <TabsContent value="catalog">
             <div className="mt-2">
               <CatalogImport />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <div className="mt-2">
+              <AdminCatalogSettings />
             </div>
           </TabsContent>
 
