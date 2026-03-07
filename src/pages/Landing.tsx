@@ -26,7 +26,7 @@ const Landing = () => {
         >
           {/* Logo */}
           <motion.img
-            src="/images/logo_chrysler.webp"
+            src="/images/logo-cd-pardubice.png"
             alt="Chrysler&amp;Dodge Pardubice"
             className="h-20 object-contain drop-shadow-2xl"
             initial={{ opacity: 0, scale: 0.8 }}
