@@ -2,9 +2,12 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Search, ShoppingCart, Wrench } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import ServiceRecommendations from "@/components/ServiceRecommendations";
 
 const Landing = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col gradient-dark overflow-hidden">
@@ -73,6 +76,18 @@ const Landing = () => {
               <img key={i} src={src} alt="" className="h-8 object-contain opacity-40" />
             ))}
           </motion.div>
+
+          {/* Service Recommendations for logged-in users */}
+          {user && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.85 }}
+              className="w-full"
+            >
+              <ServiceRecommendations />
+            </motion.div>
+          )}
 
           {/* CTA */}
           <motion.div
