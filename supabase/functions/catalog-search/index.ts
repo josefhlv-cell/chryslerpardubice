@@ -265,6 +265,25 @@ async function loginToCatalog(password: string): Promise<Session> {
   }
   console.log('Catalog page inputs:', inputs.join(', '));
 
+  // Log script sources and inline scripts
+  const scriptSrcRegex = /<script[^>]+src="([^"]+)"/gi;
+  const scripts: string[] = [];
+  let scriptMatch;
+  while ((scriptMatch = scriptSrcRegex.exec(catalogBody)) !== null) {
+    scripts.push(scriptMatch[1]);
+  }
+  console.log('Catalog page scripts:', scripts.join(' | '));
+
+  // Log inline script content (search-related)
+  const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+  let inlineMatch;
+  while ((inlineMatch = inlineScriptRegex.exec(catalogBody)) !== null) {
+    const content = inlineMatch[1].trim();
+    if (content.length > 10 && (content.includes('search') || content.includes('find') || content.includes('ajax') || content.includes('fetch') || content.includes('part'))) {
+      console.log('Inline script (search-related):', content.substring(0, 1000));
+    }
+  }
+
   return { loggedIn: catalogHasSearch || !catalogBody.includes('name="password"'), cookies };
 }
 
