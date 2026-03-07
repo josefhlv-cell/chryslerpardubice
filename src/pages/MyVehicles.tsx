@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText } from "lucide-react";
+import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type UserVehicle = {
@@ -332,6 +332,9 @@ const MyVehicles = () => {
                     )}
                     <Button size="icon" variant="ghost" onClick={() => navigate("/service-plan")}>
                       <FileText className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={() => navigate(`/service-book?vehicle=${v.id}`)} title="Servisní kniha">
+                      <BookOpen className="w-4 h-4" />
                     </Button>
                     {serviceHistoryEnabled && (
                       <Button size="icon" variant="ghost" onClick={() => openHistory(v)}>
