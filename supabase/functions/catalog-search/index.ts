@@ -321,6 +321,6 @@ function parseSearchResult(html: string, oem: string): {
     };
   }
 
-  console.log('No price found for', searchCode_placeholder_not_available, '- text snippet:', textContent.substring(0, 300));
+  console.log('No price found for', oem, '- text snippet:', textContent.substring(0, 300));
   return { found: false, name: '', price_without_vat: 0, price_with_vat: 0 };
 }
