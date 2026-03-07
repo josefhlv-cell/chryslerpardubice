@@ -34,6 +34,7 @@ type ServiceRecord = {
   mileage: number | null;
   service_date: string;
   created_at: string;
+  photos: string[] | null;
 };
 
 const MyVehicles = () => {
@@ -309,6 +310,13 @@ const MyVehicles = () => {
                       {s.price != null && <span className="font-medium text-foreground">{s.price.toLocaleString("cs")} Kč</span>}
                     </div>
                     {s.parts_used && <p className="text-[10px] text-muted-foreground">Díly: {s.parts_used}</p>}
+                    {s.photos && s.photos.length > 0 && (
+                      <div className="flex gap-1.5 mt-2 flex-wrap">
+                        {s.photos.map((url, pi) => (
+                          <img key={pi} src={url} alt="Foto" className="w-16 h-16 rounded object-cover border cursor-pointer" onClick={() => window.open(url, '_blank')} />
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
