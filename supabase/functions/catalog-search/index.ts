@@ -238,8 +238,32 @@ async function loginToCatalog(password: string): Promise<Session> {
   const catalogHasSearch = catalogBody.includes('name="code"') || catalogBody.includes('submit-search') || catalogBody.includes('VYHLEDAT');
   console.log('Catalog page - has search form:', catalogHasSearch, 'body length:', catalogBody.length);
   
-  const bodySnippet = catalogBody.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
-  console.log('Catalog snippet:', bodySnippet);
+  // Log all links and forms on the page
+  const linkRegex = /href="([^"]+)"/gi;
+  const links: string[] = [];
+  let linkMatch;
+  while ((linkMatch = linkRegex.exec(catalogBody)) !== null) {
+    if (!links.includes(linkMatch[1])) links.push(linkMatch[1]);
+  }
+  console.log('Catalog page links:', links.join(' | '));
+  
+  // Log all form actions
+  const formRegex = /action="([^"]+)"/gi;
+  const forms: string[] = [];
+  let formMatch;
+  while ((formMatch = formRegex.exec(catalogBody)) !== null) {
+    forms.push(formMatch[1]);
+  }
+  console.log('Catalog page forms:', forms.join(' | '));
+  
+  // Log all input names
+  const inputRegex = /name="([^"]+)"/gi;
+  const inputs: string[] = [];
+  let inputMatch;
+  while ((inputMatch = inputRegex.exec(catalogBody)) !== null) {
+    if (!inputs.includes(inputMatch[1])) inputs.push(inputMatch[1]);
+  }
+  console.log('Catalog page inputs:', inputs.join(', '));
 
   return { loggedIn: catalogHasSearch || !catalogBody.includes('name="password"'), cookies };
 }
