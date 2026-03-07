@@ -4,7 +4,6 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,92 +21,17 @@ Deno.serve(async (req) => {
     }
 
     const password = Deno.env.get('CATALOG_PASS');
+    const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (!password || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required secrets (CATALOG_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
     }
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const browserHeaders: Record<string, string> = {
-      'User-Agent': UA,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'cs-CZ,cs;q=0.9,en;q=0.8',
-      'Cache-Control': 'no-cache',
-      'Sec-Ch-Ua': '"Chromium";v="122"',
-      'Sec-Fetch-Dest': 'document',
-      'Sec-Fetch-Mode': 'navigate',
-      'Sec-Fetch-Site': 'same-origin',
-      'Upgrade-Insecure-Requests': '1',
-    };
-
-    // Cookie jar
-    const cookieJar: Record<string, string> = {};
-    const collectCookies = (resp: Response) => {
-      const setCookies = resp.headers.getSetCookie?.() || [];
-      for (const sc of setCookies) {
-        const parts = sc.split(';')[0].split('=');
-        const name = parts[0].trim();
-        const value = parts.slice(1).join('=').trim();
-        cookieJar[name] = value;
-      }
-    };
-    const getCookieHeader = () =>
-      Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join('; ');
-
-    // Step 1: GET initial page
-    console.log('Step 1: GET initial page');
-    const initResp = await fetch(CATALOG_URL, { headers: browserHeaders, redirect: 'follow' });
-    collectCookies(initResp);
-    const initBody = await initResp.text();
-
-    const isLoginPage = initBody.includes('submit-password') && initBody.includes('name="password"');
-
-    // Step 2: POST login if needed
-    if (isLoginPage) {
-      console.log('Step 2: POST login with password length:', password.length);
-      const loginResp = await fetch(CATALOG_URL, {
-        method: 'POST',
-        headers: {
-          ...browserHeaders,
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Cookie': getCookieHeader(),
-          'Origin': 'https://www.vernostsevyplaci.cz',
-          'Referer': CATALOG_URL,
-        },
-        body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
-        redirect: 'follow',
-      });
-      collectCookies(loginResp);
-      const loginBody = await loginResp.text();
-      const loginOk = !loginBody.includes('submit-password') || loginBody.includes('Zadejte kód');
-      console.log('Login status:', loginResp.status, 'URL:', loginResp.url, 'loginOk:', loginOk);
-      console.log('Cookies after login:', Object.keys(cookieJar).join(', '));
-
-      if (!loginOk) {
-        // Try GET again with cookies
-        const getResp = await fetch(CATALOG_URL, {
-          headers: { ...browserHeaders, 'Cookie': getCookieHeader(), 'Referer': CATALOG_URL },
-          redirect: 'follow',
-        });
-        collectCookies(getResp);
-        const getBody = await getResp.text();
-        const getOk = !getBody.includes('submit-password') || getBody.includes('Zadejte kód');
-        console.log('GET after login ok:', getOk, 'URL:', getResp.url);
-        
-        if (!getOk) {
-          return new Response(
-            JSON.stringify({ success: false, error: 'Login to catalog failed. Check CATALOG_PASS secret.' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-    }
-
-    // Step 3: Search for each OEM code
     const results: Array<{
       oem_number: string;
       name: string;
@@ -118,7 +42,6 @@ Deno.serve(async (req) => {
       search_code: string;
     }> = [];
 
-    // Limit to 10 codes per request
     const codesToSearch = oemCodes.slice(0, 10);
 
     for (const oem of codesToSearch) {
@@ -152,91 +75,69 @@ Deno.serve(async (req) => {
       const searchCode = `K${cleanOem}`;
       console.log(`Searching for: ${searchCode}`);
 
-      try {
-        const searchResp = await fetch(CATALOG_URL, {
-          method: 'POST',
-          headers: {
-            ...browserHeaders,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': getCookieHeader(),
-            'Referer': CATALOG_URL,
-          },
-          body: `code=${encodeURIComponent(searchCode)}&submit-search=${encodeURIComponent('VYHLEDAT')}`,
-          redirect: 'follow',
-        });
-        collectCookies(searchResp);
-        const searchHtml = await searchResp.text();
+      let searchResult: { found: boolean; name: string; price_without_vat: number; price_with_vat: number } = {
+        found: false, name: '', price_without_vat: 0, price_with_vat: 0
+      };
 
-        // Parse the result - look for table rows with price data
-        const parsed = parseSearchResult(searchHtml, cleanOem);
+      // Method 1: Try Firecrawl (handles Cloudflare + JS)
+      if (firecrawlKey) {
+        try {
+          searchResult = await searchWithFirecrawl(firecrawlKey, password || '', searchCode, cleanOem);
+        } catch (err) {
+          console.error('Firecrawl search failed:', err);
+        }
+      }
 
-        if (parsed.found) {
-          // Upsert into parts_new cache
-          if (cached) {
-            // Track price history if changed
-            if (cached.price_without_vat !== parsed.price_without_vat && !cached.price_locked) {
-              await supabase.from('price_history').insert({
-                part_id: cached.id,
-                old_price_without_vat: cached.price_without_vat,
-                new_price_without_vat: parsed.price_without_vat,
-                old_price_with_vat: cached.price_with_vat,
-                new_price_with_vat: parsed.price_with_vat,
-                source: 'catalog-search',
-              });
-            }
-            if (!cached.price_locked) {
-              await supabase.from('parts_new').update({
-                name: parsed.name || cached.name,
-                price_without_vat: parsed.price_without_vat,
-                price_with_vat: parsed.price_with_vat,
-                last_price_update: new Date().toISOString(),
-              }).eq('id', cached.id);
-            }
-          } else {
-            // Insert new
-            await supabase.from('parts_new').insert({
-              oem_number: cleanOem,
-              name: parsed.name || `Díl ${cleanOem}`,
-              price_without_vat: parsed.price_without_vat,
-              price_with_vat: parsed.price_with_vat,
-              last_price_update: new Date().toISOString(),
+      // Method 2: Fallback to direct HTTP if Firecrawl didn't work
+      if (!searchResult.found && password) {
+        try {
+          searchResult = await searchDirect(password, searchCode, cleanOem);
+        } catch (err) {
+          console.error('Direct search failed:', err);
+        }
+      }
+
+      if (searchResult.found) {
+        // Upsert into parts_new cache
+        if (cached) {
+          if (cached.price_without_vat !== searchResult.price_without_vat && !cached.price_locked) {
+            await supabase.from('price_history').insert({
+              part_id: cached.id,
+              old_price_without_vat: cached.price_without_vat,
+              new_price_without_vat: searchResult.price_without_vat,
+              old_price_with_vat: cached.price_with_vat,
+              new_price_with_vat: searchResult.price_with_vat,
+              source: 'catalog-search',
             });
           }
-
-          results.push({
-            oem_number: cleanOem,
-            name: parsed.name || `Díl ${cleanOem}`,
-            price_without_vat: parsed.price_without_vat,
-            price_with_vat: parsed.price_with_vat,
-            found: true,
-            cached: false,
-            search_code: searchCode,
-          });
+          if (!cached.price_locked) {
+            await supabase.from('parts_new').update({
+              name: searchResult.name || cached.name,
+              price_without_vat: searchResult.price_without_vat,
+              price_with_vat: searchResult.price_with_vat,
+              last_price_update: new Date().toISOString(),
+            }).eq('id', cached.id);
+          }
         } else {
-          console.log(`No price found for ${searchCode}`);
-          console.log('HTML preview:', searchHtml.substring(0, 2000));
-          results.push({
+          await supabase.from('parts_new').insert({
             oem_number: cleanOem,
-            name: `Díl ${cleanOem}`,
-            price_without_vat: 0,
-            price_with_vat: 0,
-            found: false,
-            cached: false,
-            search_code: searchCode,
+            name: searchResult.name || `Díl ${cleanOem}`,
+            price_without_vat: searchResult.price_without_vat,
+            price_with_vat: searchResult.price_with_vat,
+            last_price_update: new Date().toISOString(),
           });
         }
-      } catch (searchErr) {
-        console.error(`Error searching ${searchCode}:`, searchErr);
-        results.push({
-          oem_number: cleanOem,
-          name: `Díl ${cleanOem}`,
-          price_without_vat: 0,
-          price_with_vat: 0,
-          found: false,
-          cached: false,
-          search_code: searchCode,
-        });
       }
+
+      results.push({
+        oem_number: cleanOem,
+        name: searchResult.name || `Díl ${cleanOem}`,
+        price_without_vat: searchResult.price_without_vat,
+        price_with_vat: searchResult.price_with_vat,
+        found: searchResult.found,
+        cached: false,
+        search_code: searchCode,
+      });
     }
 
     return new Response(
@@ -253,25 +154,147 @@ Deno.serve(async (req) => {
   }
 });
 
-function parseSearchResult(html: string, oem: string): {
+async function searchWithFirecrawl(
+  apiKey: string, password: string, searchCode: string, oem: string
+): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number }> {
+  console.log('Trying Firecrawl for:', searchCode);
+
+  // Use Firecrawl actions to: login, search, extract results
+  const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: CATALOG_URL,
+      formats: ['html', 'markdown'],
+      waitFor: 3000,
+      actions: [
+        { type: 'wait', milliseconds: 2000 },
+        {
+          type: 'executeJavascript',
+          script: `
+            const pwInput = document.querySelector('input[name="password"]');
+            if (pwInput) {
+              pwInput.value = '${password}';
+              const submitBtn = document.querySelector('input[name="submit-password"]');
+              if (submitBtn) submitBtn.click();
+            }
+          `
+        },
+        { type: 'wait', milliseconds: 5000 },
+        {
+          type: 'executeJavascript',
+          script: `
+            // After login, find search input and submit search
+            const codeInput = document.querySelector('input[placeholder*="kód"]') || document.querySelector('input[name="code"]') || document.querySelector('input[type="text"]');
+            if (codeInput) {
+              codeInput.value = '${searchCode}';
+              const searchBtn = document.querySelector('input[type="submit"][value*="VYHLEDAT"]') || document.querySelector('input[type="submit"]');
+              if (searchBtn) searchBtn.click();
+            }
+          `
+        },
+        { type: 'wait', milliseconds: 5000 },
+        { type: 'scrape' },
+      ],
+    }),
+  });
+
+  const data = await resp.json();
+  if (!resp.ok) {
+    console.error('Firecrawl error:', JSON.stringify(data).substring(0, 500));
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0 };
+  }
+
+  const html = data.data?.html || data.html || '';
+  const markdown = data.data?.markdown || data.markdown || '';
+
+  console.log('Firecrawl markdown preview:', markdown.substring(0, 1000));
+
+  return parseSearchResult(html, markdown, oem);
+}
+
+async function searchDirect(
+  password: string, searchCode: string, oem: string
+): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number }> {
+  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+  const browserHeaders: Record<string, string> = {
+    'User-Agent': UA,
+    'Accept': 'text/html,application/xhtml+xml,*/*',
+    'Accept-Language': 'cs-CZ,cs;q=0.9',
+  };
+
+  const cookieJar: Record<string, string> = {};
+  const collectCookies = (resp: Response) => {
+    const sc = resp.headers.getSetCookie?.() || [];
+    for (const c of sc) {
+      const parts = c.split(';')[0].split('=');
+      cookieJar[parts[0].trim()] = parts.slice(1).join('=').trim();
+    }
+  };
+  const getCookieHeader = () => Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join('; ');
+
+  // GET page
+  const initResp = await fetch(CATALOG_URL, { headers: browserHeaders, redirect: 'follow' });
+  collectCookies(initResp);
+  await initResp.text();
+
+  // POST login
+  console.log('Direct login with password length:', password.length);
+  const loginResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      ...browserHeaders,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': getCookieHeader(),
+      'Origin': 'https://www.vernostsevyplaci.cz',
+      'Referer': CATALOG_URL,
+    },
+    body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
+    redirect: 'follow',
+  });
+  collectCookies(loginResp);
+  const loginBody = await loginResp.text();
+  const loginOk = !loginBody.includes('submit-password') || loginBody.includes('Zadejte kód');
+  console.log('Direct login ok:', loginOk);
+
+  if (!loginOk) {
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0 };
+  }
+
+  // POST search
+  const searchResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      ...browserHeaders,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': getCookieHeader(),
+      'Referer': CATALOG_URL,
+    },
+    body: `code=${encodeURIComponent(searchCode)}&submit-search=${encodeURIComponent('VYHLEDAT')}`,
+    redirect: 'follow',
+  });
+  const searchHtml = await searchResp.text();
+
+  return parseSearchResult(searchHtml, '', oem);
+}
+
+function parseSearchResult(html: string, markdown: string, oem: string): {
   found: boolean;
   name: string;
   price_without_vat: number;
   price_with_vat: number;
 } {
-  // Try to extract data from HTML table rows
-  // The catalog typically shows results in a table with columns like:
-  // Code | Name | Price without VAT | Price with VAT
-
-  // Remove scripts and styles
+  // Clean HTML
   const cleanHtml = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
-  // Strategy 1: Look for table rows containing the OEM code or price data
+  // Strategy 1: Parse table rows
   const tableRowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let match;
-  let bestMatch: { name: string; priceWithout: number; priceWith: number } | null = null;
 
   while ((match = tableRowRegex.exec(cleanHtml)) !== null) {
     const rowHtml = match[1];
@@ -279,18 +302,15 @@ function parseSearchResult(html: string, oem: string): {
     const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
     let cellMatch;
     while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
-      const cellText = cellMatch[1].replace(/<[^>]+>/g, '').trim();
-      cells.push(cellText);
+      cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
     }
 
     if (cells.length < 2) continue;
 
-    // Look for rows that contain price-like numbers
     const priceValues: number[] = [];
     let nameCandidate = '';
 
     for (const cell of cells) {
-      // Try to parse as price (Czech format: 1 234,56 or 1234.56)
       const priceStr = cell.replace(/\s/g, '').replace(',', '.');
       const priceNum = parseFloat(priceStr);
       if (!isNaN(priceNum) && priceNum > 0 && priceNum < 1000000) {
@@ -300,36 +320,51 @@ function parseSearchResult(html: string, oem: string): {
       }
     }
 
-    // If we found at least one price in this row
     if (priceValues.length >= 1) {
       const priceWithout = priceValues[0];
       const priceWith = priceValues.length >= 2 ? priceValues[1] : Math.round(priceWithout * 1.21 * 100) / 100;
-      bestMatch = {
+      return {
+        found: true,
         name: nameCandidate || `Díl ${oem}`,
-        priceWithout,
-        priceWith,
+        price_without_vat: priceWithout,
+        price_with_vat: priceWith,
       };
-      // If the row seems to contain our OEM code, prefer it
-      const rowText = cells.join(' ').toUpperCase();
-      if (rowText.includes(oem) || rowText.includes(`K${oem}`)) {
-        break; // This is likely our match
+    }
+  }
+
+  // Strategy 2: Parse from markdown (Firecrawl)
+  if (markdown) {
+    // Look for table rows in markdown: | col1 | col2 | col3 |
+    const mdLines = markdown.split('\n');
+    for (const line of mdLines) {
+      if (!line.includes('|')) continue;
+      const cols = line.split('|').map(c => c.trim()).filter(c => c && !c.match(/^-+$/));
+      if (cols.length < 2) continue;
+
+      const priceValues: number[] = [];
+      let nameCandidate = '';
+      for (const col of cols) {
+        const num = parseFloat(col.replace(/\s/g, '').replace(',', '.'));
+        if (!isNaN(num) && num > 0 && num < 1000000) {
+          priceValues.push(num);
+        } else if (col.length > 2 && !col.match(/^\d+$/) && !nameCandidate) {
+          nameCandidate = col;
+        }
+      }
+
+      if (priceValues.length >= 1) {
+        return {
+          found: true,
+          name: nameCandidate || `Díl ${oem}`,
+          price_without_vat: priceValues[0],
+          price_with_vat: priceValues.length >= 2 ? priceValues[1] : Math.round(priceValues[0] * 1.21 * 100) / 100,
+        };
       }
     }
   }
 
-  if (bestMatch) {
-    return {
-      found: true,
-      name: bestMatch.name,
-      price_without_vat: bestMatch.priceWithout,
-      price_with_vat: bestMatch.priceWith,
-    };
-  }
-
-  // Strategy 2: Look for any price-like content in the page
+  // Strategy 3: Look for price patterns in text
   const textContent = cleanHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  
-  // Look for patterns like "Cena: 1234" or numbers near "Kč"
   const pricePattern = /(\d[\d\s]*[,.]?\d*)\s*(?:Kč|CZK|,-)/gi;
   const prices: number[] = [];
   let priceMatch;
