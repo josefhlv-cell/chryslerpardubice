@@ -24,6 +24,7 @@ import MyVehicles from "./pages/MyVehicles";
 import Notifications from "./pages/Notifications";
 import AiMechanic from "./pages/AiMechanic";
 import Terms from "./pages/Terms";
+import Emergency from "./pages/Emergency";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/ai-mechanic" element={<AiMechanic />} />
+              <Route path="/emergency" element={<Emergency />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/terms" element={<Terms />} />
