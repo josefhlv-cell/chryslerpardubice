@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
     const vehicleContext = vehicle
-      ? `Zákazník vlastní vozidlo: ${vehicle.brand} ${vehicle.model} ${vehicle.year || ''} ${vehicle.engine || ''} (VIN: ${vehicle.vin || 'neznámý'}).`
+      ? `Zákazník vlastní vozidlo: ${vehicle.brand} ${vehicle.model} ${vehicle.year || ''} ${vehicle.engine || ''} (VIN: ${vehicle.vin || 'neznámý'}, km: ${vehicle.mileage || 'neznámé'}).`
       : 'Zákazník nemá uložené vozidlo.';
 
     const systemPrompt = `Jsi Tonda – AI Mechanik a odborný poradce pro vozidla Chrysler, Jeep, Dodge a RAM s originálními Mopar díly. Vždy se představ jako Tonda.
