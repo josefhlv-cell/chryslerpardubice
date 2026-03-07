@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Plus, Trash2, Edit, History, ToggleRight } from "lucide-react";
+import { Loader2, Plus, Trash2, Edit, ToggleRight, ImagePlus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type Profile = {
@@ -38,6 +38,7 @@ type ServiceRecord = {
   price: number | null;
   mileage: number | null;
   service_date: string;
+  photos: string[] | null;
 };
 
 const AdminServiceHistory = () => {
@@ -57,6 +58,8 @@ const AdminServiceHistory = () => {
   const [price, setPrice] = useState("");
   const [mileage, setMileage] = useState("");
   const [serviceDate, setServiceDate] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const fetch = async () => {
@@ -87,7 +90,7 @@ const AdminServiceHistory = () => {
     fetch();
   }, [selectedVehicleId]);
 
-  const toggleServiceHistory = async (profileId: string, userId: string, enabled: boolean) => {
+  const toggleServiceHistory = async (profileId: string, _userId: string, enabled: boolean) => {
     await supabase.from("profiles").update({ service_history_enabled: enabled }).eq("id", profileId);
     setProfiles(prev => prev.map(p => p.id === profileId ? { ...p, service_history_enabled: enabled } : p));
     toast({ title: enabled ? "Servisní knížka zapnuta" : "Servisní knížka vypnuta" });
@@ -101,6 +104,7 @@ const AdminServiceHistory = () => {
     setPrice("");
     setMileage("");
     setServiceDate("");
+    setPhotos([]);
   };
 
   const openAdd = () => { resetForm(); setDialogOpen(true); };
@@ -112,7 +116,32 @@ const AdminServiceHistory = () => {
     setPrice(r.price?.toString() || "");
     setMileage(r.mileage?.toString() || "");
     setServiceDate(r.service_date);
+    setPhotos(r.photos || []);
     setDialogOpen(true);
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    setUploading(true);
+    const newPhotos = [...photos];
+    for (const file of Array.from(files)) {
+      const ext = file.name.split(".").pop();
+      const path = `${selectedVehicleId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("service-photos").upload(path, file);
+      if (error) {
+        toast({ title: "Chyba nahrávání", description: error.message, variant: "destructive" });
+        continue;
+      }
+      const { data: urlData } = supabase.storage.from("service-photos").getPublicUrl(path);
+      newPhotos.push(urlData.publicUrl);
+    }
+    setPhotos(newPhotos);
+    setUploading(false);
+  };
+
+  const removePhoto = (idx: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== idx));
   };
 
   const save = async () => {
@@ -120,7 +149,7 @@ const AdminServiceHistory = () => {
       toast({ title: "Vyplňte typ servisu a datum", variant: "destructive" });
       return;
     }
-    const payload = {
+    const payload: any = {
       vehicle_id: selectedVehicleId,
       user_id: selectedUserId,
       service_type: serviceType,
@@ -129,6 +158,7 @@ const AdminServiceHistory = () => {
       price: price ? parseFloat(price) : null,
       mileage: mileage ? parseInt(mileage) : null,
       service_date: serviceDate,
+      photos: photos.length > 0 ? photos : [],
     };
 
     if (editRecord) {
@@ -141,7 +171,6 @@ const AdminServiceHistory = () => {
     toast({ title: "Uloženo" });
     setDialogOpen(false);
     resetForm();
-    // Refresh
     const { data } = await supabase.from("service_history").select("*").eq("vehicle_id", selectedVehicleId).order("service_date", { ascending: false });
     setRecords((data as ServiceRecord[]) || []);
   };
@@ -156,7 +185,6 @@ const AdminServiceHistory = () => {
 
   return (
     <div className="space-y-4">
-      {/* User select */}
       <div>
         <label className="text-sm font-medium">Zákazník</label>
         <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -172,7 +200,6 @@ const AdminServiceHistory = () => {
         </Select>
       </div>
 
-      {/* Toggle service history */}
       {selectedProfile && (
         <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
           <div className="flex items-center gap-2">
@@ -186,7 +213,6 @@ const AdminServiceHistory = () => {
         </div>
       )}
 
-      {/* Vehicle select */}
       {vehicles.length > 0 && (
         <div>
           <label className="text-sm font-medium">Vozidlo</label>
@@ -207,7 +233,6 @@ const AdminServiceHistory = () => {
         <p className="text-sm text-muted-foreground text-center py-4">Zákazník nemá žádná vozidla</p>
       )}
 
-      {/* Records */}
       {selectedVehicleId && (
         <>
           <Button size="sm" onClick={openAdd} className="w-full">
@@ -224,7 +249,7 @@ const AdminServiceHistory = () => {
                 <Card key={r.id}>
                   <CardContent className="p-3">
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-semibold text-sm">{r.service_type}</p>
                         <p className="text-xs text-muted-foreground">{new Date(r.service_date).toLocaleDateString("cs-CZ")}</p>
                         {r.description && <p className="text-xs text-muted-foreground mt-1">{r.description}</p>}
@@ -232,8 +257,15 @@ const AdminServiceHistory = () => {
                           {r.mileage != null && <span>{r.mileage.toLocaleString("cs")} km</span>}
                           {r.price != null && <span className="font-medium">{r.price.toLocaleString("cs")} Kč</span>}
                         </div>
+                        {r.photos && r.photos.length > 0 && (
+                          <div className="flex gap-1.5 mt-2 flex-wrap">
+                            {r.photos.map((url, i) => (
+                              <img key={i} src={url} alt="Foto" className="w-16 h-16 rounded object-cover border" />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1 shrink-0">
                         <Button size="icon" variant="ghost" onClick={() => openEdit(r)}><Edit className="w-4 h-4" /></Button>
                         <Button size="icon" variant="ghost" onClick={() => remove(r.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
                       </div>
@@ -246,9 +278,8 @@ const AdminServiceHistory = () => {
         </>
       )}
 
-      {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(o) => { if (!o) { setDialogOpen(false); resetForm(); } }}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editRecord ? "Upravit záznam" : "Přidat servisní záznam"}</DialogTitle>
           </DialogHeader>
@@ -277,6 +308,24 @@ const AdminServiceHistory = () => {
               <div>
                 <label className="text-sm font-medium">Cena (Kč)</label>
                 <Input type="number" value={price} onChange={e => setPrice(e.target.value)} />
+              </div>
+            </div>
+            {/* Photos */}
+            <div>
+              <label className="text-sm font-medium">Fotografie</label>
+              <div className="flex gap-1.5 flex-wrap mt-1">
+                {photos.map((url, i) => (
+                  <div key={i} className="relative group">
+                    <img src={url} alt="Foto" className="w-20 h-20 rounded object-cover border" />
+                    <button onClick={() => removePhoto(i)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                <label className="w-20 h-20 rounded border-2 border-dashed border-muted-foreground/30 flex items-center justify-center cursor-pointer hover:border-primary transition-colors">
+                  {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5 text-muted-foreground" />}
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
+                </label>
               </div>
             </div>
           </div>

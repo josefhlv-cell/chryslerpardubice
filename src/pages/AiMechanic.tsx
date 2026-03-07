@@ -55,11 +55,10 @@ const AiMechanic = () => {
     setInput("");
     setIsLoading(true);
 
-    // Also notify admin
     if (user) {
       supabase.from("notifications").insert({
-        user_id: user.id, // Will be visible to admin via admin query
-        title: "AI Mechanik – dotaz",
+        user_id: user.id,
+        title: "Tonda – dotaz zákazníka",
         message: text.substring(0, 200),
       }).then(() => {});
     }
@@ -139,7 +138,7 @@ const AiMechanic = () => {
 
   return (
     <div className="min-h-screen pb-20 flex flex-col">
-      <PageHeader title="AI Mechanik" />
+      <PageHeader title="Tonda – AI Mechanik" />
       <div className="flex-1 p-4 max-w-lg mx-auto w-full flex flex-col gap-3">
         {/* Vehicle selector */}
         {vehicles.length > 0 && (
@@ -162,10 +161,11 @@ const AiMechanic = () => {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <Card className="border-primary/30">
               <CardContent className="p-4 text-center">
+                <p className="text-xs font-semibold text-primary mb-1">Tonda</p>
                 <Bot className="w-10 h-10 mx-auto mb-2 text-primary" />
-                <h2 className="font-display font-bold text-lg">AI Mechanik</h2>
+                <h2 className="font-display font-bold text-lg">Ahoj, jsem Tonda!</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Popište problém s vozidlem – analyzuji příčinu a doporučím řešení.
+                  Váš AI mechanik. Popište problém s vozidlem – analyzuji příčinu a doporučím řešení.
                 </p>
               </CardContent>
             </Card>
@@ -203,7 +203,13 @@ const AiMechanic = () => {
               animate={{ opacity: 1, y: 0 }}
               className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
+              {msg.role === "assistant" && (
+                <div className="flex flex-col items-center mr-2 shrink-0">
+                  <span className="text-[9px] font-bold text-primary">Tonda</span>
+                  <Bot className="w-6 h-6 text-primary" />
+                </div>
+              )}
+              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
                 msg.role === "user"
                   ? "gradient-primary text-primary-foreground"
                   : "glass-card"
@@ -214,6 +220,10 @@ const AiMechanic = () => {
           ))}
           {isLoading && messages[messages.length - 1]?.role === "user" && (
             <div className="flex justify-start">
+              <div className="flex flex-col items-center mr-2 shrink-0">
+                <span className="text-[9px] font-bold text-primary">Tonda</span>
+                <Bot className="w-6 h-6 text-primary" />
+              </div>
               <div className="glass-card rounded-2xl px-4 py-2.5">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
               </div>
