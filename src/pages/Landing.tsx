@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Search, ShoppingCart, Wrench } from "lucide-react";
+import { Search, ShoppingCart, Wrench, FileDown, Presentation } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import ServiceRecommendations from "@/components/ServiceRecommendations";
 
@@ -108,6 +108,17 @@ const Landing = () => {
             >
               Pokračovat jako host →
             </button>
+
+            <div className="flex gap-2 w-full mt-2">
+              <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={() => navigate("/presentation")}>
+                <Presentation className="w-3 h-3 mr-1" />
+                PDF Prezentace
+              </Button>
+              <Button variant="ghost" size="sm" className="flex-1 text-xs text-muted-foreground" onClick={() => navigate("/presentation")}>
+                <FileDown className="w-3 h-3 mr-1" />
+                Záloha projektu
+              </Button>
+            </div>
           </motion.div>
         </motion.div>
       </div>
