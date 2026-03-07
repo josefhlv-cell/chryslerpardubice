@@ -27,6 +27,7 @@ import Terms from "./pages/Terms";
 import Emergency from "./pages/Emergency";
 import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
+import AppPresentation from "./pages/AppPresentation";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
