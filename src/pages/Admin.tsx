@@ -306,6 +306,7 @@ const Admin = () => {
             <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>
             <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
             <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>
+            <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
