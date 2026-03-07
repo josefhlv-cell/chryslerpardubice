@@ -101,50 +101,84 @@ const Shop = () => {
   const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase();
 
   const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
-    if (!searchQuery && !brand && !category && !subCategory) return;
+    if (!searchQuery && !category && !subCategory) return;
     setSearching(true);
+    setPriceFetching(true);
     try {
-      const cleanQuery = searchQuery.replace(/^0+/, "");
       const normalized = normalizeOem(searchQuery);
+      const oemCodes = [normalized];
 
-      let q = supabase
+      // First check local cache
+      const { data: cached, count } = await supabase
         .from("parts_new")
-        .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" });
+        .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" })
+        .or(`oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`)
+        .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
+        .order("name");
 
-      if (searchQuery) {
-        q = q.or(`oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${cleanQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`);
+      if (cached && cached.length > 0) {
+        // Found in local DB - show cached results
+        setResults(cached);
+        setTotalCount(count ?? 0);
+        setSearching(false);
+        setPriceFetching(false);
+        return;
       }
-      if (category) q = q.ilike("category", `%${category}%`);
-      if (subCategory) q = q.ilike("family", `%${subCategory}%`);
 
-      const from = pageNum * PAGE_SIZE;
-      const { data, error, count } = await q.range(from, from + PAGE_SIZE - 1).order("name");
-      if (error) throw error;
+      // Not found locally - fetch from external catalog in real-time
+      console.log("Fetching from external catalog for:", oemCodes);
+      const { data: catalogData, error: fnError } = await supabase.functions.invoke("catalog-search", {
+        body: { oemCodes },
+      });
 
-      setResults(data || []);
-      setTotalCount(count ?? 0);
+      if (fnError) throw new Error(fnError.message || "Chyba při volání katalogu");
 
-      // Auto-fetch prices for displayed parts
-      if (data?.length) {
-        fetchPricesForParts(data.map(p => p.oem_number));
+      const catalogResults = catalogData?.results || [];
+      
+      // Convert catalog results to PartResult format
+      const partResults: PartResult[] = catalogResults
+        .filter((r: any) => r.found)
+        .map((r: any, i: number) => ({
+          id: `catalog-${i}-${r.oem_number}`,
+          name: r.name || `Díl ${r.oem_number}`,
+          oem_number: r.oem_number,
+          internal_code: r.search_code || null,
+          price_without_vat: r.price_without_vat,
+          price_with_vat: r.price_with_vat,
+          category: null,
+          family: null,
+          segment: r.cached ? "Cache" : "Live",
+          packaging: null,
+        }));
+
+      // Also include not-found items so user knows
+      const notFound = catalogResults.filter((r: any) => !r.found);
+      if (notFound.length > 0 && partResults.length === 0) {
+        toast.error(`Díl "${searchQuery}" nebyl nalezen v katalogu`);
+      }
+
+      setResults(partResults);
+      setTotalCount(partResults.length);
+
+      // If parts were found and cached, refresh from DB to get proper IDs
+      if (partResults.length > 0) {
+        const { data: freshData } = await supabase
+          .from("parts_new")
+          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging")
+          .in("oem_number", partResults.map(p => p.oem_number));
+        if (freshData && freshData.length > 0) {
+          setResults(freshData);
+          setTotalCount(freshData.length);
+        }
       }
     } catch (err: any) {
       toast.error("Chyba při vyhledávání: " + err.message);
       setResults([]);
     } finally {
       setSearching(false);
+      setPriceFetching(false);
     }
-  }, [brand, category, subCategory]);
-
-  const fetchPricesForParts = async (partNumbers: string[]) => {
-    setPriceFetching(true);
-    try {
-      await supabase.functions.invoke("price-sync", {
-        body: { partNumbers, mode: "cache" },
-      });
-    } catch {}
-    setPriceFetching(false);
-  };
+  }, [category, subCategory]);
 
   const hasSearched = useRef(false);
   useEffect(() => {
