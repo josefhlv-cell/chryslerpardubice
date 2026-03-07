@@ -274,14 +274,27 @@ async function loginToCatalog(password: string): Promise<Session> {
   }
   console.log('Catalog page scripts:', scripts.join(' | '));
 
-  // Log inline script content (search-related)
+  // Log inline script content
   const inlineScriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
   let inlineMatch;
+  let scriptCount = 0;
   while ((inlineMatch = inlineScriptRegex.exec(catalogBody)) !== null) {
     const content = inlineMatch[1].trim();
-    if (content.length > 10 && (content.includes('search') || content.includes('find') || content.includes('ajax') || content.includes('fetch') || content.includes('part'))) {
-      console.log('Inline script (search-related):', content.substring(0, 1000));
+    if (content.length > 10) {
+      scriptCount++;
+      console.log(`Inline script #${scriptCount} (${content.length} chars):`, content.substring(0, 500));
     }
+  }
+  console.log('Total inline scripts:', scriptCount);
+
+  // Log HTML around "find-part" or "search-part"
+  const findIdx = catalogBody.indexOf('find-part');
+  if (findIdx > -1) {
+    console.log('HTML around find-part:', catalogBody.substring(Math.max(0, findIdx - 200), findIdx + 300));
+  }
+  const searchIdx = catalogBody.indexOf('search-part');
+  if (searchIdx > -1) {
+    console.log('HTML around search-part:', catalogBody.substring(Math.max(0, searchIdx - 200), searchIdx + 300));
   }
 
   return { loggedIn: catalogHasSearch || !catalogBody.includes('name="password"'), cookies };
