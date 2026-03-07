@@ -238,14 +238,24 @@ async function searchCatalog(
     'Referer': CATALOG_URL,
   };
 
+  const searchBody = `code=${encodeURIComponent(searchCode)}&submit-search=${encodeURIComponent('VYHLEDAT')}`;
+  console.log('Search POST body:', searchBody);
+  console.log('Search cookie:', cookieHeader(session.cookies));
+
   const searchResp = await fetch(CATALOG_URL, {
     method: 'POST',
     headers,
-    body: `code=${encodeURIComponent(searchCode)}&submit-search=${encodeURIComponent('VYHLEDAT')}`,
+    body: searchBody,
     redirect: 'follow',
   });
   const searchHtml = await searchResp.text();
+  
+  // Log search page content
+  const searchText = searchHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   console.log('Search response length:', searchHtml.length);
+  console.log('Search has code input:', searchHtml.includes('name="code"'));
+  console.log('Search has results table:', searchHtml.includes('<table') && searchHtml.includes('Kč'));
+  console.log('Search text snippet:', searchText.substring(0, 800));
 
   return parseSearchResult(searchHtml, oem);
 }
