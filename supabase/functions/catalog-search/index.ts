@@ -344,12 +344,9 @@ function parseSearchResult(html: string, oem: string): {
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
 
-  // Strategy 1: Parse table rows - log all rows with multiple cells
+  // Known column layout: Kód dílu | Název | Famílie | Kategorie | Segment | Balení | Cena bez DPH | Cena s DPH
   const tableRowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let match;
-  let rowIndex = 0;
-
-  const candidateRows: Array<{ cells: string[]; rowIndex: number }> = [];
 
   while ((match = tableRowRegex.exec(cleanHtml)) !== null) {
     const rowHtml = match[1];
@@ -359,49 +356,37 @@ function parseSearchResult(html: string, oem: string): {
     while ((cellMatch = cellRegex.exec(rowHtml)) !== null) {
       cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
     }
-    rowIndex++;
 
-    if (cells.length >= 2) {
-      console.log(`Table row #${rowIndex} (${cells.length} cells):`, JSON.stringify(cells));
-      candidateRows.push({ cells, rowIndex });
-    }
-  }
+    if (cells.length < 7) continue;
 
-  // Find the row that looks like a price result (has numeric values that could be prices)
-  for (const row of candidateRows) {
-    const { cells } = row;
+    // Look for cells containing "Kč" - those are price cells
+    const priceWithoutIdx = cells.findIndex(c => c.includes('Kč'));
+    if (priceWithoutIdx === -1) continue;
+
+    const parsePrice = (s: string) => parseFloat(s.replace(/\s/g, '').replace('Kč', '').replace(',', '.'));
     
-    // Look for cells with price-like values (> 10, typical for auto parts)
-    const priceValues: number[] = [];
-    let nameCandidate = '';
-    let codeCandidate = '';
+    const priceWithout = parsePrice(cells[priceWithoutIdx]);
+    const priceWith = priceWithoutIdx + 1 < cells.length && cells[priceWithoutIdx + 1].includes('Kč')
+      ? parsePrice(cells[priceWithoutIdx + 1])
+      : Math.round(priceWithout * 1.21 * 100) / 100;
 
-    for (const cell of cells) {
-      const cleaned = cell.replace(/\s/g, '').replace(',', '.');
-      const num = parseFloat(cleaned);
-      
-      // Price should be > 10 for auto parts
-      if (!isNaN(num) && num > 10 && num < 1000000) {
-        priceValues.push(num);
-      } else if (cell.length > 3 && !cell.match(/^\d+$/) && cell.match(/[a-záčďéěíňóřšťúůýž]/i)) {
-        // Name contains Czech characters
-        if (!nameCandidate) nameCandidate = cell;
-      } else if (cell.match(/^[A-Z0-9K]{5,}/)) {
-        codeCandidate = cell;
-      }
-    }
+    if (isNaN(priceWithout) || priceWithout <= 0) continue;
 
-    if (priceValues.length >= 1) {
-      const priceWithout = priceValues[0];
-      const priceWith = priceValues.length >= 2 ? priceValues[1] : Math.round(priceWithout * 1.21 * 100) / 100;
-      console.log('Found price:', priceWithout, 'with VAT:', priceWith, 'name:', nameCandidate, 'code:', codeCandidate);
-      return {
-        found: true,
-        name: nameCandidate || `Díl ${oem}`,
-        price_without_vat: priceWithout,
-        price_with_vat: priceWith,
-      };
-    }
+    // Name is cell[1], code is cell[0]
+    const partCode = cells[0] || '';
+    const partName = cells[1] || '';
+    const family = cells[2] || '';
+    const category = cells[3] || '';
+    const segment = cells[4] || '';
+
+    console.log('Found part:', partCode, 'name:', partName, 'price:', priceWithout, 'with VAT:', priceWith);
+
+    return {
+      found: true,
+      name: partName || `Díl ${oem}`,
+      price_without_vat: priceWithout,
+      price_with_vat: priceWith,
+    };
   }
 
   // Strategy 2: Look for price patterns in text
