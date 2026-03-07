@@ -500,6 +500,12 @@ const Admin = () => {
               <AdminFaultReports />
             </div>
           </TabsContent>
+
+          <TabsContent value="prices">
+            <div className="mt-2">
+              <AdminPriceManagement />
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
