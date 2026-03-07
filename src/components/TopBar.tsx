@@ -14,7 +14,7 @@ const TopBar = () => {
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border bg-background/95 backdrop-blur-xl safe-top">
       <button onClick={() => navigate("/shop")} className="flex items-center gap-2.5">
-        <img src="/images/logo_chrysler.webp" alt="Chrysler&amp;Dodge Pardubice" className="h-8 object-contain" />
+        <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-8 object-contain" />
       </button>
 
       <div className="flex items-center gap-1">
