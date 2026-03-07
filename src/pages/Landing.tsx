@@ -119,7 +119,7 @@ const Landing = () => {
                 Záloha projektu
               </Button>
             </div>
-        </motion.div>
+          </motion.div>
       </div>
     </div>
   );
