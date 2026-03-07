@@ -27,6 +27,7 @@ import Terms from "./pages/Terms";
 import Emergency from "./pages/Emergency";
 import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
+import AppPresentation from "./pages/AppPresentation";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="/emergency" element={<Emergency />} />
               <Route path="/service-plan" element={<ServicePlan />} />
               <Route path="/service-book" element={<ServiceBook />} />
+              <Route path="/presentation" element={<AppPresentation />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/terms" element={<Terms />} />
