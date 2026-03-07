@@ -413,6 +413,7 @@ export type Database = {
           id: string
           mileage: number | null
           parts_used: string | null
+          photos: string[] | null
           price: number | null
           service_date: string
           service_type: string
@@ -425,6 +426,7 @@ export type Database = {
           id?: string
           mileage?: number | null
           parts_used?: string | null
+          photos?: string[] | null
           price?: number | null
           service_date: string
           service_type: string
@@ -437,6 +439,7 @@ export type Database = {
           id?: string
           mileage?: number | null
           parts_used?: string | null
+          photos?: string[] | null
           price?: number | null
           service_date?: string
           service_type?: string
