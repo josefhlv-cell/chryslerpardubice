@@ -217,6 +217,41 @@ export type Database = {
           },
         ]
       }
+      mileage_history: {
+        Row: {
+          created_at: string
+          id: string
+          mileage: number
+          source: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mileage: number
+          source?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mileage?: number
+          source?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mileage_history_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "user_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       new_part_orders: {
         Row: {
           admin_note: string | null
@@ -664,6 +699,62 @@ export type Database = {
           },
         ]
       }
+      service_plans: {
+        Row: {
+          created_at: string
+          id: string
+          interval_km: number | null
+          interval_months: number | null
+          is_active: boolean
+          is_custom: boolean
+          last_service_date: string | null
+          last_service_km: number | null
+          recommended_part_oem: string | null
+          service_name: string
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          interval_km?: number | null
+          interval_months?: number | null
+          is_active?: boolean
+          is_custom?: boolean
+          last_service_date?: string | null
+          last_service_km?: number | null
+          recommended_part_oem?: string | null
+          service_name: string
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          interval_km?: number | null
+          interval_months?: number | null
+          is_active?: boolean
+          is_custom?: boolean
+          last_service_date?: string | null
+          last_service_km?: number | null
+          recommended_part_oem?: string | null
+          service_name?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_plans_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "user_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       used_part_requests: {
         Row: {
           admin_available: boolean | null
@@ -737,6 +828,7 @@ export type Database = {
         Row: {
           brand: string
           created_at: string
+          current_mileage: number | null
           engine: string | null
           id: string
           license_plate: string | null
@@ -748,6 +840,7 @@ export type Database = {
         Insert: {
           brand: string
           created_at?: string
+          current_mileage?: number | null
           engine?: string | null
           id?: string
           license_plate?: string | null
@@ -759,6 +852,7 @@ export type Database = {
         Update: {
           brand?: string
           created_at?: string
+          current_mileage?: number | null
           engine?: string | null
           id?: string
           license_plate?: string | null

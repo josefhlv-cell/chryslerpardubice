@@ -20,6 +20,7 @@ import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
 import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
 import AdminFaultReports from "@/components/admin/AdminFaultReports";
 import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
+import AdminServicePlans from "@/components/admin/AdminServicePlans";
 
 // ---- Types ----
 
@@ -307,6 +308,7 @@ const Admin = () => {
             <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
             <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>
             <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>
+            <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -504,6 +506,12 @@ const Admin = () => {
           <TabsContent value="prices">
             <div className="mt-2">
               <AdminPriceManagement />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="service-plans">
+            <div className="mt-2">
+              <AdminServicePlans />
             </div>
           </TabsContent>
         </Tabs>

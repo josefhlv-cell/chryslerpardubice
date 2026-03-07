@@ -8,3 +8,12 @@ verify_jwt = false
 
 [functions.catalog-fetch]
 verify_jwt = false
+
+[functions.vin-ocr]
+verify_jwt = false
+
+[functions.ai-mechanic]
+verify_jwt = false
+
+[functions.price-sync]
+verify_jwt = false

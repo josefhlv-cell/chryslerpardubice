@@ -40,7 +40,7 @@ const AiMechanic = () => {
 
   useEffect(() => {
     if (user) {
-      supabase.from("user_vehicles").select("id, brand, model, year, engine, vin")
+      supabase.from("user_vehicles").select("id, brand, model, year, engine, vin, current_mileage")
         .eq("user_id", user.id).then(({ data }) => {
           setVehicles((data as Vehicle[]) || []);
           if (data?.length === 1) setSelectedVehicle(data[0].id);
