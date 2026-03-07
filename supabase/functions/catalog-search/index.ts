@@ -312,7 +312,7 @@ async function searchCatalog(
     'Referer': CATALOG_URL,
   };
 
-  const searchBody = `code=${encodeURIComponent(searchCode)}&submit-search=${encodeURIComponent('VYHLEDAT')}`;
+  const searchBody = `find-part=${encodeURIComponent(searchCode)}&search-part=${encodeURIComponent('Vyhledat')}`;
   console.log('Search POST body:', searchBody);
   console.log('Search cookie:', cookieHeader(session.cookies));
 
