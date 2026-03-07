@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Search, ShoppingCart, Wrench } from "lucide-react";
+import { Search, ShoppingCart, Wrench, FileDown, Presentation } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import ServiceRecommendations from "@/components/ServiceRecommendations";
 
