@@ -62,6 +62,74 @@ export type Database = {
         }
         Relationships: []
       }
+      fault_reports: {
+        Row: {
+          admin_note: string | null
+          ai_analysis: string | null
+          ai_risk_level: string | null
+          created_at: string
+          description: string
+          id: string
+          mileage: number | null
+          photos: string[] | null
+          status: string
+          updated_at: string
+          user_id: string
+          vehicle_brand: string | null
+          vehicle_engine: string | null
+          vehicle_id: string | null
+          vehicle_model: string | null
+          vehicle_year: number | null
+          vin: string | null
+        }
+        Insert: {
+          admin_note?: string | null
+          ai_analysis?: string | null
+          ai_risk_level?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          mileage?: number | null
+          photos?: string[] | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_id?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vin?: string | null
+        }
+        Update: {
+          admin_note?: string | null
+          ai_analysis?: string | null
+          ai_risk_level?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          mileage?: number | null
+          photos?: string[] | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_id?: string | null
+          vehicle_model?: string | null
+          vehicle_year?: number | null
+          vin?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fault_reports_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "user_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       new_part_orders: {
         Row: {
           admin_note: string | null
