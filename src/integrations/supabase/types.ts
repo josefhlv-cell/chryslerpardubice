@@ -62,6 +62,93 @@ export type Database = {
         }
         Relationships: []
       }
+      epc_categories: {
+        Row: {
+          brand: string
+          category: string
+          created_at: string
+          diagram_svg: string | null
+          engine: string | null
+          id: string
+          model: string
+          sort_order: number | null
+          subcategory: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand: string
+          category: string
+          created_at?: string
+          diagram_svg?: string | null
+          engine?: string | null
+          id?: string
+          model: string
+          sort_order?: number | null
+          subcategory?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string
+          category?: string
+          created_at?: string
+          diagram_svg?: string | null
+          engine?: string | null
+          id?: string
+          model?: string
+          sort_order?: number | null
+          subcategory?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
+      epc_part_links: {
+        Row: {
+          created_at: string
+          epc_category_id: string
+          id: string
+          part_id: string
+          position_label: string | null
+          x_pos: number | null
+          y_pos: number | null
+        }
+        Insert: {
+          created_at?: string
+          epc_category_id: string
+          id?: string
+          part_id: string
+          position_label?: string | null
+          x_pos?: number | null
+          y_pos?: number | null
+        }
+        Update: {
+          created_at?: string
+          epc_category_id?: string
+          id?: string
+          part_id?: string
+          position_label?: string | null
+          x_pos?: number | null
+          y_pos?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "epc_part_links_epc_category_id_fkey"
+            columns: ["epc_category_id"]
+            isOneToOne: false
+            referencedRelation: "epc_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "epc_part_links_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fault_reports: {
         Row: {
           admin_note: string | null
@@ -317,48 +404,101 @@ export type Database = {
       }
       parts_new: {
         Row: {
+          admin_margin_percent: number | null
+          admin_price: number | null
           category: string | null
           currency: string
           family: string | null
           id: string
           internal_code: string | null
+          last_price_update: string | null
           name: string
           oem_number: string
           packaging: string | null
+          price_locked: boolean
           price_with_vat: number
           price_without_vat: number
           segment: string | null
           updated_at: string
         }
         Insert: {
+          admin_margin_percent?: number | null
+          admin_price?: number | null
           category?: string | null
           currency?: string
           family?: string | null
           id?: string
           internal_code?: string | null
+          last_price_update?: string | null
           name: string
           oem_number: string
           packaging?: string | null
+          price_locked?: boolean
           price_with_vat?: number
           price_without_vat?: number
           segment?: string | null
           updated_at?: string
         }
         Update: {
+          admin_margin_percent?: number | null
+          admin_price?: number | null
           category?: string | null
           currency?: string
           family?: string | null
           id?: string
           internal_code?: string | null
+          last_price_update?: string | null
           name?: string
           oem_number?: string
           packaging?: string | null
+          price_locked?: boolean
           price_with_vat?: number
           price_without_vat?: number
           segment?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      price_history: {
+        Row: {
+          created_at: string
+          id: string
+          new_price_with_vat: number
+          new_price_without_vat: number
+          old_price_with_vat: number
+          old_price_without_vat: number
+          part_id: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_price_with_vat: number
+          new_price_without_vat: number
+          old_price_with_vat: number
+          old_price_without_vat: number
+          part_id: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_price_with_vat?: number
+          new_price_without_vat?: number
+          old_price_with_vat?: number
+          old_price_without_vat?: number
+          part_id?: string
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_history_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
