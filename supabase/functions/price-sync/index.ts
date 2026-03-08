@@ -151,23 +151,35 @@ async function firecrawlSearch(
         {
           type: 'executeJavascript',
           script: `
-            // Synchronous XHR to maintain session
-            var xhr1 = new XMLHttpRequest();
-            xhr1.open('POST', '/cnd/', false);
-            xhr1.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr1.send('password=${password}&submit-password=P%C5%99ihl%C3%A1sit');
-            
-            var xhr2 = new XMLHttpRequest();
-            xhr2.open('POST', '/cnd/', false);
-            xhr2.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr2.send('search=${searchCode}&submit-search=Vyhledat');
-            
-            document.open();
-            document.write(xhr2.responseText);
-            document.close();
+            (async function() {
+              try {
+                var r1 = await fetch('/cnd/', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: 'password=${password}&submit-password=P%C5%99ihl%C3%A1sit',
+                  credentials: 'include'
+                });
+                var loginHtml = await r1.text();
+                
+                var r2 = await fetch('/cnd/', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: 'search=${searchCode}&submit-search=Vyhledat',
+                  credentials: 'include'
+                });
+                var searchHtml = await r2.text();
+                
+                document.body.setAttribute('data-login-len', loginHtml.length);
+                document.body.setAttribute('data-search-len', searchHtml.length);
+                document.body.setAttribute('data-login-preview', loginHtml.substring(0, 200));
+                document.body.setAttribute('data-search-result', searchHtml);
+              } catch(e) {
+                document.body.setAttribute('data-error', e.message);
+              }
+            })();
           `,
         },
-        { type: 'wait', milliseconds: 2000 },
+        { type: 'wait', milliseconds: 8000 },
       ],
     }),
   });
