@@ -193,14 +193,32 @@ const Shop = () => {
     if (!vinQuery || vinQuery.length < 11) { toast.error("Zadejte platný VIN"); return; }
     setVinLoading(true);
     try {
-      const decoded = await decodeVIN(vinQuery);
+      // Use enhanced AI decode that also saves to user_vehicles
+      const result = await decodeAndSetupVehicle(vinQuery, user?.id);
+      const decoded = {
+        brand: result.basic.brand,
+        model: result.basic.model,
+        year: result.basic.year,
+        engine: [result.basic.engine_displacement, result.basic.engine_cylinders ? `${result.basic.engine_cylinders}V` : ''].filter(Boolean).join(' '),
+      };
       setVinDecoded(decoded);
       setBrand(decoded.brand);
       setModel(decoded.model);
       setYear(decoded.year);
       setMotor(decoded.engine);
-      toast.success("VIN dekódován");
-    } catch { toast.error("Nepodařilo se dekódovat VIN"); }
+      toast.success("VIN dekódován s AI obohacením");
+    } catch {
+      // Fallback to basic NHTSA decode
+      try {
+        const decoded = await decodeVIN(vinQuery);
+        setVinDecoded(decoded);
+        setBrand(decoded.brand);
+        setModel(decoded.model);
+        setYear(decoded.year);
+        setMotor(decoded.engine);
+        toast.success("VIN dekódován (základní)");
+      } catch { toast.error("Nepodařilo se dekódovat VIN"); }
+    }
     setVinLoading(false);
   };
 
