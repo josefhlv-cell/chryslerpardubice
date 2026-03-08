@@ -133,8 +133,9 @@ async function firecrawlSearch(
   searchCode: string,
   debugMode: boolean
 ): Promise<{ prices: number[]; debug: any }> {
-  
-  const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+
+  // Step 1: Login via Firecrawl with JS actions
+  const loginResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -143,32 +144,14 @@ async function firecrawlSearch(
     body: JSON.stringify({
       url: CATALOG_URL,
       formats: ['html'],
-      waitFor: 3000,
+      waitFor: 2000,
       actions: [
         { type: 'wait', milliseconds: 2000 },
         {
           type: 'executeJavascript',
           script: `
-            (function() {
-              var pw = document.querySelector('input[name="password"]');
-              if (pw) { pw.value = '${password}'; }
-              var btn = document.querySelector('input[name="submit-password"]');
-              if (btn) { btn.click(); }
-              return pw ? 'found' : 'not_found';
-            })()
-          `,
-        },
-        { type: 'wait', milliseconds: 4000 },
-        {
-          type: 'executeJavascript',
-          script: `
-            (function() {
-              var s = document.querySelector('input[name="search"]');
-              if (s) { s.value = '${searchCode}'; }
-              var btn = document.querySelector('input[name="submit-search"]');
-              if (btn) { btn.click(); }
-              return s ? 'found' : 'not_found';
-            })()
+            document.querySelector('input[name="password"]').value = '${password}';
+            document.querySelector('input[name="submit-password"]').click();
           `,
         },
         { type: 'wait', milliseconds: 4000 },
@@ -176,23 +159,83 @@ async function firecrawlSearch(
     }),
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    console.error('Firecrawl error:', JSON.stringify(data).substring(0, 500));
-    throw new Error(`Firecrawl API error: ${response.status}`);
+  const loginData = await loginResp.json();
+  if (!loginResp.ok) {
+    console.error('Firecrawl login error:', JSON.stringify(loginData).substring(0, 300));
+    throw new Error(`Firecrawl login error: ${loginResp.status}`);
   }
 
-  const html = data.data?.html || data.html || '';
-  const markdown = data.data?.markdown || data.markdown || '';
+  const loginHtml = loginData.data?.html || loginData.html || '';
+  const loggedIn = loginHtml.includes('submit-search') || loginHtml.includes('Zadejte');
+
+  if (!loggedIn) {
+    // If login didn't work, return debug info
+    const debug = debugMode ? {
+      step: 'login_failed',
+      htmlLength: loginHtml.length,
+      htmlPreview: loginHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
+      hasPasswordForm: loginHtml.includes('submit-password'),
+    } : {};
+    return { prices: [], debug };
+  }
+
+  // Step 2: Search - the page after login should have the search form
+  // We need to scrape the same session - but Firecrawl doesn't maintain sessions
+  // So we need to do login + search in one go
+  // Let's try combining both actions in a single scrape call
+  const searchResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: CATALOG_URL,
+      formats: ['html'],
+      waitFor: 2000,
+      actions: [
+        { type: 'wait', milliseconds: 2000 },
+        // Login
+        {
+          type: 'executeJavascript',
+          script: `
+            document.querySelector('input[name="password"]').value = '${password}';
+            document.querySelector('input[name="submit-password"]').click();
+          `,
+        },
+        { type: 'wait', milliseconds: 4000 },
+        // Search
+        {
+          type: 'executeJavascript',
+          script: `
+            var s = document.querySelector('input[name="search"]');
+            if (s) {
+              s.value = '${searchCode}';
+              document.querySelector('input[name="submit-search"]').click();
+            }
+          `,
+        },
+        { type: 'wait', milliseconds: 4000 },
+      ],
+    }),
+  });
+
+  const searchData = await searchResp.json();
+  if (!searchResp.ok) {
+    console.error('Firecrawl search error:', JSON.stringify(searchData).substring(0, 300));
+    throw new Error(`Firecrawl search error: ${searchResp.status}`);
+  }
+
+  const html = searchData.data?.html || searchData.html || '';
   const prices = extractPrices(html);
 
   const debug = debugMode ? {
+    step: 'search_complete',
+    loggedIn,
     htmlLength: html.length,
-    markdownPreview: markdown.substring(0, 500),
     htmlPreview: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
     pricesFound: prices,
-    passedLogin: !html.includes('submit-password') || html.includes('Zadejte'),
+    hasSearchForm: html.includes('submit-search'),
   } : {};
 
   return { prices, debug };
