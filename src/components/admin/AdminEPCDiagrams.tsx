@@ -37,7 +37,7 @@ const AdminEPCDiagrams = () => {
   const fetchDiagrams = async () => {
     setLoading(true);
     const { data } = await supabase
-      .from("epc_diagrams" as any)
+      .from("epc_diagrams")
       .select("id, brand, model, engine, category, subcategory, parts_count, created_at")
       .order("created_at", { ascending: false })
       .limit(200);
