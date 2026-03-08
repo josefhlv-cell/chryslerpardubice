@@ -129,10 +129,10 @@ const Filters = ({
                 ))}
               </div>
             )}
-            {category && (
+            {(category || brand) && (
               <Button size="sm" className="w-full" onClick={onSearch} disabled={searching}>
                 {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
-                Vyhledat
+                Vyhledat {brand && !category ? `díly ${brand}` : ""}
               </Button>
             )}
           </div>
