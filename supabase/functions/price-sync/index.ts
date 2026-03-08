@@ -142,17 +142,36 @@ async function firecrawlSearch(
     },
     body: JSON.stringify({
       url: CATALOG_URL,
-      formats: ['html', 'markdown'],
-      waitFor: 2000,
+      formats: ['html'],
+      waitFor: 3000,
       actions: [
-        { type: 'wait', milliseconds: 1500 },
-        { type: 'write', selector: 'input[name="password"]', text: password },
-        { type: 'click', selector: 'input[name="submit-password"]' },
-        { type: 'wait', milliseconds: 3000 },
-        { type: 'write', selector: 'input[name="search"]', text: searchCode },
-        { type: 'click', selector: 'input[name="submit-search"]' },
-        { type: 'wait', milliseconds: 3000 },
-        { type: 'scrape' },
+        { type: 'wait', milliseconds: 2000 },
+        {
+          type: 'executeJavascript',
+          script: `
+            (function() {
+              var pw = document.querySelector('input[name="password"]');
+              if (pw) { pw.value = '${password}'; }
+              var btn = document.querySelector('input[name="submit-password"]');
+              if (btn) { btn.click(); }
+              return pw ? 'found' : 'not_found';
+            })()
+          `,
+        },
+        { type: 'wait', milliseconds: 4000 },
+        {
+          type: 'executeJavascript',
+          script: `
+            (function() {
+              var s = document.querySelector('input[name="search"]');
+              if (s) { s.value = '${searchCode}'; }
+              var btn = document.querySelector('input[name="submit-search"]');
+              if (btn) { btn.click(); }
+              return s ? 'found' : 'not_found';
+            })()
+          `,
+        },
+        { type: 'wait', milliseconds: 4000 },
       ],
     }),
   });
