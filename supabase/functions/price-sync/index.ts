@@ -5,209 +5,13 @@ const corsHeaders = {
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
 
-async function createSession(password: string): Promise<{ cookies: string; loggedIn: boolean; searchFormHtml: string }> {
-  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-  const cookieJar: Record<string, string> = {};
-  
-  const collectCookies = (resp: Response) => {
-    const setCookies = resp.headers.getSetCookie?.() || [];
-    for (const sc of setCookies) {
-      const [nameVal] = sc.split(';');
-      const eqIdx = nameVal.indexOf('=');
-      if (eqIdx > 0) {
-        cookieJar[nameVal.substring(0, eqIdx).trim()] = nameVal.substring(eqIdx + 1).trim();
-      }
-    }
-  };
-  const getCookie = () => Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join('; ');
-
-  // Step 1: GET to get PHPSESSID
-  console.log('Step 1: GET initial page');
-  const initResp = await fetch(CATALOG_URL, {
-    headers: { 'User-Agent': ua, 'Accept': 'text/html,application/xhtml+xml' },
-    redirect: 'follow',
-  });
-  collectCookies(initResp);
-  await initResp.text();
-  console.log('Got cookies:', Object.keys(cookieJar));
-
-  // Step 2: POST login with manual redirect to preserve cookies
-  console.log('Step 2: POST login');
-  const loginResp = await fetch(CATALOG_URL, {
-    method: 'POST',
-    headers: {
-      'User-Agent': ua,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': getCookie(),
-      'Origin': 'https://www.vernostsevyplaci.cz',
-      'Referer': CATALOG_URL,
-      'Accept': 'text/html,application/xhtml+xml',
-    },
-    body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
-    redirect: 'manual',
-  });
-  collectCookies(loginResp);
-  await loginResp.text();
-  const loginLocation = loginResp.headers.get('location');
-  console.log('Login status:', loginResp.status, 'Location:', loginLocation, 'Cookies:', Object.keys(cookieJar));
-
-  // Step 3: Follow redirect(s) manually with cookies
-  let loginHtml = '';
-  if (loginLocation || loginResp.status === 301 || loginResp.status === 302) {
-    const redir = loginLocation?.startsWith('http') ? loginLocation : `https://www.vernostsevyplaci.cz${loginLocation || '/cnd/'}`;
-    console.log('Step 3: Following redirect to', redir);
-    const redirResp = await fetch(redir, {
-      headers: { 'User-Agent': ua, 'Cookie': getCookie(), 'Referer': CATALOG_URL, 'Accept': 'text/html,application/xhtml+xml' },
-      redirect: 'follow',
-    });
-    collectCookies(redirResp);
-    loginHtml = await redirResp.text();
-    console.log('Redirect status:', redirResp.status, 'URL:', redirResp.url);
-  } else {
-    // No redirect - re-GET with cookies
-    console.log('Step 3: No redirect, re-GET with cookies');
-    const getResp = await fetch(CATALOG_URL, {
-      headers: { 'User-Agent': ua, 'Cookie': getCookie(), 'Referer': CATALOG_URL, 'Accept': 'text/html,application/xhtml+xml' },
-      redirect: 'follow',
-    });
-    collectCookies(getResp);
-    loginHtml = await getResp.text();
-    console.log('Re-GET status:', getResp.status);
-  }
-
-  // Check if we're past login
-  const hasSearchForm = loginHtml.includes('Zadejte') || loginHtml.includes('hledaného') || 
-                         loginHtml.includes('VYHLEDAT') || loginHtml.includes('search');
-  const stillOnLogin = loginHtml.includes('submit-password') && loginHtml.includes('name="password"');
-  
-  console.log('Has search form:', hasSearchForm, 'Still on login:', stillOnLogin);
-  console.log('Page snippet:', loginHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500));
-
-  return { 
-    cookies: getCookie(), 
-    loggedIn: !stillOnLogin || hasSearchForm,
-    searchFormHtml: loginHtml
-  };
-}
-
-async function searchPart(cookies: string, searchCode: string, pageHtml: string): Promise<{ price_with_vat: number; price_without_vat: number } | null> {
-  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-
-  // Find the search form in the HTML
-  const formMatch = pageHtml.match(/<form[^>]*action="([^"]*)"[^>]*method="post"[^>]*>([\s\S]*?)<\/form>/gi);
-  let searchFormAction = CATALOG_URL;
-  let searchFieldName = 'search';
-  let submitFieldName = 'submit-search';
-  let submitValue = 'Vyhledat';
-
-  if (formMatch) {
-    for (const form of formMatch) {
-      // Skip login form
-      if (form.includes('submit-password')) continue;
-      
-      const actionMatch = form.match(/action="([^"]*)"/);
-      if (actionMatch) searchFormAction = actionMatch[1] || CATALOG_URL;
-      
-      const inputMatch = form.match(/<input[^>]*name="([^"]*)"[^>]*(?:placeholder|type="text")/i);
-      if (inputMatch) searchFieldName = inputMatch[1];
-      
-      const submitMatch = form.match(/<input[^>]*name="([^"]*)"[^>]*type="submit"[^>]*value="([^"]*)"/i);
-      if (!submitMatch) {
-        const submitMatch2 = form.match(/<input[^>]*type="submit"[^>]*name="([^"]*)"[^>]*value="([^"]*)"/i);
-        if (submitMatch2) { submitFieldName = submitMatch2[1]; submitValue = submitMatch2[2]; }
-      } else { submitFieldName = submitMatch[1]; submitValue = submitMatch[2]; }
-      
-      console.log('Found search form:', { searchFormAction, searchFieldName, submitFieldName, submitValue });
-      break;
-    }
-  }
-
-  if (!searchFormAction.startsWith('http')) {
-    searchFormAction = `https://www.vernostsevyplaci.cz${searchFormAction}`;
-  }
-
-  const searchResp = await fetch(searchFormAction, {
-    method: 'POST',
-    headers: {
-      'User-Agent': ua,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': cookies,
-      'Referer': CATALOG_URL,
-      'Accept': 'text/html,application/xhtml+xml',
-    },
-    body: `${searchFieldName}=${encodeURIComponent(searchCode)}&${submitFieldName}=${encodeURIComponent(submitValue)}`,
-    redirect: 'follow',
-  });
-
-  const html = await searchResp.text();
-  console.log('Search response for', searchCode, '- status:', searchResp.status, 'length:', html.length);
-
-  // Extract prices from HTML
-  const allPrices: number[] = [];
-  
-  // Pattern: Czech price formats
-  const pricePatterns = [
-    /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
-    /cena[^<]*?(\d[\d\s,.]*)/gi,
-    /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi,
-  ];
-
-  for (const pattern of pricePatterns) {
-    let match;
-    while ((match = pattern.exec(html)) !== null) {
-      const priceStr = match[1].replace(/\s/g, '').replace(',', '.');
-      const price = parseFloat(priceStr);
-      if (price > 1 && price < 1000000) {
-        allPrices.push(price);
-      }
-    }
-  }
-
-  // Also try CSV-style data
-  const lines = html.split('\n');
-  for (const line of lines) {
-    if (line.includes(';')) {
-      const parts = line.split(';');
-      for (const part of parts) {
-        const cleaned = part.replace(/<[^>]*>/g, '').replace(/\s/g, '').replace(',', '.');
-        const num = parseFloat(cleaned);
-        if (num > 1 && num < 1000000 && !isNaN(num)) {
-          allPrices.push(num);
-        }
-      }
-    }
-  }
-
-  if (allPrices.length === 0) {
-    const textContent = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    console.log('No prices found for', searchCode, '- text preview:', textContent.substring(0, 300));
-    return null;
-  }
-
-  const sorted = [...new Set(allPrices)].sort((a, b) => a - b);
-  let priceWithVat: number;
-  let priceWithoutVat: number;
-
-  if (sorted.length >= 2) {
-    priceWithoutVat = sorted[sorted.length - 2];
-    priceWithVat = sorted[sorted.length - 1];
-  } else {
-    priceWithVat = sorted[0];
-    priceWithoutVat = Math.round(priceWithVat / 1.21 * 100) / 100;
-  }
-
-  return { price_with_vat: priceWithVat, price_without_vat: priceWithoutVat };
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { partNumbers, mode, batchSize = 50, offset = 0 } = await req.json();
+    const { partNumbers, mode, batchSize = 50, offset = 0, debugMode = false } = await req.json();
     
     const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -231,21 +35,16 @@ Deno.serve(async (req) => {
       oemNumbers = (topParts || []).map((p: any) => p.oem_number);
     }
 
-    // Login to catalog
-    const session = await createSession(CATALOG_PASS);
-    if (!session.loggedIn) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Login failed - still on login page',
-        debug: session.searchFormHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500)
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     const results: any[] = [];
     let updated = 0, errors = 0, skipped = 0;
+
+    // Try multiple auth approaches
+    const authMethods = [
+      // Method 1: Basic Auth with "user:password"
+      { type: 'basic', header: `Basic ${btoa(`user:${CATALOG_PASS}`)}` },
+      // Method 2: Basic Auth with just password
+      { type: 'basic-pass', header: `Basic ${btoa(`:${CATALOG_PASS}`)}` },
+    ];
 
     for (const partNumber of (oemNumbers || []).slice(0, batchSize)) {
       const priceCode = `K${partNumber.replace(/^0+/, '')}`;
@@ -272,42 +71,85 @@ Deno.serve(async (req) => {
         }
       }
 
-      try {
-        const priceResult = await searchPart(session.cookies, priceCode, session.searchFormHtml);
+      let found = false;
 
-        if (priceResult) {
-          if (cached && cached.price_with_vat !== priceResult.price_with_vat) {
-            await supabase.from('price_history').insert({
-              part_id: cached.id,
-              old_price_without_vat: cached.price_without_vat || 0,
-              new_price_without_vat: priceResult.price_without_vat,
-              old_price_with_vat: cached.price_with_vat || 0,
-              new_price_with_vat: priceResult.price_with_vat,
-              source: mode === 'force' ? 'manual' : 'auto',
+      // Try approach 1: POST with code= and Basic Auth
+      for (const auth of authMethods) {
+        if (found) break;
+        try {
+          const response = await fetch(CATALOG_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': auth.header,
+            },
+            body: `code=${encodeURIComponent(priceCode)}`,
+          });
+
+          if (response.ok) {
+            const text = await response.text();
+            const prices = extractPrices(text);
+            
+            if (debugMode && !found) {
+              results.push({ 
+                oem_number: partNumber, 
+                debug: true, 
+                method: auth.type + '-code',
+                searchCode: priceCode,
+                responseLength: text.length,
+                responsePreview: text.substring(0, 500),
+                prices 
+              });
+            }
+
+            if (prices.length > 0) {
+              found = true;
+              const { priceWithVat, priceWithoutVat } = pickPrices(prices);
+              await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
+              results.push({ oem_number: partNumber, status: 'updated', method: auth.type, price_with_vat: priceWithVat, price_without_vat: priceWithoutVat });
+              updated++;
+            }
+          } else {
+            await response.text();
+          }
+        } catch (e) {
+          console.error(`Method ${auth.type} failed for ${priceCode}:`, e);
+        }
+      }
+
+      // Try approach 2: Session-based login + search form
+      if (!found) {
+        try {
+          const sessionResult = await sessionSearch(CATALOG_PASS, priceCode, debugMode);
+          
+          if (debugMode && !found) {
+            results.push({
+              oem_number: partNumber,
+              debug: true,
+              method: 'session',
+              searchCode: priceCode,
+              ...sessionResult.debug
             });
           }
 
-          if (cached) {
-            await supabase.from('parts_new').update({
-              price_without_vat: priceResult.price_without_vat,
-              price_with_vat: priceResult.price_with_vat,
-              last_price_update: new Date().toISOString(),
-            }).eq('id', cached.id);
+          if (sessionResult.prices.length > 0) {
+            found = true;
+            const { priceWithVat, priceWithoutVat } = pickPrices(sessionResult.prices);
+            await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
+            results.push({ oem_number: partNumber, status: 'updated', method: 'session', price_with_vat: priceWithVat, price_without_vat: priceWithoutVat });
             updated++;
           }
-
-          results.push({ oem_number: partNumber, status: 'updated', ...priceResult });
-        } else {
-          results.push({ oem_number: partNumber, status: 'not_found', searchCode: priceCode });
-          errors++;
+        } catch (e) {
+          console.error(`Session method failed for ${priceCode}:`, e);
         }
-      } catch (fetchErr) {
-        console.error(`Error for ${priceCode}:`, fetchErr);
-        results.push({ oem_number: partNumber, status: 'error', error: String(fetchErr) });
+      }
+
+      if (!found && !debugMode) {
+        results.push({ oem_number: partNumber, status: 'not_found', searchCode: priceCode });
         errors++;
       }
 
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 300));
     }
 
     return new Response(JSON.stringify({ 
@@ -324,3 +166,140 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+function extractPrices(text: string): number[] {
+  const prices: number[] = [];
+  
+  // CSV semicolon format
+  const lines = text.split('\n');
+  for (const line of lines) {
+    if (line.includes(';')) {
+      const parts = line.split(';');
+      for (const part of parts) {
+        const cleaned = part.replace(/<[^>]*>/g, '').replace(/\s/g, '').replace(',', '.');
+        const num = parseFloat(cleaned);
+        if (num > 1 && num < 1000000 && !isNaN(num)) {
+          prices.push(num);
+        }
+      }
+    }
+  }
+
+  // HTML price patterns
+  const patterns = [
+    /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
+    /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi,
+    /cena[^<]*?(\d[\d\s,.]+)/gi,
+  ];
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const priceStr = match[1].replace(/\s/g, '').replace(',', '.');
+      const p = parseFloat(priceStr);
+      if (p > 1 && p < 1000000) prices.push(p);
+    }
+  }
+
+  return [...new Set(prices)];
+}
+
+function pickPrices(prices: number[]): { priceWithVat: number; priceWithoutVat: number } {
+  const sorted = prices.sort((a, b) => a - b);
+  if (sorted.length >= 2) {
+    return { priceWithoutVat: sorted[sorted.length - 2], priceWithVat: sorted[sorted.length - 1] };
+  }
+  return { priceWithVat: sorted[0], priceWithoutVat: Math.round(sorted[0] / 1.21 * 100) / 100 };
+}
+
+async function savePriceUpdate(supabase: any, cached: any, partNumber: string, priceWithVat: number, priceWithoutVat: number, mode: string) {
+  if (cached && cached.price_with_vat !== priceWithVat) {
+    await supabase.from('price_history').insert({
+      part_id: cached.id,
+      old_price_without_vat: cached.price_without_vat || 0,
+      new_price_without_vat: priceWithoutVat,
+      old_price_with_vat: cached.price_with_vat || 0,
+      new_price_with_vat: priceWithVat,
+      source: mode === 'force' ? 'manual' : 'auto',
+    });
+  }
+  if (cached) {
+    await supabase.from('parts_new').update({
+      price_without_vat: priceWithoutVat,
+      price_with_vat: priceWithVat,
+      last_price_update: new Date().toISOString(),
+    }).eq('id', cached.id);
+  }
+}
+
+async function sessionSearch(password: string, searchCode: string, debugMode: boolean): Promise<{ prices: number[]; debug: any }> {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  const cookieJar: Record<string, string> = {};
+  const collectCookies = (resp: Response) => {
+    const sc = resp.headers.getSetCookie?.() || [];
+    for (const c of sc) {
+      const [nv] = c.split(';');
+      const eq = nv.indexOf('=');
+      if (eq > 0) cookieJar[nv.substring(0, eq).trim()] = nv.substring(eq + 1).trim();
+    }
+  };
+  const gc = () => Object.entries(cookieJar).map(([k, v]) => `${k}=${v}`).join('; ');
+
+  // GET page
+  const initResp = await fetch(CATALOG_URL, { headers: { 'User-Agent': ua }, redirect: 'follow' });
+  collectCookies(initResp);
+  await initResp.text();
+
+  // POST login
+  const loginResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      'User-Agent': ua, 'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': gc(), 'Origin': 'https://www.vernostsevyplaci.cz', 'Referer': CATALOG_URL,
+    },
+    body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
+    redirect: 'manual',
+  });
+  collectCookies(loginResp);
+  await loginResp.text();
+  const loc = loginResp.headers.get('location');
+
+  // Follow redirect or re-GET
+  let pageHtml = '';
+  if (loc) {
+    const redir = loc.startsWith('http') ? loc : `https://www.vernostsevyplaci.cz${loc}`;
+    const r = await fetch(redir, { headers: { 'User-Agent': ua, 'Cookie': gc() }, redirect: 'follow' });
+    collectCookies(r);
+    pageHtml = await r.text();
+  } else {
+    const r = await fetch(CATALOG_URL, { headers: { 'User-Agent': ua, 'Cookie': gc() }, redirect: 'follow' });
+    collectCookies(r);
+    pageHtml = await r.text();
+  }
+
+  const loggedIn = !pageHtml.includes('submit-password') || pageHtml.includes('Zadejte') || pageHtml.includes('VYHLEDAT');
+
+  // Try search
+  const searchResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      'User-Agent': ua, 'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': gc(), 'Referer': CATALOG_URL,
+    },
+    body: `search=${encodeURIComponent(searchCode)}&submit-search=${encodeURIComponent('Vyhledat')}`,
+    redirect: 'follow',
+  });
+  const searchHtml = await searchResp.text();
+  const prices = extractPrices(searchHtml);
+
+  const debug = debugMode ? {
+    loggedIn,
+    loginStatus: loginResp.status,
+    loginLocation: loc,
+    cookies: Object.keys(cookieJar),
+    searchResponseLength: searchHtml.length,
+    searchPreview: searchHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
+    pricesFound: prices,
+  } : {};
+
+  return { prices, debug };
+}
