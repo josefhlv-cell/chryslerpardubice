@@ -89,6 +89,27 @@ Telefon: ${record.phone || "—"}
 
 Poznámka: ${record.note || "—"}
       `.trim();
+    } else if (type === "order") {
+      const sourceLabel = record.catalog_source === "autokelly" ? "AutoKelly"
+        : record.catalog_source === "mopar" ? "Mopar OE"
+        : record.catalog_source === "csv" ? "CSV Import"
+        : record.catalog_source || "Neznámý";
+      subject = `Nová objednávka: ${record.part_name || "díl"} (${sourceLabel})`;
+      body = `
+Nová objednávka dílu:
+
+Název: ${record.part_name || "—"}
+OEM: ${record.oem_number || "—"}
+Typ: ${record.order_type === "used" ? "Použitý díl" : "Nový díl"}
+Množství: ${record.quantity || 1}
+Cena bez DPH: ${record.unit_price ? record.unit_price + " Kč" : "—"}
+
+🔧 ZDROJ DÍLU: ${sourceLabel}
+${record.catalog_source === "autokelly" ? "→ Objednat přes AutoKelly" : ""}
+${record.catalog_source === "mopar" ? "→ Objednat přes Mopar katalog" : ""}
+
+Poznámka zákazníka: ${record.customer_note || "—"}
+      `.trim();
     } else {
       // Generic notification
       subject = record.title || "Nová notifikace";
