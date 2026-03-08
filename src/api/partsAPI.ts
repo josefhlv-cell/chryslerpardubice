@@ -606,3 +606,92 @@ export function downloadCSV(parts: PartResult[], filename = "dily-export.csv") {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ---- VIN AI Decode ----
+
+export interface VINDecodeResult {
+  basic: {
+    vin: string; brand: string; model: string; year: string; trim: string;
+    body_class: string; doors: string; drive_type: string;
+    engine_displacement: string; engine_cylinders: string; engine_model: string;
+    fuel_type: string; transmission: string; plant_country: string; plant_city: string;
+    airbags: string;
+  };
+  enriched: {
+    equipment_highlights?: string[];
+    engine_specs?: Record<string, any>;
+    transmission_specs?: Record<string, any>;
+    service_intervals?: Array<{ service_name: string; interval_km: number; interval_months: number; recommended_oem?: string }>;
+    common_issues?: string[];
+    tire_size?: string;
+    brake_info?: Record<string, any>;
+  } | null;
+}
+
+export async function decodeVINEnriched(vin: string): Promise<VINDecodeResult> {
+  const { data, error } = await supabase.functions.invoke("vin-decode-ai", {
+    body: { vin },
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.success) throw new Error(data?.error || "VIN decode failed");
+  return data as VINDecodeResult;
+}
+
+// ---- OEM Cross-references ----
+
+export interface CrossRefResult {
+  oem_number: string;
+  part_name?: string;
+  superseded_by?: string | null;
+  supersedes?: string | null;
+  alternatives?: Array<{ manufacturer: string; part_number: string; note?: string }>;
+}
+
+export async function getOEMCrossReferences(oemNumber: string, partName?: string): Promise<CrossRefResult | null> {
+  const { data, error } = await supabase.functions.invoke("oem-crossref", {
+    body: { oem_number: oemNumber, part_name: partName, action: "generate" },
+  });
+  if (error || !data?.success) return null;
+  return data as CrossRefResult;
+}
+
+// ---- EPC Diagram ----
+
+export async function getEPCDiagram(
+  vehicle: string,
+  category: string,
+  parts: Array<{ oem_number?: string; part_name?: string }>
+): Promise<string | null> {
+  // Check DB cache first
+  const [brand, ...modelParts] = vehicle.split(" ");
+  const model = modelParts.join(" ");
+  
+  const { data: cached } = await supabase
+    .from("epc_categories")
+    .select("diagram_svg")
+    .eq("brand", brand)
+    .eq("model", model)
+    .eq("category", category)
+    .not("diagram_svg", "is", null)
+    .limit(1)
+    .maybeSingle();
+
+  if (cached?.diagram_svg) return cached.diagram_svg;
+
+  // Generate via AI
+  const { data, error } = await supabase.functions.invoke("epc-diagram", {
+    body: { vehicle, category, parts },
+  });
+  if (error || !data?.success) return null;
+  return data.svg || null;
+}
+
+// ---- 7zap Scraping ----
+
+export async function scrape7zap(brand: string, model: string, year?: string) {
+  const { data, error } = await supabase.functions.invoke("scrape-7zap", {
+    body: { brand, model, year, action: "scrape-catalog" },
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}

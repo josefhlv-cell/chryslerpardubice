@@ -1,17 +1,18 @@
 /**
  * PartDetailModal Component
  * Shows full part detail in a side panel (desktop) or bottom sheet (mobile).
- * Photo loads only on explicit click.
+ * Includes OEM cross-references and aftermarket alternatives.
  */
 
-import { Image as ImageIcon, X, ShoppingCart, Package, ArrowRight, Info } from "lucide-react";
+import { useState } from "react";
+import { Image as ImageIcon, X, ShoppingCart, Package, ArrowRight, Info, Loader2, RefreshCw, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { PartResult } from "@/api/partsAPI";
-import { sourceLabel } from "@/api/partsAPI";
+import { sourceLabel, getOEMCrossReferences, type CrossRefResult } from "@/api/partsAPI";
 import Recommendations from "./Recommendations";
 
 interface PartDetailModalProps {
@@ -45,6 +46,18 @@ const AvailabilityDot = ({ availability }: { availability: string }) => {
 
 /** Inner content used in both desktop panel and mobile sheet */
 const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, onSearchOem, discountPercent, disabled }: PartDetailModalProps & { part: PartResult }) => {
+  const [crossRef, setCrossRef] = useState<CrossRefResult | null>(null);
+  const [crossRefLoading, setCrossRefLoading] = useState(false);
+  const [crossRefLoaded, setCrossRefLoaded] = useState(false);
+
+  const loadCrossRef = async () => {
+    setCrossRefLoading(true);
+    setCrossRefLoaded(true);
+    const result = await getOEMCrossReferences(part.oem_number, part.name);
+    setCrossRef(result);
+    setCrossRefLoading(false);
+  };
+
   const discounted = discountPercent > 0 ? {
     withVat: Math.round(part.price_without_vat * (1 - discountPercent / 100) * 1.21 * 100) / 100,
   } : null;
@@ -133,6 +146,40 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
         </div>
       )}
 
+      {/* Cross-references / Aftermarket alternatives */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Křížové reference</p>
+          {!crossRefLoaded && (
+            <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={loadCrossRef}>
+              <ArrowLeftRight className="w-3 h-3 mr-1" />Najít alternativy
+            </Button>
+          )}
+        </div>
+        {crossRefLoading && (
+          <div className="flex items-center gap-2 py-3">
+            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+            <span className="text-xs text-muted-foreground">Hledám aftermarket alternativy...</span>
+          </div>
+        )}
+        {crossRef && crossRef.alternatives && crossRef.alternatives.length > 0 && (
+          <div className="space-y-1.5">
+            {crossRef.alternatives.map((alt, i) => (
+              <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-secondary/50 border border-border/50">
+                <div>
+                  <p className="text-xs font-medium">{alt.manufacturer}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">{alt.part_number}</p>
+                </div>
+                {alt.note && <p className="text-[10px] text-muted-foreground max-w-[120px] text-right">{alt.note}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+        {crossRefLoaded && !crossRefLoading && (!crossRef?.alternatives || crossRef.alternatives.length === 0) && (
+          <p className="text-xs text-muted-foreground">Nebyly nalezeny aftermarket alternativy.</p>
+        )}
+      </div>
+
       {/* Action buttons */}
       <div className="flex gap-2 pt-2">
         <Button className="flex-1" onClick={() => onOrderNew(part)} disabled={disabled}>
@@ -146,7 +193,7 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
       <Separator />
 
       {/* Recommendations */}
-      <Recommendations part={part} onSelect={(p) => { onClose(); /* navigate to it */ }} />
+      <Recommendations part={part} onSelect={(p) => { onClose(); }} />
     </div>
   );
 };

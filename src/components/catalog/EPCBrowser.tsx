@@ -1,15 +1,16 @@
 /**
  * EPCBrowser Component
  * Shows EPC categories for selected vehicle and drills down to parts with live prices.
+ * Includes interactive SVG diagrams generated via AI.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw } from "lucide-react";
+import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices,
+  getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 
@@ -43,8 +44,11 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [parts, setParts] = useState<EPCPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [priceMap, setPriceMap] = useState<Map<string, PriceData>>(new Map());
+  const [priceMap, setPriceMap] = useState<Map<string, PriceData>>(() => new Map());
   const [pricesLoading, setPricesLoading] = useState(false);
+  const [diagramSvg, setDiagramSvg] = useState<string | null>(null);
+  const [diagramLoading, setDiagramLoading] = useState(false);
+  const diagramRef = useRef<HTMLDivElement>(null);
 
   // Load categories when vehicle params change
   useEffect(() => {
@@ -53,7 +57,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setHasSearched(true);
     setSelectedCategory(null);
     setParts([]);
-    setPriceMap(new Map());
+    setPriceMap(() => new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
       .then((cats) => {
@@ -65,7 +69,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
   // Load parts when category selected
   useEffect(() => {
-    if (!selectedCategory) { setParts([]); setPriceMap(new Map()); return; }
+    if (!selectedCategory) { setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); return; }
     setPartsLoading(true);
     const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
     getEPCParts(catIds)
@@ -90,6 +94,32 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     enrichEPCPrices(oems)
       .then(setPriceMap)
       .finally(() => setPricesLoading(false));
+  };
+
+  const handleLoadDiagram = async () => {
+    if (!selectedCategory || !brand) return;
+    setDiagramLoading(true);
+    try {
+      const vehicle = `${brand} ${model}`;
+      const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
+      const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
+      setDiagramSvg(svg);
+      // Attach click handlers to diagram parts
+      setTimeout(() => {
+        if (diagramRef.current) {
+          const clickables = diagramRef.current.querySelectorAll('[data-oem]');
+          clickables.forEach(el => {
+            el.addEventListener('click', () => {
+              const oem = el.getAttribute('data-oem');
+              if (oem) onSearchOem(oem);
+            });
+          });
+        }
+      }, 100);
+    } catch (e) {
+      console.error('Diagram load error:', e);
+    }
+    setDiagramLoading(false);
   };
 
   if (!brand) return null;
@@ -154,6 +184,10 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
               <RefreshCw className={`w-3 h-3 ${pricesLoading ? "animate-spin" : ""}`} />
             </Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleLoadDiagram} disabled={diagramLoading}>
+              {diagramLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutGrid className="w-3 h-3" />}
+              <span className="text-[10px] ml-1">Nákres</span>
+            </Button>
             <Badge variant="secondary" className="text-[10px]">
               {parts.length} dílů
             </Badge>
@@ -186,6 +220,17 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         {/* Parts list */}
         {selectedCategory && (
           <motion.div key="parts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            {/* Interactive diagram */}
+            {diagramSvg && (
+              <div className="mb-4 rounded-xl border border-border bg-card p-3 overflow-hidden">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Interaktivní nákres – klikněte na číslo dílu</p>
+                <div
+                  ref={diagramRef}
+                  className="w-full overflow-x-auto [&_svg]:w-full [&_svg]:h-auto [&_[data-oem]]:cursor-pointer [&_[data-oem]:hover]:opacity-80"
+                  dangerouslySetInnerHTML={{ __html: diagramSvg }}
+                />
+              </div>
+            )}
             {partsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
