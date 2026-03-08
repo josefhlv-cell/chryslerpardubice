@@ -106,17 +106,125 @@ const Shop = () => {
     setPriceFetching(true);
     try {
       const normalized = normalizeOem(searchQuery);
+      const allResults: PartResult[] = [];
+
+      // ===== EPC MODE: search via epc_categories + epc_part_links =====
+      if (searchMode === "epc" && category && brand) {
+        // Try EPC tables first
+        let epcQuery = supabase.from("epc_categories").select("id").eq("brand", brand).eq("category", category);
+        if (model) epcQuery = epcQuery.eq("model", model);
+        if (subCategory) epcQuery = epcQuery.eq("subcategory", subCategory);
+
+        const { data: epcCats } = await epcQuery;
+        if (epcCats && epcCats.length > 0) {
+          const catIds = epcCats.map((c: any) => c.id);
+          const { data: links } = await supabase.from("epc_part_links").select("part_id").in("epc_category_id", catIds);
+          if (links && links.length > 0) {
+            const partIds = [...new Set(links.map((l: any) => l.part_id))];
+            const { data: epcParts } = await supabase.from("parts_new")
+              .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging")
+              .in("id", partIds);
+            if (epcParts) allResults.push(...epcParts);
+          }
+        }
+
+        // Fallback: search by subcategory name in parts_new and parts_catalog
+        if (allResults.length === 0 && subCategory) {
+          const { data: pn } = await supabase.from("parts_new")
+            .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging")
+            .ilike("name", `%${subCategory}%`)
+            .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
+          if (pn) allResults.push(...pn);
+
+          const { data: pc } = await supabase.from("parts_catalog")
+            .select("id, name, oem_code, price, brand, category, available")
+            .ilike("name", `%${subCategory}%`)
+            .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
+          if (pc) {
+            const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
+            for (const item of pc) {
+              if (!existingOems.has(normalizeOem(item.oem_code))) {
+                allResults.push({
+                  id: item.id, name: item.name, oem_number: item.oem_code, internal_code: null,
+                  price_without_vat: item.price, price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
+                  category: item.category, family: item.brand, segment: item.available ? "Skladem" : "Na objednávku", packaging: null,
+                });
+              }
+            }
+          }
+        }
+
+        if (allResults.length > 0) {
+          setResults(allResults);
+          setTotalCount(allResults.length);
+          setSearching(false);
+          setPriceFetching(false);
+          return;
+        }
+        // If nothing found in EPC
+        toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly v databázi. Zkuste vyhledat podle OEM čísla.`);
+        setResults([]);
+        setTotalCount(0);
+        setSearching(false);
+        setPriceFetching(false);
+        return;
+      }
+
+      // ===== VEHICLE MODE: filter by brand/category =====
+      if (searchMode === "vehicle" && !searchQuery && category) {
+        let pnQuery = supabase.from("parts_new")
+          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" })
+          .ilike("name", `%${category}%`)
+          .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
+
+        const { data: pn, count: pnCount } = await pnQuery;
+        if (pn) allResults.push(...pn);
+
+        const { data: pc, count: pcCount } = await supabase.from("parts_catalog")
+          .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
+          .or(`name.ilike.%${category}%,category.ilike.%${category}%`)
+          .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
+        if (pc) {
+          const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
+          for (const item of pc) {
+            if (!existingOems.has(normalizeOem(item.oem_code))) {
+              allResults.push({
+                id: item.id, name: item.name, oem_number: item.oem_code, internal_code: null,
+                price_without_vat: item.price, price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
+                category: item.category, family: item.brand, segment: item.available ? "Skladem" : "Na objednávku", packaging: null,
+              });
+            }
+          }
+        }
+
+        setResults(allResults);
+        setTotalCount((pnCount ?? 0) + (pcCount ?? 0));
+        setSearching(false);
+        setPriceFetching(false);
+        return;
+      }
+
+      // ===== STANDARD SEARCH (part_number, vehicle with query, vin) =====
+      if (!searchQuery) {
+        setResults([]);
+        setTotalCount(0);
+        setSearching(false);
+        setPriceFetching(false);
+        return;
+      }
+
       const oemCodes = [normalized];
 
-      // Search in parts_new (external catalog cache)
+      // Build filter for parts_new
+      let pnFilter = `oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`;
       const { data: partsNewData, count: partsNewCount } = await supabase
         .from("parts_new")
         .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" })
-        .or(`oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`)
+        .or(pnFilter)
         .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
         .order("name");
 
-      // Also search in parts_catalog (CSV imported parts)
+      // Also search parts_catalog
       const { data: catalogData, count: catalogCount } = await supabase
         .from("parts_catalog")
         .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
@@ -124,31 +232,18 @@ const Shop = () => {
         .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
         .order("name");
 
-      // Merge results from both tables
-      const allResults: PartResult[] = [];
-
       if (partsNewData && partsNewData.length > 0) {
         allResults.push(...partsNewData);
       }
-
       if (catalogData && catalogData.length > 0) {
-        const catalogMapped: PartResult[] = catalogData.map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          oem_number: item.oem_code,
-          internal_code: null,
-          price_without_vat: item.price,
-          price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
-          category: item.category,
-          family: item.brand,
-          segment: item.available ? "Skladem" : "Na objednávku",
-          packaging: null,
-        }));
-        // Don't add duplicates (same OEM code already in parts_new)
         const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
-        for (const item of catalogMapped) {
-          if (!existingOems.has(normalizeOem(item.oem_number))) {
-            allResults.push(item);
+        for (const item of catalogData) {
+          if (!existingOems.has(normalizeOem(item.oem_code))) {
+            allResults.push({
+              id: item.id, name: item.name, oem_number: item.oem_code, internal_code: null,
+              price_without_vat: item.price, price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
+              category: item.category, family: item.brand, segment: item.available ? "Skladem" : "Na objednávku", packaging: null,
+            });
           }
         }
       }
@@ -161,7 +256,7 @@ const Shop = () => {
         return;
       }
 
-      // Not found locally - fetch from external catalog in real-time
+      // Not found locally - fetch from external catalog
       console.log("Fetching from external catalog for:", oemCodes);
       const { data: extCatalogData, error: fnError } = await supabase.functions.invoke("catalog-search", {
         body: { oemCodes },
@@ -170,8 +265,6 @@ const Shop = () => {
       if (fnError) throw new Error(fnError.message || "Chyba při volání katalogu");
 
       const catalogResults = extCatalogData?.results || [];
-      
-      // Convert catalog results to PartResult format
       const partResults: PartResult[] = catalogResults
         .filter((r: any) => r.found)
         .map((r: any, i: number) => ({
@@ -181,13 +274,9 @@ const Shop = () => {
           internal_code: r.search_code || null,
           price_without_vat: r.price_without_vat,
           price_with_vat: r.price_with_vat,
-          category: null,
-          family: null,
-          segment: r.cached ? "Cache" : "Live",
-          packaging: null,
+          category: null, family: null, segment: r.cached ? "Cache" : "Live", packaging: null,
         }));
 
-      // Also include not-found items so user knows
       const notFound = catalogResults.filter((r: any) => !r.found);
       if (notFound.length > 0 && partResults.length === 0) {
         toast.error(`Díl "${searchQuery}" nebyl nalezen v katalogu`);
@@ -196,7 +285,6 @@ const Shop = () => {
       setResults(partResults);
       setTotalCount(partResults.length);
 
-      // If parts were found and cached, refresh from DB to get proper IDs
       if (partResults.length > 0) {
         const { data: freshData } = await supabase
           .from("parts_new")
@@ -214,7 +302,7 @@ const Shop = () => {
       setSearching(false);
       setPriceFetching(false);
     }
-  }, [category, subCategory]);
+  }, [category, subCategory, searchMode, brand, model]);
 
   const hasSearched = useRef(false);
   useEffect(() => {
