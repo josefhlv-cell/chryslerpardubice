@@ -233,6 +233,54 @@ const Filters = ({
           onChange={(e) => setFilters({ ...filters, manufacturer: e.target.value || undefined })} />
       </div>
 
+      {/* Catalog source filter */}
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Zdroj katalogu</p>
+        <Select value={filters.catalogSource || "all"} onValueChange={(v) => setFilters({ ...filters, catalogSource: v === "all" ? undefined : v })}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Všechny zdroje</SelectItem>
+            {sourceStats.map(s => (
+              <SelectItem key={s.source} value={s.source} className="text-xs">
+                {sourceLabel[s.source] || s.source} ({s.count.toLocaleString("cs")})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Source stats */}
+      {sourceStats.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <Database className="w-3 h-3" />
+            Pokrytí katalogu
+          </p>
+          <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5">
+            <p className="text-[10px] text-muted-foreground">
+              Celkem <strong>{totalParts.toLocaleString("cs")}</strong> dílů
+            </p>
+            {sourceStats.map(s => {
+              const pct = totalParts > 0 ? Math.round((s.count / totalParts) * 100) : 0;
+              return (
+                <div key={s.source} className="space-y-0.5">
+                  <div className="flex justify-between text-[10px]">
+                    <span>{sourceLabel[s.source] || s.source}</span>
+                    <span className="font-mono">{s.count.toLocaleString("cs")} ({pct}%)</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <Separator />
 
       {/* Reset */}
