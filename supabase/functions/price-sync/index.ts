@@ -4,8 +4,7 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const RATE_LIMIT_MS = 2000;
-const MAX_RETRIES = 3;
+const FIRECRAWL_API = 'https://api.firecrawl.dev/v1/scrape';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -13,7 +12,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { partNumbers, mode, batchSize = 20, offset = 0, debugMode = false, exportCsv = false } = await req.json();
+    const {
+      partNumbers,
+      mode = 'auto',
+      batchSize = 5,
+      offset = 0,
+      debugMode = false,
+      exportCsv = false,
+    } = await req.json();
 
     const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
     const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
@@ -21,18 +27,18 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!CATALOG_PASS || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required secrets (CATALOG_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+      return json({ error: 'Missing secrets (CATALOG_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)' }, 500);
     }
     if (!FIRECRAWL_API_KEY) {
-      throw new Error('FIRECRAWL_API_KEY not configured – connect Firecrawl in Settings');
+      return json({ error: 'FIRECRAWL_API_KEY not configured' }, 500);
     }
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Get part numbers to sync
-    let oemNumbers = partNumbers;
-    if (!oemNumbers || oemNumbers.length === 0) {
+    // ── Resolve OEM numbers ─────────────────────────────────────────
+    let oemNumbers: string[] = partNumbers || [];
+    if (oemNumbers.length === 0) {
       const { data: topParts } = await supabase
         .from('parts_new')
         .select('oem_number')
@@ -41,167 +47,257 @@ Deno.serve(async (req) => {
       oemNumbers = (topParts || []).map((p: any) => p.oem_number);
     }
 
-    if (!oemNumbers || oemNumbers.length === 0) {
-      return json({ success: true, summary: { total: 0 } });
+    if (oemNumbers.length === 0) {
+      return json({ success: true, summary: { total: 0, message: 'No parts to sync' } });
     }
 
-    // Step 1: Login via Firecrawl (handles Cloudflare)
-    console.log('Logging in via Firecrawl...');
-    const loginResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
-      formats: ['html'],
-      waitFor: 3000,
-      actions: [
-        { type: 'wait', milliseconds: 2000 },
-        {
-          type: 'executeJavascript',
-          script: `
-            const pw = document.querySelector('input[name="password"]');
-            if (pw) { pw.value = '${CATALOG_PASS}'; pw.closest('form')?.submit(); }
-          `,
-        },
-        { type: 'wait', milliseconds: 5000 },
-        { type: 'scrape' },
-      ],
+    const batch = oemNumbers.slice(0, batchSize);
+    console.log(`Processing batch of ${batch.length} parts (offset ${offset}):`, batch);
+
+    // ── Step 1: Login via direct POST (no Firecrawl needed for login) ──
+    console.log('Logging in to catalog...');
+    const loginResp = await fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      body: `password=${encodeURIComponent(CATALOG_PASS)}&submit-password=P%C5%99ihl%C3%A1sit`,
+      redirect: 'manual',
     });
 
-    const loginHtml = loginResult.data?.html || '';
-    const loggedIn = !loginHtml.includes('name="password"') && (loginHtml.includes('Zadejte') || loginHtml.includes('name="search"'));
-
-    if (!loggedIn) {
-      console.error('Login failed. HTML length:', loginHtml.length);
-      return json({
-        error: 'Catalog login failed via Firecrawl',
-        debug: debugMode ? { htmlLength: loginHtml.length, htmlPreview: loginHtml.substring(0, 1000) } : undefined,
-      }, 500);
+    // Get session cookies
+    const cookies = loginResp.headers.getSetCookie?.() || [];
+    const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
+    
+    // Follow redirect or read response
+    let catalogHtml = '';
+    if (loginResp.status >= 300 && loginResp.status < 400) {
+      const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
+      const followResp = await fetch(redirectUrl, {
+        headers: {
+          'Cookie': cookieStr,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+      catalogHtml = await followResp.text();
+    } else {
+      catalogHtml = await loginResp.text();
     }
 
-    console.log('Login OK, searching parts...');
+    // Check if we're logged in
+    const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte');
+    const stillHasPassword = catalogHtml.includes('name="password"') && !catalogHtml.includes('name="search"');
+    
+    // Extract all form fields for debugging
+    const formMatches = catalogHtml.match(/<form[^>]*>[\s\S]*?<\/form>/gi) || [];
+    const inputMatches = catalogHtml.match(/<input[^>]*>/gi) || [];
+    console.log(`Login result: hasSearch=${hasSearchForm}, stillPassword=${stillHasPassword}, htmlLen=${catalogHtml.length}, cookies=${cookies.length}`);
+    console.log(`Forms found: ${formMatches.length}, Inputs: ${inputMatches.map(i => i.substring(0, 100))}`);
 
-    // Step 2: Search each part via Firecrawl actions
+    if (debugMode && !hasSearchForm) {
+      // Return debug info about login attempt
+      return json({
+        success: false,
+        loginDebug: {
+          status: loginResp.status,
+          cookieCount: cookies.length,
+          cookieStr: cookieStr.substring(0, 200),
+          htmlLength: catalogHtml.length,
+          hasSearchForm,
+          stillHasPassword,
+          htmlPreview: catalogHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
+        },
+      });
+    }
+
+    // ── Step 2: If direct POST fails, try Firecrawl with actions ────
+    let sessionCookies = cookieStr;
+    if (!hasSearchForm) {
+      console.log('Direct POST login failed, trying Firecrawl actions...');
+      const loginResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
+        formats: ['html'],
+        waitFor: 2000,
+        actions: [
+          { type: 'wait', milliseconds: 1500 },
+          {
+            type: 'executeJavascript',
+            script: `
+              const pw = document.querySelector('input[name="password"]');
+              if (pw) {
+                pw.value = '${CATALOG_PASS}';
+                const btn = document.querySelector('input[name="submit-password"]');
+                if (btn) btn.click();
+              }
+            `,
+          },
+          { type: 'wait', milliseconds: 5000 },
+          { type: 'scrape' },
+        ],
+      });
+
+      catalogHtml = loginResult.data?.html || '';
+      const loggedIn = catalogHtml.includes('Zadejte') || catalogHtml.includes('name="search"');
+      
+      if (!loggedIn) {
+        console.error('Both login methods failed');
+        return json({
+          error: 'Catalog login failed',
+          debug: debugMode ? {
+            htmlLength: catalogHtml.length,
+            htmlPreview: catalogHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
+          } : undefined,
+        }, 500);
+      }
+      
+      // For Firecrawl approach, we'll use Firecrawl for searches too
+      sessionCookies = '__firecrawl__';
+    }
+
+    // ── Step 3: Search each part ────────────────────────────────────
     const results: any[] = [];
+    let updated = 0, errors = 0, skipped = 0;
     const notFound: string[] = [];
     const errorParts: string[] = [];
-    let updated = 0, errors = 0, skipped = 0;
 
-    for (const partNumber of oemNumbers.slice(0, batchSize)) {
-      // Check cache / lock
-      const { data: cached } = await supabase
-        .from('parts_new')
-        .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
-        .eq('oem_number', partNumber)
-        .single();
+    for (const partNumber of batch) {
+      try {
+        const { data: cached } = await supabase
+          .from('parts_new')
+          .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
+          .eq('oem_number', partNumber)
+          .single();
 
-      if (cached?.price_locked) {
-        results.push({ oem_number: partNumber, status: 'locked' });
-        skipped++;
-        continue;
-      }
-
-      if (cached?.last_price_update && mode !== 'force') {
-        const daysAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60 * 60 * 24);
-        if (daysAgo < 14) {
-          results.push({ oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat });
+        if (cached?.price_locked) {
+          results.push({ oem_number: partNumber, status: 'locked' });
           skipped++;
           continue;
         }
-      }
 
-      const searchCode = `K${partNumber}`;
-      let found = false;
+        if (cached?.last_price_update && mode !== 'force') {
+          const daysAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60 * 60 * 24);
+          if (daysAgo < 14) {
+            results.push({ oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat });
+            skipped++;
+            continue;
+          }
+        }
 
-      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          console.log(`[${attempt}] Searching ${searchCode}...`);
+        const searchCode = `K${partNumber}`;
+        console.log(`Searching ${searchCode}...`);
 
-          // Use Firecrawl actions: fill search field, submit, scrape result
+        let searchHtml = '';
+        
+        if (sessionCookies === '__firecrawl__') {
+          // Use Firecrawl for search (session in Firecrawl's browser)
           const searchResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
             formats: ['html'],
-            waitFor: 3000,
+            waitFor: 2000,
             actions: [
-              { type: 'wait', milliseconds: 2000 },
-              // First login again (session may not persist)
+              { type: 'wait', milliseconds: 1000 },
               {
                 type: 'executeJavascript',
                 script: `
                   const pw = document.querySelector('input[name="password"]');
-                  if (pw) { pw.value = '${CATALOG_PASS}'; pw.closest('form')?.submit(); }
-                `,
-              },
-              { type: 'wait', milliseconds: 4000 },
-              // Now search
-              {
-                type: 'executeJavascript',
-                script: `
-                  const searchInput = document.querySelector('input[type="text"]');
-                  if (searchInput) {
-                    searchInput.value = '${searchCode}';
-                    const form = searchInput.closest('form');
-                    if (form) form.submit();
+                  if (pw) {
+                    pw.value = '${CATALOG_PASS}';
+                    document.querySelector('input[name="submit-password"]')?.click();
                   }
                 `,
               },
-              { type: 'wait', milliseconds: 5000 },
+              { type: 'wait', milliseconds: 3000 },
+              {
+                type: 'executeJavascript',
+                script: `
+                  const inputs = document.querySelectorAll('input[type="text"]');
+                  for (const inp of inputs) {
+                    if (inp.offsetParent !== null) {
+                      inp.value = '${searchCode}';
+                      inp.closest('form')?.submit();
+                      break;
+                    }
+                  }
+                `,
+              },
+              { type: 'wait', milliseconds: 4000 },
               { type: 'scrape' },
             ],
           });
+          searchHtml = searchResult.data?.html || '';
+        } else {
+          // Use direct HTTP with session cookies
+          const searchResp = await fetch(CATALOG_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': sessionCookies,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
+          });
+          searchHtml = await searchResp.text();
+        }
 
-          const html = searchResult.data?.html || '';
-          const prices = extractPrices(html);
+        const prices = extractPrices(searchHtml);
 
-          if (debugMode) {
-            results.push({
-              oem_number: partNumber, searchCode, debug: true,
-              htmlLength: html.length, pricesFound: prices,
-              textSnippet: html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1000),
+        if (debugMode) {
+          results.push({
+            oem_number: partNumber, searchCode, debug: true,
+            htmlLength: searchHtml.length, pricesFound: prices,
+            textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
+          });
+        }
+
+        if (prices.length > 0) {
+          const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
+
+          if (cached && cached.price_with_vat !== priceWithVat) {
+            await supabase.from('price_history').insert({
+              part_id: cached.id,
+              old_price_without_vat: cached.price_without_vat || 0,
+              new_price_without_vat: priceWithoutVat,
+              old_price_with_vat: cached.price_with_vat || 0,
+              new_price_with_vat: priceWithVat,
+              source: mode === 'force' ? 'manual' : 'auto',
             });
           }
-
-          if (prices.length > 0) {
-            found = true;
-            const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
-            await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
-            results.push({
-              oem_number: partNumber, status: 'updated', searchCode,
-              price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
-            });
-            updated++;
+          if (cached) {
+            await supabase.from('parts_new').update({
+              price_without_vat: priceWithoutVat,
+              price_with_vat: priceWithVat,
+              last_price_update: new Date().toISOString(),
+            }).eq('id', cached.id);
           }
-          break;
-        } catch (e) {
-          console.error(`Attempt ${attempt} error for ${searchCode}:`, e);
-          if (attempt === MAX_RETRIES) {
-            results.push({ oem_number: partNumber, status: 'error', error: String(e) });
-            errorParts.push(partNumber);
-            errors++;
-          } else {
-            await sleep(3000);
-          }
-        }
-      }
 
-      if (!found && !errorParts.includes(partNumber)) {
-        if (cached) {
-          await supabase.from('parts_new').update({
-            last_price_update: new Date().toISOString(),
-          }).eq('id', cached.id);
-        }
-        if (!debugMode) {
+          results.push({
+            oem_number: partNumber, status: 'updated', searchCode,
+            price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
+          });
+          updated++;
+        } else {
+          if (cached) {
+            await supabase.from('parts_new').update({
+              last_price_update: new Date().toISOString(),
+            }).eq('id', cached.id);
+          }
           results.push({ oem_number: partNumber, status: 'not_found', searchCode });
+          notFound.push(partNumber);
+          errors++;
         }
-        notFound.push(partNumber);
+      } catch (e) {
+        console.error(`Error processing ${partNumber}:`, e);
+        results.push({ oem_number: partNumber, status: 'error', error: String(e) });
+        errorParts.push(partNumber);
         errors++;
       }
-
-      await sleep(RATE_LIMIT_MS);
     }
 
     const summary = {
-      total: oemNumbers.length, processed: results.length,
+      total: oemNumbers.length, batchProcessed: batch.length,
       updated, errors, skipped,
-      notFoundCount: notFound.length, notFoundParts: notFound, errorParts,
+      notFound: notFound.length, nextOffset: offset + batch.length,
     };
 
-    // Optional CSV export
     let csv: string | undefined;
     if (exportCsv) {
       const { data: allParts } = await supabase
@@ -217,7 +313,6 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Sync complete: ${updated} updated, ${errors} errors, ${skipped} skipped`);
-
     return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
   } catch (e) {
     console.error('price-sync error:', e);
@@ -228,7 +323,7 @@ Deno.serve(async (req) => {
 // ─── Firecrawl helper ───────────────────────────────────────────────────────
 
 async function firecrawlScrape(apiKey: string, url: string, options: any): Promise<any> {
-  const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+  const resp = await fetch(FIRECRAWL_API, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -236,10 +331,9 @@ async function firecrawlScrape(apiKey: string, url: string, options: any): Promi
     },
     body: JSON.stringify({ url, ...options }),
   });
-
   const data = await resp.json();
   if (!resp.ok) {
-    throw new Error(`Firecrawl error ${resp.status}: ${JSON.stringify(data)}`);
+    throw new Error(`Firecrawl error ${resp.status}: ${JSON.stringify(data).substring(0, 500)}`);
   }
   return data;
 }
@@ -250,47 +344,42 @@ function extractPrices(html: string): number[] {
   const prices: number[] = [];
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  // Semicolon-separated data rows
-  for (const line of html.split('\n')) {
-    if (line.includes(';')) {
-      for (const part of line.split(';')) {
-        const cleaned = part.replace(/<[^>]*>/g, '').replace(/\s/g, '').replace(',', '.');
-        const num = parseFloat(cleaned);
-        if (num > 10 && num < 1000000 && !isNaN(num)) prices.push(num);
-      }
-    }
+  // Primary: "X XXX.XX Kč" pattern – strict: 1-3 digits optionally followed by (space + 3 digits), then decimal
+  const kcPattern = /(?<!\d)(\d{1,3}(?:\s\d{3})*[,.]\d{2})\s*Kč/gi;
+  let m;
+  while ((m = kcPattern.exec(text)) !== null) {
+    const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+    if (p > 10 && p < 1000000) prices.push(p);
   }
 
-  // MOC s DPH / MOC bez DPH patterns
-  for (const pat of [
-    /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+  // Secondary: "Cena bez DPH" / "Cena s DPH" patterns
+  const dphPatterns = [
+    /Cena\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /Cena\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /MOC\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
-    /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /bez\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
-  ]) {
-    let m;
-    while ((m = pat.exec(text)) !== null) {
-      const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+    /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+  ];
+
+  for (const pat of dphPatterns) {
+    let m2;
+    while ((m2 = pat.exec(text)) !== null) {
+      const p = parseFloat(m2[1].replace(/\s/g, '').replace(',', '.'));
       if (p > 10 && p < 1000000) prices.push(p);
     }
   }
 
-  // Kč / table cell patterns
-  for (const pat of [
-    /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
-    /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi,
-  ]) {
-    let m;
-    while ((m = pat.exec(html)) !== null) {
-      const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
-      if (p > 10 && p < 1000000) prices.push(p);
-    }
+  // Table cell prices
+  const tdPattern = /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi;
+  let m3;
+  while ((m3 = tdPattern.exec(html)) !== null) {
+    const p = parseFloat(m3[1].replace(/\s/g, '').replace(',', '.'));
+    if (p > 10 && p < 1000000) prices.push(p);
   }
 
   return [...new Set(prices)];
 }
-
-// ─── Price logic ────────────────────────────────────────────────────────────
 
 function pickBestPrices(prices: number[]): { priceWithVat: number; priceWithoutVat: number } {
   const sorted = [...prices].sort((a, b) => a - b);
@@ -308,38 +397,9 @@ function pickBestPrices(prices: number[]): { priceWithVat: number; priceWithoutV
   return { priceWithVat: sorted[0], priceWithoutVat: Math.round(sorted[0] / 1.21 * 100) / 100 };
 }
 
-async function savePriceUpdate(
-  supabase: any, cached: any, partNumber: string,
-  priceWithVat: number, priceWithoutVat: number, mode: string,
-) {
-  if (cached && cached.price_with_vat !== priceWithVat) {
-    await supabase.from('price_history').insert({
-      part_id: cached.id,
-      old_price_without_vat: cached.price_without_vat || 0,
-      new_price_without_vat: priceWithoutVat,
-      old_price_with_vat: cached.price_with_vat || 0,
-      new_price_with_vat: priceWithVat,
-      source: mode === 'force' ? 'manual' : 'auto',
-    });
-  }
-  if (cached) {
-    await supabase.from('parts_new').update({
-      price_without_vat: priceWithoutVat,
-      price_with_vat: priceWithVat,
-      last_price_update: new Date().toISOString(),
-    }).eq('id', cached.id);
-  }
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-function sleep(ms: number) {
-  return new Promise(r => setTimeout(r, ms));
 }
