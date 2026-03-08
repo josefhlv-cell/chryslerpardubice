@@ -57,7 +57,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setHasSearched(true);
     setSelectedCategory(null);
     setParts([]);
-    setPriceMap(new Map());
+    setPriceMap(() => new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
       .then((cats) => {
