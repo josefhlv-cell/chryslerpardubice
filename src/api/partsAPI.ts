@@ -286,8 +286,79 @@ export async function searchByCategory(
   return { results: sortByPriority(filtered), totalCount: (pnRes.count ?? 0) + (pcRes.count ?? 0) };
 }
 
+// ---- EPC types ----
+
+export interface EPCCategory {
+  id: string;
+  brand: string;
+  model: string;
+  engine: string | null;
+  category: string;
+  subcategory: string | null;
+  year_from: number | null;
+  year_to: number | null;
+}
+
+export interface EPCPart {
+  id: string;
+  oem_number: string | null;
+  part_name: string | null;
+  manufacturer: string | null;
+  note: string | null;
+  epc_category_id: string;
+  part_id: string | null;
+}
+
 /**
- * Search EPC categories then linked parts
+ * Get available EPC categories for a vehicle
+ */
+export async function getEPCCategories(
+  brand: string,
+  model?: string,
+  engine?: string,
+  year?: number
+): Promise<EPCCategory[]> {
+  let query = supabase
+    .from("epc_categories")
+    .select("id, brand, model, engine, category, subcategory, year_from, year_to")
+    .eq("brand", brand);
+
+  if (model) query = query.eq("model", model);
+  if (engine) query = query.eq("engine", engine);
+  if (year) {
+    query = query.or(`year_from.is.null,year_from.lte.${year}`);
+    query = query.or(`year_to.is.null,year_to.gte.${year}`);
+  }
+
+  query = query.order("sort_order").order("category");
+
+  const { data } = await query;
+  return (data as EPCCategory[]) || [];
+}
+
+/**
+ * Get unique category names from EPC categories
+ */
+export function getUniqueCategoryNames(categories: EPCCategory[]): string[] {
+  return [...new Set(categories.map((c) => c.category))];
+}
+
+/**
+ * Get EPC parts for given category IDs
+ */
+export async function getEPCParts(categoryIds: string[]): Promise<EPCPart[]> {
+  if (categoryIds.length === 0) return [];
+  
+  const { data } = await supabase
+    .from("epc_part_links")
+    .select("id, oem_number, part_name, manufacturer, note, epc_category_id, part_id")
+    .in("epc_category_id", categoryIds);
+
+  return (data as EPCPart[]) || [];
+}
+
+/**
+ * Search EPC categories then linked parts (legacy compatible)
  */
 export async function searchEPC(
   brand: string,
@@ -298,6 +369,7 @@ export async function searchEPC(
 ): Promise<SearchResult> {
   const allResults: PartResult[] = [];
 
+  // Find matching EPC categories
   let epcQuery = supabase.from("epc_categories").select("id").eq("brand", brand).eq("category", category);
   if (model) epcQuery = epcQuery.eq("model", model);
   if (subCategory) epcQuery = epcQuery.eq("subcategory", subCategory);
@@ -305,20 +377,59 @@ export async function searchEPC(
   const { data: epcCats } = await epcQuery;
   if (epcCats && epcCats.length > 0) {
     const catIds = epcCats.map((c: any) => c.id);
-    const { data: links } = await supabase.from("epc_part_links").select("part_id").in("epc_category_id", catIds);
+    
+    // Get parts from epc_part_links (with new direct columns)
+    const { data: links } = await supabase
+      .from("epc_part_links")
+      .select("id, oem_number, part_name, manufacturer, note, part_id")
+      .in("epc_category_id", catIds);
+
     if (links && links.length > 0) {
-      const partIds = [...new Set(links.map((l: any) => l.part_id))];
-      const { data: epcParts } = await supabase
-        .from("parts_new")
-        .select(
-          "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source"
-        )
-        .in("id", partIds);
-      if (epcParts) allResults.push(...epcParts.map((p) => mapToPartResult(p, "mopar")));
+      // Parts that have direct data in epc_part_links
+      const directParts = links.filter((l: any) => l.oem_number && l.part_name);
+      for (const dp of directParts) {
+        allResults.push({
+          id: `epc-${dp.id}`,
+          name: dp.part_name || "",
+          oem_number: dp.oem_number || "",
+          internal_code: null,
+          price_without_vat: 0,
+          price_with_vat: 0,
+          category: category,
+          family: brand,
+          segment: null,
+          packaging: null,
+          description: dp.note || null,
+          manufacturer: dp.manufacturer || null,
+          catalog_source: "epc",
+          availability: "unknown",
+          compatible_vehicles: `${brand} ${model || ""}`.trim(),
+          superseded_by: null,
+          supersedes: null,
+        });
+      }
+
+      // Parts that reference parts_new
+      const linkedPartIds = links.filter((l: any) => l.part_id).map((l: any) => l.part_id);
+      if (linkedPartIds.length > 0) {
+        const uniqueIds = [...new Set(linkedPartIds)];
+        const { data: epcParts } = await supabase
+          .from("parts_new")
+          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+          .in("id", uniqueIds);
+        if (epcParts) {
+          const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
+          for (const p of epcParts) {
+            if (!existingOems.has(normalizeOem(p.oem_number))) {
+              allResults.push(mapToPartResult(p, "mopar"));
+            }
+          }
+        }
+      }
     }
   }
 
-  // Fallback: text search
+  // Fallback: text search if no EPC data
   if (allResults.length === 0 && subCategory) {
     return searchByCategory(subCategory, page);
   }
