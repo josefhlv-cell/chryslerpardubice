@@ -109,9 +109,9 @@ export const mapToPartResult = (item: any, source: string): PartResult => ({
   supersedes: item.supersedes || null,
 });
 
-/** Sort results by catalog source priority */
+/** Sort results by catalog source priority, filtering blocked parts */
 export const sortByPriority = (parts: PartResult[]) =>
-  [...parts].sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
+  [...parts].filter(p => !isPartBlocked(p)).sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
 
 /** Enrich parts with supersession data from DB */
 export const enrichWithSupersessions = async (parts: PartResult[]) => {
