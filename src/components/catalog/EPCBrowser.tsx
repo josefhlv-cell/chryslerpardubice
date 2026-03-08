@@ -1,15 +1,15 @@
 /**
  * EPCBrowser Component
- * Shows EPC categories for selected vehicle and drills down to parts.
+ * Shows EPC categories for selected vehicle and drills down to parts with live prices.
  */
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info } from "lucide-react";
+import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  getEPCCategories, getUniqueCategoryNames, getEPCParts,
+  getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 
@@ -22,21 +22,18 @@ interface EPCBrowserProps {
 }
 
 const categoryIcons: Record<string, string> = {
-  "Motor": "🔧",
-  "Brzdy": "🛑",
-  "Chlazení": "❄️",
-  "Převodovka": "⚙️",
-  "Karoserie": "🚗",
-  "Elektro": "⚡",
-  "Elektroinstalace": "⚡",
-  "Podvozek": "🔩",
-  "Řízení": "🎯",
-  "Výfuk": "💨",
-  "Klimatizace": "🌡️",
-  "Interiér": "💺",
-  "Filtry": "🔍",
-  "Oleje a kapaliny": "🛢️",
+  "Motor": "🔧", "Brzdy": "🛑", "Chlazení": "❄️", "Převodovka": "⚙️",
+  "Karoserie": "🚗", "Elektro": "⚡", "Elektroinstalace": "⚡", "Podvozek": "🔩",
+  "Řízení": "🎯", "Výfuk": "💨", "Klimatizace": "🌡️", "Interiér": "💺",
+  "Filtry": "🔍", "Oleje a kapaliny": "🛢️", "Brzdový systém": "🛑",
+  "Palivový systém": "⛽", "Výfukový systém": "💨", "Klimatizace/Topení": "🌡️",
+  "Kola a pneumatiky": "🔘", "Náprava": "🔩", "Osvětlení": "💡",
 };
+
+type PriceData = { price_without_vat: number; price_with_vat: number; availability: string; name?: string };
+
+const formatPrice = (price: number) =>
+  price > 0 ? `${price.toLocaleString("cs-CZ")} Kč` : "—";
 
 const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps) => {
   const [loading, setLoading] = useState(false);
@@ -46,6 +43,8 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [parts, setParts] = useState<EPCPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [priceMap, setPriceMap] = useState<Map<string, PriceData>>(new Map());
+  const [pricesLoading, setPricesLoading] = useState(false);
 
   // Load categories when vehicle params change
   useEffect(() => {
@@ -54,6 +53,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setHasSearched(true);
     setSelectedCategory(null);
     setParts([]);
+    setPriceMap(new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
       .then((cats) => {
@@ -65,13 +65,32 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
   // Load parts when category selected
   useEffect(() => {
-    if (!selectedCategory) { setParts([]); return; }
+    if (!selectedCategory) { setParts([]); setPriceMap(new Map()); return; }
     setPartsLoading(true);
     const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
     getEPCParts(catIds)
-      .then(setParts)
+      .then((loadedParts) => {
+        setParts(loadedParts);
+        // Auto-trigger price enrichment
+        const oems = loadedParts.map(p => p.oem_number).filter(Boolean) as string[];
+        if (oems.length > 0) {
+          setPricesLoading(true);
+          enrichEPCPrices(oems)
+            .then(setPriceMap)
+            .finally(() => setPricesLoading(false));
+        }
+      })
       .finally(() => setPartsLoading(false));
   }, [selectedCategory, categories]);
+
+  const handleRefreshPrices = () => {
+    const oems = parts.map(p => p.oem_number).filter(Boolean) as string[];
+    if (oems.length === 0) return;
+    setPricesLoading(true);
+    enrichEPCPrices(oems)
+      .then(setPriceMap)
+      .finally(() => setPricesLoading(false));
+  };
 
   if (!brand) return null;
 
@@ -84,7 +103,6 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     );
   }
 
-  // No data state
   if (hasSearched && categoryNames.length === 0) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -100,6 +118,8 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       </motion.div>
     );
   }
+
+  const pricedCount = parts.filter(p => p.oem_number && priceMap.has(p.oem_number)).length;
 
   return (
     <div className="space-y-4">
@@ -119,9 +139,25 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
           </p>
         </div>
         {selectedCategory && (
-          <Badge variant="secondary" className="text-[10px] ml-auto">
-            {parts.length} dílů
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            {pricesLoading && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Načítám ceny…</span>
+              </div>
+            )}
+            {!pricesLoading && pricedCount > 0 && (
+              <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/30">
+                {pricedCount}/{parts.length} s cenou
+              </Badge>
+            )}
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
+              <RefreshCw className={`w-3 h-3 ${pricesLoading ? "animate-spin" : ""}`} />
+            </Button>
+            <Badge variant="secondary" className="text-[10px]">
+              {parts.length} dílů
+            </Badge>
+          </div>
         )}
       </div>
 
@@ -162,43 +198,60 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             ) : (
               <div className="space-y-1">
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_2fr_1fr_auto] gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b">
+                <div className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b">
                   <span>OEM číslo</span>
                   <span>Název dílu</span>
-                  <span>Výrobce</span>
+                  <span className="w-24 text-right">Cena s DPH</span>
                   <span className="w-16 text-center">Akce</span>
                 </div>
-                {parts.map((part) => (
-                  <div key={part.id}
-                    className="grid grid-cols-[1fr_2fr_1fr_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50">
-                    <div>
-                      {part.oem_number ? (
-                        <button
-                          onClick={() => onSearchOem(part.oem_number!)}
-                          className="text-xs font-mono font-medium text-primary hover:underline"
-                        >
-                          {part.oem_number}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                {parts.map((part) => {
+                  const price = part.oem_number ? priceMap.get(part.oem_number) : undefined;
+                  return (
+                    <div key={part.id}
+                      className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50">
+                      <div>
+                        {part.oem_number ? (
+                          <button
+                            onClick={() => onSearchOem(part.oem_number!)}
+                            className="text-xs font-mono font-medium text-primary hover:underline"
+                          >
+                            {part.oem_number}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium">{price?.name || part.part_name || "—"}</p>
+                        {part.note && <p className="text-[10px] text-muted-foreground mt-0.5">{part.note}</p>}
+                        {part.manufacturer && (
+                          <p className="text-[10px] text-muted-foreground">{part.manufacturer}</p>
+                        )}
+                      </div>
+                      <div className="w-24 text-right">
+                        {price ? (
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">{formatPrice(price.price_with_vat)}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatPrice(price.price_without_vat)} bez DPH</p>
+                          </div>
+                        ) : pricesLoading && part.oem_number ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </div>
+                      <div className="w-16 flex justify-center">
+                        {part.oem_number && (
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
+                            onClick={() => onSearchOem(part.oem_number!)}>
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            Detail
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-medium">{part.part_name || "—"}</p>
-                      {part.note && <p className="text-[10px] text-muted-foreground mt-0.5">{part.note}</p>}
-                    </div>
-                    <span className="text-xs text-muted-foreground">{part.manufacturer || "—"}</span>
-                    <div className="w-16 flex justify-center">
-                      {part.oem_number && (
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
-                          onClick={() => onSearchOem(part.oem_number!)}>
-                          <ExternalLink className="w-3 h-3 mr-1" />
-                          Detail
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </motion.div>
