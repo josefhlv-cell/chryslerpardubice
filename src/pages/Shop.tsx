@@ -105,12 +105,22 @@ const Shop = () => {
 
   // ---- Search logic ----
   const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
-    if (!searchQuery && !category && !subCategory) return;
+    // In vehicle mode, allow search with brand only (no query/category required)
+    const hasVehicleParams = brand || model || motor;
+    if (!searchQuery && !category && !subCategory && !hasVehicleParams) return;
     setSearching(true);
     setPriceFetching(true);
 
     // Record in history
     if (searchQuery) addEntry(searchQuery);
+
+    // Merge vehicle params into filters
+    const mergedFilters: SearchFilters = {
+      ...filters,
+      brand: brand || filters.brand,
+      model: model || filters.model,
+      motor: motor || undefined,
+    };
 
     try {
       let result;
@@ -120,10 +130,16 @@ const Shop = () => {
         if (result.results.length === 0 && (subCategory || category)) {
           toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly.`);
         }
-      } else if (searchMode === "vehicle" && !searchQuery && category) {
-        result = await searchByCategory(subCategory || category, pageNum, filters);
+      } else if (searchMode === "vehicle") {
+        // Vehicle mode: search by category/subcategory text + vehicle filters
+        const searchTerm = subCategory || category || searchQuery || "";
+        result = await searchByCategory(searchTerm, pageNum, mergedFilters);
+        if (result.results.length === 0) {
+          const desc = [brand, model, category].filter(Boolean).join(" / ");
+          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné díly.` : "Vyberte značku a kategorii pro vyhledání.");
+        }
       } else if (searchQuery) {
-        result = await searchParts(searchQuery, pageNum, filters);
+        result = await searchParts(searchQuery, pageNum, mergedFilters);
         if (result.results.length === 0) {
           toast.error(`Díl "${searchQuery}" nebyl nalezen`);
         }
@@ -140,7 +156,7 @@ const Shop = () => {
       setSearching(false);
       setPriceFetching(false);
     }
-  }, [category, subCategory, searchMode, brand, model, filters, addEntry]);
+  }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry]);
 
   // Auto-search on debounced query
   const hasSearched = useRef(false);
@@ -341,7 +357,7 @@ const Shop = () => {
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
                       <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                     </Select>
-                    {category && (
+                    {(category || brand) && (
                       <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
                         {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
                         Hledat
