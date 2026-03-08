@@ -421,6 +421,21 @@ const MyVehicles = () => {
                 <Input type="number" value={currentMileage} onChange={e => setCurrentMileage(e.target.value)} placeholder="50000" />
               </div>
             </div>
+            {/* AI VIN Detail Panel */}
+            {vin && vin.length >= 11 && (
+              <VINDetailPanel
+                vin={vin}
+                data={vinDecodeResult}
+                compact
+                onDecoded={(basic) => {
+                  if (basic.brand) setBrand(basic.brand);
+                  if (basic.model) setModel(basic.model);
+                  if (basic.year) setYear(basic.year);
+                  const ep = [basic.engine_displacement, basic.fuel_type].filter(Boolean);
+                  if (ep.length) setEngine(ep.join(" "));
+                }}
+              />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Zrušit</Button>
