@@ -203,29 +203,30 @@ const ServiceRecommendations = () => {
             <Card className={`border ${style.bg}`}>
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <CarIcon car={rec.vehicle} size="sm" className="mt-0.5" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      {rec.urgency === "due" && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
-                      <p className="font-semibold text-sm truncate">{rec.plan.service_name}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{rec.vehicle.brand} {rec.vehicle.model} {rec.vehicle.year || ""}</p>
-                    <div className="flex gap-3 mt-1 flex-wrap">
-                      <Badge className={`text-[10px] ${style.badge}`}>{style.label}</Badge>
-                      {rec.kmRemaining != null && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {rec.kmRemaining <= 0 ? "Překročeno" : `za ${rec.kmRemaining.toLocaleString("cs")} km`}
-                        </span>
-                      )}
-                      {rec.daysRemaining != null && (
-                        <span className="text-[10px] text-muted-foreground">
-                          {rec.daysRemaining <= 0 ? "Prošlý termín" : `za ${rec.daysRemaining} dní`}
-                        </span>
-                      )}
-                      {rec.estimatedPrice && (
-                        <span className="text-[10px] font-medium">~{rec.estimatedPrice.toLocaleString("cs")} Kč</span>
-                      )}
+                  <div className="flex items-start gap-3 min-w-0 flex-1">
+                    <CarIcon car={rec.vehicle} size="sm" className="mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {rec.urgency === "due" && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                        <p className="font-semibold text-sm truncate">{rec.plan.service_name}</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{rec.vehicle.brand} {rec.vehicle.model} {rec.vehicle.year || ""}</p>
+                      <div className="flex gap-3 mt-1 flex-wrap">
+                        <Badge className={`text-[10px] ${style.badge}`}>{style.label}</Badge>
+                        {rec.kmRemaining != null && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {rec.kmRemaining <= 0 ? "Překročeno" : `za ${rec.kmRemaining.toLocaleString("cs")} km`}
+                          </span>
+                        )}
+                        {rec.daysRemaining != null && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {rec.daysRemaining <= 0 ? "Prošlý termín" : `za ${rec.daysRemaining} dní`}
+                          </span>
+                        )}
+                        {rec.estimatedPrice && (
+                          <span className="text-[10px] font-medium">~{rec.estimatedPrice.toLocaleString("cs")} Kč</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <Button
