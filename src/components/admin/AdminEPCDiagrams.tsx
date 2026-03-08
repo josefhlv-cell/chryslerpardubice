@@ -198,7 +198,7 @@ const AdminEPCDiagrams = () => {
             </Button>
           </div>
           {items.map((d) => (
-            <Card key={d.id} className="border-border/50">
+            <Card key={d.id} className="border-border/50 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => handlePreview(d)}>
               <CardContent className="p-3 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium">{d.category}{d.subcategory ? ` › ${d.subcategory}` : ''}</p>
@@ -210,7 +210,7 @@ const AdminEPCDiagrams = () => {
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0"
                     disabled={regenerating === d.id}
-                    onClick={() => handleRegenerate(d)}
+                    onClick={(e) => { e.stopPropagation(); handleRegenerate(d); }}
                   >
                     {regenerating === d.id ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -220,7 +220,7 @@ const AdminEPCDiagrams = () => {
                   </Button>
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive"
-                    onClick={() => handleDelete(d.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
