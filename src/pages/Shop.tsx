@@ -104,11 +104,23 @@ const Shop = () => {
     return () => clearTimeout(debounceRef.current);
   }, [query]);
 
+  // ---- AbortController for cancelling stale requests ----
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelPrevious = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    abortRef.current = new AbortController();
+    return abortRef.current.signal;
+  };
+
   // ---- Search logic ----
   const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
     // In vehicle mode, allow search with brand only (no query/category required)
     const hasVehicleParams = brand || model || motor;
     if (!searchQuery && !category && !subCategory && !hasVehicleParams) return;
+    
+    const signal = cancelPrevious();
     setSearching(true);
     setPriceFetching(true);
 
@@ -132,7 +144,6 @@ const Shop = () => {
           toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly.`);
         }
       } else if (searchMode === "vehicle") {
-        // Vehicle mode: search by category/subcategory text + vehicle filters
         const searchTerm = subCategory || category || searchQuery || "";
         result = await searchByCategory(searchTerm, pageNum, mergedFilters);
         if (result.results.length === 0) {
@@ -148,14 +159,20 @@ const Shop = () => {
         result = { results: [], totalCount: 0 };
       }
 
-      setResults(result.results);
-      setTotalCount(result.totalCount);
+      // Only update state if this request wasn't aborted
+      if (!signal.aborted) {
+        setResults(result.results);
+        setTotalCount(result.totalCount);
+      }
     } catch (err: any) {
+      if (signal.aborted) return; // Silently ignore aborted requests
       toast.error("Chyba: " + err.message);
       setResults([]);
     } finally {
-      setSearching(false);
-      setPriceFetching(false);
+      if (!signal.aborted) {
+        setSearching(false);
+        setPriceFetching(false);
+      }
     }
   }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry]);
 
@@ -245,22 +262,29 @@ const Shop = () => {
   };
 
   const handleSearchOem = (oem: string) => {
-    // Always switch to part_number mode for OEM searches
+    const signal = cancelPrevious();
     setSearchMode("part_number");
     setQuery(oem);
     setPage(0);
-    // Use searchParts directly (part_number mode logic)
     setSearching(true);
     setPriceFetching(true);
     addEntry(oem);
     searchParts(oem, 0, filters)
       .then((result) => {
+        if (signal.aborted) return;
         setResults(result.results);
         setTotalCount(result.totalCount);
         if (result.results.length === 0) toast.error(`Díl "${oem}" nebyl nalezen`);
       })
-      .catch((err: any) => { toast.error("Chyba: " + err.message); setResults([]); })
-      .finally(() => { setSearching(false); setPriceFetching(false); });
+      .catch((err: any) => { 
+        if (signal.aborted) return;
+        toast.error("Chyba: " + err.message); setResults([]); 
+      })
+      .finally(() => { 
+        if (!signal.aborted) {
+          setSearching(false); setPriceFetching(false); 
+        }
+      });
   };
 
   // ===== RENDER =====
@@ -313,12 +337,15 @@ const Shop = () => {
                     searching={searching}
                     searchMode={searchMode}
                     onModeChange={(mode) => { 
+                      cancelPrevious(); // Abort any in-flight requests
                       setSearchMode(mode); 
                       setResults(null); 
                       setPage(0); 
                       setCategory(""); 
                       setSubCategory(""); 
-                      // Clear query when switching to EPC/Vehicle mode to avoid stale searches
+                      setSearching(false);
+                      setPriceFetching(false);
+                      // Clear query when switching to EPC/Vehicle mode
                       if (mode === "epc" || mode === "vehicle") {
                         setQuery("");
                       }
