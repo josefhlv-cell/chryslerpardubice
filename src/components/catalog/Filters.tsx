@@ -26,7 +26,7 @@ export const catalogTree: Record<string, Record<string, string[]>> = {
 };
 
 export const partCategories = [
-  "Motor", "Převodovka", "Brzdy", "Řízení", "Podvozek", "Elektroinstalace",
+  "Motor", "Převodovka", "Brzdy", "Chlazení", "Řízení", "Podvozek", "Elektroinstalace",
   "Karoserie", "Interiér", "Klimatizace", "Výfuk", "Filtry", "Oleje a kapaliny",
 ];
 
