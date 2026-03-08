@@ -330,6 +330,11 @@ const MyVehicles = () => {
                       )}
                     </div>
                     {v.vin && <p className="text-[10px] text-muted-foreground mt-1">VIN: {v.vin}</p>}
+                    {v.vin && v.vin.length >= 11 && (
+                      <div className="mt-2">
+                        <VINDetailPanel vin={v.vin} compact />
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     {!v.current_mileage && (
