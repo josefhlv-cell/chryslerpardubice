@@ -197,9 +197,10 @@ export async function getVehicleServiceReport(
   const plans = (plansRes.data || []) as ServiceInterval[];
   const history = (historyRes.data || []) as ServiceHistoryEntry[];
 
-  // Calculate due items
+  // Calculate due items (filter out nulls from km_start check)
   const items = plans
     .map((plan) => calculateServiceDue(vehicle, plan))
+    .filter((item): item is ServiceDueItem => item !== null)
     .sort((a, b) => {
       const order = { due: 0, soon: 1, ok: 2 };
       return order[a.urgency] - order[b.urgency];
