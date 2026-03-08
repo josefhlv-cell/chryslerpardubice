@@ -249,11 +249,15 @@ async function firecrawlSearch(
   
   const searchHtmlB64 = getAttr('search-html');
   const searchTextB64 = getAttr('search-text');
+  const loginTextB64 = getAttr('login-text');
   const searchHtml = decodeB64(searchHtmlB64);
   const searchText = decodeB64(searchTextB64);
+  const loginText = decodeB64(loginTextB64);
   const loginLen = getAttr('login-len');
   const searchLen = getAttr('search-len');
-  const hasSearchForm = getAttr('has-search-form');
+  const inputsStr = getAttr('inputs');
+  const searchInputName = getAttr('search-input');
+  const submitName = getAttr('submit-name');
   const error = getAttr('error');
   
   // Extract prices from the search result HTML
@@ -263,9 +267,12 @@ async function firecrawlSearch(
     htmlLength: html.length,
     loginLen,
     searchLen,
-    hasSearchForm,
+    inputs: inputsStr,
+    searchInputName,
+    submitName,
     error,
     searchTextPreview: searchText.substring(0, 500),
+    loginTextPreview: loginText.substring(0, 500),
     pricesFound: prices,
   } : {};
 
