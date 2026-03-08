@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { Settings, CheckCircle } from "lucide-react";
+import { Settings, CheckCircle, Save } from "lucide-react";
 
 type CatalogConfig = {
   id: string;
@@ -19,16 +20,17 @@ const AdminCatalogSettings = () => {
     { id: "autokelly", name: "AutoKelly katalog", description: "Alternativní díly – připraveno k aktivaci", enabled: false, ready: true },
     { id: "intercars", name: "InterCars katalog", description: "Alternativní díly – připraveno k aktivaci", enabled: false, ready: true },
   ]);
+  const [hasChanges, setHasChanges] = useState(false);
 
   const toggleCatalog = (id: string) => {
-    setCatalogs(prev => prev.map(c => {
-      if (c.id === id) {
-        const newEnabled = !c.enabled;
-        toast({ title: newEnabled ? `${c.name} aktivován` : `${c.name} deaktivován` });
-        return { ...c, enabled: newEnabled };
-      }
-      return c;
-    }));
+    setCatalogs(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
+    setHasChanges(true);
+  };
+
+  const saveChanges = () => {
+    // Save catalog configuration (in future this would persist to DB)
+    toast({ title: "Nastavení katalogů uloženo" });
+    setHasChanges(false);
   };
 
   return (
@@ -55,6 +57,11 @@ const AdminCatalogSettings = () => {
           </CardContent>
         </Card>
       ))}
+
+      <Button className="w-full" onClick={saveChanges} disabled={!hasChanges}>
+        <Save className="w-4 h-4 mr-2" />
+        Uložit nastavení katalogů
+      </Button>
 
       <Card>
         <CardContent className="p-4">
