@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { RefreshCw, Activity, CheckCircle, Clock, AlertCircle, TrendingUp } from "lucide-react";
+import { RefreshCw, Activity, CheckCircle, Clock, AlertCircle, TrendingUp, Pause, Play } from "lucide-react";
 
 type Stats = {
   total: number;
