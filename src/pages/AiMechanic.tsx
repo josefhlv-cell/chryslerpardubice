@@ -9,8 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Send, Phone, Wrench, AlertTriangle, Car, Loader2, Camera, ImagePlus, ShoppingCart } from "lucide-react";
-import tondaAvatar from "@/assets/tonda-avatar.png";
+import { Bot, Send, Phone, Wrench, AlertTriangle, Car, Loader2, Camera, ImagePlus, ShoppingCart } from "lucide-react";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type Vehicle = { id: string; brand: string; model: string; year: number | null; engine: string | null; vin: string | null; mileage?: number | null };
@@ -260,7 +259,7 @@ const AiMechanic = () => {
             <Card className="border-primary/30">
               <CardContent className="p-4 text-center">
                 <p className="text-xs font-semibold text-primary mb-1">Tonda</p>
-                <img src={tondaAvatar} alt="Tonda – AI Mechanik" className="w-20 h-20 mx-auto mb-2 object-contain" />
+                <Bot className="w-10 h-10 mx-auto mb-2 text-primary" />
                 <h2 className="font-display font-bold text-lg">Ahoj, jsem Tonda!</h2>
                 <p className="text-xs text-muted-foreground mt-1">
                   Váš AI mechanik. Popište problém, přiložte fotku nebo zvuk – analyzuji příčinu a doporučím řešení.
@@ -322,7 +321,7 @@ const AiMechanic = () => {
               {msg.role === "assistant" && (
                 <div className="flex flex-col items-center mr-2 shrink-0">
                   <span className="text-[9px] font-bold text-primary">Tonda</span>
-                  <img src={tondaAvatar} alt="Tonda" className="w-8 h-8 object-contain" />
+                  <Bot className="w-6 h-6 text-primary" />
                 </div>
               )}
               <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
@@ -338,7 +337,7 @@ const AiMechanic = () => {
             <div className="flex justify-start">
               <div className="flex flex-col items-center mr-2 shrink-0">
                 <span className="text-[9px] font-bold text-primary">Tonda</span>
-                <img src={tondaAvatar} alt="Tonda" className="w-8 h-8 object-contain" />
+                <Bot className="w-6 h-6 text-primary" />
               </div>
               <div className="glass-card rounded-2xl px-4 py-2.5">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
