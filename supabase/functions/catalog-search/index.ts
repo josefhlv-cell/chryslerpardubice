@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
     for (const oem of oemCodes.slice(0, 10)) {
       const cleanOem = oem.replace(/[\s-]/g, '').toUpperCase();
-      const searchCode = `K${cleanOem}`;
+      const searchCode = `6${cleanOem}`;
 
       // Check cache in DB
       const { data: cached } = await supabase
