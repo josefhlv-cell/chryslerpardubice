@@ -73,8 +73,33 @@ const normalizeBrand = (brand: string): string => {
   return map[upper] || brand.trim().toLowerCase().replace(/\s+/g, "-");
 };
 
-const normalizeModel = (model: string): string =>
-  model.trim().toLowerCase().replace(/\s+/g, "-");
+// Normalize model names — imagin.studio uses specific modelFamily values
+const modelMap: Record<string, string> = {
+  "grand caravan": "grand-caravan",
+  "grand cherokee": "grand-cherokee",
+  "town & country": "town-country",
+  "town country": "town-country",
+  "town&country": "town-country",
+  "300c": "300",
+  "300s": "300",
+  "300 c": "300",
+  "300 s": "300",
+  "pacifica": "pacifica",
+  "durango": "durango",
+  "challenger": "challenger",
+  "charger": "charger",
+  "wrangler": "wrangler",
+  "compass": "compass",
+  "renegade": "renegade",
+  "1500": "1500",
+  "2500": "2500",
+  "3500": "3500",
+};
+
+const normalizeModel = (model: string): string => {
+  const lower = model.trim().toLowerCase();
+  return modelMap[lower] || lower.replace(/\s+/g, "-");
+};
 
 // Simple in-memory cache for failed URLs to avoid re-fetching
 const failedUrls = new Set<string>();
