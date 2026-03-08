@@ -771,6 +771,27 @@ export async function generateAICatalog(brand: string, model: string, year?: num
   return data;
 }
 
+/** Generate full EPC catalog with AI normalization */
+export interface EPCGenerateResult {
+  success: boolean;
+  vehicle: string;
+  scraped: boolean;
+  stats: { categories: number; parts: number; compatibility: number; procedures: number };
+  categories_list: string[];
+  error?: string;
+}
+
+export async function generateEPCCatalog(
+  brand: string, model: string, year?: number, engine?: string
+): Promise<EPCGenerateResult> {
+  const { data, error } = await supabase.functions.invoke("epc-generate", {
+    body: { brand, model, year, engine },
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.success) throw new Error(data?.error || "EPC generation failed");
+  return data as EPCGenerateResult;
+}
+
 /** Map 7zap URLs for a brand */
 export async function map7zapBrand(brand: string, model?: string) {
   const { data, error } = await supabase.functions.invoke("scrape-7zap", {
