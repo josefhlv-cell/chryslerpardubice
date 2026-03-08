@@ -523,6 +523,17 @@ const Shop = () => {
               </AnimatePresence>
             )}
 
+            {/* EPC Browser — vehicle-based catalog */}
+            {partType === "new" && searchMode === "epc" && brand && !searching && (
+              <EPCBrowser
+                brand={brand}
+                model={model}
+                engine={motor}
+                year={year}
+                onSearchOem={handleSearchOem}
+              />
+            )}
+
             {/* Loading */}
             {partType === "new" && searching && (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -532,7 +543,7 @@ const Shop = () => {
             )}
 
             {/* No results */}
-            {partType === "new" && !searching && results && results.length === 0 && (
+            {partType === "new" && !searching && results && results.length === 0 && searchMode !== "epc" && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center py-16 gap-3">
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">

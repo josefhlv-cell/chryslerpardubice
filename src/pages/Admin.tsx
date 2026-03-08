@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "@/hooks/use-toast";
 import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp } from "lucide-react";
 import CatalogImport from "@/components/admin/CatalogImport";
+import EPCImport from "@/components/admin/EPCImport";
 import AdminNotifications from "@/components/admin/AdminNotifications";
 import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
 import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
