@@ -1,17 +1,18 @@
 /**
  * PartDetailModal Component
  * Shows full part detail in a side panel (desktop) or bottom sheet (mobile).
- * Photo loads only on explicit click.
+ * Includes OEM cross-references and aftermarket alternatives.
  */
 
-import { Image as ImageIcon, X, ShoppingCart, Package, ArrowRight, Info } from "lucide-react";
+import { useState } from "react";
+import { Image as ImageIcon, X, ShoppingCart, Package, ArrowRight, Info, Loader2, RefreshCw, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { PartResult } from "@/api/partsAPI";
-import { sourceLabel } from "@/api/partsAPI";
+import { sourceLabel, getOEMCrossReferences, type CrossRefResult } from "@/api/partsAPI";
 import Recommendations from "./Recommendations";
 
 interface PartDetailModalProps {
