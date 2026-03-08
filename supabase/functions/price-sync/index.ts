@@ -138,15 +138,15 @@ async function firecrawlSearch(
       waitFor: 3000,
       actions: [
         // Step 1: Wait for the password form to load
-        { type: 'wait', selector: 'input[name="password"]', milliseconds: 3000 },
+        { type: 'wait', selector: 'input[name="password"]' },
         // Step 2: Type the password
         { type: 'write', selector: 'input[name="password"]', text: password },
         // Step 3: Click submit
         { type: 'click', selector: 'input[name="submit-password"]' },
         // Step 4: Wait for the page to reload with search form
-        { type: 'wait', milliseconds: 4000 },
-        // Step 5: Wait for search input to appear (name="search" based on screenshots)
-        { type: 'wait', selector: 'input[name="search"]', milliseconds: 5000 },
+        { type: 'wait', milliseconds: 5000 },
+        // Step 5: Wait for search input to appear
+        { type: 'wait', selector: 'input[name="search"]' },
         // Step 6: Type the search code
         { type: 'write', selector: 'input[name="search"]', text: searchCode },
         // Step 7: Click search button
