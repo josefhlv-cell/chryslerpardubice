@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Wrench, Calendar, AlertTriangle, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import CarIcon from "@/components/CarIcon";
 
 type Vehicle = {
   id: string;
