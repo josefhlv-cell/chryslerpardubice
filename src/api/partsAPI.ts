@@ -66,6 +66,24 @@ export const sourcePriority: Record<string, number> = {
   intercars: 4,
 };
 
+// ---- Catalog config ----
+
+/** Enabled alternative catalog sources */
+export const enabledSources = new Set(["mopar", "csv", "autokelly"]);
+
+/** Blocked manufacturers per source (lowercase) */
+export const blockedManufacturers: Record<string, Set<string>> = {
+  autokelly: new Set(["starline"]),
+};
+
+/** Check if a part should be filtered out */
+export const isPartBlocked = (part: PartResult): boolean => {
+  if (!enabledSources.has(part.catalog_source)) return true;
+  const blocked = blockedManufacturers[part.catalog_source];
+  if (blocked && part.manufacturer && blocked.has(part.manufacturer.toLowerCase())) return true;
+  return false;
+};
+
 // ---- Helpers ----
 
 export const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase();
@@ -91,9 +109,9 @@ export const mapToPartResult = (item: any, source: string): PartResult => ({
   supersedes: item.supersedes || null,
 });
 
-/** Sort results by catalog source priority */
+/** Sort results by catalog source priority, filtering blocked parts */
 export const sortByPriority = (parts: PartResult[]) =>
-  [...parts].sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
+  [...parts].filter(p => !isPartBlocked(p)).sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
 
 /** Enrich parts with supersession data from DB */
 export const enrichWithSupersessions = async (parts: PartResult[]) => {

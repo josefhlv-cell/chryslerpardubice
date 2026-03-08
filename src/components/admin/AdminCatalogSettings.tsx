@@ -24,7 +24,7 @@ type DiagResult = {
 const AdminCatalogSettings = () => {
   const [catalogs, setCatalogs] = useState<CatalogConfig[]>([
     { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Jeep, Dodge, RAM", enabled: true, ready: true },
-    { id: "autokelly", name: "AutoKelly", description: "Alternativní díly – vyžaduje API klíč", enabled: false, ready: false },
+    { id: "autokelly", name: "AutoKelly", description: "Alternativní díly (bez Starline)", enabled: true, ready: true },
     { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", enabled: false, ready: false },
   ]);
   const [hasChanges, setHasChanges] = useState(false);
