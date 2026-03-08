@@ -99,14 +99,15 @@ const Filters = ({
   const currentSubs = category ? (subCategoriesMap[category] || []) : [];
 
   const [sourceStats, setSourceStats] = useState<SourceStats[]>([]);
+  const [brandStats, setBrandStats] = useState<BrandStats[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
-      // Get counts per catalog_source from parts_new
       const { data } = await supabase
         .from("parts_new")
-        .select("catalog_source");
+        .select("catalog_source, family, compatible_vehicles");
       if (data) {
+        // Source counts
         const counts: Record<string, number> = {};
         data.forEach((r: any) => {
           const src = r.catalog_source || "unknown";
@@ -115,6 +116,24 @@ const Filters = ({
         setSourceStats(
           Object.entries(counts)
             .map(([source, count]) => ({ source, count }))
+            .sort((a, b) => b.count - a.count)
+        );
+
+        // Brand counts from family / compatible_vehicles
+        const brandCounts: Record<string, number> = {};
+        const targetBrands = ["Chrysler", "Dodge", "Jeep", "RAM"];
+        data.forEach((r: any) => {
+          const text = `${r.family || ""} ${r.compatible_vehicles || ""}`.toLowerCase();
+          for (const b of targetBrands) {
+            if (text.includes(b.toLowerCase())) {
+              brandCounts[b] = (brandCounts[b] || 0) + 1;
+              break; // count each part only once
+            }
+          }
+        });
+        setBrandStats(
+          targetBrands
+            .map((b) => ({ brand: b, count: brandCounts[b] || 0 }))
             .sort((a, b) => b.count - a.count)
         );
       }
