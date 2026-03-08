@@ -508,20 +508,37 @@ const Shop = () => {
                         onKeyDown={(e) => e.key === "Enter" && handleUsedSubmit()} />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <Select value={brand} onValueChange={setBrand}>
+                      <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); }}>
                         <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
                         <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                       </Select>
-                      <Input placeholder="Model" className="h-9 text-xs" value={model} onChange={(e) => setModel(e.target.value)} />
+                      {brand && catalogTree[brand] ? (
+                        <Select value={model} onValueChange={(v) => { setModel(v); setMotor(""); }}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger>
+                          <SelectContent>{Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Input placeholder="Model" className="h-9 text-xs" value={model} onChange={(e) => setModel(e.target.value)} />
+                      )}
                     </div>
-                    <Select value={year} onValueChange={setYear}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Rok výroby" /></SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 30 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => (
-                          <SelectItem key={y} value={y}>{y}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={year} onValueChange={setYear}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Rok výroby" /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 30 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => (
+                            <SelectItem key={y} value={y}>{y}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {brand && model && catalogTree[brand]?.[model] ? (
+                        <Select value={motor} onValueChange={setMotor}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
+                          <SelectContent>{catalogTree[brand][model].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Input placeholder="Motor" className="h-9 text-xs" value={motor} onChange={(e) => setMotor(e.target.value)} />
+                      )}
+                    </div>
                     <Textarea placeholder="Poznámka..." className="text-xs" rows={2} value={usedNote} onChange={(e) => setUsedNote(e.target.value)} />
                     <Button className="w-full h-10" onClick={handleUsedSubmit} disabled={isPendingBusiness}>
                       <Send className="w-4 h-4 mr-1" />Odeslat poptávku
