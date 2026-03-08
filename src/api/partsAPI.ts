@@ -720,7 +720,7 @@ export async function getEPCDiagram(
   const cacheId = `${vehicle}_${category}_${subcategory || ''}`.replace(/\s+/g, '_');
 
   // 0. Check localStorage cache (permanent)
-  const memoryCached = cacheGet<string>('diagram', cacheId);
+  const memoryCached = await cacheGet<string>('diagram', cacheId);
   if (memoryCached) return memoryCached;
 
   // 1. Check epc_diagrams table
