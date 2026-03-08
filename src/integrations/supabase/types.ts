@@ -104,6 +104,42 @@ export type Database = {
         }
         Relationships: []
       }
+      epc_diagrams: {
+        Row: {
+          brand: string
+          category: string
+          created_at: string
+          engine: string | null
+          id: string
+          model: string
+          parts_count: number | null
+          subcategory: string | null
+          svg_content: string
+        }
+        Insert: {
+          brand: string
+          category: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model: string
+          parts_count?: number | null
+          subcategory?: string | null
+          svg_content: string
+        }
+        Update: {
+          brand?: string
+          category?: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model?: string
+          parts_count?: number | null
+          subcategory?: string | null
+          svg_content?: string
+        }
+        Relationships: []
+      }
       epc_part_links: {
         Row: {
           created_at: string
