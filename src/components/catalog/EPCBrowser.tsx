@@ -137,7 +137,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .catch(() => setLoading(false));
   }, [brand, model, engine, year]);
 
-  // Load parts when category/subcategory selected + auto-load diagram
+  // Load parts when category/subcategory selected — lazy generate if empty
   useEffect(() => {
     if (!selectedCategory) {
       setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
@@ -152,6 +152,28 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
     getEPCParts(catIds)
       .then(async (loadedParts) => {
+        // Lazy generation: if no parts exist, generate them on-demand
+        if (loadedParts.length === 0 && !batchGenerating) {
+          setBatchGenerating(true);
+          toast.info(`Generuji díly pro ${selectedSubcategory || selectedCategory}...`);
+          try {
+            const result = await generatePartsBatch(
+              brand, model, selectedCategory, selectedSubcategory || undefined,
+              engine || undefined, year ? parseInt(year) : undefined
+            );
+            if (result.parts_count > 0) {
+              toast.success(`${result.parts_count} dílů vygenerováno`);
+              // Reload parts after generation
+              const reloaded = await getEPCParts(catIds);
+              loadedParts = reloaded;
+            }
+          } catch (e: any) {
+            console.error('Batch generation error:', e);
+            toast.error("Generace dílů selhala – zkuste to znovu");
+          }
+          setBatchGenerating(false);
+        }
+
         setParts(loadedParts);
         const oems = loadedParts.map(p => p.oem_number).filter(Boolean) as string[];
         if (oems.length > 0) {
@@ -166,7 +188,6 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
           setDiagramSvg(diagramCache.get(cacheKey)!);
           attachDiagramHandlers();
         } else if (loadedParts.length > 0) {
-          // Auto-generate diagram in background
           setDiagramLoading(true);
           try {
             const vehicle = `${brand} ${model}`;
