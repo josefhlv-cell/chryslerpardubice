@@ -74,7 +74,7 @@ const AdminEPCDiagrams = () => {
     setRegenerating(d.id);
     try {
       // Delete existing diagram
-      await supabase.from("epc_diagrams" as any).delete().eq("id", d.id);
+      await supabase.from("epc_diagrams").delete().eq("id", d.id);
 
       // Get parts for this category
       const { data: catData } = await supabase
