@@ -10,8 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Trash2, RefreshCw, Layers } from "lucide-react";
+import { Upload, FileSpreadsheet, Trash2, RefreshCw, Layers, Sparkles, Loader2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface EPCCategoryRow {
   brand: string;
@@ -103,6 +104,62 @@ const EPCImport = () => {
   const [catCount, setCatCount] = useState<number | null>(null);
   const [partCount, setPartCount] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [aiVehicle, setAiVehicle] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiProgress, setAiProgress] = useState<Array<{ category: string; parts: number; status: string }>>([]);
+
+  const AI_VEHICLES = [
+    "Chrysler 300C", "Chrysler Pacifica", "Chrysler Town & Country", "Chrysler Voyager",
+    "Dodge Grand Caravan", "Dodge Durango", "Dodge Charger", "Dodge Challenger",
+  ];
+
+  const handleAiGenerate = async () => {
+    if (!aiVehicle) return;
+    setAiGenerating(true);
+    setAiProgress([]);
+    try {
+      const { data, error } = await supabase.functions.invoke("epc-scrape", {
+        body: { vehicle: aiVehicle, action: "generate-all" },
+      });
+      if (error) throw error;
+      if (data?.results) {
+        setAiProgress(data.results);
+        toast({
+          title: "AI generování dokončeno",
+          description: `${data.total_parts} dílů pro ${aiVehicle}`,
+        });
+      } else if (!data?.success) {
+        throw new Error(data?.error || "Neznámá chyba");
+      }
+      loadCounts();
+    } catch (err: any) {
+      toast({ title: "Chyba AI generování", description: err.message, variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleAiGenerateSingle = async (category: string) => {
+    if (!aiVehicle) return;
+    setAiGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("epc-scrape", {
+        body: { vehicle: aiVehicle, category, action: "generate" },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: `${category}`, description: `${data.parts_inserted} dílů vygenerováno` });
+        setAiProgress(prev => [...prev, { category, parts: data.parts_inserted, status: "ok" }]);
+      } else {
+        throw new Error(data?.error || "Chyba");
+      }
+      loadCounts();
+    } catch (err: any) {
+      toast({ title: "Chyba", description: err.message, variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   const loadCounts = async () => {
     const [cats, parts] = await Promise.all([
@@ -226,7 +283,7 @@ const EPCImport = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Import EPC dat ve dvou krocích: nejprve kategorie, poté díly.
+          Import EPC dat: AI generování nebo manuální CSV import.
         </p>
 
         {catCount !== null && partCount !== null && (
@@ -235,6 +292,57 @@ const EPCImport = () => {
             <span>Díly: <strong>{partCount.toLocaleString("cs")}</strong></span>
           </div>
         )}
+
+        {/* AI Generation Section */}
+        <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p className="text-xs font-semibold flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-primary" />
+            AI generování EPC dílů
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            AI vygeneruje kategorie a OEM čísla dílů pro vybraný model vozidla.
+          </p>
+
+          <Select value={aiVehicle} onValueChange={setAiVehicle}>
+            <SelectTrigger className="text-xs h-8">
+              <SelectValue placeholder="Vyberte vozidlo..." />
+            </SelectTrigger>
+            <SelectContent>
+              {AI_VEHICLES.map(v => (
+                <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={handleAiGenerate}
+              disabled={!aiVehicle || aiGenerating}
+              className="flex-1"
+            >
+              {aiGenerating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+              {aiGenerating ? "Generuji..." : "Generovat VŠE (15 kategorií)"}
+            </Button>
+          </div>
+
+          {aiProgress.length > 0 && (
+            <div className="max-h-40 overflow-auto text-[10px] border rounded p-2 space-y-0.5 bg-background">
+              {aiProgress.map((r, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>{r.category}</span>
+                  <span className={r.status === "ok" ? "text-green-600" : "text-destructive"}>
+                    {r.status === "ok" ? `✓ ${r.parts} dílů` : `✗ ${r.status}`}
+                  </span>
+                </div>
+              ))}
+              <div className="border-t pt-1 mt-1 font-semibold flex justify-between">
+                <span>Celkem</span>
+                <span>{aiProgress.reduce((s, r) => s + r.parts, 0)} dílů</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         {importing && progress > 0 && (
           <Progress value={progress} className="h-2" />
