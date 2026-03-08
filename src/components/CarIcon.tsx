@@ -135,66 +135,58 @@ const FallbackSvg = ({ type, alt }: { type: ReturnType<typeof detectBodyType>; a
   );
 };
 
-// Cache for covered-car detection
-const coveredUrls = new Set<string>();
+// Cache for failed URLs
 const failedUrls = new Set<string>();
 
-// Covered car images from imagin are very small (~2-4KB) and have a distinctive red/brown palette
-// We detect them by checking the loaded image dimensions and file size via canvas
-const isCoveredCar = (img: HTMLImageElement): boolean => {
-  try {
-    const canvas = document.createElement("canvas");
-    const size = 10;
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return false;
-    ctx.drawImage(img, 0, 0, size, size);
-    const data = ctx.getImageData(0, 0, size, size).data;
-    // Check if most pixels are reddish/brownish (covered car) or very uniform gray (placeholder)
-    let redishCount = 0;
-    let grayCount = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
-      if (a < 10) continue; // transparent
-      // Covered car is typically red/brown: r > 120, g < 80, b < 80
-      if (r > 100 && r > g * 1.5 && r > b * 1.5) redishCount++;
-      // Gray background: all channels similar and mid-range
-      if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && r > 60 && r < 200) grayCount++;
-    }
-    const totalPixels = size * size;
-    // If >40% reddish pixels → it's a covered car
-    if (redishCount / totalPixels > 0.35) return true;
-    // If >80% uniform gray → it's a placeholder
-    if (grayCount / totalPixels > 0.8) return true;
-    return false;
-  } catch {
-    return false;
-  }
-};
-
-const getImageUrl = (car: CarData): string => {
+// Build multiple image source URLs to try in order
+const getImageUrls = (car: CarData): string[] => {
   const brand = normalizeBrand(car.brand);
   const model = normalizeModel(car.model);
   const year = car.year || new Date().getFullYear();
-  return `https://cdn.imagin.studio/getimage?customer=hrjavascript-masede&make=${brand}&modelFamily=${model}&modelYear=${year}&angle=01&width=400`;
+  const rawModel = car.model.trim().replace(/\s+/g, "+");
+  const rawBrand = car.brand.trim().replace(/\s+/g, "+");
+  
+  return [
+    // Primary: imagin.studio
+    `https://cdn.imagin.studio/getimage?customer=hrjavascript-masede&make=${brand}&modelFamily=${model}&modelYear=${year}&angle=01&width=400`,
+    // Fallback: try with raw model name
+    `https://cdn.imagin.studio/getimage?customer=hrjavascript-masede&make=${brand}&modelFamily=${rawModel}&modelYear=${year}&angle=01&width=400`,
+  ];
 };
 
 const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
-  const url = getImageUrl(car);
-  const alreadyFailed = failedUrls.has(url) || coveredUrls.has(url);
-  const [showFallback, setShowFallback] = useState(alreadyFailed);
+  const urls = getImageUrls(car);
+  const [urlIndex, setUrlIndex] = useState(0);
+  const [showFallback, setShowFallback] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const alt = `${car.brand} ${car.model} ${car.year || ""}`.trim();
   const bodyType = detectBodyType(car.brand, car.model);
 
+  // Check if all URLs are already known to fail
+  useEffect(() => {
+    if (urls.every(u => failedUrls.has(u))) {
+      setShowFallback(true);
+    }
+  }, []);
+
+  const currentUrl = urls[urlIndex];
+
+  const handleError = () => {
+    failedUrls.add(currentUrl);
+    if (urlIndex < urls.length - 1) {
+      setUrlIndex(urlIndex + 1);
+    } else {
+      setShowFallback(true);
+    }
+  };
+
+  // Detect covered car by checking naturalWidth — covered car images are often 1x1 or very small
   const handleLoad = () => {
     const img = imgRef.current;
     if (!img) return;
-    // Check if the loaded image is a "covered car" placeholder
-    if (isCoveredCar(img)) {
-      coveredUrls.add(url);
-      setShowFallback(true);
+    // If image is suspiciously small (< 10px), it's likely a placeholder
+    if (img.naturalWidth < 10 || img.naturalHeight < 10) {
+      handleError();
     }
   };
 
@@ -217,16 +209,12 @@ const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
     <div className={cn(sizeMap[size], "rounded-lg overflow-hidden bg-muted/30 shrink-0", className)} title={alt}>
       <img
         ref={imgRef}
-        src={url}
+        src={currentUrl}
         alt={alt}
         loading="lazy"
-        crossOrigin="anonymous"
         className="w-full h-full object-contain"
         onLoad={handleLoad}
-        onError={() => {
-          failedUrls.add(url);
-          setShowFallback(true);
-        }}
+        onError={handleError}
       />
     </div>
   );
