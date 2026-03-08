@@ -312,7 +312,17 @@ const Shop = () => {
                     onSearch={handleSearch}
                     searching={searching}
                     searchMode={searchMode}
-                    onModeChange={(mode) => { setSearchMode(mode); setResults(null); setPage(0); setCategory(""); setSubCategory(""); }}
+                    onModeChange={(mode) => { 
+                      setSearchMode(mode); 
+                      setResults(null); 
+                      setPage(0); 
+                      setCategory(""); 
+                      setSubCategory(""); 
+                      // Clear query when switching to EPC/Vehicle mode to avoid stale searches
+                      if (mode === "epc" || mode === "vehicle") {
+                        setQuery("");
+                      }
+                    }}
                   />
                 </div>
                 {/* Mobile filter toggle */}
