@@ -57,6 +57,19 @@ const AdminEPCDiagrams = () => {
 
   useEffect(() => { fetchDiagrams(); }, []);
 
+  const handlePreview = async (d: DiagramRow) => {
+    setPreviewDiagram(d);
+    if (d.svg_content) return;
+    setPreviewLoading(true);
+    const { data } = await supabase
+      .from("epc_diagrams")
+      .select("svg_content")
+      .eq("id", d.id)
+      .maybeSingle();
+    setPreviewDiagram({ ...d, svg_content: (data as any)?.svg_content || '' });
+    setPreviewLoading(false);
+  };
+
   const handleRegenerate = async (d: DiagramRow) => {
     setRegenerating(d.id);
     try {
