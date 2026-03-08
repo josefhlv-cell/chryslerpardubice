@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "@/hooks/use-toast";
 import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import CarIcon from "@/components/CarIcon";
 
 type UserVehicle = {
   id: string;
@@ -309,7 +310,10 @@ const MyVehicles = () => {
           <motion.div key={v.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card className="hover:border-primary/40 transition-colors">
               <CardContent className="p-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start gap-3">
+                  <CarIcon car={v} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between">
                   <div>
                     <p className="font-display font-semibold text-sm">{v.brand} {v.model}</p>
                     <div className="flex gap-2 mt-1 flex-wrap">
@@ -347,6 +351,8 @@ const MyVehicles = () => {
                     <Button size="icon" variant="ghost" onClick={() => remove(v.id)}>
                       <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
+                  </div>
+                </div>
                   </div>
                 </div>
               </CardContent>
