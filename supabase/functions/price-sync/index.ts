@@ -1,10 +1,11 @@
+import { DOMParser } from "https://deno.land/x/deno_dom/deno-dom-wasm.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const FIRECRAWL_API = 'https://api.firecrawl.dev/v1/scrape';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -15,22 +16,18 @@ Deno.serve(async (req) => {
     const {
       partNumbers,
       mode = 'auto',
-      batchSize = 5,
+      batchSize = 10,
       offset = 0,
       debugMode = false,
       exportCsv = false,
     } = await req.json();
 
     const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
-    const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!CATALOG_PASS || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return json({ error: 'Missing secrets (CATALOG_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)' }, 500);
-    }
-    if (!FIRECRAWL_API_KEY) {
-      return json({ error: 'FIRECRAWL_API_KEY not configured' }, 500);
+      return json({ error: 'Missing secrets' }, 500);
     }
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -54,7 +51,7 @@ Deno.serve(async (req) => {
     const batch = oemNumbers.slice(0, batchSize);
     console.log(`Processing batch of ${batch.length} parts (offset ${offset}):`, batch);
 
-    // ── Step 1: Login via direct POST (no Firecrawl needed for login) ──
+    // ── Step 1: Login via direct POST ───────────────────────────────
     console.log('Logging in to catalog...');
     const loginResp = await fetch(CATALOG_URL, {
       method: 'POST',
@@ -66,43 +63,31 @@ Deno.serve(async (req) => {
       redirect: 'manual',
     });
 
-    // Get session cookies
     const cookies = loginResp.headers.getSetCookie?.() || [];
     const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
-    
-    // Follow redirect or read response
+
     let catalogHtml = '';
     if (loginResp.status >= 300 && loginResp.status < 400) {
       const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
       const followResp = await fetch(redirectUrl, {
-        headers: {
-          'Cookie': cookieStr,
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
+        headers: { 'Cookie': cookieStr, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       });
       catalogHtml = await followResp.text();
     } else {
       catalogHtml = await loginResp.text();
     }
 
-    // Check if we're logged in
-    const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte');
-    const stillHasPassword = catalogHtml.includes('name="password"') && !catalogHtml.includes('name="search"');
-    
-    // Extract all form fields for debugging
-    const formMatches = catalogHtml.match(/<form[^>]*>[\s\S]*?<\/form>/gi) || [];
-    const inputMatches = catalogHtml.match(/<input[^>]*>/gi) || [];
-    console.log(`Login result: hasSearch=${hasSearchForm}, stillPassword=${stillHasPassword}, htmlLen=${catalogHtml.length}, cookies=${cookies.length}`);
-    console.log(`Forms found: ${formMatches.length}, Inputs: ${inputMatches.map(i => i.substring(0, 100))}`);
+    const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte') || catalogHtml.includes('find-part');
+    const stillHasPassword = catalogHtml.includes('name="password"') && !hasSearchForm;
+
+    console.log(`Login: hasSearch=${hasSearchForm}, stillPassword=${stillHasPassword}, cookies=${cookies.length}, htmlLen=${catalogHtml.length}`);
 
     if (debugMode && !hasSearchForm) {
-      // Return debug info about login attempt
       return json({
         success: false,
         loginDebug: {
           status: loginResp.status,
           cookieCount: cookies.length,
-          cookieStr: cookieStr.substring(0, 200),
           htmlLength: catalogHtml.length,
           hasSearchForm,
           stillHasPassword,
@@ -111,54 +96,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ── Step 2: If direct POST fails, try Firecrawl with actions ────
-    let sessionCookies = cookieStr;
     if (!hasSearchForm) {
-      console.log('Direct POST login failed, trying Firecrawl actions...');
-      const loginResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
-        formats: ['html'],
-        waitFor: 2000,
-        actions: [
-          { type: 'wait', milliseconds: 1500 },
-          {
-            type: 'executeJavascript',
-            script: `
-              const pw = document.querySelector('input[name="password"]');
-              if (pw) {
-                pw.value = '${CATALOG_PASS}';
-                const btn = document.querySelector('input[name="submit-password"]');
-                if (btn) btn.click();
-              }
-            `,
-          },
-          { type: 'wait', milliseconds: 5000 },
-          { type: 'scrape' },
-        ],
-      });
-
-      catalogHtml = loginResult.data?.html || '';
-      const loggedIn = catalogHtml.includes('Zadejte') || catalogHtml.includes('name="search"');
-      
-      if (!loggedIn) {
-        console.error('Both login methods failed');
-        return json({
-          error: 'Catalog login failed',
-          debug: debugMode ? {
-            htmlLength: catalogHtml.length,
-            htmlPreview: catalogHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
-          } : undefined,
-        }, 500);
-      }
-      
-      // For Firecrawl approach, we'll use Firecrawl for searches too
-      sessionCookies = '__firecrawl__';
+      return json({ error: 'Catalog login failed', loginStatus: loginResp.status }, 500);
     }
 
-    // ── Step 3: Search each part ────────────────────────────────────
+    // ── Step 2: Search each part ────────────────────────────────────
     const results: any[] = [];
     let updated = 0, errors = 0, skipped = 0;
-    const notFound: string[] = [];
-    const errorParts: string[] = [];
 
     for (const partNumber of batch) {
       try {
@@ -174,9 +118,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Freshness: skip if updated within last day (unless forced)
         if (cached?.last_price_update && mode !== 'force') {
           const daysAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60 * 60 * 24);
-          if (daysAgo < 14) {
+          if (daysAgo < 1) {
             results.push({ oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat });
             skipped++;
             continue;
@@ -186,65 +131,25 @@ Deno.serve(async (req) => {
         const searchCode = `K${partNumber}`;
         console.log(`Searching ${searchCode}...`);
 
-        let searchHtml = '';
-        
-        if (sessionCookies === '__firecrawl__') {
-          // Use Firecrawl for search (session in Firecrawl's browser)
-          const searchResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
-            formats: ['html'],
-            waitFor: 2000,
-            actions: [
-              { type: 'wait', milliseconds: 1000 },
-              {
-                type: 'executeJavascript',
-                script: `
-                  const pw = document.querySelector('input[name="password"]');
-                  if (pw) {
-                    pw.value = '${CATALOG_PASS}';
-                    document.querySelector('input[name="submit-password"]')?.click();
-                  }
-                `,
-              },
-              { type: 'wait', milliseconds: 3000 },
-              {
-                type: 'executeJavascript',
-                script: `
-                  const inputs = document.querySelectorAll('input[type="text"]');
-                  for (const inp of inputs) {
-                    if (inp.offsetParent !== null) {
-                      inp.value = '${searchCode}';
-                      inp.closest('form')?.submit();
-                      break;
-                    }
-                  }
-                `,
-              },
-              { type: 'wait', milliseconds: 4000 },
-              { type: 'scrape' },
-            ],
-          });
-          searchHtml = searchResult.data?.html || '';
-        } else {
-          // Use direct HTTP with session cookies
-          const searchResp = await fetch(CATALOG_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Cookie': sessionCookies,
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
-            body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
-          });
-          searchHtml = await searchResp.text();
-        }
+        const searchResp = await fetch(CATALOG_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': cookieStr,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
+        });
+        const searchHtml = await searchResp.text();
 
-        const prices = extractPrices(searchHtml);
+        // Parse with DOMParser for structured extraction
+        const prices = extractPricesDOM(searchHtml);
 
         if (debugMode) {
           results.push({
             oem_number: partNumber, searchCode, debug: true,
             htmlLength: searchHtml.length, pricesFound: prices,
-            textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
+            textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
           });
         }
 
@@ -281,13 +186,11 @@ Deno.serve(async (req) => {
             }).eq('id', cached.id);
           }
           results.push({ oem_number: partNumber, status: 'not_found', searchCode });
-          notFound.push(partNumber);
           errors++;
         }
       } catch (e) {
         console.error(`Error processing ${partNumber}:`, e);
         results.push({ oem_number: partNumber, status: 'error', error: String(e) });
-        errorParts.push(partNumber);
         errors++;
       }
     }
@@ -295,7 +198,7 @@ Deno.serve(async (req) => {
     const summary = {
       total: oemNumbers.length, batchProcessed: batch.length,
       updated, errors, skipped,
-      notFound: notFound.length, nextOffset: offset + batch.length,
+      nextOffset: offset + batch.length,
     };
 
     let csv: string | undefined;
@@ -320,31 +223,45 @@ Deno.serve(async (req) => {
   }
 });
 
-// ─── Firecrawl helper ───────────────────────────────────────────────────────
+// ─── Price extraction with DOMParser ────────────────────────────────────────
 
-async function firecrawlScrape(apiKey: string, url: string, options: any): Promise<any> {
-  const resp = await fetch(FIRECRAWL_API, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ url, ...options }),
-  });
-  const data = await resp.json();
-  if (!resp.ok) {
-    throw new Error(`Firecrawl error ${resp.status}: ${JSON.stringify(data).substring(0, 500)}`);
-  }
-  return data;
-}
-
-// ─── Price extraction ───────────────────────────────────────────────────────
-
-function extractPrices(html: string): number[] {
+function extractPricesDOM(html: string): number[] {
   const prices: number[] = [];
+
+  // Try DOMParser first for structured data
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (doc) {
+      // Extract from table cells
+      const tds = doc.querySelectorAll('td');
+      for (const td of tds) {
+        const text = (td as any).textContent || '';
+        const m = text.match(/(\d[\d\s]*[,.]\d{2})/);
+        if (m) {
+          const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+          if (p > 10 && p < 1000000) prices.push(p);
+        }
+      }
+
+      // Extract from elements with price-like classes
+      const priceEls = doc.querySelectorAll('.price, .cena, [class*="price"], [class*="cena"]');
+      for (const el of priceEls) {
+        const text = (el as any).textContent || '';
+        const m = text.match(/(\d[\d\s]*[,.]\d{2})/);
+        if (m) {
+          const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+          if (p > 10 && p < 1000000) prices.push(p);
+        }
+      }
+    }
+  } catch (e) {
+    console.log('DOMParser fallback to regex:', e);
+  }
+
+  // Regex fallback (always run to catch more)
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  // Primary: "X XXX.XX Kč" pattern – strict: 1-3 digits optionally followed by (space + 3 digits), then decimal
+  // "X XXX.XX Kč" pattern
   const kcPattern = /(?<!\d)(\d{1,3}(?:\s\d{3})*[,.]\d{2})\s*Kč/gi;
   let m;
   while ((m = kcPattern.exec(text)) !== null) {
@@ -352,7 +269,7 @@ function extractPrices(html: string): number[] {
     if (p > 10 && p < 1000000) prices.push(p);
   }
 
-  // Secondary: "Cena bez DPH" / "Cena s DPH" patterns
+  // DPH patterns
   const dphPatterns = [
     /Cena\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /Cena\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
@@ -361,7 +278,6 @@ function extractPrices(html: string): number[] {
     /bez\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
   ];
-
   for (const pat of dphPatterns) {
     let m2;
     while ((m2 = pat.exec(text)) !== null) {
@@ -370,7 +286,7 @@ function extractPrices(html: string): number[] {
     }
   }
 
-  // Table cell prices
+  // Table cell prices from raw HTML
   const tdPattern = /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi;
   let m3;
   while ((m3 = tdPattern.exec(html)) !== null) {
