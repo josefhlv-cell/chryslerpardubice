@@ -143,23 +143,15 @@ async function firecrawlSearch(
     body: JSON.stringify({
       url: CATALOG_URL,
       formats: ['html', 'markdown'],
-      waitFor: 5000,
+      waitFor: 2000,
       actions: [
-        { type: 'wait', milliseconds: 3000 },
-        // Type password into the input field
+        { type: 'wait', milliseconds: 1500 },
         { type: 'write', selector: 'input[name="password"]', text: password },
-        { type: 'wait', milliseconds: 500 },
-        // Click submit button
         { type: 'click', selector: 'input[name="submit-password"]' },
-        { type: 'wait', milliseconds: 5000 },
-        // Now type the search code
+        { type: 'wait', milliseconds: 3000 },
         { type: 'write', selector: 'input[name="search"]', text: searchCode },
-        { type: 'wait', milliseconds: 500 },
-        // Click search button
         { type: 'click', selector: 'input[name="submit-search"]' },
-        { type: 'wait', milliseconds: 5000 },
-        // Take screenshot for debug + scrape
-        { type: 'screenshot' },
+        { type: 'wait', milliseconds: 3000 },
         { type: 'scrape' },
       ],
     }),
