@@ -51,11 +51,106 @@ Deno.serve(async (req) => {
       return json({ success: true, summary: { total: 0, message: 'No parts to sync' } });
     }
 
-    // Limit to batchSize
     const batch = oemNumbers.slice(0, batchSize);
     console.log(`Processing batch of ${batch.length} parts (offset ${offset}):`, batch);
 
-    // ── Process each part ───────────────────────────────────────────
+    // ── Step 1: Login via direct POST (no Firecrawl needed for login) ──
+    console.log('Logging in to catalog...');
+    const loginResp = await fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      body: `password=${encodeURIComponent(CATALOG_PASS)}&submit-password=P%C5%99ihl%C3%A1sit`,
+      redirect: 'manual',
+    });
+
+    // Get session cookies
+    const cookies = loginResp.headers.getSetCookie?.() || [];
+    const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
+    
+    // Follow redirect or read response
+    let catalogHtml = '';
+    if (loginResp.status >= 300 && loginResp.status < 400) {
+      const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
+      const followResp = await fetch(redirectUrl, {
+        headers: {
+          'Cookie': cookieStr,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+      catalogHtml = await followResp.text();
+    } else {
+      catalogHtml = await loginResp.text();
+    }
+
+    // Check if we're logged in (should see search form, not password form)
+    const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte');
+    const stillHasPassword = catalogHtml.includes('name="password"') && !catalogHtml.includes('name="search"');
+    
+    console.log(`Login result: hasSearch=${hasSearchForm}, stillPassword=${stillHasPassword}, htmlLen=${catalogHtml.length}, cookies=${cookies.length}`);
+
+    if (debugMode && !hasSearchForm) {
+      // Return debug info about login attempt
+      return json({
+        success: false,
+        loginDebug: {
+          status: loginResp.status,
+          cookieCount: cookies.length,
+          cookieStr: cookieStr.substring(0, 200),
+          htmlLength: catalogHtml.length,
+          hasSearchForm,
+          stillHasPassword,
+          htmlPreview: catalogHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
+        },
+      });
+    }
+
+    // ── Step 2: If direct POST fails, try Firecrawl with actions ────
+    let sessionCookies = cookieStr;
+    if (!hasSearchForm) {
+      console.log('Direct POST login failed, trying Firecrawl actions...');
+      const loginResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
+        formats: ['html'],
+        waitFor: 2000,
+        actions: [
+          { type: 'wait', milliseconds: 1500 },
+          {
+            type: 'executeJavascript',
+            script: `
+              const pw = document.querySelector('input[name="password"]');
+              if (pw) {
+                pw.value = '${CATALOG_PASS}';
+                const btn = document.querySelector('input[name="submit-password"]');
+                if (btn) btn.click();
+              }
+            `,
+          },
+          { type: 'wait', milliseconds: 5000 },
+          { type: 'scrape' },
+        ],
+      });
+
+      catalogHtml = loginResult.data?.html || '';
+      const loggedIn = catalogHtml.includes('Zadejte') || catalogHtml.includes('name="search"');
+      
+      if (!loggedIn) {
+        console.error('Both login methods failed');
+        return json({
+          error: 'Catalog login failed',
+          debug: debugMode ? {
+            htmlLength: catalogHtml.length,
+            htmlPreview: catalogHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
+          } : undefined,
+        }, 500);
+      }
+      
+      // For Firecrawl approach, we'll use Firecrawl for searches too
+      sessionCookies = '__firecrawl__';
+    }
+
+    // ── Step 3: Search each part ────────────────────────────────────
     const results: any[] = [];
     let updated = 0, errors = 0, skipped = 0;
     const notFound: string[] = [];
@@ -63,7 +158,6 @@ Deno.serve(async (req) => {
 
     for (const partNumber of batch) {
       try {
-        // Check cache / lock
         const { data: cached } = await supabase
           .from('parts_new')
           .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
@@ -88,23 +182,71 @@ Deno.serve(async (req) => {
         const searchCode = `K${partNumber}`;
         console.log(`Searching ${searchCode}...`);
 
-        // Single Firecrawl call: login + search + scrape
-        const scrapeResult = await firecrawlLoginAndSearch(FIRECRAWL_API_KEY, CATALOG_PASS, searchCode);
-        const html = scrapeResult.data?.html || '';
-        const prices = extractPrices(html);
+        let searchHtml = '';
+        
+        if (sessionCookies === '__firecrawl__') {
+          // Use Firecrawl for search (session in Firecrawl's browser)
+          const searchResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
+            formats: ['html'],
+            waitFor: 2000,
+            actions: [
+              { type: 'wait', milliseconds: 1000 },
+              {
+                type: 'executeJavascript',
+                script: `
+                  const pw = document.querySelector('input[name="password"]');
+                  if (pw) {
+                    pw.value = '${CATALOG_PASS}';
+                    document.querySelector('input[name="submit-password"]')?.click();
+                  }
+                `,
+              },
+              { type: 'wait', milliseconds: 3000 },
+              {
+                type: 'executeJavascript',
+                script: `
+                  const inputs = document.querySelectorAll('input[type="text"]');
+                  for (const inp of inputs) {
+                    if (inp.offsetParent !== null) {
+                      inp.value = '${searchCode}';
+                      inp.closest('form')?.submit();
+                      break;
+                    }
+                  }
+                `,
+              },
+              { type: 'wait', milliseconds: 4000 },
+              { type: 'scrape' },
+            ],
+          });
+          searchHtml = searchResult.data?.html || '';
+        } else {
+          // Use direct HTTP with session cookies
+          const searchResp = await fetch(CATALOG_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': sessionCookies,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            body: `search=${encodeURIComponent(searchCode)}`,
+          });
+          searchHtml = await searchResp.text();
+        }
+
+        const prices = extractPrices(searchHtml);
 
         if (debugMode) {
-          const textSnippet = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000);
           results.push({
             oem_number: partNumber, searchCode, debug: true,
-            htmlLength: html.length, pricesFound: prices, textSnippet,
+            htmlLength: searchHtml.length, pricesFound: prices,
+            textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
           });
         }
 
         if (prices.length > 0) {
           const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
 
-          // Save to DB
           if (cached && cached.price_with_vat !== priceWithVat) {
             await supabase.from('price_history').insert({
               part_id: cached.id,
@@ -129,7 +271,6 @@ Deno.serve(async (req) => {
           });
           updated++;
         } else {
-          // Mark as checked even if not found
           if (cached) {
             await supabase.from('parts_new').update({
               last_price_update: new Date().toISOString(),
@@ -147,17 +288,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Summary ─────────────────────────────────────────────────────
     const summary = {
-      total: oemNumbers.length,
-      batchProcessed: batch.length,
+      total: oemNumbers.length, batchProcessed: batch.length,
       updated, errors, skipped,
-      notFound: notFound.length,
-      nextOffset: offset + batch.length,
-      hasMore: oemNumbers.length > batch.length,
+      notFound: notFound.length, nextOffset: offset + batch.length,
     };
 
-    // Optional CSV export
     let csv: string | undefined;
     if (exportCsv) {
       const { data: allParts } = await supabase
@@ -180,58 +316,17 @@ Deno.serve(async (req) => {
   }
 });
 
-// ─── Firecrawl: login + search in one call ──────────────────────────────────
+// ─── Firecrawl helper ───────────────────────────────────────────────────────
 
-async function firecrawlLoginAndSearch(
-  apiKey: string, catalogPass: string, searchCode: string
-): Promise<any> {
+async function firecrawlScrape(apiKey: string, url: string, options: any): Promise<any> {
   const resp = await fetch(FIRECRAWL_API, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      url: CATALOG_URL,
-      formats: ['html'],
-      waitFor: 3000,
-      actions: [
-        { type: 'wait', milliseconds: 1500 },
-        // Login if password field exists
-        {
-          type: 'executeJavascript',
-          script: `
-            const pw = document.querySelector('input[name="password"]');
-            if (pw) {
-              pw.value = '${catalogPass}';
-              const form = pw.closest('form');
-              if (form) form.submit();
-            }
-          `,
-        },
-        { type: 'wait', milliseconds: 3000 },
-        // Search for the part
-        {
-          type: 'executeJavascript',
-          script: `
-            const inputs = document.querySelectorAll('input[type="text"], input[name="search"], input[name="q"]');
-            let searchInput = null;
-            for (const inp of inputs) {
-              if (inp.offsetParent !== null) { searchInput = inp; break; }
-            }
-            if (searchInput) {
-              searchInput.value = '${searchCode}';
-              const form = searchInput.closest('form');
-              if (form) form.submit();
-            }
-          `,
-        },
-        { type: 'wait', milliseconds: 4000 },
-        { type: 'scrape' },
-      ],
-    }),
+    body: JSON.stringify({ url, ...options }),
   });
-
   const data = await resp.json();
   if (!resp.ok) {
     throw new Error(`Firecrawl error ${resp.status}: ${JSON.stringify(data).substring(0, 500)}`);
@@ -245,7 +340,6 @@ function extractPrices(html: string): number[] {
   const prices: number[] = [];
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  // Semicolon-separated data rows (catalog format)
   for (const line of html.split('\n')) {
     if (line.includes(';')) {
       for (const part of line.split(';')) {
@@ -256,8 +350,7 @@ function extractPrices(html: string): number[] {
     }
   }
 
-  // MOC s DPH / MOC bez DPH patterns
-  const pricePatterns = [
+  const textPatterns = [
     /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /MOC\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
@@ -265,7 +358,7 @@ function extractPrices(html: string): number[] {
     /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
   ];
 
-  for (const pat of pricePatterns) {
+  for (const pat of textPatterns) {
     let m;
     while ((m = pat.exec(text)) !== null) {
       const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
@@ -273,7 +366,6 @@ function extractPrices(html: string): number[] {
     }
   }
 
-  // Table cell prices
   const tdPattern = /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi;
   let m;
   while ((m = tdPattern.exec(html)) !== null) {
@@ -283,8 +375,6 @@ function extractPrices(html: string): number[] {
 
   return [...new Set(prices)];
 }
-
-// ─── Pick best price pair (VAT ratio ~1.21) ────────────────────────────────
 
 function pickBestPrices(prices: number[]): { priceWithVat: number; priceWithoutVat: number } {
   const sorted = [...prices].sort((a, b) => a - b);
@@ -301,8 +391,6 @@ function pickBestPrices(prices: number[]): { priceWithVat: number; priceWithoutV
   }
   return { priceWithVat: sorted[0], priceWithoutVat: Math.round(sorted[0] / 1.21 * 100) / 100 };
 }
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
