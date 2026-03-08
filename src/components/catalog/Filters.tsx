@@ -49,6 +49,11 @@ export const subCategoriesMap: Record<string, string[]> = {
   "Oleje a kapaliny": ["Motorový olej", "Převodový olej", "Chladicí kapalina", "Brzdová kapalina"],
 };
 
+interface SourceStats {
+  source: string;
+  count: number;
+}
+
 interface FiltersProps {
   searchMode: SearchMode;
   brand: string;
