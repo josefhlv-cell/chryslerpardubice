@@ -49,6 +49,7 @@ const Service = () => {
     setWantsReplacement(false);
     setBrand("");
     setModel("");
+    setYear("");
   };
 
   return (
