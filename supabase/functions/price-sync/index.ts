@@ -131,67 +131,88 @@ async function catalogLogin(password: string, debugMode: boolean): Promise<{
   cookies: string;
   debug?: any;
 }> {
-  // First GET the page to get initial session cookie
+  // First GET the page to get ALL cookies (PHPSESSID + Cloudflare)
   const getResp = await fetch(CATALOG_URL, {
-    redirect: 'manual',
+    redirect: 'follow',
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'cs,en;q=0.5',
     },
   });
   
-  const initialCookies = extractCookies(getResp.headers);
-  const getHtml = await getResp.text();
+  // Collect ALL set-cookie headers
+  const allGetCookies: string[] = [];
+  for (const [key, value] of getResp.headers.entries()) {
+    if (key.toLowerCase() === 'set-cookie') {
+      allGetCookies.push(value.split(';')[0]);
+    }
+  }
+  // Also try getSetCookie if available
+  try {
+    const setCookies = (getResp.headers as any).getSetCookie?.() || [];
+    for (const c of setCookies) {
+      const part = c.split(';')[0];
+      if (!allGetCookies.includes(part)) allGetCookies.push(part);
+    }
+  } catch {}
+  
+  const initialCookies = allGetCookies.join('; ');
+  await getResp.text(); // consume body
+  
+  // Build POST body
+  const postBody = `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`;
   
   // POST login
   const loginResp = await fetch(CATALOG_URL, {
     method: 'POST',
-    redirect: 'manual',
+    redirect: 'follow',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Cookie': initialCookies,
       'Referer': CATALOG_URL,
       'Origin': 'https://www.vernostsevyplaci.cz',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'cs,en;q=0.5',
     },
-    body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
+    body: postBody,
   });
   
-  // Merge cookies from login response
-  const loginCookies = mergeCookies(initialCookies, extractCookies(loginResp.headers));
-  const loginStatus = loginResp.status;
-  
-  // Follow redirect if 302/301
-  let finalHtml = '';
-  let finalUrl = '';
-  if (loginStatus === 302 || loginStatus === 301) {
-    const redirectUrl = loginResp.headers.get('Location') || CATALOG_URL;
-    finalUrl = redirectUrl.startsWith('http') ? redirectUrl : `https://www.vernostsevyplaci.cz${redirectUrl}`;
-    const redirectResp = await fetch(finalUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Cookie': loginCookies,
-      },
-    });
-    finalHtml = await redirectResp.text();
-  } else {
-    finalHtml = await loginResp.text();
-    finalUrl = CATALOG_URL;
+  // Collect login cookies
+  const allLoginCookies: string[] = [];
+  for (const [key, value] of loginResp.headers.entries()) {
+    if (key.toLowerCase() === 'set-cookie') {
+      allLoginCookies.push(value.split(';')[0]);
+    }
   }
+  try {
+    const setCookies = (loginResp.headers as any).getSetCookie?.() || [];
+    for (const c of setCookies) {
+      const part = c.split(';')[0];
+      if (!allLoginCookies.includes(part)) allLoginCookies.push(part);
+    }
+  } catch {}
   
-  // Check if login succeeded (no more password field)
+  const loginCookies = mergeCookies(initialCookies, allLoginCookies.join('; '));
+  const loginStatus = loginResp.status;
+  const finalHtml = await loginResp.text();
+  
   const stillLogin = finalHtml.includes('name="password"');
-  const hasSearchField = finalHtml.includes('name="search"') || finalHtml.includes('type="text"');
+  const hasSearchField = finalHtml.includes('name="search"') || finalHtml.includes('Zadejte');
   
   const debug = debugMode ? {
     initialCookies,
     loginCookies,
+    allLoginCookies,
     loginStatus,
-    finalUrl,
+    postBody: postBody.replace(password, '***'),
+    passwordLength: password.length,
     finalHtmlLength: finalHtml.length,
     stillLogin,
     hasSearchField,
-    htmlSnippet: finalHtml.substring(0, 2000),
-    // Find all input fields
+    // Look for error messages in HTML
+    formArea: finalHtml.match(/<form[^>]*>[\s\S]*?<\/form>/)?.[0]?.substring(0, 1000) || 'no form found',
     inputs: [...finalHtml.matchAll(/<input[^>]*name="([^"]*)"[^>]*>/g)].map(m => m[1]),
   } : undefined;
 
