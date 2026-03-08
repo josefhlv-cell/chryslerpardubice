@@ -151,34 +151,23 @@ async function firecrawlSearch(
         {
           type: 'executeJavascript',
           script: `
-            async function run() {
-              // Step 1: Login via fetch (uses browser cookies)
-              await fetch('/cnd/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'password=${password}&submit-password=P%C5%99ihl%C3%A1sit',
-                credentials: 'include',
-                redirect: 'follow'
-              });
-              
-              // Step 2: Search via fetch (session cookie set from login)
-              const searchResp = await fetch('/cnd/', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'search=${searchCode}&submit-search=Vyhledat',
-                credentials: 'include',
-                redirect: 'follow'
-              });
-              const html = await searchResp.text();
-              
-              // Inject result into DOM so Firecrawl can scrape it
-              document.body.innerHTML = html;
-              return 'done';
-            }
-            run();
+            // Synchronous XHR to maintain session
+            var xhr1 = new XMLHttpRequest();
+            xhr1.open('POST', '/cnd/', false);
+            xhr1.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr1.send('password=${password}&submit-password=P%C5%99ihl%C3%A1sit');
+            
+            var xhr2 = new XMLHttpRequest();
+            xhr2.open('POST', '/cnd/', false);
+            xhr2.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr2.send('search=${searchCode}&submit-search=Vyhledat');
+            
+            document.open();
+            document.write(xhr2.responseText);
+            document.close();
           `,
         },
-        { type: 'wait', milliseconds: 5000 },
+        { type: 'wait', milliseconds: 2000 },
       ],
     }),
   });
