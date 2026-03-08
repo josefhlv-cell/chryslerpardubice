@@ -667,7 +667,7 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
   const cacheId = normalizeOem(oemNumber);
 
   // 0. Check localStorage cache (30-day TTL)
-  const memoryCached = cacheGet<CrossRefResult>('oem_crossref', cacheId);
+  const memoryCached = await cacheGet<CrossRefResult>('oem_crossref', cacheId);
   if (memoryCached) return memoryCached;
 
   // 1. Check local DB cache first
