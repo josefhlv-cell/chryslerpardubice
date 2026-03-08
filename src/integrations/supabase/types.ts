@@ -1317,6 +1317,7 @@ export type Database = {
         }[]
       }
       can_place_order: { Args: { _user_id: string }; Returns: boolean }
+      get_cron_job_status: { Args: never; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1324,6 +1325,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      manage_price_sync_cron: { Args: { p_action: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "customer"
