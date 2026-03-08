@@ -147,7 +147,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
               </div>
             )}
             {!pricesLoading && pricedCount > 0 && (
-              <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/30">
+              <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
                 {pricedCount}/{parts.length} s cenou
               </Badge>
             )}
