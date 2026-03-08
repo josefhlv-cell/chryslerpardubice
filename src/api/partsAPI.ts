@@ -654,11 +654,40 @@ export interface CrossRefResult {
 }
 
 export async function getOEMCrossReferences(oemNumber: string, partName?: string): Promise<CrossRefResult | null> {
+  // 1. Check local DB cache first
+  const { data: cached } = await supabase
+    .from("part_crossref")
+    .select("manufacturer, part_number, note")
+    .eq("oem_number", normalizeOem(oemNumber));
+
+  if (cached && cached.length > 0) {
+    return {
+      oem_number: oemNumber,
+      part_name: partName,
+      alternatives: cached.map(c => ({ manufacturer: c.manufacturer, part_number: c.part_number, note: c.note || undefined })),
+    };
+  }
+
+  // 2. Call backend AI crossref
   const { data, error } = await supabase.functions.invoke("oem-crossref", {
     body: { oem_number: oemNumber, part_name: partName, action: "generate" },
   });
   if (error || !data?.success) return null;
-  return data as CrossRefResult;
+
+  // 3. Save alternatives to part_crossref for caching
+  const result = data as CrossRefResult;
+  if (result.alternatives && result.alternatives.length > 0) {
+    const rows = result.alternatives.map(alt => ({
+      oem_number: normalizeOem(oemNumber),
+      manufacturer: alt.manufacturer,
+      part_number: alt.part_number,
+      note: alt.note || null,
+      source: 'ai',
+    }));
+    supabase.from("part_crossref").insert(rows).then(() => {});
+  }
+
+  return result;
 }
 
 // ---- EPC Diagram ----
@@ -700,4 +729,50 @@ export async function scrape7zap(brand: string, model: string, year?: string) {
   });
   if (error) throw new Error(error.message);
   return data;
+}
+
+/** Generate AI catalog for a brand/model via scrape-7zap edge function */
+export async function generateAICatalog(brand: string, model: string, year?: number) {
+  const { data, error } = await supabase.functions.invoke("scrape-7zap", {
+    body: { brand, model, year, action: "generate-catalog" },
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Map 7zap URLs for a brand */
+export async function map7zapBrand(brand: string, model?: string) {
+  const { data, error } = await supabase.functions.invoke("scrape-7zap", {
+    body: { brand, model, action: "map" },
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Decode VIN and auto-set catalog filters, optionally save to user_vehicles */
+export async function decodeAndSetupVehicle(vin: string, userId?: string) {
+  const result = await decodeVINEnriched(vin);
+  
+  // Save to user_vehicles if user is logged in
+  if (userId && result.basic.brand && result.basic.model) {
+    const { data: existing } = await supabase
+      .from("user_vehicles")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("vin", vin)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from("user_vehicles").insert({
+        user_id: userId,
+        brand: result.basic.brand,
+        model: result.basic.model,
+        year: result.basic.year ? parseInt(result.basic.year) : null,
+        engine: [result.basic.engine_displacement, result.basic.engine_cylinders ? `${result.basic.engine_cylinders}V` : ''].filter(Boolean).join(' '),
+        vin,
+      });
+    }
+  }
+
+  return result;
 }

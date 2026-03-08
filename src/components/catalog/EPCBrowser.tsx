@@ -1,12 +1,13 @@
 /**
  * EPCBrowser Component
  * Shows EPC categories for selected vehicle and drills down to parts with live prices.
- * Includes interactive SVG diagrams generated via AI.
+ * Includes interactive SVG diagrams generated via AI with caching.
+ * Features: lazy loading, pagination (20 items), diagram caching.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, LayoutGrid } from "lucide-react";
+import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, LayoutGrid, ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,12 +30,18 @@ const categoryIcons: Record<string, string> = {
   "Filtry": "🔍", "Oleje a kapaliny": "🛢️", "Brzdový systém": "🛑",
   "Palivový systém": "⛽", "Výfukový systém": "💨", "Klimatizace/Topení": "🌡️",
   "Kola a pneumatiky": "🔘", "Náprava": "🔩", "Osvětlení": "💡",
+  "Chladící systém": "❄️", "Odpružení": "🔩", "Údržba": "🛠️",
 };
 
 type PriceData = { price_without_vat: number; price_with_vat: number; availability: string; name?: string };
 
+const PARTS_PER_PAGE = 20;
+
 const formatPrice = (price: number) =>
   price > 0 ? `${price.toLocaleString("cs-CZ")} Kč` : "—";
+
+// Diagram SVG cache (in-memory per session)
+const diagramCache = new Map<string, string>();
 
 const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps) => {
   const [loading, setLoading] = useState(false);
@@ -48,7 +55,15 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [pricesLoading, setPricesLoading] = useState(false);
   const [diagramSvg, setDiagramSvg] = useState<string | null>(null);
   const [diagramLoading, setDiagramLoading] = useState(false);
+  const [partsPage, setPartsPage] = useState(0);
   const diagramRef = useRef<HTMLDivElement>(null);
+
+  // Paginated parts
+  const paginatedParts = useMemo(() => {
+    const start = partsPage * PARTS_PER_PAGE;
+    return parts.slice(start, start + PARTS_PER_PAGE);
+  }, [parts, partsPage]);
+  const totalPartsPages = Math.ceil(parts.length / PARTS_PER_PAGE);
 
   // Load categories when vehicle params change
   useEffect(() => {
@@ -69,19 +84,24 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
   // Load parts when category selected
   useEffect(() => {
-    if (!selectedCategory) { setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); return; }
+    if (!selectedCategory) { setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0); return; }
     setPartsLoading(true);
+    setPartsPage(0);
     const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
     getEPCParts(catIds)
       .then((loadedParts) => {
         setParts(loadedParts);
-        // Auto-trigger price enrichment
         const oems = loadedParts.map(p => p.oem_number).filter(Boolean) as string[];
         if (oems.length > 0) {
           setPricesLoading(true);
           enrichEPCPrices(oems)
             .then(setPriceMap)
             .finally(() => setPricesLoading(false));
+        }
+        // Auto-load cached diagram
+        const cacheKey = `${brand}-${model}-${selectedCategory}`;
+        if (diagramCache.has(cacheKey)) {
+          setDiagramSvg(diagramCache.get(cacheKey)!);
         }
       })
       .finally(() => setPartsLoading(false));
@@ -96,26 +116,40 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .finally(() => setPricesLoading(false));
   };
 
+  const attachDiagramHandlers = () => {
+    setTimeout(() => {
+      if (diagramRef.current) {
+        const clickables = diagramRef.current.querySelectorAll('[data-oem]');
+        clickables.forEach(el => {
+          el.addEventListener('click', () => {
+            const oem = el.getAttribute('data-oem');
+            if (oem) onSearchOem(oem);
+          });
+        });
+      }
+    }, 100);
+  };
+
   const handleLoadDiagram = async () => {
     if (!selectedCategory || !brand) return;
+    const cacheKey = `${brand}-${model}-${selectedCategory}`;
+    
+    if (diagramCache.has(cacheKey)) {
+      setDiagramSvg(diagramCache.get(cacheKey)!);
+      attachDiagramHandlers();
+      return;
+    }
+
     setDiagramLoading(true);
     try {
       const vehicle = `${brand} ${model}`;
       const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
       const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
-      setDiagramSvg(svg);
-      // Attach click handlers to diagram parts
-      setTimeout(() => {
-        if (diagramRef.current) {
-          const clickables = diagramRef.current.querySelectorAll('[data-oem]');
-          clickables.forEach(el => {
-            el.addEventListener('click', () => {
-              const oem = el.getAttribute('data-oem');
-              if (oem) onSearchOem(oem);
-            });
-          });
-        }
-      }, 100);
+      if (svg) {
+        diagramCache.set(cacheKey, svg);
+        setDiagramSvg(svg);
+        attachDiagramHandlers();
+      }
     } catch (e) {
       console.error('Diagram load error:', e);
     }
@@ -249,7 +283,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                   <span className="w-24 text-right">Cena s DPH</span>
                   <span className="w-16 text-center">Akce</span>
                 </div>
-                {parts.map((part) => {
+                {paginatedParts.map((part) => {
                   const price = part.oem_number ? priceMap.get(part.oem_number) : undefined;
                   return (
                     <div key={part.id}
@@ -297,6 +331,23 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                     </div>
                   );
                 })}
+
+                {/* Pagination */}
+                {totalPartsPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 pt-3">
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" disabled={partsPage === 0}
+                      onClick={() => setPartsPage(p => Math.max(0, p - 1))}>
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">
+                      {partsPage + 1} / {totalPartsPages}
+                    </span>
+                    <Button size="sm" variant="outline" className="h-7 w-7 p-0" disabled={partsPage >= totalPartsPages - 1}
+                      onClick={() => setPartsPage(p => Math.min(totalPartsPages - 1, p + 1))}>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </motion.div>
