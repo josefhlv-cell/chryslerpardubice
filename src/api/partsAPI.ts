@@ -58,6 +58,8 @@ export const sourceLabel: Record<string, string> = {
   intercars: "InterCars",
   csv: "Lokální katalog",
   epc: "EPC katalog",
+  "7zap": "7zap.com",
+  ai: "AI generováno",
 };
 
 export const sourcePriority: Record<string, number> = {
