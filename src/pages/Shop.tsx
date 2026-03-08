@@ -29,7 +29,7 @@ import { toast } from "sonner";
 // ---- Modular components ----
 import SearchBar from "@/components/catalog/SearchBar";
 import type { SearchMode } from "@/components/catalog/SearchBar";
-import Filters, { brands } from "@/components/catalog/Filters";
+import Filters, { brands, catalogTree, partCategories, subCategoriesMap } from "@/components/catalog/Filters";
 import PartCard from "@/components/catalog/PartCard";
 import { PartDetailPanel, PartDetailSheet } from "@/components/catalog/PartDetailModal";
 import { useFavorites } from "@/components/catalog/Favorites";
