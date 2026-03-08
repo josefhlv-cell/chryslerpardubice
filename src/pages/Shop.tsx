@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, ShoppingCart, Package, Send, Sparkles, AlertTriangle, ChevronLeft, ChevronRight, Loader2, Layers, RefreshCw } from "lucide-react";
+import { Search, ShoppingCart, Package, Send, Sparkles, AlertTriangle, ChevronLeft, ChevronRight, Loader2, Layers, RefreshCw, Image, ArrowRight, Info, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const brands = ["Chrysler", "Jeep", "Dodge", "RAM", "Fiat", "Lancia"];
 const PAGE_SIZE = 20;
@@ -56,10 +57,20 @@ interface PartResult {
   family: string | null;
   segment: string | null;
   packaging: string | null;
+  description: string | null;
+  manufacturer: string | null;
+  catalog_source: string;
+  availability: string;
+  compatible_vehicles: string | null;
+  superseded_by: string | null;
+  supersedes: string | null;
 }
 
 type PartType = "new" | "used";
 type SearchMode = "part_number" | "vehicle" | "vin" | "epc";
+
+const sourceLabel: Record<string, string> = { mopar: "Mopar", autokelly: "AutoKelly", intercars: "InterCars", csv: "Lokální katalog" };
+const sourcePriority: Record<string, number> = { mopar: 1, csv: 2, autokelly: 3, intercars: 4 };
 
 const Shop = () => {
   const navigate = useNavigate();
@@ -84,6 +95,8 @@ const Shop = () => {
   const [page, setPage] = useState(0);
   const [priceFetching, setPriceFetching] = useState(false);
   const [showAlternatives, setShowAlternatives] = useState<string | null>(null);
+  const [expandedPart, setExpandedPart] = useState<string | null>(null);
+  const [photoDialog, setPhotoDialog] = useState<{ open: boolean; oem: string; loading: boolean; urls: string[] }>({ open: false, oem: "", loading: false, urls: [] });
 
   const [usedNote, setUsedNote] = useState("");
   const [usedSubmitted, setUsedSubmitted] = useState(false);
@@ -91,7 +104,6 @@ const Shop = () => {
   const isBusinessActive = profile?.account_type === "business" && profile?.status === "active";
   const discountPercent = isBusinessActive ? (profile?.discount_percent ?? 0) : 0;
 
-  // Debounce
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
     debounceRef.current = setTimeout(() => setDebouncedQuery(query), 400);
@@ -99,6 +111,26 @@ const Shop = () => {
   }, [query]);
 
   const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase();
+
+  const mapToPartResult = (item: any, source: string): PartResult => ({
+    id: item.id,
+    name: item.name,
+    oem_number: item.oem_code || item.oem_number,
+    internal_code: item.internal_code || null,
+    price_without_vat: item.price_without_vat ?? item.price ?? 0,
+    price_with_vat: item.price_with_vat ?? Math.round((item.price ?? 0) * 1.21 * 100) / 100,
+    category: item.category || null,
+    family: item.family || item.brand || null,
+    segment: item.segment || (item.available !== undefined ? (item.available ? "Skladem" : "Na objednávku") : null),
+    packaging: item.packaging || null,
+    description: item.description || null,
+    manufacturer: item.manufacturer || (source === "mopar" ? "Mopar" : null),
+    catalog_source: item.catalog_source || source,
+    availability: item.availability || (item.available ? "available" : "unknown"),
+    compatible_vehicles: item.compatible_vehicles || null,
+    superseded_by: item.superseded_by || null,
+    supersedes: item.supersedes || null,
+  });
 
   const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
     if (!searchQuery && !category && !subCategory) return;
@@ -108,9 +140,8 @@ const Shop = () => {
       const normalized = normalizeOem(searchQuery);
       const allResults: PartResult[] = [];
 
-      // ===== EPC MODE: search via epc_categories + epc_part_links =====
+      // ===== EPC MODE =====
       if (searchMode === "epc" && category && brand) {
-        // Try EPC tables first
         let epcQuery = supabase.from("epc_categories").select("id").eq("brand", brand).eq("category", category);
         if (model) epcQuery = epcQuery.eq("model", model);
         if (subCategory) epcQuery = epcQuery.eq("subcategory", subCategory);
@@ -122,47 +153,41 @@ const Shop = () => {
           if (links && links.length > 0) {
             const partIds = [...new Set(links.map((l: any) => l.part_id))];
             const { data: epcParts } = await supabase.from("parts_new")
-              .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging")
+              .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
               .in("id", partIds);
-            if (epcParts) allResults.push(...epcParts);
+            if (epcParts) allResults.push(...epcParts.map(p => mapToPartResult(p, "mopar")));
           }
         }
 
-        // Fallback: search by subcategory name in parts_new and parts_catalog
         if (allResults.length === 0 && subCategory) {
-          const { data: pn } = await supabase.from("parts_new")
-            .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging")
-            .ilike("name", `%${subCategory}%`)
-            .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
-          if (pn) allResults.push(...pn);
-
-          const { data: pc } = await supabase.from("parts_catalog")
-            .select("id, name, oem_code, price, brand, category, available")
-            .ilike("name", `%${subCategory}%`)
-            .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
-          if (pc) {
+          const [pnRes, pcRes] = await Promise.all([
+            supabase.from("parts_new")
+              .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+              .ilike("name", `%${subCategory}%`).range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1),
+            supabase.from("parts_catalog")
+              .select("id, name, oem_code, price, brand, category, available")
+              .ilike("name", `%${subCategory}%`).range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1),
+          ]);
+          if (pnRes.data) allResults.push(...pnRes.data.map(p => mapToPartResult(p, "mopar")));
+          if (pcRes.data) {
             const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
-            for (const item of pc) {
+            for (const item of pcRes.data) {
               if (!existingOems.has(normalizeOem(item.oem_code))) {
-                allResults.push({
-                  id: item.id, name: item.name, oem_number: item.oem_code, internal_code: null,
-                  price_without_vat: item.price, price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
-                  category: item.category, family: item.brand, segment: item.available ? "Skladem" : "Na objednávku", packaging: null,
-                });
+                allResults.push(mapToPartResult(item, "csv"));
               }
             }
           }
         }
 
         if (allResults.length > 0) {
-          setResults(allResults);
+          await enrichWithSupersessions(allResults);
+          setResults(sortByPriority(allResults));
           setTotalCount(allResults.length);
           setSearching(false);
           setPriceFetching(false);
           return;
         }
-        // If nothing found in EPC
-        toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly v databázi. Zkuste vyhledat podle OEM čísla.`);
+        toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly v databázi.`);
         setResults([]);
         setTotalCount(0);
         setSearching(false);
@@ -170,41 +195,37 @@ const Shop = () => {
         return;
       }
 
-      // ===== VEHICLE MODE: filter by brand/category =====
+      // ===== VEHICLE MODE =====
       if (searchMode === "vehicle" && !searchQuery && category) {
-        let pnQuery = supabase.from("parts_new")
-          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" })
-          .ilike("name", `%${category}%`)
-          .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
+        const searchTerm = subCategory || category;
+        const [pnRes, pcRes] = await Promise.all([
+          supabase.from("parts_new")
+            .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source", { count: "exact" })
+            .ilike("name", `%${searchTerm}%`).range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1),
+          supabase.from("parts_catalog")
+            .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
+            .or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`).range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1),
+        ]);
 
-        const { data: pn, count: pnCount } = await pnQuery;
-        if (pn) allResults.push(...pn);
-
-        const { data: pc, count: pcCount } = await supabase.from("parts_catalog")
-          .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
-          .or(`name.ilike.%${category}%,category.ilike.%${category}%`)
-          .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1);
-        if (pc) {
+        if (pnRes.data) allResults.push(...pnRes.data.map(p => mapToPartResult(p, "mopar")));
+        if (pcRes.data) {
           const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
-          for (const item of pc) {
+          for (const item of pcRes.data) {
             if (!existingOems.has(normalizeOem(item.oem_code))) {
-              allResults.push({
-                id: item.id, name: item.name, oem_number: item.oem_code, internal_code: null,
-                price_without_vat: item.price, price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
-                category: item.category, family: item.brand, segment: item.available ? "Skladem" : "Na objednávku", packaging: null,
-              });
+              allResults.push(mapToPartResult(item, "csv"));
             }
           }
         }
 
-        setResults(allResults);
-        setTotalCount((pnCount ?? 0) + (pcCount ?? 0));
+        await enrichWithSupersessions(allResults);
+        setResults(sortByPriority(allResults));
+        setTotalCount((pnRes.count ?? 0) + (pcRes.count ?? 0));
         setSearching(false);
         setPriceFetching(false);
         return;
       }
 
-      // ===== STANDARD SEARCH (part_number, vehicle with query, vin) =====
+      // ===== STANDARD SEARCH =====
       if (!searchQuery) {
         setResults([]);
         setTotalCount(0);
@@ -213,58 +234,46 @@ const Shop = () => {
         return;
       }
 
-      const oemCodes = [normalized];
+      // 1. Search local DB first (parallel)
+      const pnFilter = `oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`;
+      const [pnRes, pcRes] = await Promise.all([
+        supabase.from("parts_new")
+          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source", { count: "exact" })
+          .or(pnFilter).range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1).order("name"),
+        supabase.from("parts_catalog")
+          .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
+          .or(`oem_code.ilike.%${searchQuery}%,oem_code.ilike.%${normalized}%,name.ilike.%${searchQuery}%`)
+          .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1).order("name"),
+      ]);
 
-      // Build filter for parts_new
-      let pnFilter = `oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`;
-      const { data: partsNewData, count: partsNewCount } = await supabase
-        .from("parts_new")
-        .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" })
-        .or(pnFilter)
-        .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
-        .order("name");
-
-      // Also search parts_catalog
-      const { data: catalogData, count: catalogCount } = await supabase
-        .from("parts_catalog")
-        .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
-        .or(`oem_code.ilike.%${searchQuery}%,oem_code.ilike.%${normalized}%,name.ilike.%${searchQuery}%`)
-        .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
-        .order("name");
-
-      if (partsNewData && partsNewData.length > 0) {
-        allResults.push(...partsNewData);
-      }
-      if (catalogData && catalogData.length > 0) {
+      if (pnRes.data) allResults.push(...pnRes.data.map(p => mapToPartResult(p, "mopar")));
+      if (pcRes.data) {
         const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
-        for (const item of catalogData) {
+        for (const item of pcRes.data) {
           if (!existingOems.has(normalizeOem(item.oem_code))) {
-            allResults.push({
-              id: item.id, name: item.name, oem_number: item.oem_code, internal_code: null,
-              price_without_vat: item.price, price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
-              category: item.category, family: item.brand, segment: item.available ? "Skladem" : "Na objednávku", packaging: null,
-            });
+            allResults.push(mapToPartResult(item, "csv"));
           }
         }
       }
 
       if (allResults.length > 0) {
-        setResults(allResults);
-        setTotalCount((partsNewCount ?? 0) + (catalogCount ?? 0));
+        await enrichWithSupersessions(allResults);
+        setResults(sortByPriority(allResults));
+        setTotalCount((pnRes.count ?? 0) + (pcRes.count ?? 0));
         setSearching(false);
         setPriceFetching(false);
         return;
       }
 
-      // Not found locally - fetch from external catalog
-      console.log("Fetching from external catalog for:", oemCodes);
-      const { data: extCatalogData, error: fnError } = await supabase.functions.invoke("catalog-search", {
-        body: { oemCodes },
+      // 2. Not found locally → fetch from external catalogs
+      console.log("Fetching from external catalog for:", normalized);
+      const { data: extData, error: fnError } = await supabase.functions.invoke("catalog-search", {
+        body: { oemCodes: [normalized] },
       });
 
       if (fnError) throw new Error(fnError.message || "Chyba při volání katalogu");
 
-      const catalogResults = extCatalogData?.results || [];
+      const catalogResults = extData?.results || [];
       const partResults: PartResult[] = catalogResults
         .filter((r: any) => r.found)
         .map((r: any, i: number) => ({
@@ -274,25 +283,37 @@ const Shop = () => {
           internal_code: r.search_code || null,
           price_without_vat: r.price_without_vat,
           price_with_vat: r.price_with_vat,
-          category: null, family: null, segment: r.cached ? "Cache" : "Live", packaging: null,
+          category: r.category || null,
+          family: r.family || null,
+          segment: r.segment || null,
+          packaging: r.packaging || null,
+          description: r.description || null,
+          manufacturer: r.manufacturer || "Mopar",
+          catalog_source: r.catalog_source || "mopar",
+          availability: r.availability || "available",
+          compatible_vehicles: r.compatible_vehicles || null,
+          superseded_by: r.superseded_by || null,
+          supersedes: r.supersedes || null,
         }));
 
-      const notFound = catalogResults.filter((r: any) => !r.found);
-      if (notFound.length > 0 && partResults.length === 0) {
-        toast.error(`Díl "${searchQuery}" nebyl nalezen v katalogu`);
+      if (partResults.length === 0) {
+        toast.error(`Díl "${searchQuery}" nebyl nalezen`);
       }
 
-      setResults(partResults);
+      setResults(sortByPriority(partResults));
       setTotalCount(partResults.length);
 
+      // 3. Refresh from DB (catalog-search saves them)
       if (partResults.length > 0) {
         const { data: freshData } = await supabase
           .from("parts_new")
-          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging")
+          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
           .in("oem_number", partResults.map(p => p.oem_number));
         if (freshData && freshData.length > 0) {
-          setResults(freshData);
-          setTotalCount(freshData.length);
+          const mapped = freshData.map(p => mapToPartResult(p, "mopar"));
+          await enrichWithSupersessions(mapped);
+          setResults(sortByPriority(mapped));
+          setTotalCount(mapped.length);
         }
       }
     } catch (err: any) {
@@ -303,6 +324,27 @@ const Shop = () => {
       setPriceFetching(false);
     }
   }, [category, subCategory, searchMode, brand, model]);
+
+  const enrichWithSupersessions = async (parts: PartResult[]) => {
+    const oems = parts.map(p => p.oem_number);
+    if (oems.length === 0) return;
+    const [byOld, byNew] = await Promise.all([
+      supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("old_oem_number", oems),
+      supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("new_oem_number", oems),
+    ]);
+    const supersededMap = new Map<string, string>();
+    const supersedesMap = new Map<string, string>();
+    byOld.data?.forEach(s => supersededMap.set(s.old_oem_number, s.new_oem_number));
+    byNew.data?.forEach(s => supersedesMap.set(s.new_oem_number, s.old_oem_number));
+    parts.forEach(p => {
+      if (!p.superseded_by) p.superseded_by = supersededMap.get(p.oem_number) || null;
+      if (!p.supersedes) p.supersedes = supersedesMap.get(p.oem_number) || null;
+    });
+  };
+
+  const sortByPriority = (parts: PartResult[]) => {
+    return [...parts].sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
+  };
 
   const hasSearched = useRef(false);
   useEffect(() => {
@@ -341,6 +383,18 @@ const Shop = () => {
     setVinLoading(false);
   };
 
+  const handlePhotoClick = (oem: string) => {
+    setPhotoDialog({ open: true, oem, loading: true, urls: [] });
+    // Simulate photo loading (in real implementation would fetch from catalog)
+    setTimeout(() => {
+      setPhotoDialog(prev => ({
+        ...prev,
+        loading: false,
+        urls: [], // No photos available yet - catalogs don't provide image URLs directly
+      }));
+    }, 1000);
+  };
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const [submitting, setSubmitting] = useState(false);
 
@@ -351,7 +405,8 @@ const Shop = () => {
     setSubmitting(true);
     try {
       const { error } = await supabase.from("orders").insert({
-        user_id: user.id, part_id: part.id, order_type: "new" as const, quantity: 1,
+        user_id: user.id, part_id: part.id.startsWith("catalog-") ? null : part.id,
+        order_type: "new" as const, quantity: 1,
         unit_price: part.price_without_vat, part_name: part.name, oem_number: part.oem_number,
       });
       if (error) throw error;
@@ -391,6 +446,19 @@ const Shop = () => {
   const models = brand && catalogTree[brand] ? Object.keys(catalogTree[brand]) : [];
   const engines = brand && model && catalogTree[brand]?.[model] ? catalogTree[brand][model] : [];
   const currentSubCategories = category ? (subCategories[category] || []) : [];
+
+  const availabilityBadge = (availability: string) => {
+    if (availability === "available") return <Badge className="bg-green-100 text-green-800 border-green-300 text-[9px]"><CheckCircle className="w-2.5 h-2.5 mr-0.5" />Skladem</Badge>;
+    if (availability === "unavailable") return <Badge className="bg-red-100 text-red-800 border-red-300 text-[9px]"><XCircle className="w-2.5 h-2.5 mr-0.5" />Nedostupné</Badge>;
+    return <Badge variant="outline" className="text-[9px]">Na dotaz</Badge>;
+  };
+
+  const sourceBadge = (source: string) => {
+    if (source === "mopar") return <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px]">🥇 Mopar</Badge>;
+    if (source === "autokelly") return <Badge className="bg-orange-100 text-orange-800 border-orange-200 text-[9px]">🥈 AutoKelly</Badge>;
+    if (source === "intercars") return <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]">🥉 InterCars</Badge>;
+    return <Badge variant="outline" className="text-[9px]">{sourceLabel[source] || source}</Badge>;
+  };
 
   return (
     <div className="min-h-screen pb-20">
@@ -493,8 +561,6 @@ const Shop = () => {
                       <SelectContent>{engines.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
                     </Select>
                   )}
-
-                  {/* EPC Category tree */}
                   {motor && (
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -503,18 +569,14 @@ const Shop = () => {
                       <Accordion type="single" collapsible className="space-y-1">
                         {partCategories.map(cat => (
                           <AccordionItem key={cat} value={cat} className="border rounded-lg overflow-hidden">
-                            <AccordionTrigger className="text-sm px-3 py-2 hover:bg-muted/50">
-                              {cat}
-                            </AccordionTrigger>
+                            <AccordionTrigger className="text-sm px-3 py-2 hover:bg-muted/50">{cat}</AccordionTrigger>
                             <AccordionContent className="px-3 pb-2">
-                              {/* EPC diagram placeholder */}
                               <div className="bg-muted/30 rounded-lg p-3 mb-2 border border-dashed border-muted-foreground/20">
                                 <div className="grid grid-cols-4 gap-2">
                                   {(subCategories[cat] || []).map((sub, i) => (
                                     <button key={sub}
                                       onClick={() => { setCategory(cat); setSubCategory(sub); doSearch("", 0); }}
-                                      className="aspect-square rounded-lg border border-muted-foreground/20 bg-card hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center p-1 cursor-pointer group"
-                                    >
+                                      className="aspect-square rounded-lg border border-muted-foreground/20 bg-card hover:border-primary hover:bg-primary/5 transition-all flex flex-col items-center justify-center p-1 cursor-pointer group">
                                       <span className="text-[10px] font-bold text-primary group-hover:text-primary">{i + 1}</span>
                                       <span className="text-[8px] text-muted-foreground text-center leading-tight mt-0.5">{sub}</span>
                                     </button>
@@ -566,10 +628,7 @@ const Shop = () => {
                     <div className="flex flex-wrap gap-1">
                       {currentSubCategories.map(sub => (
                         <Button key={sub} size="sm" variant={subCategory === sub ? "default" : "outline"}
-                          className="text-[10px] h-7"
-                          onClick={() => { setSubCategory(sub); }}>
-                          {sub}
-                        </Button>
+                          className="text-[10px] h-7" onClick={() => setSubCategory(sub)}>{sub}</Button>
                       ))}
                     </div>
                   )}
@@ -602,9 +661,7 @@ const Shop = () => {
                   <p className="text-[10px] text-muted-foreground w-full">Příklady:</p>
                   {["68218951AA", "68191349AC", "06507741AA"].map(code => (
                     <Button key={code} size="sm" variant="outline" className="text-[10px] h-7"
-                      onClick={() => { setQuery(code); setPage(0); doSearch(code, 0); }}>
-                      {code}
-                    </Button>
+                      onClick={() => { setQuery(code); setPage(0); doSearch(code, 0); }}>{code}</Button>
                   ))}
                 </div>
               )}
@@ -644,7 +701,7 @@ const Shop = () => {
         {partType === "new" && searching && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            <span className="ml-3 text-sm text-muted-foreground">Hledám v Mopar katalogu...</span>
+            <span className="ml-3 text-sm text-muted-foreground">Hledám v katalozích...</span>
           </div>
         )}
 
@@ -664,21 +721,29 @@ const Shop = () => {
               {totalPages > 1 && <span className="text-xs text-muted-foreground">Strana {page + 1}/{totalPages}</span>}
             </div>
 
-            {/* Priority badge */}
-            <div className="flex gap-1">
+            {/* Priority legend */}
+            <div className="flex gap-1 flex-wrap">
               <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px]">🥇 Mopar originál</Badge>
+              <Badge variant="outline" className="text-[9px]">📦 Lokální katalog</Badge>
             </div>
 
             {results.map((part, i) => {
               const discounted = discountPercent > 0 ? calculateDiscountedPrice(part.price_without_vat) : null;
+              const isExpanded = expandedPart === part.id;
               return (
                 <motion.div key={part.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                   className="glass-card p-4 space-y-2">
+                  {/* Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {sourceBadge(part.catalog_source)}
+                        {availabilityBadge(part.availability)}
+                      </div>
                       <h3 className="text-sm font-semibold truncate">{part.name}</h3>
                       <p className="text-xs text-muted-foreground font-mono">OEM: {part.oem_number}</p>
                       {part.internal_code && <p className="text-[10px] text-muted-foreground">Kód: {part.internal_code}</p>}
+                      {part.manufacturer && <p className="text-[10px] text-muted-foreground">Výrobce: {part.manufacturer}</p>}
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {part.family && <Badge variant="outline" className="text-[9px]">{part.family}</Badge>}
                         {part.category && <Badge variant="outline" className="text-[9px]">{part.category}</Badge>}
@@ -686,8 +751,38 @@ const Shop = () => {
                         {part.packaging && <Badge variant="outline" className="text-[9px]">{part.packaging}</Badge>}
                       </div>
                     </div>
+                    <div className="flex flex-col gap-1">
+                      <button onClick={() => handlePhotoClick(part.oem_number)}
+                        className="w-10 h-10 rounded-lg border border-muted-foreground/20 bg-muted/30 flex items-center justify-center hover:bg-primary/10 hover:border-primary/30 transition-all"
+                        title="Zobrazit fotografii">
+                        <Image className="w-5 h-5 text-muted-foreground" />
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Supersession info */}
+                  {part.superseded_by && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-yellow-50 border border-yellow-200">
+                      <ArrowRight className="w-3.5 h-3.5 text-yellow-600 shrink-0" />
+                      <p className="text-[11px] text-yellow-800">
+                        <span className="font-semibold">Náhrada:</span> {part.oem_number} → <span className="font-mono font-bold">{part.superseded_by}</span>
+                      </p>
+                      <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[9px] ml-auto"
+                        onClick={() => { setQuery(part.superseded_by!); doSearch(part.superseded_by!, 0); }}>
+                        Hledat
+                      </Button>
+                    </div>
+                  )}
+                  {part.supersedes && (
+                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-blue-50 border border-blue-200">
+                      <Info className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <p className="text-[11px] text-blue-800">
+                        Nahrazuje díl: <span className="font-mono">{part.supersedes}</span>
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Prices */}
                   <div className="space-y-1">
                     <div className="flex items-center gap-3 text-xs">
                       <span className="text-muted-foreground">Bez DPH:</span>
@@ -707,6 +802,32 @@ const Shop = () => {
                     )}
                   </div>
 
+                  {/* Expand detail button */}
+                  <Button size="sm" variant="ghost" className="w-full text-[10px] text-muted-foreground h-6"
+                    onClick={() => setExpandedPart(isExpanded ? null : part.id)}>
+                    <Info className="w-3 h-3 mr-1" />
+                    {isExpanded ? "Skrýt detaily" : "Zobrazit detaily"}
+                  </Button>
+
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      className="space-y-1.5 text-[11px] border-t border-muted pt-2">
+                      {part.description && (
+                        <div><span className="text-muted-foreground">Popis:</span> <span>{part.description}</span></div>
+                      )}
+                      {part.compatible_vehicles && (
+                        <div><span className="text-muted-foreground">Kompatibilní vozidla:</span> <span>{part.compatible_vehicles}</span></div>
+                      )}
+                      <div><span className="text-muted-foreground">Zdroj:</span> <span>{sourceLabel[part.catalog_source] || part.catalog_source}</span></div>
+                      {part.category && <div><span className="text-muted-foreground">Kategorie:</span> <span>{part.category}</span></div>}
+                      {part.segment && <div><span className="text-muted-foreground">Segment:</span> <span>{part.segment}</span></div>}
+                      {part.family && <div><span className="text-muted-foreground">Famílie:</span> <span>{part.family}</span></div>}
+                      {part.packaging && <div><span className="text-muted-foreground">Balení:</span> <span>{part.packaging}</span></div>}
+                    </motion.div>
+                  )}
+
+                  {/* Actions */}
                   <div className="flex gap-2 pt-1">
                     <Button size="sm" variant="hero" className="flex-1 text-xs"
                       onClick={() => handleOrderNew(part)} disabled={isPendingBusiness || submitting}>
@@ -729,7 +850,7 @@ const Shop = () => {
                     </Button>
                   </div>
 
-                  {/* Alternative parts button */}
+                  {/* Alternative parts */}
                   <Button size="sm" variant="ghost" className="w-full text-[10px] text-muted-foreground"
                     onClick={() => setShowAlternatives(showAlternatives === part.id ? null : part.id)}>
                     Zobrazit alternativní díly
@@ -739,17 +860,17 @@ const Shop = () => {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-1.5 pt-1">
                       <div className="p-2 rounded-lg bg-muted/50 border border-dashed">
                         <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-[9px]">AutoKelly</Badge>
-                          <span className="text-[10px] text-muted-foreground">Katalog není aktivní</span>
+                          <Badge className="bg-orange-100 text-orange-800 border-orange-200 text-[9px]">AutoKelly</Badge>
+                          <span className="text-[10px] text-muted-foreground">Katalog vyžaduje API klíč</span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Pro aktivaci kontaktujte administrátora.</p>
+                        <p className="text-[10px] text-muted-foreground">Pro aktivaci nastavte API klíč v administraci.</p>
                       </div>
                       <div className="p-2 rounded-lg bg-muted/50 border border-dashed">
                         <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="text-[9px]">InterCars</Badge>
-                          <span className="text-[10px] text-muted-foreground">Katalog není aktivní</span>
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]">InterCars</Badge>
+                          <span className="text-[10px] text-muted-foreground">Katalog vyžaduje API klíč</span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">Pro aktivaci kontaktujte administrátora.</p>
+                        <p className="text-[10px] text-muted-foreground">Pro aktivaci nastavte API klíč v administraci.</p>
                       </div>
                     </motion.div>
                   )}
@@ -789,6 +910,33 @@ const Shop = () => {
           </a>
         </div>
       </div>
+
+      {/* Photo Dialog */}
+      <Dialog open={photoDialog.open} onOpenChange={(open) => setPhotoDialog(prev => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Fotografie dílu {photoDialog.oem}</DialogTitle>
+          </DialogHeader>
+          {photoDialog.loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-3 text-sm text-muted-foreground">Načítám fotografii z katalogu...</span>
+            </div>
+          ) : photoDialog.urls.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2">
+              {photoDialog.urls.map((url, i) => (
+                <img key={i} src={url} alt={`${photoDialog.oem} foto ${i + 1}`} className="w-full rounded-lg border" />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Image className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">Fotografie pro tento díl zatím není k dispozici.</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Fotografický katalog bude dostupný po propojení s Mopar EPC.</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
