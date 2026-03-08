@@ -209,7 +209,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     try {
       const vehicle = `${brand} ${model}`;
       const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
-      const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
+      const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram, selectedSubcategory || undefined);
       if (svg) {
         const sanitized = DOMPurify.sanitize(svg, {
           USE_PROFILES: { svg: true, svgFilters: true },
