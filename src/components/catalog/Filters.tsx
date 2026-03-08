@@ -305,6 +305,34 @@ const Filters = ({
         </div>
       )}
 
+      {/* Brand stats */}
+      {brandStats.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Pokrytí podle značky
+          </p>
+          <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5">
+            {brandStats.map(b => {
+              const pct = totalParts > 0 ? Math.round((b.count / totalParts) * 100) : 0;
+              return (
+                <div key={b.brand} className="space-y-0.5">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="font-medium">{b.brand}</span>
+                    <span className="font-mono">{b.count.toLocaleString("cs")} ({pct}%)</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <Separator />
 
       {/* Reset */}
