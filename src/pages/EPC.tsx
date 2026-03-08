@@ -236,7 +236,7 @@ const EPC = () => {
         oem={photoDialog.oem}
         loading={photoDialog.loading}
         urls={photoDialog.urls}
-        onClose={() => setPhotoDialog((p) => ({ ...p, open: false }))}
+        onOpenChange={(open) => !open && setPhotoDialog((p) => ({ ...p, open: false }))}
       />
     </div>
   );
