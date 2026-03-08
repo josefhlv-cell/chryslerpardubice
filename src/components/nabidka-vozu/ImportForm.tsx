@@ -66,6 +66,7 @@ const ImportForm = () => {
         note: values.note || undefined,
       };
       await createImportRequest(clean as any);
+      supabase.functions.invoke("notify-admin", { body: { type: "import", record: values } }).catch(() => {});
       setSubmitted(true);
       toast({ title: "Odesláno ✓", description: "Váš požadavek na dovoz byl přijat." });
     } catch {
