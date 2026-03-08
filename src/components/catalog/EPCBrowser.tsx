@@ -136,7 +136,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .catch(() => setLoading(false));
   }, [brand, model, engine, year]);
 
-  // Load parts when category/subcategory selected
+  // Load parts when category/subcategory selected + auto-load diagram
   useEffect(() => {
     if (!selectedCategory) {
       setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
@@ -150,7 +150,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .map((c) => c.id);
 
     getEPCParts(catIds)
-      .then((loadedParts) => {
+      .then(async (loadedParts) => {
         setParts(loadedParts);
         const oems = loadedParts.map(p => p.oem_number).filter(Boolean) as string[];
         if (oems.length > 0) {
@@ -159,10 +159,31 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             .then(setPriceMap)
             .finally(() => setPricesLoading(false));
         }
-        // Auto-load cached diagram
+        // Auto-load diagram
         const cacheKey = `${brand}-${model}-${selectedCategory}-${selectedSubcategory || ''}`;
         if (diagramCache.has(cacheKey)) {
           setDiagramSvg(diagramCache.get(cacheKey)!);
+          attachDiagramHandlers();
+        } else if (loadedParts.length > 0) {
+          // Auto-generate diagram in background
+          setDiagramLoading(true);
+          try {
+            const vehicle = `${brand} ${model}`;
+            const partsForDiagram = loadedParts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
+            const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram, selectedSubcategory || undefined);
+            if (svg) {
+              const sanitized = DOMPurify.sanitize(svg, {
+                USE_PROFILES: { svg: true, svgFilters: true },
+                ADD_ATTR: ['data-oem', 'data-part-name', 'data-name'],
+              });
+              diagramCache.set(cacheKey, sanitized);
+              setDiagramSvg(sanitized);
+              attachDiagramHandlers();
+            }
+          } catch (e) {
+            console.error('Auto diagram load error:', e);
+          }
+          setDiagramLoading(false);
         }
       })
       .finally(() => setPartsLoading(false));
