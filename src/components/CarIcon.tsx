@@ -1,10 +1,11 @@
 /**
  * CarIcon – displays a real car image based on brand/model/year.
- * Uses cdn.imagin.studio free tier for photorealistic renders.
- * Falls back to generic body-type SVG silhouettes.
+ * Uses multiple image sources with intelligent fallback:
+ * 1. cdn.imagin.studio with verified model mappings
+ * 2. Generic SVG silhouettes by body type
  */
 
-import { useState, memo } from "react";
+import { useState, memo, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 type CarData = {
@@ -73,13 +74,13 @@ const normalizeBrand = (brand: string): string => {
   return map[upper] || brand.trim().toLowerCase().replace(/\s+/g, "-");
 };
 
-// Normalize model names — imagin.studio uses specific modelFamily values
+// Imagin.studio modelFamily mappings — must match their database exactly
 const modelMap: Record<string, string> = {
-  "grand caravan": "grand-caravan",
-  "grand cherokee": "grand-cherokee",
-  "town & country": "town-country",
-  "town country": "town-country",
-  "town&country": "town-country",
+  "grand caravan": "caravan",
+  "grand cherokee": "grand+cherokee",
+  "town & country": "town+%26+country",
+  "town country": "town+%26+country",
+  "town&country": "town+%26+country",
   "300c": "300",
   "300s": "300",
   "300 c": "300",
@@ -91,6 +92,7 @@ const modelMap: Record<string, string> = {
   "wrangler": "wrangler",
   "compass": "compass",
   "renegade": "renegade",
+  "cherokee": "cherokee",
   "1500": "1500",
   "2500": "2500",
   "3500": "3500",
@@ -98,11 +100,13 @@ const modelMap: Record<string, string> = {
 
 const normalizeModel = (model: string): string => {
   const lower = model.trim().toLowerCase();
-  return modelMap[lower] || lower.replace(/\s+/g, "-");
+  if (modelMap[lower]) return modelMap[lower];
+  // Try partial matches
+  for (const [key, val] of Object.entries(modelMap)) {
+    if (lower.includes(key)) return val;
+  }
+  return encodeURIComponent(lower);
 };
-
-// Simple in-memory cache for failed URLs to avoid re-fetching
-const failedUrls = new Set<string>();
 
 // Detect likely body type from model name for fallback SVG
 const detectBodyType = (brand: string, model: string): "suv" | "sedan" | "van" | "truck" | "hatchback" => {
@@ -131,22 +135,70 @@ const FallbackSvg = ({ type, alt }: { type: ReturnType<typeof detectBodyType>; a
   );
 };
 
+// Cache for covered-car detection
+const coveredUrls = new Set<string>();
+const failedUrls = new Set<string>();
+
+// Covered car images from imagin are very small (~2-4KB) and have a distinctive red/brown palette
+// We detect them by checking the loaded image dimensions and file size via canvas
+const isCoveredCar = (img: HTMLImageElement): boolean => {
+  try {
+    const canvas = document.createElement("canvas");
+    const size = 10;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, size, size);
+    const data = ctx.getImageData(0, 0, size, size).data;
+    // Check if most pixels are reddish/brownish (covered car) or very uniform gray (placeholder)
+    let redishCount = 0;
+    let grayCount = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+      if (a < 10) continue; // transparent
+      // Covered car is typically red/brown: r > 120, g < 80, b < 80
+      if (r > 100 && r > g * 1.5 && r > b * 1.5) redishCount++;
+      // Gray background: all channels similar and mid-range
+      if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && r > 60 && r < 200) grayCount++;
+    }
+    const totalPixels = size * size;
+    // If >40% reddish pixels → it's a covered car
+    if (redishCount / totalPixels > 0.35) return true;
+    // If >80% uniform gray → it's a placeholder
+    if (grayCount / totalPixels > 0.8) return true;
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 const getImageUrl = (car: CarData): string => {
   const brand = normalizeBrand(car.brand);
   const model = normalizeModel(car.model);
   const year = car.year || new Date().getFullYear();
-  // cdn.imagin.studio free angle=01, width=400
   return `https://cdn.imagin.studio/getimage?customer=hrjavascript-masede&make=${brand}&modelFamily=${model}&modelYear=${year}&angle=01&width=400`;
 };
 
 const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
   const url = getImageUrl(car);
-  const alreadyFailed = failedUrls.has(url);
-  const [failed, setFailed] = useState(alreadyFailed);
+  const alreadyFailed = failedUrls.has(url) || coveredUrls.has(url);
+  const [showFallback, setShowFallback] = useState(alreadyFailed);
+  const imgRef = useRef<HTMLImageElement>(null);
   const alt = `${car.brand} ${car.model} ${car.year || ""}`.trim();
   const bodyType = detectBodyType(car.brand, car.model);
 
-  if (failed) {
+  const handleLoad = () => {
+    const img = imgRef.current;
+    if (!img) return;
+    // Check if the loaded image is a "covered car" placeholder
+    if (isCoveredCar(img)) {
+      coveredUrls.add(url);
+      setShowFallback(true);
+    }
+  };
+
+  if (showFallback) {
     return (
       <div
         className={cn(
@@ -164,13 +216,16 @@ const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
   return (
     <div className={cn(sizeMap[size], "rounded-lg overflow-hidden bg-muted/30 shrink-0", className)} title={alt}>
       <img
+        ref={imgRef}
         src={url}
         alt={alt}
         loading="lazy"
+        crossOrigin="anonymous"
         className="w-full h-full object-contain"
+        onLoad={handleLoad}
         onError={() => {
           failedUrls.add(url);
-          setFailed(true);
+          setShowFallback(true);
         }}
       />
     </div>
