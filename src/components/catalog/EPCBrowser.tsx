@@ -79,6 +79,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [generating, setGenerating] = useState(false);
   const [autoExpanding, setAutoExpanding] = useState(false);
   const [scrapingOem, setScrapingOem] = useState<string | null>(null);
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const diagramRef = useRef<HTMLDivElement>(null);
 
   // Paginated parts
