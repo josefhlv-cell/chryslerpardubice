@@ -59,6 +59,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [diagramSvg, setDiagramSvg] = useState<string | null>(null);
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [partsPage, setPartsPage] = useState(0);
+  const [generating, setGenerating] = useState(false);
   const diagramRef = useRef<HTMLDivElement>(null);
 
   // Paginated parts
