@@ -8,6 +8,7 @@ export interface CartItem {
   quantity: number;
   brand?: string;
   type: "new" | "used";
+  catalog_source?: string;
 }
 
 interface CartContextType {

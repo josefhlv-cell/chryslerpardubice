@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp } from "lucide-react";
+import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
 import AdminNotifications from "@/components/admin/AdminNotifications";
@@ -55,6 +56,7 @@ type OrderRow = {
   status: string;
   admin_note: string | null;
   customer_note: string | null;
+  catalog_source: string | null;
   created_at: string;
 };
 
@@ -406,6 +408,11 @@ const Admin = () => {
                             </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "–"} · {o.quantity}×</p>
+                          {o.catalog_source && (
+                            <Badge variant="outline" className="text-[10px] mt-0.5 bg-secondary/50">
+                              Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}
+                            </Badge>
+                          )}
                           {o.customer_note && <p className="text-xs text-muted-foreground italic mt-1">"{o.customer_note}"</p>}
                           <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)} · {o.id.slice(0, 8)}</p>
                         </div>

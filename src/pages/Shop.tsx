@@ -220,6 +220,7 @@ const Shop = () => {
         user_id: user.id, part_id: part.id.startsWith("catalog-") ? null : part.id,
         order_type: "new" as const, quantity: 1,
         unit_price: part.price_without_vat, part_name: part.name, oem_number: part.oem_number,
+        catalog_source: part.catalog_source || null,
       });
       if (error) throw error;
       toast.success(`Objednávka "${part.name}" vytvořena!`);
@@ -234,6 +235,7 @@ const Shop = () => {
       await supabase.from("orders").insert({
         user_id: user.id, order_type: "used" as const, quantity: 1,
         part_name: part.name, oem_number: part.oem_number,
+        catalog_source: part.catalog_source || null,
       });
       toast.success("Poptávka odeslána!");
     } catch (err: any) { toast.error(err.message); }
