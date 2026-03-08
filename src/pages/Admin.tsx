@@ -21,6 +21,7 @@ import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
 import AdminFaultReports from "@/components/admin/AdminFaultReports";
 import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
 import AdminServicePlans from "@/components/admin/AdminServicePlans";
+import AdminVehicleOffers from "@/components/admin/AdminVehicleOffers";
 
 // ---- Types ----
 
