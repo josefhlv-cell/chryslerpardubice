@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen } from "lucide-react";
+import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen, Cpu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import CarIcon from "@/components/CarIcon";
+import VINDetailPanel from "@/components/VINDetailPanel";
+import type { VINDecodeResult } from "@/api/partsAPI";
 
 type UserVehicle = {
   id: string;
@@ -68,6 +70,7 @@ const MyVehicles = () => {
   const [engine, setEngine] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [currentMileage, setCurrentMileage] = useState("");
+  const [vinDecodeResult, setVinDecodeResult] = useState<VINDecodeResult | null>(null);
 
   const serviceHistoryEnabled = profile?.service_history_enabled ?? false;
 
@@ -93,7 +96,7 @@ const MyVehicles = () => {
 
   const resetForm = () => {
     setVin(""); setBrand(""); setModel(""); setYear(""); setEngine(""); setLicensePlate(""); setCurrentMileage("");
-    setEditVehicle(null);
+    setEditVehicle(null); setVinDecodeResult(null);
   };
 
   const openAdd = () => { resetForm(); setDialogOpen(true); };
@@ -327,6 +330,11 @@ const MyVehicles = () => {
                       )}
                     </div>
                     {v.vin && <p className="text-[10px] text-muted-foreground mt-1">VIN: {v.vin}</p>}
+                    {v.vin && v.vin.length >= 11 && (
+                      <div className="mt-2">
+                        <VINDetailPanel vin={v.vin} compact />
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-1">
                     {!v.current_mileage && (
@@ -418,6 +426,21 @@ const MyVehicles = () => {
                 <Input type="number" value={currentMileage} onChange={e => setCurrentMileage(e.target.value)} placeholder="50000" />
               </div>
             </div>
+            {/* AI VIN Detail Panel */}
+            {vin && vin.length >= 11 && (
+              <VINDetailPanel
+                vin={vin}
+                data={vinDecodeResult}
+                compact
+                onDecoded={(basic) => {
+                  if (basic.brand) setBrand(basic.brand);
+                  if (basic.model) setModel(basic.model);
+                  if (basic.year) setYear(basic.year);
+                  const ep = [basic.engine_displacement, basic.fuel_type].filter(Boolean);
+                  if (ep.length) setEngine(ep.join(" "));
+                }}
+              />
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>Zrušit</Button>
