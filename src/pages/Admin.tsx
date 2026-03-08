@@ -541,6 +541,7 @@ const Admin = () => {
 
           <TabsContent value="prices">
             <div className="mt-2 space-y-4">
+              <AdminPriceSyncStats />
               <AdminBulkPriceSync />
               <AdminPriceManagement />
             </div>
