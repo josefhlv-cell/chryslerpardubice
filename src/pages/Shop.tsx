@@ -337,12 +337,15 @@ const Shop = () => {
                     searching={searching}
                     searchMode={searchMode}
                     onModeChange={(mode) => { 
+                      cancelPrevious(); // Abort any in-flight requests
                       setSearchMode(mode); 
                       setResults(null); 
                       setPage(0); 
                       setCategory(""); 
                       setSubCategory(""); 
-                      // Clear query when switching to EPC/Vehicle mode to avoid stale searches
+                      setSearching(false);
+                      setPriceFetching(false);
+                      // Clear query when switching to EPC/Vehicle mode
                       if (mode === "epc" || mode === "vehicle") {
                         setQuery("");
                       }
