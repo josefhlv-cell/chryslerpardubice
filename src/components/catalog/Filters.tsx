@@ -26,12 +26,13 @@ export const catalogTree: Record<string, Record<string, string[]>> = {
 };
 
 export const partCategories = [
-  "Motor", "Převodovka", "Brzdy", "Řízení", "Podvozek", "Elektroinstalace",
+  "Motor", "Převodovka", "Brzdy", "Chlazení", "Řízení", "Podvozek", "Elektroinstalace",
   "Karoserie", "Interiér", "Klimatizace", "Výfuk", "Filtry", "Oleje a kapaliny",
 ];
 
 export const subCategoriesMap: Record<string, string[]> = {
   Motor: ["Blok motoru", "Hlava válců", "Rozvodový mechanismus", "Klikový hřídel", "Písty a ojnice", "Těsnění", "Olejové čerpadlo", "Vodní čerpadlo", "Turbo"],
+  Chlazení: ["Chladič", "Vodní čerpadlo", "Termostat", "Hadice chladicího systému", "Ventilátor", "Expanzní nádobka"],
   Převodovka: ["Automatická převodovka", "Manuální převodovka", "Spojka", "Diferenciál", "Hřídel"],
   Brzdy: ["Brzdové destičky", "Brzdové kotouče", "Brzdové třmeny", "Hadice", "ABS systém"],
   Řízení: ["Řízení s posilovačem", "Tyče řízení", "Kulové čepy", "Čerpadlo"],
