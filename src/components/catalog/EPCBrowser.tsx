@@ -1,18 +1,21 @@
 /**
  * EPCBrowser Component
- * Shows EPC categories for selected vehicle and drills down to parts with live prices.
- * Includes interactive SVG diagrams generated via AI with caching.
- * Features: lazy loading, pagination (20 items), diagram caching.
+ * Shows EPC categories as expandable tree (main → subcategory), drills down to parts with live prices.
+ * Includes interactive SVG diagrams with data-oem + data-name attributes.
+ * Features: lazy loading, pagination, diagram caching, auto-scrape fallback.
  */
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, LayoutGrid, ChevronLeft, Sparkles } from "lucide-react";
+import {
+  Loader2, ChevronRight, ChevronDown, ArrowLeft, Package, ExternalLink,
+  Info, RefreshCw, LayoutGrid, ChevronLeft, Sparkles, Download,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
-  scrape7zap, generateEPCCatalog,
+  scrape7zap, generateEPCCatalog, searchParts,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 import { toast } from "sonner";
@@ -46,11 +49,25 @@ const formatPrice = (price: number) =>
 // Diagram SVG cache (in-memory per session)
 const diagramCache = new Map<string, string>();
 
+/** Build category tree: { main: [subcategories] } */
+function buildCategoryTree(categories: EPCCategory[]): Map<string, string[]> {
+  const tree = new Map<string, string[]>();
+  for (const cat of categories) {
+    if (!tree.has(cat.category)) tree.set(cat.category, []);
+    if (cat.subcategory && !tree.get(cat.category)!.includes(cat.subcategory)) {
+      tree.get(cat.category)!.push(cat.subcategory);
+    }
+  }
+  return tree;
+}
+
 const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps) => {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<EPCCategory[]>([]);
-  const [categoryNames, setCategoryNames] = useState<string[]>([]);
+  const [categoryTree, setCategoryTree] = useState<Map<string, string[]>>(new Map());
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
   const [parts, setParts] = useState<EPCPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -60,6 +77,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [partsPage, setPartsPage] = useState(0);
   const [generating, setGenerating] = useState(false);
+  const [scrapingOem, setScrapingOem] = useState<string | null>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
 
   // Paginated parts
@@ -75,23 +93,32 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setLoading(true);
     setHasSearched(true);
     setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setExpandedCategory(null);
     setParts([]);
     setPriceMap(() => new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
       .then((cats) => {
         setCategories(cats);
-        setCategoryNames(getUniqueCategoryNames(cats));
+        setCategoryTree(buildCategoryTree(cats));
       })
       .finally(() => setLoading(false));
   }, [brand, model, engine, year]);
 
-  // Load parts when category selected
+  // Load parts when category/subcategory selected
   useEffect(() => {
-    if (!selectedCategory) { setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0); return; }
+    if (!selectedCategory) {
+      setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
+      return;
+    }
     setPartsLoading(true);
     setPartsPage(0);
-    const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
+
+    const catIds = categories
+      .filter((c) => c.category === selectedCategory && (!selectedSubcategory || c.subcategory === selectedSubcategory))
+      .map((c) => c.id);
+
     getEPCParts(catIds)
       .then((loadedParts) => {
         setParts(loadedParts);
@@ -109,7 +136,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         }
       })
       .finally(() => setPartsLoading(false));
-  }, [selectedCategory, categories]);
+  }, [selectedCategory, selectedSubcategory, categories]);
 
   const handleRefreshPrices = () => {
     const oems = parts.map(p => p.oem_number).filter(Boolean) as string[];
@@ -120,24 +147,28 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .finally(() => setPricesLoading(false));
   };
 
-  const attachDiagramHandlers = () => {
+  const attachDiagramHandlers = useCallback(() => {
     setTimeout(() => {
-      if (diagramRef.current) {
-        const clickables = diagramRef.current.querySelectorAll('[data-oem]');
-        clickables.forEach(el => {
-          el.addEventListener('click', () => {
-            const oem = el.getAttribute('data-oem');
-            if (oem) onSearchOem(oem);
-          });
+      if (!diagramRef.current) return;
+      const clickables = diagramRef.current.querySelectorAll('[data-oem]');
+      clickables.forEach(el => {
+        (el as HTMLElement).style.cursor = 'pointer';
+        el.addEventListener('click', () => {
+          const oem = el.getAttribute('data-oem');
+          const name = el.getAttribute('data-name') || el.getAttribute('data-part-name');
+          if (oem) {
+            onSearchOem(oem);
+            if (name) toast.info(`${name} (${oem})`);
+          }
         });
-      }
+      });
     }, 100);
-  };
+  }, [onSearchOem]);
 
   const handleLoadDiagram = async () => {
     if (!selectedCategory || !brand) return;
     const cacheKey = `${brand}-${model}-${selectedCategory}`;
-    
+
     if (diagramCache.has(cacheKey)) {
       setDiagramSvg(diagramCache.get(cacheKey)!);
       attachDiagramHandlers();
@@ -150,7 +181,10 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
       const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
       if (svg) {
-        const sanitized = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_ATTR: ['data-oem', 'data-part-name'] });
+        const sanitized = DOMPurify.sanitize(svg, {
+          USE_PROFILES: { svg: true, svgFilters: true },
+          ADD_ATTR: ['data-oem', 'data-part-name', 'data-name'],
+        });
         diagramCache.set(cacheKey, sanitized);
         setDiagramSvg(sanitized);
         attachDiagramHandlers();
@@ -160,6 +194,71 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       toast.error("Nepodařilo se načíst nákres");
     }
     setDiagramLoading(false);
+  };
+
+  /** Scrape missing OEM and reload */
+  const handleScrapeMissing = async (oem: string) => {
+    setScrapingOem(oem);
+    try {
+      // Try scraping via 7zap first
+      await scrape7zap(brand, model, year || undefined);
+      // Check if part now exists
+      const result = await searchParts(oem, 0);
+      if (result.results.length > 0) {
+        onSearchOem(oem);
+        toast.success("Díl nalezen po aktualizaci katalogu");
+      } else {
+        toast.info("Díl zatím nebyl nalezen – zkuste později");
+      }
+    } catch {
+      toast.error("Nepodařilo se načíst data");
+    }
+    setScrapingOem(null);
+  };
+
+  const handleGenerateCatalog = async () => {
+    setGenerating(true);
+    try {
+      toast.info("Generuji AI katalog – může trvat 30-60s...");
+      const result = await generateEPCCatalog(brand, model, year ? parseInt(year) : undefined, engine || undefined);
+      toast.success(`Katalog vygenerován: ${result.stats.categories} kategorií, ${result.stats.parts} dílů`);
+      // Reload categories
+      const cats = await getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined);
+      setCategories(cats);
+      setCategoryTree(buildCategoryTree(cats));
+    } catch (e: any) {
+      toast.error(e.message || "Nepodařilo se vygenerovat katalog");
+    }
+    setGenerating(false);
+  };
+
+  const handleCategoryClick = (name: string) => {
+    const subs = categoryTree.get(name) || [];
+    if (subs.length === 0) {
+      // No subcategories — go directly to parts
+      setSelectedCategory(name);
+      setSelectedSubcategory(null);
+      setExpandedCategory(null);
+    } else {
+      // Toggle expand
+      setExpandedCategory(expandedCategory === name ? null : name);
+    }
+  };
+
+  const handleSubcategoryClick = (main: string, sub: string) => {
+    setSelectedCategory(main);
+    setSelectedSubcategory(sub);
+  };
+
+  const handleBack = () => {
+    if (selectedSubcategory) {
+      setSelectedSubcategory(null);
+      setSelectedCategory(null);
+      setDiagramSvg(null);
+    } else if (selectedCategory) {
+      setSelectedCategory(null);
+      setDiagramSvg(null);
+    }
   };
 
   if (!brand) return null;
@@ -173,23 +272,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     );
   }
 
-  const handleGenerateCatalog = async () => {
-    setGenerating(true);
-    try {
-      toast.info("Generuji AI katalog – může trvat 30-60s...");
-      const result = await generateEPCCatalog(brand, model, year ? parseInt(year) : undefined, engine || undefined);
-      toast.success(`Katalog vygenerován: ${result.stats.categories} kategorií, ${result.stats.parts} dílů`);
-      // Reload categories
-      const cats = await getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined);
-      setCategories(cats);
-      setCategoryNames(getUniqueCategoryNames(cats));
-    } catch (e: any) {
-      toast.error(e.message || "Nepodařilo se vygenerovat katalog");
-    }
-    setGenerating(false);
-  };
-
-  if (hasSearched && categoryNames.length === 0) {
+  if (hasSearched && categoryTree.size === 0) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
         className="flex flex-col items-center justify-center py-16 gap-3">
@@ -200,11 +283,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         <p className="text-xs text-muted-foreground max-w-sm text-center">
           EPC katalog pro {brand} {model} {engine} se průběžně rozšiřuje.
         </p>
-        <Button
-          onClick={handleGenerateCatalog}
-          disabled={generating}
-          className="mt-2"
-        >
+        <Button onClick={handleGenerateCatalog} disabled={generating} className="mt-2">
           {generating ? (
             <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generuji katalog…</>
           ) : (
@@ -216,19 +295,20 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   }
 
   const pricedCount = parts.filter(p => p.oem_number && priceMap.has(p.oem_number)).length;
+  const breadcrumb = [selectedCategory, selectedSubcategory].filter(Boolean).join(" › ");
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
         {selectedCategory && (
-          <Button variant="ghost" size="sm" onClick={() => setSelectedCategory(null)} className="h-8 px-2">
+          <Button variant="ghost" size="sm" onClick={handleBack} className="h-8 px-2">
             <ArrowLeft className="w-4 h-4" />
           </Button>
         )}
         <div>
           <p className="text-sm font-semibold">
-            {selectedCategory ? selectedCategory : "EPC kategorie"}
+            {breadcrumb || "EPC kategorie"}
           </p>
           <p className="text-xs text-muted-foreground">
             {brand} {model} {engine} {year ? `· ${year}` : ""}
@@ -262,24 +342,67 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       </div>
 
       <AnimatePresence mode="wait">
-        {/* Category grid */}
+        {/* Category tree */}
         {!selectedCategory && (
           <motion.div key="categories" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-            {categoryNames.map((name) => {
-              const count = categories.filter((c) => c.category === name).length;
-              return (
-                <button key={name} onClick={() => setSelectedCategory(name)}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group">
-                  <span className="text-2xl">{categoryIcons[name] || "📦"}</span>
+            className="space-y-1">
+            {[...categoryTree.entries()].map(([name, subs]) => (
+              <div key={name}>
+                {/* Main category row */}
+                <button
+                  onClick={() => handleCategoryClick(name)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-primary/5 transition-all text-left group"
+                >
+                  <span className="text-xl">{categoryIcons[name] || "📦"}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">{name}</p>
-                    <p className="text-[10px] text-muted-foreground">{count} podkat.</p>
+                    <p className="text-xs font-medium group-hover:text-primary transition-colors">{name}</p>
+                    {subs.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground">{subs.length} podkategorií</p>
+                    )}
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+                  {subs.length > 0 ? (
+                    expandedCategory === name
+                      ? <ChevronDown className="w-4 h-4 text-primary shrink-0 transition-transform" />
+                      : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+                  )}
                 </button>
-              );
-            })}
+
+                {/* Expandable subcategories */}
+                <AnimatePresence>
+                  {expandedCategory === name && subs.length > 0 && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="ml-8 mt-1 mb-2 space-y-0.5">
+                        {/* "All" option */}
+                        <button
+                          onClick={() => { setSelectedCategory(name); setSelectedSubcategory(null); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-left hover:bg-primary/5 transition-colors"
+                        >
+                          <Package className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-xs font-medium text-primary">Vše v „{name}"</span>
+                        </button>
+                        {subs.map((sub) => (
+                          <button
+                            key={sub}
+                            onClick={() => handleSubcategoryClick(name, sub)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-left hover:bg-muted/50 transition-colors group"
+                          >
+                            <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                            <span className="text-xs group-hover:text-primary transition-colors">{sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
           </motion.div>
         )}
 
@@ -289,7 +412,9 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             {/* Interactive diagram */}
             {diagramSvg && (
               <div className="mb-4 rounded-xl border border-border bg-card p-3 overflow-hidden">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Interaktivní nákres – klikněte na číslo dílu</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Interaktivní nákres – klikněte na díl
+                </p>
                 <div
                   ref={diagramRef}
                   className="w-full overflow-x-auto [&_svg]:w-full [&_svg]:h-auto [&_[data-oem]]:cursor-pointer [&_[data-oem]:hover]:opacity-80"
@@ -297,6 +422,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                 />
               </div>
             )}
+
             {partsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -304,27 +430,36 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             ) : parts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Package className="w-8 h-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Pro kategorii „{selectedCategory}" zatím nejsou díly.</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs"
-                  onClick={async () => {
-                    try {
-                      toast.info("Hledám díly v externím katalogu...");
-                      await scrape7zap(brand, model, year || undefined);
-                      toast.success("Díly nalezeny – načítám znovu");
-                      // Reload parts
-                      const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
-                      const reloaded = await getEPCParts(catIds);
-                      setParts(reloaded);
-                    } catch {
-                      toast.error("Nepodařilo se načíst díly z externího katalogu");
-                    }
-                  }}
-                >
-                  <RefreshCw className="w-3 h-3 mr-1" /> Načíst z externího katalogu
-                </Button>
+                <p className="text-sm text-muted-foreground">Pro kategorii „{breadcrumb}" zatím nejsou díly.</p>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm" variant="outline" className="text-xs"
+                    onClick={async () => {
+                      try {
+                        toast.info("Hledám díly v externím katalogu...");
+                        await scrape7zap(brand, model, year || undefined);
+                        toast.success("Díly nalezeny – načítám znovu");
+                        const catIds = categories
+                          .filter((c) => c.category === selectedCategory && (!selectedSubcategory || c.subcategory === selectedSubcategory))
+                          .map((c) => c.id);
+                        const reloaded = await getEPCParts(catIds);
+                        setParts(reloaded);
+                      } catch {
+                        toast.error("Nepodařilo se načíst díly z externího katalogu");
+                      }
+                    }}
+                  >
+                    <Download className="w-3 h-3 mr-1" /> Načíst z externího katalogu
+                  </Button>
+                  <Button
+                    size="sm" className="text-xs"
+                    onClick={handleGenerateCatalog}
+                    disabled={generating}
+                  >
+                    {generating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
+                    AI generátor
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-1">
@@ -337,6 +472,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                 </div>
                 {paginatedParts.map((part) => {
                   const price = part.oem_number ? priceMap.get(part.oem_number) : undefined;
+                  const isScraping = scrapingOem === part.oem_number;
                   return (
                     <div key={part.id}
                       className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50">
@@ -372,13 +508,22 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                         )}
                       </div>
                       <div className="w-16 flex justify-center">
-                        {part.oem_number && (
+                        {part.oem_number && !price && !pricesLoading ? (
+                          <Button
+                            variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
+                            disabled={isScraping}
+                            onClick={() => handleScrapeMissing(part.oem_number!)}
+                          >
+                            {isScraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
+                            {isScraping ? "" : "Najít"}
+                          </Button>
+                        ) : part.oem_number ? (
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
                             onClick={() => onSearchOem(part.oem_number!)}>
                             <ExternalLink className="w-3 h-3 mr-1" />
                             Detail
                           </Button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   );
