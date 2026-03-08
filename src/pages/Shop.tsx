@@ -531,8 +531,10 @@ const Shop = () => {
               </AnimatePresence>
             )}
 
-            {/* EPC Browser — vehicle-based catalog */}
-            {partType === "new" && searchMode === "epc" && brand && !searching && (
+            {/* EPC Browser — vehicle-based catalog (EPC mode or Vehicle mode fallback) */}
+            {partType === "new" && brand && !searching && (
+              (searchMode === "epc" || (searchMode === "vehicle" && (!results || results.length === 0) && !query && !category && !subCategory))
+            ) && (
               <EPCBrowser
                 brand={brand}
                 model={model}
