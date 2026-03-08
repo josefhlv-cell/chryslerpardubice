@@ -240,21 +240,38 @@ export async function searchByCategory(
 ): Promise<SearchResult> {
   const allResults: PartResult[] = [];
 
-  const [pnRes, pcRes] = await Promise.all([
-    supabase
-      .from("parts_new")
-      .select(
-        "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source",
-        { count: "exact" }
-      )
-      .ilike("name", `%${searchTerm}%`)
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
-    supabase
-      .from("parts_catalog")
-      .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
-      .or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`)
-      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1),
-  ]);
+  // Build parts_new query with vehicle filters
+  let pnQuery = supabase
+    .from("parts_new")
+    .select(
+      "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source",
+      { count: "exact" }
+    );
+
+  if (searchTerm) {
+    pnQuery = pnQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+  }
+  if (filters.brand) {
+    pnQuery = pnQuery.or(`compatible_vehicles.ilike.%${filters.brand}%,family.ilike.%${filters.brand}%`);
+  }
+
+  pnQuery = pnQuery.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+  // Build parts_catalog query with brand filter
+  let pcQuery = supabase
+    .from("parts_catalog")
+    .select("id, name, oem_code, price, brand, category, available", { count: "exact" });
+
+  if (searchTerm) {
+    pcQuery = pcQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+  }
+  if (filters.brand) {
+    pcQuery = pcQuery.ilike("brand", `%${filters.brand}%`);
+  }
+
+  pcQuery = pcQuery.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+  const [pnRes, pcRes] = await Promise.all([pnQuery, pcQuery]);
 
   if (pnRes.data) allResults.push(...pnRes.data.map((p) => mapToPartResult(p, "mopar")));
   if (pcRes.data) {
