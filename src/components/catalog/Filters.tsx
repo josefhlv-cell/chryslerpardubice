@@ -54,6 +54,11 @@ interface SourceStats {
   count: number;
 }
 
+interface BrandStats {
+  brand: string;
+  count: number;
+}
+
 interface FiltersProps {
   searchMode: SearchMode;
   brand: string;
