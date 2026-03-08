@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Calendar, Fuel, Gauge } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Search, Calendar, Fuel, Gauge, ArrowDownUp, Import } from "lucide-react";
 import { fetchVehicles } from "@/lib/api";
 
 const Vehicles = () => {
@@ -21,7 +22,13 @@ const Vehicles = () => {
     <div className="min-h-screen pb-20">
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="font-display text-2xl font-bold mb-3">Vozy k prodeji</h1>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="font-display text-2xl font-bold">Vozy k prodeji</h1>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => navigate("/vehicle-offer")}>
+              <ArrowDownUp className="w-3.5 h-3.5" />
+              Výkup / Dovoz
+            </Button>
+          </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
