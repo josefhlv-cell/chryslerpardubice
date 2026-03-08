@@ -197,7 +197,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
   const handleLoadDiagram = async () => {
     if (!selectedCategory || !brand) return;
-    const cacheKey = `${brand}-${model}-${selectedCategory}`;
+    const cacheKey = `${brand}-${model}-${selectedCategory}-${selectedSubcategory || ''}`;
 
     if (diagramCache.has(cacheKey)) {
       setDiagramSvg(diagramCache.get(cacheKey)!);

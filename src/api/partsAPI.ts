@@ -714,36 +714,36 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
 export async function getEPCDiagram(
   vehicle: string,
   category: string,
-  parts: Array<{ oem_number?: string; part_name?: string }>
+  parts: Array<{ oem_number?: string; part_name?: string }>,
+  subcategory?: string
 ): Promise<string | null> {
-  const cacheId = `${vehicle}_${category}`.replace(/\s+/g, '_');
+  const cacheId = `${vehicle}_${category}_${subcategory || ''}`.replace(/\s+/g, '_');
 
   // 0. Check localStorage cache (permanent)
   const memoryCached = cacheGet<string>('diagram', cacheId);
   if (memoryCached) return memoryCached;
 
-  // 1. Check DB cache
+  // 1. Check epc_diagrams table
   const [brand, ...modelParts] = vehicle.split(" ");
   const model = modelParts.join(" ");
-  
+
   const { data: cached } = await supabase
-    .from("epc_categories")
-    .select("diagram_svg")
+    .from("epc_diagrams" as any)
+    .select("svg_content")
     .eq("brand", brand)
     .eq("model", model)
     .eq("category", category)
-    .not("diagram_svg", "is", null)
-    .limit(1)
+    .eq("subcategory", subcategory || '')
     .maybeSingle();
 
-  if (cached?.diagram_svg) {
-    cacheSet('diagram', cacheId, cached.diagram_svg);
-    return cached.diagram_svg;
+  if ((cached as any)?.svg_content) {
+    cacheSet('diagram', cacheId, (cached as any).svg_content);
+    return (cached as any).svg_content;
   }
 
-  // 2. Generate via AI
+  // 2. Generate via AI (edge function also saves to epc_diagrams)
   const { data, error } = await supabase.functions.invoke("epc-diagram", {
-    body: { vehicle, category, parts },
+    body: { vehicle, category, subcategory, parts },
   });
   if (error || !data?.success) return null;
 

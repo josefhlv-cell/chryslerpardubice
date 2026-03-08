@@ -10,18 +10,41 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { vehicle, category, parts } = body;
+    const { vehicle, category, subcategory, parts } = body;
 
     if (!vehicle || !category) {
       return jsonResponse({ success: false, error: 'vehicle and category required' }, 400);
     }
 
+    // Extract brand/model from vehicle string
+    const [brand, ...modelParts] = vehicle.split(' ');
+    const model = modelParts.join(' ');
+
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+
+    // 1. Check epc_diagrams table first
+    const { data: existing } = await supabase
+      .from('epc_diagrams')
+      .select('svg_content')
+      .eq('brand', brand)
+      .eq('model', model)
+      .eq('category', category)
+      .eq('subcategory', subcategory || '')
+      .maybeSingle();
+
+    if (existing?.svg_content) {
+      return jsonResponse({ success: true, svg: existing.svg_content, vehicle, category, cached: true });
+    }
+
+    // 2. Generate via AI
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
       return jsonResponse({ success: false, error: 'AI not configured' }, 500);
     }
 
-    // Build parts list for prompt
     const partsDesc = (parts || [])
       .slice(0, 30)
       .map((p: any, i: number) => `${i + 1}. ${p.oem_number || '?'} – ${p.part_name || 'Unknown'}`)
@@ -30,7 +53,7 @@ Deno.serve(async (req) => {
     const aiPrompt = `Generate an SVG technical diagram for an automotive parts catalog.
 
 Vehicle: ${vehicle}
-Category: ${category}
+Category: ${category}${subcategory ? `\nSubcategory: ${subcategory}` : ''}
 Parts to position:
 ${partsDesc || 'Generate typical parts for this category'}
 
@@ -71,37 +94,30 @@ Requirements:
     const aiData = await aiResp.json();
     const content = aiData.choices?.[0]?.message?.content || '';
 
-    // Extract SVG from response
     const svgMatch = content.match(/<svg[\s\S]*<\/svg>/i);
     if (!svgMatch) {
       return jsonResponse({ success: false, error: 'No SVG generated', raw: content.substring(0, 500) });
     }
 
     let svg = svgMatch[0];
-    // Security: strip any script tags
     svg = svg.replace(/<script[\s\S]*?<\/script>/gi, '');
 
-    // Optionally save to DB
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Count parts in SVG
+    const partsCount = (svg.match(/data-oem=/g) || []).length;
 
-      // Extract brand/model from vehicle string
-      const [brand, ...modelParts] = vehicle.split(' ');
-      const model = modelParts.join(' ');
+    // 3. Save to epc_diagrams table (upsert)
+    await supabase
+      .from('epc_diagrams')
+      .upsert({
+        brand,
+        model,
+        category,
+        subcategory: subcategory || null,
+        svg_content: svg,
+        parts_count: partsCount,
+      }, { onConflict: 'brand,model,category,subcategory' });
 
-      // Update diagram_svg for matching categories
-      await supabase
-        .from('epc_categories')
-        .update({ diagram_svg: svg })
-        .eq('brand', brand)
-        .eq('model', model)
-        .eq('category', category);
-    }
-
-    return jsonResponse({ success: true, svg, vehicle, category });
+    return jsonResponse({ success: true, svg, vehicle, category, parts_count: partsCount });
   } catch (error) {
     console.error('EPC diagram error:', error);
     return jsonResponse({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
