@@ -164,7 +164,7 @@ const AdminBulkPriceSync = () => {
 
           {(running || processed > 0) && (
             <>
-              <Progress value={progressPercent} className="h-3" />
+              <Progress value={progressPercent} />
               <div className="flex flex-wrap gap-3 text-xs">
                 <span>📊 {processed}/{totalParts} ({progressPercent}%)</span>
                 <span className="text-green-600">✅ Aktualizováno: {updated}</span>
