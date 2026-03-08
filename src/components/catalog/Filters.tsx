@@ -1,14 +1,17 @@
 /**
  * Filters Component
  * Sidebar / sheet filters for brand, model, engine, category,
- * price range, availability and manufacturer.
+ * price range, availability, catalog source and manufacturer.
  */
 
+import { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Search, Loader2, RotateCcw } from "lucide-react";
+import { Search, Loader2, RotateCcw, Database } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { sourceLabel } from "@/api/partsAPI";
 import type { SearchMode } from "./SearchBar";
 import type { SearchFilters } from "@/api/partsAPI";
 
