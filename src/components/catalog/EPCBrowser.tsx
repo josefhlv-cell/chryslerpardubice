@@ -379,10 +379,16 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         </div>
         {selectedCategory && (
           <div className="ml-auto flex items-center gap-2">
+            {diagramLoading && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Nákres…</span>
+              </div>
+            )}
             {pricesLoading && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Načítám ceny…</span>
+                <span>Ceny…</span>
               </div>
             )}
             {!pricesLoading && pricedCount > 0 && (
