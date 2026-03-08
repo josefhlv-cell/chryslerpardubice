@@ -260,7 +260,7 @@ const AiMechanic = () => {
             <Card className="border-primary/30">
               <CardContent className="p-4 text-center">
                 <p className="text-xs font-semibold text-primary mb-1">Tonda</p>
-                <Bot className="w-10 h-10 mx-auto mb-2 text-primary" />
+                <TondaAvatar size="lg" className="mx-auto mb-2" />
                 <h2 className="font-display font-bold text-lg">Ahoj, jsem Tonda!</h2>
                 <p className="text-xs text-muted-foreground mt-1">
                   Váš AI mechanik. Popište problém, přiložte fotku nebo zvuk – analyzuji příčinu a doporučím řešení.
