@@ -220,6 +220,17 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         {/* Parts list */}
         {selectedCategory && (
           <motion.div key="parts" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            {/* Interactive diagram */}
+            {diagramSvg && (
+              <div className="mb-4 rounded-xl border border-border bg-card p-3 overflow-hidden">
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Interaktivní nákres – klikněte na číslo dílu</p>
+                <div
+                  ref={diagramRef}
+                  className="w-full overflow-x-auto [&_svg]:w-full [&_svg]:h-auto [&_[data-oem]]:cursor-pointer [&_[data-oem]:hover]:opacity-80"
+                  dangerouslySetInnerHTML={{ __html: diagramSvg }}
+                />
+              </div>
+            )}
             {partsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
