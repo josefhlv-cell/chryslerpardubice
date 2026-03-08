@@ -56,6 +56,7 @@ export const sourceLabel: Record<string, string> = {
   autokelly: "AutoKelly",
   intercars: "InterCars",
   csv: "Lokální katalog",
+  epc: "EPC katalog",
 };
 
 export const sourcePriority: Record<string, number> = {
