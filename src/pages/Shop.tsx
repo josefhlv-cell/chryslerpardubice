@@ -238,6 +238,7 @@ const Shop = () => {
         part_name: part.name, oem_number: part.oem_number,
         catalog_source: part.catalog_source || null,
       });
+      supabase.functions.invoke("notify-admin", { body: { type: "order", record: { part_name: part.name, oem_number: part.oem_number, order_type: "used", quantity: 1, catalog_source: part.catalog_source || null } } }).catch(() => {});
       toast.success("Poptávka odeslána!");
     } catch (err: any) { toast.error(err.message); }
   };
