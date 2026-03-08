@@ -344,36 +344,37 @@ function extractPrices(html: string): number[] {
   const prices: number[] = [];
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  for (const line of html.split('\n')) {
-    if (line.includes(';')) {
-      for (const part of line.split(';')) {
-        const cleaned = part.replace(/<[^>]*>/g, '').replace(/\s/g, '').replace(',', '.');
-        const num = parseFloat(cleaned);
-        if (num > 10 && num < 1000000 && !isNaN(num)) prices.push(num);
-      }
-    }
+  // Primary: "X XXX.XX Kč" pattern (handles space-separated thousands)
+  const kcPattern = /(\d[\d\s]*[,.]\d{2})\s*Kč/gi;
+  let m;
+  while ((m = kcPattern.exec(text)) !== null) {
+    const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+    if (p > 10 && p < 1000000) prices.push(p);
   }
 
-  const textPatterns = [
-    /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+  // Secondary: "Cena bez DPH" / "Cena s DPH" patterns
+  const dphPatterns = [
+    /Cena\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /Cena\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /MOC\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
-    /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /bez\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
-    /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
+    /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
   ];
 
-  for (const pat of textPatterns) {
-    let m;
-    while ((m = pat.exec(text)) !== null) {
-      const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+  for (const pat of dphPatterns) {
+    let m2;
+    while ((m2 = pat.exec(text)) !== null) {
+      const p = parseFloat(m2[1].replace(/\s/g, '').replace(',', '.'));
       if (p > 10 && p < 1000000) prices.push(p);
     }
   }
 
+  // Table cell prices
   const tdPattern = /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi;
-  let m;
-  while ((m = tdPattern.exec(html)) !== null) {
-    const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+  let m3;
+  while ((m3 = tdPattern.exec(html)) !== null) {
+    const p = parseFloat(m3[1].replace(/\s/g, '').replace(',', '.'));
     if (p > 10 && p < 1000000) prices.push(p);
   }
 
