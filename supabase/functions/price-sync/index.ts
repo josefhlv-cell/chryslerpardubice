@@ -14,15 +14,11 @@ Deno.serve(async (req) => {
     const { partNumbers, mode, batchSize = 5, offset = 0, debugMode = false } = await req.json();
     
     const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
-    const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!CATALOG_PASS || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required secrets (CATALOG_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
-    }
-    if (!FIRECRAWL_API_KEY) {
-      throw new Error('Missing FIRECRAWL_API_KEY');
+      throw new Error('Missing required secrets');
     }
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -45,11 +41,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Step 1: Login and get session cookie (direct HTTP - no Firecrawl needed)
+    const session = await catalogLogin(CATALOG_PASS, debugMode);
+    
+    if (!session.success) {
+      return new Response(JSON.stringify({ 
+        error: 'Login to catalog failed', 
+        debug: debugMode ? session.debug : undefined 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const results: any[] = [];
     let updated = 0, errors = 0, skipped = 0;
 
     for (const partNumber of oemNumbers.slice(0, batchSize)) {
-      // Check cache / freshness
       const { data: cached } = await supabase
         .from('parts_new')
         .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
@@ -72,8 +80,8 @@ Deno.serve(async (req) => {
       }
 
       try {
-        console.log(`Searching price for ${partNumber} via Firecrawl...`);
-        const searchResult = await firecrawlSearch(FIRECRAWL_API_KEY, CATALOG_PASS, partNumber, debugMode);
+        console.log(`Searching price for ${partNumber}...`);
+        const searchResult = await catalogSearch(session.cookies, partNumber, debugMode);
 
         if (debugMode) {
           results.push({ oem_number: partNumber, debug: true, ...searchResult.debug });
@@ -96,8 +104,7 @@ Deno.serve(async (req) => {
         errors++;
       }
 
-      // Rate limit between parts
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     return new Response(JSON.stringify({
@@ -116,130 +123,148 @@ Deno.serve(async (req) => {
 });
 
 /**
- * Use Firecrawl with NATIVE browser actions (type, click, wait)
- * to maintain PHP session cookies through the login → search flow.
+ * Login to the catalog via direct HTTP POST (no browser needed).
+ * PHP sessions use cookies - we capture Set-Cookie headers.
  */
-async function firecrawlSearch(
-  apiKey: string,
-  password: string,
-  searchCode: string,
-  debugMode: boolean
-): Promise<{ prices: number[]; debug: any }> {
-
-  const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-    method: 'POST',
+async function catalogLogin(password: string, debugMode: boolean): Promise<{
+  success: boolean;
+  cookies: string;
+  debug?: any;
+}> {
+  // First GET the page to get initial session cookie
+  const getResp = await fetch(CATALOG_URL, {
+    redirect: 'manual',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     },
-    body: JSON.stringify({
-      url: CATALOG_URL,
-      formats: ['html'],
-      timeout: 60000,
-      actions: [
-        { type: 'wait', milliseconds: 2000 },
-        {
-          type: 'executeJavascript',
-          script: `
-            (async function() {
-              try {
-                // Step 1: Login via POST
-                var loginResp = await fetch('https://www.vernostsevyplaci.cz/cnd/', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                  body: 'password=${password}&submit-password=P%C5%99ihl%C3%A1sit',
-                  credentials: 'include',
-                  redirect: 'follow'
-                });
-                var loginHtml = await loginResp.text();
-                
-                // Debug: store login page info
-                document.body.setAttribute('data-login-len', loginHtml.length.toString());
-                document.body.setAttribute('data-login-url', loginResp.url);
-                document.body.setAttribute('data-login-status', loginResp.status.toString());
-                
-                // Parse login page to find form fields
-                var parser = new DOMParser();
-                var loginDoc = parser.parseFromString(loginHtml, 'text/html');
-                var allInputs = loginDoc.querySelectorAll('input');
-                var inputInfo = [];
-                allInputs.forEach(function(inp) {
-                  inputInfo.push(inp.name + ':' + inp.type + ':' + (inp.placeholder || '').substring(0,20));
-                });
-                document.body.setAttribute('data-inputs', inputInfo.join('|'));
-                
-                // Check if we're still on login page
-                var hasPasswordField = loginDoc.querySelector('input[name="password"]');
-                document.body.setAttribute('data-still-login', hasPasswordField ? 'yes' : 'no');
-                
-                if (hasPasswordField) {
-                  // Login failed - store snippet of page
-                  document.body.setAttribute('data-login-snippet', btoa(unescape(encodeURIComponent(loginHtml.substring(0, 2000)))));
-                  return;
-                }
-                
-                // Step 2: Search - try field name "search" from screenshots
-                var searchBody = 'search=${searchCode}&submit-search=Vyhledat';
-                var searchResp = await fetch('https://www.vernostsevyplaci.cz/cnd/', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                  body: searchBody,
-                  credentials: 'include',
-                  redirect: 'follow'
-                });
-                var searchHtml = await searchResp.text();
-                
-                document.body.setAttribute('data-search-len', searchHtml.length.toString());
-                document.body.setAttribute('data-search-status', searchResp.status.toString());
-                
-                // Store search results (base64 encoded)
-                var searchText = new DOMParser().parseFromString(searchHtml, 'text/html').body.textContent || '';
-                document.body.setAttribute('data-search-text', btoa(unescape(encodeURIComponent(searchText.substring(0, 5000)))));
-                document.body.setAttribute('data-search-html', btoa(unescape(encodeURIComponent(searchHtml.substring(0, 10000)))));
-                
-              } catch(e) {
-                document.body.setAttribute('data-error', e.message + ' ' + e.stack);
-              }
-            })();
-          `,
-        },
-        { type: 'wait', milliseconds: 12000 },
-      ],
-    }),
   });
-
-  const data = await resp.json();
-  if (!resp.ok) {
-    console.error('Firecrawl error:', JSON.stringify(data).substring(0, 500));
-    throw new Error(`Firecrawl API error: ${resp.status}`);
-  }
-
-  const html = data.data?.html || data.html || '';
-  const markdown = data.data?.markdown || data.markdown || '';
-  const screenshot = data.data?.screenshot || '';
   
-  // Extract prices from the final page HTML
-  const prices = extractPrices(html, markdown);
-
+  const initialCookies = extractCookies(getResp.headers);
+  const getHtml = await getResp.text();
+  
+  // POST login
+  const loginResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Cookie': initialCookies,
+      'Referer': CATALOG_URL,
+      'Origin': 'https://www.vernostsevyplaci.cz',
+    },
+    body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
+  });
+  
+  // Merge cookies from login response
+  const loginCookies = mergeCookies(initialCookies, extractCookies(loginResp.headers));
+  const loginStatus = loginResp.status;
+  
+  // Follow redirect if 302/301
+  let finalHtml = '';
+  let finalUrl = '';
+  if (loginStatus === 302 || loginStatus === 301) {
+    const redirectUrl = loginResp.headers.get('Location') || CATALOG_URL;
+    finalUrl = redirectUrl.startsWith('http') ? redirectUrl : `https://www.vernostsevyplaci.cz${redirectUrl}`;
+    const redirectResp = await fetch(finalUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Cookie': loginCookies,
+      },
+    });
+    finalHtml = await redirectResp.text();
+  } else {
+    finalHtml = await loginResp.text();
+    finalUrl = CATALOG_URL;
+  }
+  
+  // Check if login succeeded (no more password field)
+  const stillLogin = finalHtml.includes('name="password"');
+  const hasSearchField = finalHtml.includes('name="search"') || finalHtml.includes('type="text"');
+  
   const debug = debugMode ? {
-    htmlLength: html.length,
-    markdownLength: markdown.length,
-    markdownPreview: markdown.substring(0, 1500),
-    htmlPreview: html.substring(0, 1500),
+    initialCookies,
+    loginCookies,
+    loginStatus,
+    finalUrl,
+    finalHtmlLength: finalHtml.length,
+    stillLogin,
+    hasSearchField,
+    htmlSnippet: finalHtml.substring(0, 2000),
+    // Find all input fields
+    inputs: [...finalHtml.matchAll(/<input[^>]*name="([^"]*)"[^>]*>/g)].map(m => m[1]),
+  } : undefined;
+
+  return {
+    success: !stillLogin,
+    cookies: loginCookies,
+    debug,
+  };
+}
+
+/**
+ * Search for a part number in the logged-in catalog.
+ */
+async function catalogSearch(cookies: string, searchCode: string, debugMode: boolean): Promise<{
+  prices: number[];
+  debug?: any;
+}> {
+  const searchResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Cookie': cookies,
+      'Referer': CATALOG_URL,
+    },
+    body: `search=${encodeURIComponent(searchCode)}&submit-search=Vyhledat`,
+  });
+  
+  const searchHtml = await searchResp.text();
+  const prices = extractPrices(searchHtml);
+  
+  const debug = debugMode ? {
+    searchStatus: searchResp.status,
+    searchHtmlLength: searchHtml.length,
     pricesFound: prices,
-    hasScreenshot: !!screenshot,
-    screenshotPreview: screenshot ? screenshot.substring(0, 100) : '',
-  } : {};
+    htmlSnippet: searchHtml.substring(0, 3000),
+    textContent: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
+  } : undefined;
 
   return { prices, debug };
 }
 
-function extractPrices(html: string, markdown: string): number[] {
-  const prices: number[] = [];
-  const text = html + '\n' + markdown;
+function extractCookies(headers: Headers): string {
+  const cookies: string[] = [];
+  headers.forEach((value, key) => {
+    if (key.toLowerCase() === 'set-cookie') {
+      const cookiePart = value.split(';')[0];
+      cookies.push(cookiePart);
+    }
+  });
+  return cookies.join('; ');
+}
 
-  // CSV semicolon format (common in Czech catalogs: "code;name;price_no_vat;price_vat")
-  const lines = text.split('\n');
+function mergeCookies(existing: string, newCookies: string): string {
+  const map = new Map<string, string>();
+  for (const c of existing.split('; ').filter(Boolean)) {
+    const [name] = c.split('=');
+    map.set(name, c);
+  }
+  for (const c of newCookies.split('; ').filter(Boolean)) {
+    const [name] = c.split('=');
+    map.set(name, c);
+  }
+  return [...map.values()].join('; ');
+}
+
+function extractPrices(html: string): number[] {
+  const prices: number[] = [];
+  const text = html.replace(/<[^>]*>/g, ' ');
+
+  // CSV semicolon format
+  const lines = html.split('\n');
   for (const line of lines) {
     if (line.includes(';')) {
       const parts = line.split(';');
@@ -253,12 +278,10 @@ function extractPrices(html: string, markdown: string): number[] {
     }
   }
 
-  // "MOC s DPH" or "MOC bez DPH" patterns
+  // MOC patterns
   const mocPatterns = [
     /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /MOC\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
-    /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
-    /bez\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
   ];
   for (const pattern of mocPatterns) {
     let match;
@@ -273,11 +296,10 @@ function extractPrices(html: string, markdown: string): number[] {
   const patterns = [
     /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
     /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi,
-    /cena[^<]*?(\d[\d\s,.]+)/gi,
   ];
   for (const pattern of patterns) {
     let match;
-    while ((match = pattern.exec(text)) !== null) {
+    while ((match = pattern.exec(html)) !== null) {
       const priceStr = match[1].replace(/\s/g, '').replace(',', '.');
       const p = parseFloat(priceStr);
       if (p > 10 && p < 1000000) prices.push(p);
@@ -290,7 +312,6 @@ function extractPrices(html: string, markdown: string): number[] {
 function pickBestPrices(prices: number[]): { priceWithVat: number; priceWithoutVat: number } {
   const sorted = [...prices].sort((a, b) => a - b);
   if (sorted.length >= 2) {
-    // Check for ~1.21 VAT ratio pair
     for (let i = 0; i < sorted.length; i++) {
       for (let j = i + 1; j < sorted.length; j++) {
         const ratio = sorted[j] / sorted[i];
