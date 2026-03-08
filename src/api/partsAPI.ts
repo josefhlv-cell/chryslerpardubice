@@ -636,12 +636,21 @@ export interface VINDecodeResult {
 }
 
 export async function decodeVINEnriched(vin: string): Promise<VINDecodeResult> {
+  const cacheId = normalizeOem(vin);
+
+  // Check localStorage cache (7-day TTL)
+  const cached = cacheGet<VINDecodeResult>('vin_decode', cacheId);
+  if (cached) return cached;
+
   const { data, error } = await supabase.functions.invoke("vin-decode-ai", {
     body: { vin },
   });
   if (error) throw new Error(error.message);
   if (!data?.success) throw new Error(data?.error || "VIN decode failed");
-  return data as VINDecodeResult;
+
+  const result = data as VINDecodeResult;
+  cacheSet('vin_decode', cacheId, result);
+  return result;
 }
 
 // ---- OEM Cross-references ----
