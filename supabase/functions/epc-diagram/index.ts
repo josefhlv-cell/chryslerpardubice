@@ -40,8 +40,9 @@ Requirements:
 - Use simple geometric shapes (rectangles, circles, lines, paths) to represent the system
 - Use a clean monochrome style with #1a1a2e for lines and #e2e8f0 for fills
 - Add numbered circles (1, 2, 3...) positioned near each part's location
-- Each numbered circle should have: id="part-{index}" data-oem="{oem_number}" attributes
+- Each numbered circle should have: id="part-{index}" data-oem="{oem_number}" data-name="{part_name}" attributes
 - Make numbered circles clickable (cursor: pointer) with r="12" and fill="#2563eb"
+- Wrap each part group in <g data-oem="{oem_number}" data-name="{part_name}"> tags
 - Add text labels in Czech near major components
 - Include connecting lines/arrows showing how parts relate
 - The diagram should be technically informative but visually clean
