@@ -173,6 +173,22 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     );
   }
 
+  const handleGenerateCatalog = async () => {
+    setGenerating(true);
+    try {
+      toast.info("Generuji AI katalog – může trvat 30-60s...");
+      const result = await generateEPCCatalog(brand, model, year ? parseInt(year) : undefined, engine || undefined);
+      toast.success(`Katalog vygenerován: ${result.stats.categories} kategorií, ${result.stats.parts} dílů`);
+      // Reload categories
+      const cats = await getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined);
+      setCategories(cats);
+      setCategoryNames(getUniqueCategoryNames(cats));
+    } catch (e: any) {
+      toast.error(e.message || "Nepodařilo se vygenerovat katalog");
+    }
+    setGenerating(false);
+  };
+
   if (hasSearched && categoryNames.length === 0) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -182,9 +198,19 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         </div>
         <p className="text-sm font-medium">Pro toto vozidlo zatím nejsou dostupná EPC data.</p>
         <p className="text-xs text-muted-foreground max-w-sm text-center">
-          EPC katalog pro {brand} {model} {engine} se průběžně rozšiřuje. 
-          Zkuste vyhledání pomocí OEM čísla nebo názvu dílu.
+          EPC katalog pro {brand} {model} {engine} se průběžně rozšiřuje.
         </p>
+        <Button
+          onClick={handleGenerateCatalog}
+          disabled={generating}
+          className="mt-2"
+        >
+          {generating ? (
+            <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Generuji katalog…</>
+          ) : (
+            <><Sparkles className="w-4 h-4 mr-2" /> Vygenerovat AI katalog</>
+          )}
+        </Button>
       </motion.div>
     );
   }
