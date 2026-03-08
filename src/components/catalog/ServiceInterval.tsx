@@ -200,7 +200,11 @@ const VehicleServiceCard = ({ report }: { report: VehicleServiceReport }) => {
         </div>
 
         {/* Service items */}
-        {report.items.length > 0 ? (
+        {(report.vehicle.current_mileage ?? 0) < report.vehicle.km_start ? (
+          <p className="text-xs text-muted-foreground text-center py-3">
+            Aktuální km ({(report.vehicle.current_mileage ?? 0).toLocaleString("cs")}) je nižší než km_start ({report.vehicle.km_start.toLocaleString("cs")}). Servisní intervaly se zobrazí po aktualizaci stavu km.
+          </p>
+        ) : report.items.length > 0 ? (
           <div className="space-y-2">
             {report.items.map((item) => (
               <ServiceItemRow key={item.plan.id} item={item} />

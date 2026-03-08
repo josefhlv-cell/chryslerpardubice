@@ -80,8 +80,12 @@ export interface VehicleServiceReport {
 export function calculateServiceDue(
   vehicle: VehicleWithService,
   plan: ServiceInterval
-): ServiceDueItem {
+): ServiceDueItem | null {
   const currentKm = vehicle.current_mileage ?? vehicle.km_start;
+
+  // Don't show any service items if current_km < km_start
+  if (currentKm < vehicle.km_start) return null;
+
   const effectiveKm = currentKm - vehicle.km_start;
   const effectiveLastServiceKm = plan.last_service_km
     ? Math.max(0, plan.last_service_km - vehicle.km_start)
@@ -193,9 +197,10 @@ export async function getVehicleServiceReport(
   const plans = (plansRes.data || []) as ServiceInterval[];
   const history = (historyRes.data || []) as ServiceHistoryEntry[];
 
-  // Calculate due items
+  // Calculate due items (filter out nulls from km_start check)
   const items = plans
     .map((plan) => calculateServiceDue(vehicle, plan))
+    .filter((item): item is ServiceDueItem => item !== null)
     .sort((a, b) => {
       const order = { due: 0, soon: 1, ok: 2 };
       return order[a.urgency] - order[b.urgency];
