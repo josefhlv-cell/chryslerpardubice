@@ -496,8 +496,10 @@ const Admin = () => {
 
           {/* CATALOG IMPORT */}
           <TabsContent value="catalog">
-            <div className="mt-2">
+            <div className="mt-2 space-y-4">
               <CatalogImport />
+              <EPCImport />
+            </div>
             </div>
           </TabsContent>
 
