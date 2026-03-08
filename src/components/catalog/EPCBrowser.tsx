@@ -136,7 +136,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .catch(() => setLoading(false));
   }, [brand, model, engine, year]);
 
-  // Load parts when category/subcategory selected
+  // Load parts when category/subcategory selected + auto-load diagram
   useEffect(() => {
     if (!selectedCategory) {
       setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
@@ -150,7 +150,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .map((c) => c.id);
 
     getEPCParts(catIds)
-      .then((loadedParts) => {
+      .then(async (loadedParts) => {
         setParts(loadedParts);
         const oems = loadedParts.map(p => p.oem_number).filter(Boolean) as string[];
         if (oems.length > 0) {
@@ -159,10 +159,31 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             .then(setPriceMap)
             .finally(() => setPricesLoading(false));
         }
-        // Auto-load cached diagram
+        // Auto-load diagram
         const cacheKey = `${brand}-${model}-${selectedCategory}-${selectedSubcategory || ''}`;
         if (diagramCache.has(cacheKey)) {
           setDiagramSvg(diagramCache.get(cacheKey)!);
+          attachDiagramHandlers();
+        } else if (loadedParts.length > 0) {
+          // Auto-generate diagram in background
+          setDiagramLoading(true);
+          try {
+            const vehicle = `${brand} ${model}`;
+            const partsForDiagram = loadedParts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
+            const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram, selectedSubcategory || undefined);
+            if (svg) {
+              const sanitized = DOMPurify.sanitize(svg, {
+                USE_PROFILES: { svg: true, svgFilters: true },
+                ADD_ATTR: ['data-oem', 'data-part-name', 'data-name'],
+              });
+              diagramCache.set(cacheKey, sanitized);
+              setDiagramSvg(sanitized);
+              attachDiagramHandlers();
+            }
+          } catch (e) {
+            console.error('Auto diagram load error:', e);
+          }
+          setDiagramLoading(false);
         }
       })
       .finally(() => setPartsLoading(false));
@@ -226,22 +247,29 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setDiagramLoading(false);
   };
 
-  /** Scrape missing OEM and reload */
+  /** Scrape missing OEM with retry */
   const handleScrapeMissing = async (oem: string) => {
     setScrapingOem(oem);
-    try {
-      // Try scraping via 7zap first
-      await scrape7zap(brand, model, year || undefined);
-      // Check if part now exists
-      const result = await searchParts(oem, 0);
-      if (result.results.length > 0) {
-        onSearchOem(oem);
-        toast.success("Díl nalezen po aktualizaci katalogu");
-      } else {
-        toast.info("Díl zatím nebyl nalezen – zkuste později");
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await scrape7zap(brand, model, year || undefined);
+        const result = await searchParts(oem, 0);
+        if (result.results.length > 0) {
+          onSearchOem(oem);
+          toast.success("Díl nalezen po aktualizaci katalogu");
+          setScrapingOem(null);
+          return;
+        }
+        if (attempt < maxRetries) {
+          toast.info("Katalog se načítá. Zkouším znovu...");
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      } catch {
+        if (attempt === maxRetries) {
+          toast.error("Katalog se načítá. Zkuste to prosím znovu.");
+        }
       }
-    } catch {
-      toast.error("Nepodařilo se načíst data");
     }
     setScrapingOem(null);
   };
@@ -351,10 +379,16 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         </div>
         {selectedCategory && (
           <div className="ml-auto flex items-center gap-2">
+            {diagramLoading && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Nákres…</span>
+              </div>
+            )}
             {pricesLoading && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
-                <span>Načítám ceny…</span>
+                <span>Ceny…</span>
               </div>
             )}
             {!pricesLoading && pricedCount > 0 && (
