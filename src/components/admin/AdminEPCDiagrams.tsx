@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw, Trash2, LayoutGrid, Sparkles } from "lucide-react";
+import DOMPurify from "dompurify";
 
 interface DiagramRow {
   id: string;
@@ -15,6 +17,7 @@ interface DiagramRow {
   subcategory: string | null;
   parts_count: number;
   created_at: string;
+  svg_content?: string;
 }
 
 interface Stats {
@@ -28,11 +31,13 @@ const AdminEPCDiagrams = () => {
   const [stats, setStats] = useState<Stats>({ total: 0, byBrand: {}, totalParts: 0 });
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [previewDiagram, setPreviewDiagram] = useState<DiagramRow | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchDiagrams = async () => {
     setLoading(true);
     const { data } = await supabase
-      .from("epc_diagrams" as any)
+      .from("epc_diagrams")
       .select("id, brand, model, engine, category, subcategory, parts_count, created_at")
       .order("created_at", { ascending: false })
       .limit(200);
@@ -52,11 +57,24 @@ const AdminEPCDiagrams = () => {
 
   useEffect(() => { fetchDiagrams(); }, []);
 
+  const handlePreview = async (d: DiagramRow) => {
+    setPreviewDiagram(d);
+    if (d.svg_content) return;
+    setPreviewLoading(true);
+    const { data } = await supabase
+      .from("epc_diagrams")
+      .select("svg_content")
+      .eq("id", d.id)
+      .maybeSingle();
+    setPreviewDiagram({ ...d, svg_content: (data as any)?.svg_content || '' });
+    setPreviewLoading(false);
+  };
+
   const handleRegenerate = async (d: DiagramRow) => {
     setRegenerating(d.id);
     try {
       // Delete existing diagram
-      await supabase.from("epc_diagrams" as any).delete().eq("id", d.id);
+      await supabase.from("epc_diagrams").delete().eq("id", d.id);
 
       // Get parts for this category
       const { data: catData } = await supabase
@@ -96,7 +114,7 @@ const AdminEPCDiagrams = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("epc_diagrams" as any).delete().eq("id", id);
+    await supabase.from("epc_diagrams").delete().eq("id", id);
     toast({ title: "Nákres smazán" });
     fetchDiagrams();
   };
@@ -193,7 +211,7 @@ const AdminEPCDiagrams = () => {
             </Button>
           </div>
           {items.map((d) => (
-            <Card key={d.id} className="border-border/50">
+            <Card key={d.id} className="border-border/50 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => handlePreview(d)}>
               <CardContent className="p-3 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium">{d.category}{d.subcategory ? ` › ${d.subcategory}` : ''}</p>
@@ -205,7 +223,7 @@ const AdminEPCDiagrams = () => {
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0"
                     disabled={regenerating === d.id}
-                    onClick={() => handleRegenerate(d)}
+                    onClick={(e) => { e.stopPropagation(); handleRegenerate(d); }}
                   >
                     {regenerating === d.id ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -215,7 +233,7 @@ const AdminEPCDiagrams = () => {
                   </Button>
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive"
-                    onClick={() => handleDelete(d.id)}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
                   >
                     <Trash2 className="w-3 h-3" />
                   </Button>
@@ -229,6 +247,29 @@ const AdminEPCDiagrams = () => {
       {diagrams.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-8">Žádné EPC nákresy v databázi</p>
       )}
+
+      <Dialog open={!!previewDiagram} onOpenChange={(o) => !o && setPreviewDiagram(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {previewDiagram?.brand} {previewDiagram?.model} – {previewDiagram?.category}
+              {previewDiagram?.subcategory ? ` › ${previewDiagram.subcategory}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : previewDiagram?.svg_content ? (
+            <div
+              className="w-full bg-muted/30 rounded-md p-2 [&_svg]:w-full [&_svg]:h-auto"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewDiagram.svg_content) }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">SVG nákres není k dispozici</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
