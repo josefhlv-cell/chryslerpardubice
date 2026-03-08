@@ -118,16 +118,6 @@ const Service = () => {
             <Textarea placeholder="Popište problém nebo požadavek..." value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
           </div>
 
-          <div className="flex items-center gap-3 glass-card p-4">
-            <Checkbox
-              id="replacement"
-              checked={wantsReplacement}
-              onCheckedChange={(checked) => setWantsReplacement(checked as boolean)}
-            />
-            <label htmlFor="replacement" className="text-sm cursor-pointer">
-              Požaduji náhradní vozidlo
-            </label>
-          </div>
 
           <Button variant="hero" className="w-full h-11 mt-2" onClick={handleSubmit}>
             <Send className="w-4 h-4" />
