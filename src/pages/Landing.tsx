@@ -28,7 +28,7 @@ const Landing = () => {
           <motion.img
             src="/images/logo-cd-pardubice.png"
             alt="Chrysler&amp;Dodge Pardubice"
-            className="h-28 object-contain drop-shadow-2xl"
+            className="w-[60vw] max-w-xs md:max-w-[280px] object-contain drop-shadow-2xl"
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
