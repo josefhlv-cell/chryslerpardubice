@@ -664,18 +664,26 @@ export interface CrossRefResult {
 }
 
 export async function getOEMCrossReferences(oemNumber: string, partName?: string): Promise<CrossRefResult | null> {
+  const cacheId = normalizeOem(oemNumber);
+
+  // 0. Check localStorage cache (30-day TTL)
+  const memoryCached = cacheGet<CrossRefResult>('oem_crossref', cacheId);
+  if (memoryCached) return memoryCached;
+
   // 1. Check local DB cache first
   const { data: cached } = await supabase
     .from("part_crossref")
     .select("manufacturer, part_number, note")
-    .eq("oem_number", normalizeOem(oemNumber));
+    .eq("oem_number", cacheId);
 
   if (cached && cached.length > 0) {
-    return {
+    const result: CrossRefResult = {
       oem_number: oemNumber,
       part_name: partName,
       alternatives: cached.map(c => ({ manufacturer: c.manufacturer, part_number: c.part_number, note: c.note || undefined })),
     };
+    cacheSet('oem_crossref', cacheId, result);
+    return result;
   }
 
   // 2. Call backend AI crossref
@@ -688,7 +696,7 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
   const result = data as CrossRefResult;
   if (result.alternatives && result.alternatives.length > 0) {
     const rows = result.alternatives.map(alt => ({
-      oem_number: normalizeOem(oemNumber),
+      oem_number: cacheId,
       manufacturer: alt.manufacturer,
       part_number: alt.part_number,
       note: alt.note || null,
@@ -697,6 +705,7 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
     supabase.from("part_crossref").insert(rows).then(() => {});
   }
 
+  cacheSet('oem_crossref', cacheId, result);
   return result;
 }
 
