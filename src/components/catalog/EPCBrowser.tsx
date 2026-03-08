@@ -1,15 +1,16 @@
 /**
  * EPCBrowser Component
  * Shows EPC categories for selected vehicle and drills down to parts with live prices.
+ * Includes interactive SVG diagrams generated via AI.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw } from "lucide-react";
+import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices,
+  getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 
