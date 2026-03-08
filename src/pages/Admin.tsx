@@ -500,7 +500,6 @@ const Admin = () => {
               <CatalogImport />
               <EPCImport />
             </div>
-            </div>
           </TabsContent>
 
           <TabsContent value="settings">
