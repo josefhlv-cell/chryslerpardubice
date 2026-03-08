@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -25,6 +25,7 @@ import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
 import AdminServicePlans from "@/components/admin/AdminServicePlans";
 import AdminVehicleOffers from "@/components/admin/AdminVehicleOffers";
 import AICatalogImport from "@/components/admin/AICatalogImport";
+import AdminEPCDiagrams from "@/components/admin/AdminEPCDiagrams";
 
 // ---- Types ----
 
@@ -315,6 +316,7 @@ const Admin = () => {
             <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>
             <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
             <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>
+            <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -550,6 +552,12 @@ const Admin = () => {
           <TabsContent value="vehicle-offers">
             <div className="mt-2">
               <AdminVehicleOffers />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="epc-diagrams">
+            <div className="mt-2">
+              <AdminEPCDiagrams />
             </div>
           </TabsContent>
         </Tabs>
