@@ -173,26 +173,51 @@ async function firecrawlSearch(
                 });
                 var loginHtml = await r1.text();
                 
-                // Search with the code
-                var r2 = await fetch('/cnd/', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                  body: 'search=${searchCode}&submit-search=Vyhledat',
-                  credentials: 'include'
-                });
-                var searchHtml = await r2.text();
-                
-                // Extract just the content area text (strip HTML, keep numbers)
+                // Find all form inputs on logged-in page
                 var tmp = document.createElement('div');
-                tmp.innerHTML = searchHtml;
-                var textContent = tmp.textContent || tmp.innerText || '';
+                tmp.innerHTML = loginHtml;
+                var inputs = tmp.querySelectorAll('input');
+                var inputNames = [];
+                inputs.forEach(function(i) { inputNames.push(i.name + ':' + i.type + ':' + (i.value||i.placeholder||'').substring(0,30)); });
                 
-                // Store results safely using base64
+                // Find the search input name dynamically
+                var searchInputName = '';
+                var submitName = '';
+                inputs.forEach(function(i) {
+                  if (i.type === 'text' && (i.placeholder||'').toLowerCase().includes('kód')) searchInputName = i.name;
+                  if ((i.type === 'submit' || i.type === 'button') && !i.name.includes('password')) submitName = i.name;
+                });
+                
+                document.body.setAttribute('data-inputs', inputNames.join('|'));
+                document.body.setAttribute('data-search-input', searchInputName);
+                document.body.setAttribute('data-submit-name', submitName);
                 document.body.setAttribute('data-login-len', loginHtml.length.toString());
-                document.body.setAttribute('data-search-len', searchHtml.length.toString());
-                document.body.setAttribute('data-has-search-form', loginHtml.includes('submit-search') ? '1' : '0');
-                document.body.setAttribute('data-search-text', btoa(unescape(encodeURIComponent(textContent.substring(0, 2000)))));
-                document.body.setAttribute('data-search-html', btoa(unescape(encodeURIComponent(searchHtml.substring(0, 5000)))));
+                
+                // If we found search form, do the search
+                if (searchInputName) {
+                  var body = encodeURIComponent(searchInputName) + '=' + encodeURIComponent('${searchCode}');
+                  if (submitName) body += '&' + encodeURIComponent(submitName) + '=Vyhledat';
+                  
+                  var r2 = await fetch('/cnd/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: body,
+                    credentials: 'include'
+                  });
+                  var searchHtml = await r2.text();
+                  
+                  var tmp2 = document.createElement('div');
+                  tmp2.innerHTML = searchHtml;
+                  var textContent = tmp2.textContent || '';
+                  
+                  document.body.setAttribute('data-search-len', searchHtml.length.toString());
+                  document.body.setAttribute('data-search-text', btoa(unescape(encodeURIComponent(textContent.substring(0, 3000)))));
+                  document.body.setAttribute('data-search-html', btoa(unescape(encodeURIComponent(searchHtml.substring(0, 8000)))));
+                } else {
+                  // No search form found - store login page text for debug
+                  var loginText = tmp.textContent || '';
+                  document.body.setAttribute('data-login-text', btoa(unescape(encodeURIComponent(loginText.substring(0, 2000)))));
+                }
               } catch(e) {
                 document.body.setAttribute('data-error', e.message);
               }
