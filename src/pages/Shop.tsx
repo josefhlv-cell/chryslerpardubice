@@ -562,6 +562,23 @@ const Shop = () => {
                     <SelectTrigger className="h-10"><SelectValue placeholder="Kategorie dílů" /></SelectTrigger>
                     <SelectContent>{partCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                   </Select>
+                  {category && currentSubCategories.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {currentSubCategories.map(sub => (
+                        <Button key={sub} size="sm" variant={subCategory === sub ? "default" : "outline"}
+                          className="text-[10px] h-7"
+                          onClick={() => { setSubCategory(sub); }}>
+                          {sub}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {category && (
+                    <Button variant="hero" className="w-full h-11" onClick={() => doSearch(query, 0)} disabled={searching}>
+                      {searching ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Search className="w-4 h-4 mr-1" />}
+                      Vyhledat díly pro {category}{subCategory ? ` > ${subCategory}` : ""}
+                    </Button>
+                  )}
                 </div>
               )}
 
