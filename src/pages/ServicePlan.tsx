@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Wrench, AlertTriangle, ShoppingCart, CheckCircle, Clock } from "lucide-react";
+import CarIcon from "@/components/CarIcon";
 
 type Vehicle = {
   id: string;
@@ -153,7 +154,10 @@ const ServicePlan = () => {
             <SelectContent>
               {vehicles.map(v => (
                 <SelectItem key={v.id} value={v.id}>
-                  {v.brand} {v.model} {v.year || ""} {v.current_mileage ? `(${v.current_mileage.toLocaleString("cs")} km)` : ""}
+                  <div className="flex items-center gap-2">
+                    <CarIcon car={v} size="sm" />
+                    <span>{v.brand} {v.model} {v.year || ""} {v.current_mileage ? `(${v.current_mileage.toLocaleString("cs")} km)` : ""}</span>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>

@@ -7,7 +7,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { Wrench, AlertTriangle, Clock, ChevronDown, ChevronRight, Car, Calendar, Gauge } from "lucide-react";
+import { Wrench, AlertTriangle, Clock, ChevronDown, ChevronRight, Calendar, Gauge } from "lucide-react";
+import CarIcon from "@/components/CarIcon";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -170,9 +171,7 @@ const VehicleServiceCard = ({ report }: { report: VehicleServiceReport }) => {
       <CardContent className="p-4 space-y-3">
         {/* Vehicle header */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Car className="w-5 h-5 text-primary" />
-          </div>
+          <CarIcon car={report.vehicle} size="md" />
           <div className="flex-1 min-w-0">
             <h4 className="font-display font-semibold text-sm">
               {report.vehicle.brand} {report.vehicle.model} {report.vehicle.year || ""}
