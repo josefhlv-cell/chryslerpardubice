@@ -134,8 +134,9 @@ async function firecrawlSearch(
   debugMode: boolean
 ): Promise<{ prices: number[]; debug: any }> {
 
-  // Step 1: Login via Firecrawl with JS actions
-  const loginResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+  // Use XHR inside the browser to login + search in one session,
+  // then inject result HTML into the DOM for Firecrawl to capture
+  const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -150,92 +151,53 @@ async function firecrawlSearch(
         {
           type: 'executeJavascript',
           script: `
-            document.querySelector('input[name="password"]').value = '${password}';
-            document.querySelector('input[name="submit-password"]').click();
-          `,
-        },
-        { type: 'wait', milliseconds: 4000 },
-      ],
-    }),
-  });
-
-  const loginData = await loginResp.json();
-  if (!loginResp.ok) {
-    console.error('Firecrawl login error:', JSON.stringify(loginData).substring(0, 300));
-    throw new Error(`Firecrawl login error: ${loginResp.status}`);
-  }
-
-  const loginHtml = loginData.data?.html || loginData.html || '';
-  const loggedIn = loginHtml.includes('submit-search') || loginHtml.includes('Zadejte');
-
-  if (!loggedIn) {
-    // If login didn't work, return debug info
-    const debug = debugMode ? {
-      step: 'login_failed',
-      htmlLength: loginHtml.length,
-      htmlPreview: loginHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
-      hasPasswordForm: loginHtml.includes('submit-password'),
-    } : {};
-    return { prices: [], debug };
-  }
-
-  // Step 2: Search - the page after login should have the search form
-  // We need to scrape the same session - but Firecrawl doesn't maintain sessions
-  // So we need to do login + search in one go
-  // Let's try combining both actions in a single scrape call
-  const searchResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      url: CATALOG_URL,
-      formats: ['html'],
-      waitFor: 2000,
-      actions: [
-        { type: 'wait', milliseconds: 2000 },
-        // Login
-        {
-          type: 'executeJavascript',
-          script: `
-            document.querySelector('input[name="password"]').value = '${password}';
-            document.querySelector('input[name="submit-password"]').click();
-          `,
-        },
-        { type: 'wait', milliseconds: 4000 },
-        // Search
-        {
-          type: 'executeJavascript',
-          script: `
-            var s = document.querySelector('input[name="search"]');
-            if (s) {
-              s.value = '${searchCode}';
-              document.querySelector('input[name="submit-search"]').click();
+            async function run() {
+              // Step 1: Login via fetch (uses browser cookies)
+              await fetch('/cnd/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'password=${password}&submit-password=P%C5%99ihl%C3%A1sit',
+                credentials: 'include',
+                redirect: 'follow'
+              });
+              
+              // Step 2: Search via fetch (session cookie set from login)
+              const searchResp = await fetch('/cnd/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'search=${searchCode}&submit-search=Vyhledat',
+                credentials: 'include',
+                redirect: 'follow'
+              });
+              const html = await searchResp.text();
+              
+              // Inject result into DOM so Firecrawl can scrape it
+              document.body.innerHTML = html;
+              return 'done';
             }
+            run();
           `,
         },
-        { type: 'wait', milliseconds: 4000 },
+        { type: 'wait', milliseconds: 5000 },
       ],
     }),
   });
 
-  const searchData = await searchResp.json();
-  if (!searchResp.ok) {
-    console.error('Firecrawl search error:', JSON.stringify(searchData).substring(0, 300));
-    throw new Error(`Firecrawl search error: ${searchResp.status}`);
+  const data = await resp.json();
+  if (!resp.ok) {
+    console.error('Firecrawl error:', JSON.stringify(data).substring(0, 300));
+    throw new Error(`Firecrawl API error: ${resp.status}`);
   }
 
-  const html = searchData.data?.html || searchData.html || '';
+  const html = data.data?.html || data.html || '';
   const prices = extractPrices(html);
 
   const debug = debugMode ? {
-    step: 'search_complete',
-    loggedIn,
     htmlLength: html.length,
     htmlPreview: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
     pricesFound: prices,
     hasSearchForm: html.includes('submit-search'),
+    hasResults: html.includes('Kč') || html.includes(';'),
   } : {};
 
   return { prices, debug };
