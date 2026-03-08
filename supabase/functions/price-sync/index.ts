@@ -137,23 +137,43 @@ async function firecrawlSearch(
       formats: ['html', 'markdown'],
       timeout: 60000,
       actions: [
-        // Step 1: Wait for the password form to load
-        { type: 'wait', selector: 'input[name="password"]' },
-        // Step 2: Type the password
-        { type: 'write', selector: 'input[name="password"]', text: password },
-        // Step 3: Click submit
-        { type: 'click', selector: 'input[name="submit-password"]' },
-        // Step 4: Wait for the page to reload after login
-        { type: 'wait', milliseconds: 5000 },
-        // Step 5: Screenshot after login to see what's there
-        ...(debugMode ? [{ type: 'screenshot', fullPage: true }] : []),
-        // Step 6: Try to find and fill search - use broader selector
-        { type: 'write', selector: 'input[type="text"]', text: searchCode },
-        // Step 7: Press Enter to submit search
-        { type: 'press', key: 'Enter' },
-        // Step 8: Wait for results  
-        { type: 'wait', milliseconds: 5000 },
-        // Step 9: Screenshot of results
+        // Step 1: Wait for password form
+        { type: 'wait', milliseconds: 2000 },
+        // Step 2: Fill password and submit via JS (most reliable)
+        {
+          type: 'executeJavascript',
+          script: `
+            var pwdInput = document.querySelector('input[name="password"]');
+            if (pwdInput) {
+              pwdInput.value = '${password}';
+              pwdInput.dispatchEvent(new Event('input', {bubbles: true}));
+              var form = pwdInput.closest('form');
+              if (form) form.submit();
+            }
+          `
+        },
+        // Step 3: Wait for navigation after login
+        { type: 'wait', milliseconds: 6000 },
+        // Step 4: Fill search and submit via JS
+        {
+          type: 'executeJavascript',
+          script: `
+            var searchInput = document.querySelector('input[type="text"], input[name="search"]');
+            var allInputs = document.querySelectorAll('input');
+            var inputInfo = [];
+            allInputs.forEach(function(i) { inputInfo.push(i.name + ':' + i.type); });
+            document.title = 'INPUTS:' + inputInfo.join('|');
+            if (searchInput) {
+              searchInput.value = '${searchCode}';
+              searchInput.dispatchEvent(new Event('input', {bubbles: true}));
+              var form = searchInput.closest('form');
+              if (form) form.submit();
+            }
+          `
+        },
+        // Step 5: Wait for results
+        { type: 'wait', milliseconds: 6000 },
+        // Step 6: Screenshot
         { type: 'screenshot', fullPage: true },
       ],
     }),
