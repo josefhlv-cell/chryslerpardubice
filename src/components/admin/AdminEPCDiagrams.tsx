@@ -31,6 +31,8 @@ const AdminEPCDiagrams = () => {
   const [stats, setStats] = useState<Stats>({ total: 0, byBrand: {}, totalParts: 0 });
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [previewDiagram, setPreviewDiagram] = useState<DiagramRow | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const fetchDiagrams = async () => {
     setLoading(true);
