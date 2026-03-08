@@ -88,7 +88,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   }, [parts, partsPage]);
   const totalPartsPages = Math.ceil(parts.length / PARTS_PER_PAGE);
 
-  // Load categories when vehicle params change
+  // Load categories when vehicle params change — auto-expand if empty
   useEffect(() => {
     if (!brand) return;
     setLoading(true);
@@ -100,11 +100,40 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setPriceMap(() => new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
-      .then((cats) => {
-        setCategories(cats);
-        setCategoryTree(buildCategoryTree(cats));
+      .then(async (cats) => {
+        if (cats.length === 0 && !autoExpanding) {
+          // Auto-expand: generate catalog automatically
+          setAutoExpanding(true);
+          setLoading(true);
+          try {
+            const result = await autoExpandCatalog(
+              brand, model, year ? parseInt(year) : undefined, engine || undefined,
+              (msg) => toast.info(msg)
+            );
+            if (result.expanded) {
+              toast.success(`Katalog vygenerován: ${result.stats?.categories || 0} kategorií, ${result.stats?.parts || 0} dílů`);
+              // Reload categories after expansion
+              const newCats = await getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined);
+              setCategories(newCats);
+              setCategoryTree(buildCategoryTree(newCats));
+            } else {
+              setCategories([]);
+              setCategoryTree(new Map());
+            }
+          } catch {
+            setCategories([]);
+            setCategoryTree(new Map());
+          } finally {
+            setAutoExpanding(false);
+            setLoading(false);
+          }
+        } else {
+          setCategories(cats);
+          setCategoryTree(buildCategoryTree(cats));
+          setLoading(false);
+        }
       })
-      .finally(() => setLoading(false));
+      .catch(() => setLoading(false));
   }, [brand, model, engine, year]);
 
   // Load parts when category/subcategory selected
