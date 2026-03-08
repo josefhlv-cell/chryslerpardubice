@@ -191,14 +191,26 @@ async function firecrawlSearch(
   }
 
   const html = data.data?.html || data.html || '';
-  const prices = extractPrices(html);
+  
+  // Extract search result from data attributes (injected by XHR)
+  const searchResultMatch = html.match(/data-search-result="([^"]*)"/);
+  const searchResult = searchResultMatch ? searchResultMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"') : '';
+  const loginLenMatch = html.match(/data-login-len="(\d+)"/);
+  const searchLenMatch = html.match(/data-search-len="(\d+)"/);
+  const errorMatch = html.match(/data-error="([^"]*)"/);
+  const loginPreviewMatch = html.match(/data-login-preview="([^"]*)"/);
+  
+  // Try extracting prices from the search result or full HTML
+  const prices = searchResult ? extractPrices(searchResult) : extractPrices(html);
 
   const debug = debugMode ? {
     htmlLength: html.length,
-    htmlPreview: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
+    loginLen: loginLenMatch?.[1],
+    searchLen: searchLenMatch?.[1],
+    loginPreview: loginPreviewMatch?.[1]?.substring(0, 200),
+    error: errorMatch?.[1],
+    searchResultPreview: searchResult.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
     pricesFound: prices,
-    hasSearchForm: html.includes('submit-search'),
-    hasResults: html.includes('Kč') || html.includes(';'),
   } : {};
 
   return { prices, debug };
