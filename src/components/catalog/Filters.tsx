@@ -54,6 +54,11 @@ interface SourceStats {
   count: number;
 }
 
+interface BrandStats {
+  brand: string;
+  count: number;
+}
+
 interface FiltersProps {
   searchMode: SearchMode;
   brand: string;
@@ -94,14 +99,15 @@ const Filters = ({
   const currentSubs = category ? (subCategoriesMap[category] || []) : [];
 
   const [sourceStats, setSourceStats] = useState<SourceStats[]>([]);
+  const [brandStats, setBrandStats] = useState<BrandStats[]>([]);
 
   useEffect(() => {
     const fetchStats = async () => {
-      // Get counts per catalog_source from parts_new
       const { data } = await supabase
         .from("parts_new")
-        .select("catalog_source");
+        .select("catalog_source, family, compatible_vehicles");
       if (data) {
+        // Source counts
         const counts: Record<string, number> = {};
         data.forEach((r: any) => {
           const src = r.catalog_source || "unknown";
@@ -110,6 +116,24 @@ const Filters = ({
         setSourceStats(
           Object.entries(counts)
             .map(([source, count]) => ({ source, count }))
+            .sort((a, b) => b.count - a.count)
+        );
+
+        // Brand counts from family / compatible_vehicles
+        const brandCounts: Record<string, number> = {};
+        const targetBrands = ["Chrysler", "Dodge", "Jeep", "RAM"];
+        data.forEach((r: any) => {
+          const text = `${r.family || ""} ${r.compatible_vehicles || ""}`.toLowerCase();
+          for (const b of targetBrands) {
+            if (text.includes(b.toLowerCase())) {
+              brandCounts[b] = (brandCounts[b] || 0) + 1;
+              break; // count each part only once
+            }
+          }
+        });
+        setBrandStats(
+          targetBrands
+            .map((b) => ({ brand: b, count: brandCounts[b] || 0 }))
             .sort((a, b) => b.count - a.count)
         );
       }
@@ -271,6 +295,34 @@ const Filters = ({
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Brand stats */}
+      {brandStats.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Pokrytí podle značky
+          </p>
+          <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5">
+            {brandStats.map(b => {
+              const pct = totalParts > 0 ? Math.round((b.count / totalParts) * 100) : 0;
+              return (
+                <div key={b.brand} className="space-y-0.5">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="font-medium">{b.brand}</span>
+                    <span className="font-mono">{b.count.toLocaleString("cs")} ({pct}%)</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
