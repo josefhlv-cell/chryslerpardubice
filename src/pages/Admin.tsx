@@ -310,6 +310,7 @@ const Admin = () => {
             <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>
             <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>
             <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
+            <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
