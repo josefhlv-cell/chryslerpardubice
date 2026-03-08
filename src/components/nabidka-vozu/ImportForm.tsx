@@ -77,7 +77,7 @@ const ImportForm = () => {
   if (submitted) {
     return (
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-4 py-12 text-center">
-        <CheckCircle2 className="w-16 h-16 text-green-500" />
+        <CheckCircle2 className="w-16 h-16 text-primary" />
         <h3 className="text-xl font-bold text-foreground">Požadavek odeslán!</h3>
         <p className="text-muted-foreground max-w-sm">Budeme hledat váš vysněný vůz. Ozveme se s nabídkou.</p>
         <Button variant="outline" onClick={() => { setSubmitted(false); form.reset(); }}>Odeslat další</Button>
