@@ -318,6 +318,37 @@ Requirements:
       }
     }
 
+    // 3e. Auto-generate diagrams for each main category
+    const uniqueCategories = [...new Set((catalog.categories || []).map((c: any) => c.category))];
+    for (const cat of uniqueCategories) {
+      const catParts = (catalog.parts || [])
+        .filter((p: any) => p.category === cat)
+        .slice(0, 30)
+        .map((p: any) => ({ oem_number: p.oem_number, part_name: p.name }));
+
+      try {
+        // Call epc-diagram function internally via HTTP
+        const SUPABASE_URL_VAL = Deno.env.get('SUPABASE_URL')!;
+        const resp = await fetch(`${SUPABASE_URL_VAL}/functions/v1/epc-diagram`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({
+            vehicle: vehicleDesc,
+            category: cat,
+            parts: catParts,
+          }),
+        });
+        if (resp.ok) {
+          console.log(`Diagram generated for ${cat}`);
+        }
+      } catch (e) {
+        console.error(`Diagram generation failed for ${cat}:`, e);
+      }
+    }
+
     console.log('EPC catalog generated:', stats);
 
     return jsonResponse({
@@ -325,7 +356,7 @@ Requirements:
       vehicle: vehicleDesc,
       scraped: scrapedMarkdown.length > 0,
       stats,
-      categories_list: (catalog.categories || []).map((c: any) => c.category),
+      categories_list: uniqueCategories,
     });
   } catch (error) {
     console.error('EPC generate error:', error);

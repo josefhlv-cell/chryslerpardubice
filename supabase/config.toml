@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.epc-diagram]
 verify_jwt = false
+
+[functions.epc-generate]
+verify_jwt = false
