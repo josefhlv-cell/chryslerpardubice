@@ -53,13 +53,13 @@ export const PAGE_SIZE = 20;
 // ---- Source priority ----
 
 export const sourceLabel: Record<string, string> = {
-  mopar: "Mopar OE",
-  autokelly: "AutoKelly",
-  intercars: "InterCars",
-  csv: "Lokální katalog",
-  epc: "EPC katalog",
-  "7zap": "7zap.com",
-  ai: "AI generováno",
+  mopar: "Zdroj 1",
+  autokelly: "Zdroj 2",
+  intercars: "Zdroj 3",
+  csv: "Zdroj 4",
+  epc: "Zdroj 5",
+  "7zap": "Zdroj 6",
+  ai: "Zdroj 7",
 };
 
 export const sourcePriority: Record<string, number> = {
