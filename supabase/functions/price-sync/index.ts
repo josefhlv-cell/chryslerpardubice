@@ -251,12 +251,12 @@ async function catalogLogin(password: string, debugMode: boolean): Promise<{
   }
 
   const debug = debugMode ? {
-    getCookies, allCookies, loginStatus: loginResp.status,
+    getHtmlLength: getHtml.length, getHasPassword, getHasCloudflare,
+    getStatus: getResp.status, getCookies, allCookies, loginStatus: loginResp.status,
     stillLogin, hasSearch, searchFieldName, submitFieldName,
-    passwordLength: password.length,
+    passwordLength: password.length, password: password.substring(0, 3) + '***',
     htmlLength: html.length,
     inputs: [...html.matchAll(/<input[^>]*name="([^"]*)"[^>]*/gi)].map(m => m[1]),
-    formSnippet: html.match(/<form[^>]*>[\s\S]*?<\/form>/g)?.map(f => f.substring(0, 500)),
   } : undefined;
 
   return { success: !stillLogin, cookies: allCookies, debug };
