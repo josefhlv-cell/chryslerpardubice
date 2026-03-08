@@ -262,22 +262,29 @@ const Shop = () => {
   };
 
   const handleSearchOem = (oem: string) => {
-    // Always switch to part_number mode for OEM searches
+    const signal = cancelPrevious();
     setSearchMode("part_number");
     setQuery(oem);
     setPage(0);
-    // Use searchParts directly (part_number mode logic)
     setSearching(true);
     setPriceFetching(true);
     addEntry(oem);
     searchParts(oem, 0, filters)
       .then((result) => {
+        if (signal.aborted) return;
         setResults(result.results);
         setTotalCount(result.totalCount);
         if (result.results.length === 0) toast.error(`Díl "${oem}" nebyl nalezen`);
       })
-      .catch((err: any) => { toast.error("Chyba: " + err.message); setResults([]); })
-      .finally(() => { setSearching(false); setPriceFetching(false); });
+      .catch((err: any) => { 
+        if (signal.aborted) return;
+        toast.error("Chyba: " + err.message); setResults([]); 
+      })
+      .finally(() => { 
+        if (!signal.aborted) {
+          setSearching(false); setPriceFetching(false); 
+        }
+      });
   };
 
   // ===== RENDER =====
