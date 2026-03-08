@@ -4,8 +4,8 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const RATE_LIMIT_MS = 1500; // 1.5s between requests
-const MAX_RETRIES = 3;
+const RATE_LIMIT_MS = 1500;
+const MAX_RETRIES = 1; // temporarily 1 for faster debugging
 const RETRY_TIMEOUT_MS = 5000;
 
 Deno.serve(async (req) => {
