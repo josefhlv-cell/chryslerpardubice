@@ -35,6 +35,7 @@ const Service = () => {
   const [wantsReplacement, setWantsReplacement] = useState(false);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
+  const [year, setYear] = useState("");
 
   const handleSubmit = () => {
     if (!serviceType || !date) {
