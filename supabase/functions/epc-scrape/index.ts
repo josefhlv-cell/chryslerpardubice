@@ -13,6 +13,10 @@ const VEHICLE_CONFIGS: Record<string, { brand: string; engines: string[]; year_f
   'Dodge Durango': { brand: 'Dodge', engines: ['3.6L V6', '5.7L HEMI V8', '6.4L SRT V8'], year_from: 2011, year_to: 2023 },
   'Dodge Charger': { brand: 'Dodge', engines: ['3.6L V6', '5.7L HEMI V8', '6.2L Hellcat V8', '6.4L SRT V8'], year_from: 2011, year_to: 2023 },
   'Dodge Challenger': { brand: 'Dodge', engines: ['3.6L V6', '5.7L HEMI V8', '6.2L Hellcat V8', '6.4L SRT V8'], year_from: 2008, year_to: 2023 },
+  'Jeep Grand Cherokee': { brand: 'Jeep', engines: ['3.6L V6', '5.7L HEMI V8', '6.4L SRT V8', '3.0L CRD V6'], year_from: 2011, year_to: 2024 },
+  'Jeep Wrangler': { brand: 'Jeep', engines: ['3.6L V6', '2.0L Turbo', '3.0L EcoDiesel V6'], year_from: 2007, year_to: 2024 },
+  'Jeep Cherokee': { brand: 'Jeep', engines: ['2.4L Tigershark', '3.2L V6', '2.0L Turbo'], year_from: 2014, year_to: 2023 },
+  'Jeep Compass': { brand: 'Jeep', engines: ['2.4L Tigershark', '1.3L Turbo'], year_from: 2017, year_to: 2024 },
 };
 
 const EPC_CATEGORIES = [
