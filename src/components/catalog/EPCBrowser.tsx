@@ -44,7 +44,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [parts, setParts] = useState<EPCPart[]>([]);
   const [partsLoading, setPartsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [priceMap, setPriceMap] = useState<Map<string, PriceData>>(new Map());
+  const [priceMap, setPriceMap] = useState<Map<string, PriceData>>(() => new Map());
   const [pricesLoading, setPricesLoading] = useState(false);
   const [diagramSvg, setDiagramSvg] = useState<string | null>(null);
   const [diagramLoading, setDiagramLoading] = useState(false);
