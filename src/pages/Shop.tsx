@@ -108,18 +108,54 @@ const Shop = () => {
       const normalized = normalizeOem(searchQuery);
       const oemCodes = [normalized];
 
-      // First check local cache
-      const { data: cached, count } = await supabase
+      // Search in parts_new (external catalog cache)
+      const { data: partsNewData, count: partsNewCount } = await supabase
         .from("parts_new")
         .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging", { count: "exact" })
         .or(`oem_number.ilike.%${searchQuery}%,oem_number.ilike.%${normalized}%,name.ilike.%${searchQuery}%,internal_code.ilike.%${searchQuery}%`)
         .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
         .order("name");
 
-      if (cached && cached.length > 0) {
-        // Found in local DB - show cached results
-        setResults(cached);
-        setTotalCount(count ?? 0);
+      // Also search in parts_catalog (CSV imported parts)
+      const { data: catalogData, count: catalogCount } = await supabase
+        .from("parts_catalog")
+        .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
+        .or(`oem_code.ilike.%${searchQuery}%,oem_code.ilike.%${normalized}%,name.ilike.%${searchQuery}%`)
+        .range(pageNum * PAGE_SIZE, pageNum * PAGE_SIZE + PAGE_SIZE - 1)
+        .order("name");
+
+      // Merge results from both tables
+      const allResults: PartResult[] = [];
+
+      if (partsNewData && partsNewData.length > 0) {
+        allResults.push(...partsNewData);
+      }
+
+      if (catalogData && catalogData.length > 0) {
+        const catalogMapped: PartResult[] = catalogData.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          oem_number: item.oem_code,
+          internal_code: null,
+          price_without_vat: item.price,
+          price_with_vat: Math.round(item.price * 1.21 * 100) / 100,
+          category: item.category,
+          family: item.brand,
+          segment: item.available ? "Skladem" : "Na objednávku",
+          packaging: null,
+        }));
+        // Don't add duplicates (same OEM code already in parts_new)
+        const existingOems = new Set(allResults.map(r => normalizeOem(r.oem_number)));
+        for (const item of catalogMapped) {
+          if (!existingOems.has(normalizeOem(item.oem_number))) {
+            allResults.push(item);
+          }
+        }
+      }
+
+      if (allResults.length > 0) {
+        setResults(allResults);
+        setTotalCount((partsNewCount ?? 0) + (catalogCount ?? 0));
         setSearching(false);
         setPriceFetching(false);
         return;
@@ -127,13 +163,13 @@ const Shop = () => {
 
       // Not found locally - fetch from external catalog in real-time
       console.log("Fetching from external catalog for:", oemCodes);
-      const { data: catalogData, error: fnError } = await supabase.functions.invoke("catalog-search", {
+      const { data: extCatalogData, error: fnError } = await supabase.functions.invoke("catalog-search", {
         body: { oemCodes },
       });
 
       if (fnError) throw new Error(fnError.message || "Chyba při volání katalogu");
 
-      const catalogResults = catalogData?.results || [];
+      const catalogResults = extCatalogData?.results || [];
       
       // Convert catalog results to PartResult format
       const partResults: PartResult[] = catalogResults
