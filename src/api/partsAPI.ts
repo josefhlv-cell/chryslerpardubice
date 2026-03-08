@@ -771,12 +771,13 @@ export async function generateAICatalog(brand: string, model: string, year?: num
   return data;
 }
 
-/** Generate full EPC catalog with AI normalization */
+/** Generate EPC categories only (fast, no timeout) */
 export interface EPCGenerateResult {
   success: boolean;
   vehicle: string;
   scraped: boolean;
-  stats: { categories: number; parts: number; compatibility: number; procedures: number };
+  cached?: boolean;
+  stats: { categories: number; parts: number; queued?: number };
   categories_list: string[];
   error?: string;
 }
@@ -792,6 +793,56 @@ export async function generateEPCCatalog(
   return data as EPCGenerateResult;
 }
 
+/** Generate parts for a specific category (batch, on-demand) */
+export interface BatchGenerateResult {
+  success: boolean;
+  cached?: boolean;
+  parts_count: number;
+  category: string;
+  diagram_queued?: boolean;
+}
+
+export async function generatePartsBatch(
+  brand: string,
+  model: string,
+  category: string,
+  subcategory?: string,
+  engine?: string,
+  year?: number,
+  queueId?: string
+): Promise<BatchGenerateResult> {
+  const { data, error } = await supabase.functions.invoke("epc-generate-batch", {
+    body: { brand, model, category, subcategory, engine, year, queue_id: queueId },
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.success) throw new Error(data?.error || "Batch generation failed");
+  return data as BatchGenerateResult;
+}
+
+/** Check queue status for a vehicle's part generation */
+export async function getQueueStatus(brand: string, model: string): Promise<{
+  total: number;
+  pending: number;
+  processing: number;
+  done: number;
+  failed: number;
+}> {
+  const { data } = await supabase
+    .from("epc_generation_queue")
+    .select("status")
+    .eq("brand", brand)
+    .eq("model", model);
+
+  const items = data || [];
+  return {
+    total: items.length,
+    pending: items.filter((i: any) => i.status === 'pending').length,
+    processing: items.filter((i: any) => i.status === 'processing').length,
+    done: items.filter((i: any) => i.status === 'done').length,
+    failed: items.filter((i: any) => i.status === 'failed').length,
+  };
+}
+
 /** Map 7zap URLs for a brand */
 export async function map7zapBrand(brand: string, model?: string) {
   const { data, error } = await supabase.functions.invoke("scrape-7zap", {
@@ -805,7 +856,6 @@ export async function map7zapBrand(brand: string, model?: string) {
 export async function decodeAndSetupVehicle(vin: string, userId?: string) {
   const result = await decodeVINEnriched(vin);
   
-  // Save to user_vehicles if user is logged in
   if (userId && result.basic.brand && result.basic.model) {
     const { data: existing } = await supabase
       .from("user_vehicles")
@@ -831,8 +881,7 @@ export async function decodeAndSetupVehicle(vin: string, userId?: string) {
 
 /**
  * Auto-expand EPC catalog for a vehicle if categories are missing.
- * Called after VIN decode to ensure catalog data exists.
- * Returns true if catalog was generated, false if it already existed.
+ * Now only generates categories (fast). Parts are generated lazily.
  */
 export async function autoExpandCatalog(
   brand: string,
@@ -841,27 +890,24 @@ export async function autoExpandCatalog(
   engine?: string,
   onProgress?: (msg: string) => void
 ): Promise<{ expanded: boolean; stats?: { categories: number; parts: number } }> {
-  // Check if categories already exist
   const existingCats = await getEPCCategories(brand, model, engine, year);
   if (existingCats.length > 0) {
     return { expanded: false };
   }
 
-  onProgress?.("Katalog pro toto vozidlo chybí – generuji...");
+  onProgress?.("Katalog pro toto vozidlo chybí – generuji kategorie...");
 
   try {
     const result = await generateEPCCatalog(brand, model, year, engine);
     return {
       expanded: true,
-      stats: { categories: result.stats.categories, parts: result.stats.parts },
+      stats: { categories: result.stats.categories, parts: 0 },
     };
   } catch (e) {
     console.error("Auto-expand failed:", e);
-    // Fallback: try scrape-7zap
     try {
       onProgress?.("AI generátor selhal – zkouším externí katalog...");
       await scrape7zap(brand, model, year?.toString());
-      // Check if scraping added any categories
       const newCats = await getEPCCategories(brand, model, engine, year);
       return { expanded: newCats.length > 0, stats: { categories: newCats.length, parts: 0 } };
     } catch {
@@ -869,3 +915,4 @@ export async function autoExpandCatalog(
     }
   }
 }
+

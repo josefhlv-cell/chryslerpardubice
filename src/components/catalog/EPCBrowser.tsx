@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
-  scrape7zap, generateEPCCatalog, searchParts, autoExpandCatalog,
+  scrape7zap, generateEPCCatalog, generatePartsBatch, searchParts, autoExpandCatalog,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 import { toast } from "sonner";
@@ -79,6 +79,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [generating, setGenerating] = useState(false);
   const [autoExpanding, setAutoExpanding] = useState(false);
   const [scrapingOem, setScrapingOem] = useState<string | null>(null);
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const diagramRef = useRef<HTMLDivElement>(null);
 
   // Paginated parts
@@ -136,7 +137,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .catch(() => setLoading(false));
   }, [brand, model, engine, year]);
 
-  // Load parts when category/subcategory selected + auto-load diagram
+  // Load parts when category/subcategory selected — lazy generate if empty
   useEffect(() => {
     if (!selectedCategory) {
       setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
@@ -151,6 +152,28 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
     getEPCParts(catIds)
       .then(async (loadedParts) => {
+        // Lazy generation: if no parts exist, generate them on-demand
+        if (loadedParts.length === 0 && !batchGenerating) {
+          setBatchGenerating(true);
+          toast.info(`Generuji díly pro ${selectedSubcategory || selectedCategory}...`);
+          try {
+            const result = await generatePartsBatch(
+              brand, model, selectedCategory, selectedSubcategory || undefined,
+              engine || undefined, year ? parseInt(year) : undefined
+            );
+            if (result.parts_count > 0) {
+              toast.success(`${result.parts_count} dílů vygenerováno`);
+              // Reload parts after generation
+              const reloaded = await getEPCParts(catIds);
+              loadedParts = reloaded;
+            }
+          } catch (e: any) {
+            console.error('Batch generation error:', e);
+            toast.error("Generace dílů selhala – zkuste to znovu");
+          }
+          setBatchGenerating(false);
+        }
+
         setParts(loadedParts);
         const oems = loadedParts.map(p => p.oem_number).filter(Boolean) as string[];
         if (oems.length > 0) {
@@ -165,7 +188,6 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
           setDiagramSvg(diagramCache.get(cacheKey)!);
           attachDiagramHandlers();
         } else if (loadedParts.length > 0) {
-          // Auto-generate diagram in background
           setDiagramLoading(true);
           try {
             const vehicle = `${brand} ${model}`;
@@ -492,9 +514,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
               </div>
             )}
 
-            {partsLoading ? (
-              <div className="flex items-center justify-center py-12">
+            {partsLoading || batchGenerating ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                {batchGenerating && (
+                  <p className="text-xs text-muted-foreground">Generuji díly pro {selectedSubcategory || selectedCategory}...</p>
+                )}
               </div>
             ) : parts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
