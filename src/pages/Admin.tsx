@@ -55,6 +55,7 @@ type OrderRow = {
   status: string;
   admin_note: string | null;
   customer_note: string | null;
+  catalog_source: string | null;
   created_at: string;
 };
 

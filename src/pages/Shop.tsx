@@ -235,6 +235,7 @@ const Shop = () => {
       await supabase.from("orders").insert({
         user_id: user.id, order_type: "used" as const, quantity: 1,
         part_name: part.name, oem_number: part.oem_number,
+        catalog_source: part.catalog_source || null,
       });
       toast.success("Poptávka odeslána!");
     } catch (err: any) { toast.error(err.message); }
