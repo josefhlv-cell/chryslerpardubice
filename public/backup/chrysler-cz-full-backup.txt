@@ -1,0 +1,544 @@
+================================================================================
+  CHRYSLER CZ – KOMPLETNÍ ZÁLOHA ZDROJOVÉHO KÓDU
+  Datum: 2026-03-08
+  Verze: Produkční
+================================================================================
+
+OBSAH ZÁLOHY:
+1. Struktura projektu
+2. Konfigurace (package.json, vite, tailwind, tsconfig)
+3. Hlavní soubory aplikace (App.tsx, main.tsx, index.css)
+4. Kontexty (Auth, Cart)
+5. API vrstva (partsAPI, serviceAPI)
+6. Katalogové komponenty (SearchBar, Filters, PartCard, PartDetailModal, Favorites, History, Recommendations, PhotoDialog, ServiceInterval)
+7. Stránky (Landing, Shop, Auth, Account, MyVehicles, MyOrders, ServicePlan, ServiceBook, Emergency, AiMechanic, ...)
+8. Layout komponenty (TopBar, BottomNav, PageHeader)
+9. Servisní komponenty (ServiceRecommendations)
+10. Prezentace (AppPresentation)
+11. Edge Functions (ai-mechanic, vin-ocr, catalog-search, price-sync, ...)
+12. Databázové schéma a RLS
+
+================================================================================
+  1. STRUKTURA PROJEKTU
+================================================================================
+
+/src
+├── api/
+│   ├── partsAPI.ts          — vyhledávání dílů, CSV export, VIN dekódování
+│   └── serviceAPI.ts        — servisní intervaly, výpočet efektivních km
+├── components/
+│   ├── catalog/
+│   │   ├── SearchBar.tsx     — multi-mode vyhledávání (OEM, VIN, EPC, Vozidlo)
+│   │   ├── Filters.tsx       — filtry: značka, model, motor, kategorie, cena
+│   │   ├── PartCard.tsx      — karta dílu s lazy fotkou
+│   │   ├── PartDetailModal.tsx — detail panel (desktop) / sheet (mobil)
+│   │   ├── Favorites.tsx     — oblíbené (localStorage)
+│   │   ├── History.tsx       — historie vyhledávání
+│   │   ├── Recommendations.tsx — doporučené díly
+│   │   ├── PhotoDialog.tsx   — foto načtené po kliknutí
+│   │   └── ServiceInterval.tsx — servisní intervaly od km_start
+│   ├── admin/
+│   │   ├── AdminCatalogSettings.tsx
+│   │   ├── AdminFaultReports.tsx
+│   │   ├── AdminNotifications.tsx
+│   │   ├── AdminPriceManagement.tsx
+│   │   ├── AdminServiceHistory.tsx
+│   │   ├── AdminServicePlans.tsx
+│   │   └── CatalogImport.tsx
+│   ├── ui/                   — shadcn/ui komponenty
+│   ├── BottomNav.tsx
+│   ├── TopBar.tsx
+│   ├── PageHeader.tsx
+│   ├── NavLink.tsx
+│   └── ServiceRecommendations.tsx
+├── contexts/
+│   ├── AuthContext.tsx        — autentizace, profil, role
+│   └── CartContext.tsx        — košík
+├── pages/
+│   ├── Landing.tsx
+│   ├── Shop.tsx               — hlavní katalog dílů (568 řádků)
+│   ├── Auth.tsx               — přihlášení/registrace
+│   ├── Account.tsx
+│   ├── MyVehicles.tsx         — správa vozidel + OCR VIN/SPZ
+│   ├── MyOrders.tsx
+│   ├── ServicePlan.tsx        — servisní plán s intervaly
+│   ├── ServiceBook.tsx        — digitální servisní kniha + PDF export
+│   ├── AiMechanic.tsx         — AI Tonda diagnostika
+│   ├── Emergency.tsx          — nouzový režim
+│   ├── Vehicles.tsx           — vozy na prodej
+│   ├── VehicleDetail.tsx
+│   ├── Cart.tsx
+│   ├── Checkout.tsx
+│   ├── Service.tsx            — rezervace servisu
+│   ├── Contact.tsx
+│   ├── Notifications.tsx
+│   ├── Admin.tsx
+│   ├── Terms.tsx
+│   ├── ResetPassword.tsx
+│   ├── AppPresentation.tsx
+│   └── NotFound.tsx
+├── integrations/supabase/
+│   ├── client.ts              — auto-generováno
+│   └── types.ts               — auto-generováno
+├── hooks/
+│   ├── use-mobile.tsx
+│   └── use-toast.ts
+├── lib/
+│   ├── api.ts
+│   └── utils.ts
+├── App.tsx
+├── App.css
+├── main.tsx
+└── index.css
+
+/supabase
+├── config.toml
+└── functions/
+    ├── ai-mechanic/index.ts
+    ├── vin-ocr/index.ts
+    ├── catalog-search/index.ts
+    ├── catalog-fetch/index.ts
+    ├── catalog-proxy/index.ts
+    ├── catalog-probe/index.ts
+    └── price-sync/index.ts
+
+/public
+├── images/
+│   ├── logo-cd-pardubice.png
+│   ├── logo_chrysler.webp
+│   ├── chrysler-wings.webp
+│   ├── dodge-logo.webp
+│   ├── ram-logo.webp
+│   └── vehicles/
+├── videos/
+│   └── app-demo.mp4
+├── favicon.ico
+├── robots.txt
+└── test-catalog.csv
+
+
+================================================================================
+  2. KONFIGURACE
+================================================================================
+
+---- package.json (klíčové závislosti) ----
+React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui
+framer-motion, @tanstack/react-query, react-router-dom
+@supabase/supabase-js, recharts, sonner
+@capacitor/core (iOS/Android ready)
+zod, react-hook-form, date-fns
+
+
+================================================================================
+  3. HLAVNÍ SOUBORY APLIKACE
+================================================================================
+
+---- src/main.tsx ----
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import "./index.css";
+createRoot(document.getElementById("root")!).render(<App />);
+
+---- src/App.tsx ----
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { CartProvider } from "@/contexts/CartContext";
+import TopBar from "@/components/TopBar";
+import BottomNav from "@/components/BottomNav";
+import Landing from "./pages/Landing";
+import Shop from "./pages/Shop";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import Service from "./pages/Service";
+import Vehicles from "./pages/Vehicles";
+import VehicleDetail from "./pages/VehicleDetail";
+import Account from "./pages/Account";
+import Auth from "./pages/Auth";
+import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
+import Contact from "./pages/Contact";
+import ResetPassword from "./pages/ResetPassword";
+import MyOrders from "./pages/MyOrders";
+import MyVehicles from "./pages/MyVehicles";
+import Notifications from "./pages/Notifications";
+import AiMechanic from "./pages/AiMechanic";
+import Terms from "./pages/Terms";
+import Emergency from "./pages/Emergency";
+import ServicePlan from "./pages/ServicePlan";
+import ServiceBook from "./pages/ServiceBook";
+import AppPresentation from "./pages/AppPresentation";
+import { AuthProvider } from "@/contexts/AuthContext";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <CartProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <TopBar />
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/shop" element={<Shop />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/service" element={<Service />} />
+              <Route path="/vehicles" element={<Vehicles />} />
+              <Route path="/vehicles/:id" element={<VehicleDetail />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/orders" element={<MyOrders />} />
+              <Route path="/my-vehicles" element={<MyVehicles />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/ai-mechanic" element={<AiMechanic />} />
+              <Route path="/emergency" element={<Emergency />} />
+              <Route path="/service-plan" element={<ServicePlan />} />
+              <Route path="/service-book" element={<ServiceBook />} />
+              <Route path="/presentation" element={<AppPresentation />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <BottomNav />
+          </BrowserRouter>
+        </TooltipProvider>
+      </CartProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
+
+export default App;
+
+---- src/index.css ----
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 216 28% 7%;
+    --foreground: 210 20% 95%;
+    --card: 216 25% 11%;
+    --card-foreground: 210 20% 95%;
+    --popover: 216 25% 11%;
+    --popover-foreground: 210 20% 95%;
+    --primary: 213 70% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 216 20% 16%;
+    --secondary-foreground: 210 20% 90%;
+    --muted: 216 18% 14%;
+    --muted-foreground: 215 15% 50%;
+    --accent: 38 92% 50%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 216 18% 18%;
+    --input: 216 18% 18%;
+    --ring: 213 70% 45%;
+    --radius: 0.75rem;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --sidebar-background: 216 28% 5%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 213 70% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 216 18% 14%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 216 18% 18%;
+    --sidebar-ring: 213 70% 45%;
+    --font-display: 'Outfit', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
+}
+
+@layer utilities {
+  .glass-card { @apply bg-card/80 backdrop-blur-xl border border-border/50 rounded-xl; }
+  .gradient-primary { background: linear-gradient(135deg, hsl(213, 70%, 45%), hsl(213, 70%, 55%)); }
+  .gradient-accent { background: linear-gradient(135deg, hsl(38, 92%, 50%), hsl(30, 95%, 55%)); }
+  .gradient-dark { background: linear-gradient(180deg, hsl(216, 28%, 9%), hsl(216, 28%, 5%)); }
+  .text-gradient { background: linear-gradient(135deg, hsl(213, 70%, 50%), hsl(213, 70%, 65%)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .text-gradient-accent { background: linear-gradient(135deg, hsl(38, 92%, 50%), hsl(30, 95%, 58%)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+}
+
+
+================================================================================
+  4. KONTEXTY
+================================================================================
+
+---- src/contexts/AuthContext.tsx ----
+- Autentizace přes Supabase Auth
+- Profil uživatele (profiles tabulka)
+- Role (admin/customer přes user_roles)
+- signUp, signIn, signOut, resetPassword
+- isPendingBusiness, canPlaceOrder
+
+---- src/contexts/CartContext.tsx ----
+- Lokální košík (items, addItem, removeItem, updateQuantity)
+- totalItems, totalPrice, discountPercent
+
+
+================================================================================
+  5. API VRSTVA
+================================================================================
+
+---- src/api/partsAPI.ts ----
+KLÍČOVÉ FUNKCE:
+- searchParts(query, page, filters) — lokální DB + externí katalog
+- searchByCategory(term, page, filters) — hledání podle kategorie
+- searchEPC(brand, category, model, sub, page) — EPC kategorie
+- decodeVIN(vin) — NHTSA API dekódování
+- getRecommendations(part) — podobné díly
+- downloadCSV(parts) — export výsledků
+- enrichWithSupersessions(parts) — obohacení o náhrady dílů
+- mapToPartResult(item, source) — normalizace dat
+- applyFilters(parts, filters) — client-side filtrování
+
+TYPY:
+- PartResult: id, name, oem_number, price_*, category, family, segment, manufacturer, availability, superseded_by, supersedes
+- SearchFilters: brand, model, year, motor, category, manufacturer, minPrice, maxPrice, availability
+- PAGE_SIZE = 20
+
+---- src/api/serviceAPI.ts ----
+KLÍČOVÉ FUNKCE:
+- calculateServiceDue(vehicle, plan) — výpočet urgence servisu
+  - effective_km = current_km - km_start
+  - effective_last = last_service_km - km_start
+  - due when: effective_km - effective_last >= interval
+- getVehicleServiceReport(userId, vehicleId) — report pro jedno vozidlo
+- getAllVehicleReports(userId) — reporty pro všechna vozidla
+
+TYPY:
+- VehicleWithService: id, brand, model, year, engine, vin, current_mileage, km_start
+- ServiceDueItem: plan, urgency (due/soon/ok), effectiveKm, kmRemaining, daysRemaining, progressPercent
+- VehicleServiceReport: vehicle, items[], history[]
+
+
+================================================================================
+  6. KATALOGOVÉ KOMPONENTY
+================================================================================
+
+---- src/components/catalog/SearchBar.tsx (90 řádků) ----
+- 4 režimy: Číslo dílu, Vozidlo, VIN, EPC
+- Tab switcher + search input + button
+
+---- src/components/catalog/Filters.tsx (227 řádků) ----
+- Vozidlový strom: brands → catalogTree (značka → model → motor)
+- Kategorie dílů: Motor, Převodovka, Brzdy, Řízení, ...
+- Podkategorie: subCategoriesMap
+- Cenový filtr, dostupnost, výrobce
+- VIN dekódování v režimu VIN
+- Rychlé hledání (příklady OEM kódů)
+
+---- src/components/catalog/PartCard.tsx (184 řádků) ----
+- Karta s: zdroj badge, dostupnost, oblíbené ⭐
+- Lazy foto (placeholder + click to load)
+- Cena s DPH, bez DPH, firemní sleva
+- Supersession alerty (nahrazeno / nahrazuje)
+- Expandable technické detaily
+- Akce: detail, objednat nový, poptat použitý
+
+---- src/components/catalog/PartDetailModal.tsx (189 řádků) ----
+- PartDetailPanel — desktop side panel (sticky, 320px)
+- PartDetailSheet — mobile bottom sheet (85vh)
+- DetailContent: foto, cena, supersession, techinfo, doporučení
+
+---- src/components/catalog/Favorites.tsx (47 řádků) ----
+- useFavorites() hook — localStorage persistence
+- toggleFavorite, isFavorite, clearFavorites
+
+---- src/components/catalog/History.tsx (91 řádků) ----
+- useSearchHistory() hook — localStorage, max 20 entries
+- HistoryList display component
+
+---- src/components/catalog/Recommendations.tsx (66 řádků) ----
+- Načte podobné díly z DB (stejná kategorie/family)
+- Zobrazí max 4 doporučení
+
+---- src/components/catalog/PhotoDialog.tsx (46 řádků) ----
+- Dialog s lazy-loaded fotkami
+- Stav: loading → fotky → "není k dispozici"
+
+---- src/components/catalog/ServiceInterval.tsx (320 řádků) ----
+- ServiceItemRow: urgence badge + progress bar + expandable detail
+- VehicleServiceCard: přehled vozidla + servisní položky + historie
+- ServiceInterval: hlavní komponenta, načte reporty pro všechna vozidla
+
+
+================================================================================
+  7. HLAVNÍ STRÁNKY
+================================================================================
+
+---- src/pages/Landing.tsx ----
+- Hero s logem, feature karty, brand loga
+- ServiceRecommendations pro přihlášené
+- CTA: Přihlásit, Registrace, Host
+
+---- src/pages/Shop.tsx (568 řádků) ----
+- 3-sloupcový layout: Filtry | Výsledky | Detail panel
+- Nové/Použité díly toggle
+- Sidebar tabs: Filtry, Oblíbené, Historie
+- VIN dekódování, EPC browsing
+- Paginace, CSV export
+- ServiceInterval modul pod výsledky
+- Objednávka nového/poptávka použitého dílu
+
+---- src/pages/Auth.tsx ----
+- Login / Registrace / Reset hesla
+- Soukromá / Firemní registrace (IČO, DIČ)
+
+---- src/pages/MyVehicles.tsx (483 řádků) ----
+- CRUD vozidel
+- VIN dekódování (ruční + OCR z fotografie)
+- OCR SPZ z fotografie
+- Aktualizace kilometrů s historií
+- Servisní historie vozidla
+
+---- src/pages/ServicePlan.tsx ----
+- Výběr vozidla
+- Automatické generování 11 servisních úkonů
+- Stav intervalů (překročeno/zbývá)
+- Propojení s doporučenými díly
+
+---- src/pages/ServiceBook.tsx ----
+- Timeline servisních záznamů
+- Export do PDF
+- Fotografie ke každému servisu
+
+---- src/pages/AiMechanic.tsx ----
+- Chat s AI Tondou (edge function ai-mechanic)
+- Fotografie závad
+- Detekce nebezpečí → červené varování
+- Doporučení dílů z katalogu
+- Automatické hlášení poruch (fault_reports)
+
+---- src/pages/Emergency.tsx ----
+- Nouzová pomoc
+- Rychlé volání servisu
+- Návody: baterie, přehřátí, start, defekt
+
+
+================================================================================
+  8. LAYOUT KOMPONENTY
+================================================================================
+
+---- src/components/TopBar.tsx ----
+- Logo + košík + admin shield
+- Sticky header, skrytý na landing
+
+---- src/components/BottomNav.tsx ----
+- 5 položek: Díly, Vozy, Tonda, Objednávky, Účet
+- Skrytý na landing a checkout
+
+
+================================================================================
+  9. DATABÁZOVÉ TABULKY
+================================================================================
+
+profiles          — uživatelské profily (account_type, status, discount_percent, IČO, DIČ)
+user_vehicles     — vozidla zákazníků (brand, model, year, engine, vin, current_mileage)
+user_roles        — role (admin | customer)
+service_history   — servisní záznamy (typ, datum, km, díly, cena, fotky)
+service_plans     — servisní plány (interval_km, interval_months, last_service_km/date)
+service_bookings  — rezervace servisu (status, preferované datum, náhradní vůz)
+mileage_history   — historie nájezdů km (zdroj: user/service)
+fault_reports     — hlášení poruch od AI Tondy (ai_analysis, ai_risk_level, fotky)
+parts_new         — katalog dílů (OEM, ceny, kategorie, dostupnost, zdroj)
+parts_catalog     — importovaný CSV katalog
+part_supersessions — náhrady dílů (old → new OEM)
+orders            — sjednocené objednávky (nové + použité díly)
+new_part_orders   — starší objednávky nových dílů
+used_part_requests — poptávky použitých dílů
+notifications     — notifikace
+vehicles          — vozy na prodej
+vehicle_inquiries — poptávky vozů
+cars_for_sale     — inzerce
+epc_categories    — EPC kategorie
+epc_part_links    — propojení dílů s EPC
+price_history     — historie cen dílů
+
+
+================================================================================
+  10. EDGE FUNCTIONS (BACKEND)
+================================================================================
+
+ai-mechanic/      — AI diagnostika (GPT/Gemini), analýza fotek, doporučení dílů
+vin-ocr/           — OCR rozpoznání VIN/SPZ z fotografií
+catalog-search/    — vyhledávání v Mopar katalogu + ceník vernostsevyplaci.cz
+catalog-fetch/     — načítání externího katalogu
+catalog-proxy/     — proxy pro katalog
+catalog-probe/     — testování spojení
+price-sync/        — synchronizace cen z externího zdroje
+
+
+================================================================================
+  11. RLS POLITIKY (BEZPEČNOST)
+================================================================================
+
+- Uživatelé vidí/editují pouze vlastní data
+- Admini mají přístup ke všemu
+- Funkce has_role() pro bezpečné ověření rolí
+- can_place_order() pro blokování neschválených účtů
+- Trigger orders_calculate_price() pro automatický výpočet slev
+
+
+================================================================================
+  12. TECHNOLOGIE
+================================================================================
+
+Frontend: React 18 + TypeScript + Vite + Tailwind CSS
+UI:       shadcn/ui + framer-motion
+Backend:  Supabase (Lovable Cloud)
+          - PostgreSQL databáze
+          - Autentizace (email)
+          - Storage (service-photos, fault-photos)
+          - Edge Functions (Deno)
+AI:       Lovable AI (GPT-5, Gemini) pro diagnostiku
+Mobile:   Capacitor (iOS/Android ready)
+API:      NHTSA VIN dekódování, Mopar EPC, vernostsevyplaci.cz ceník
+
+
+================================================================================
+  POZNÁMKA K KOMPLETNÍ ZÁLOZE
+================================================================================
+
+Tento soubor obsahuje strukturu a popis celého projektu.
+Pro kompletní zálohu zdrojového kódu doporučujeme:
+
+1. Propojit projekt s GitHub:
+   Settings → Connectors → GitHub → Connect
+
+2. Nebo stáhnout přes GitHub:
+   Po propojení: git clone <repo-url>
+
+Testovací verze aplikace:
+https://id-preview--c6d93210-1224-4205-90de-eec3ccc6923f.lovable.app
+
+Pro publikování produkční verze:
+Klikněte na tlačítko "Publish" v pravém horním rohu editoru.
+
+================================================================================
+  KONEC ZÁLOHY — Chrysler CZ © 2026
+================================================================================
