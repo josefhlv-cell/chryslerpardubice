@@ -49,7 +49,8 @@ Deno.serve(async (req) => {
     let updated = 0, errors = 0, skipped = 0;
 
     for (const partNumber of oemNumbers.slice(0, batchSize)) {
-      const priceCode = `K${partNumber.replace(/^0+/, '')}`;
+      // Try just the OEM number directly (as shown in catalog: "Zadejte kód hledaného dílu")
+      const searchCodes = [partNumber];
 
       // Check cache / freshness
       const { data: cached } = await supabase
@@ -73,31 +74,41 @@ Deno.serve(async (req) => {
         }
       }
 
-      try {
-        console.log(`Searching price for ${priceCode} via Firecrawl...`);
-        const searchResult = await firecrawlSearch(FIRECRAWL_API_KEY, CATALOG_PASS, priceCode, debugMode);
+      let found = false;
+      for (const code of searchCodes) {
+        if (found) break;
+        try {
+          console.log(`Searching price for ${code} via Firecrawl...`);
+          const searchResult = await firecrawlSearch(FIRECRAWL_API_KEY, CATALOG_PASS, code, debugMode);
 
-        if (debugMode) {
-          results.push({
-            oem_number: partNumber,
-            debug: true,
-            searchCode: priceCode,
-            ...searchResult.debug,
-          });
-        }
+          if (debugMode) {
+            results.push({
+              oem_number: partNumber,
+              debug: true,
+              searchCode: code,
+              ...searchResult.debug,
+            });
+          }
 
-        if (searchResult.prices.length > 0) {
-          const { priceWithVat, priceWithoutVat } = pickBestPrices(searchResult.prices);
-          await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
-          results.push({ oem_number: partNumber, status: 'updated', price_with_vat: priceWithVat, price_without_vat: priceWithoutVat });
-          updated++;
-        } else {
-          results.push({ oem_number: partNumber, status: 'not_found', searchCode: priceCode });
-          errors++;
+          if (searchResult.prices.length > 0) {
+            found = true;
+            const { priceWithVat, priceWithoutVat } = pickBestPrices(searchResult.prices);
+            await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
+            results.push({ oem_number: partNumber, status: 'updated', searchCode: code, price_with_vat: priceWithVat, price_without_vat: priceWithoutVat });
+            updated++;
+          }
+        } catch (e) {
+          console.error(`Error for ${code}:`, e);
+          if (debugMode) {
+            results.push({ oem_number: partNumber, debug: true, searchCode: code, error: String(e) });
+          }
         }
-      } catch (e) {
-        console.error(`Error for ${priceCode}:`, e);
-        results.push({ oem_number: partNumber, status: 'error', message: String(e) });
+        await new Promise(r => setTimeout(r, 500));
+      }
+      if (!found && !debugMode) {
+        results.push({ oem_number: partNumber, status: 'not_found', searchCodes });
+        errors++;
+      } else if (!found) {
         errors++;
       }
 
@@ -153,6 +164,7 @@ async function firecrawlSearch(
           script: `
             (async function() {
               try {
+                // Login
                 var r1 = await fetch('/cnd/', {
                   method: 'POST',
                   headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -161,18 +173,51 @@ async function firecrawlSearch(
                 });
                 var loginHtml = await r1.text();
                 
-                var r2 = await fetch('/cnd/', {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                  body: 'search=${searchCode}&submit-search=Vyhledat',
-                  credentials: 'include'
-                });
-                var searchHtml = await r2.text();
+                // Find all form inputs on logged-in page
+                var tmp = document.createElement('div');
+                tmp.innerHTML = loginHtml;
+                var inputs = tmp.querySelectorAll('input');
+                var inputNames = [];
+                inputs.forEach(function(i) { inputNames.push(i.name + ':' + i.type + ':' + (i.value||i.placeholder||'').substring(0,30)); });
                 
-                document.body.setAttribute('data-login-len', loginHtml.length);
-                document.body.setAttribute('data-search-len', searchHtml.length);
-                document.body.setAttribute('data-login-preview', loginHtml.substring(0, 200));
-                document.body.setAttribute('data-search-result', searchHtml);
+                // Find the search input name dynamically
+                var searchInputName = '';
+                var submitName = '';
+                inputs.forEach(function(i) {
+                  if (i.type === 'text' && (i.placeholder||'').toLowerCase().includes('kód')) searchInputName = i.name;
+                  if ((i.type === 'submit' || i.type === 'button') && !i.name.includes('password')) submitName = i.name;
+                });
+                
+                document.body.setAttribute('data-inputs', inputNames.join('|'));
+                document.body.setAttribute('data-search-input', searchInputName);
+                document.body.setAttribute('data-submit-name', submitName);
+                document.body.setAttribute('data-login-len', loginHtml.length.toString());
+                
+                // If we found search form, do the search
+                if (searchInputName) {
+                  var body = encodeURIComponent(searchInputName) + '=' + encodeURIComponent('${searchCode}');
+                  if (submitName) body += '&' + encodeURIComponent(submitName) + '=Vyhledat';
+                  
+                  var r2 = await fetch('/cnd/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: body,
+                    credentials: 'include'
+                  });
+                  var searchHtml = await r2.text();
+                  
+                  var tmp2 = document.createElement('div');
+                  tmp2.innerHTML = searchHtml;
+                  var textContent = tmp2.textContent || '';
+                  
+                  document.body.setAttribute('data-search-len', searchHtml.length.toString());
+                  document.body.setAttribute('data-search-text', btoa(unescape(encodeURIComponent(textContent.substring(0, 3000)))));
+                  document.body.setAttribute('data-search-html', btoa(unescape(encodeURIComponent(searchHtml.substring(0, 8000)))));
+                } else {
+                  // No search form found - store login page text for debug
+                  var loginText = tmp.textContent || '';
+                  document.body.setAttribute('data-login-text', btoa(unescape(encodeURIComponent(loginText.substring(0, 2000)))));
+                }
               } catch(e) {
                 document.body.setAttribute('data-error', e.message);
               }
@@ -192,24 +237,42 @@ async function firecrawlSearch(
 
   const html = data.data?.html || data.html || '';
   
-  // Extract search result from data attributes (injected by XHR)
-  const searchResultMatch = html.match(/data-search-result="([^"]*)"/);
-  const searchResult = searchResultMatch ? searchResultMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"') : '';
-  const loginLenMatch = html.match(/data-login-len="(\d+)"/);
-  const searchLenMatch = html.match(/data-search-len="(\d+)"/);
-  const errorMatch = html.match(/data-error="([^"]*)"/);
-  const loginPreviewMatch = html.match(/data-login-preview="([^"]*)"/);
+  // Extract data attributes
+  const getAttr = (name: string) => {
+    const m = html.match(new RegExp(`data-${name}="([^"]*)"`));
+    return m?.[1] || '';
+  };
   
-  // Try extracting prices from the search result or full HTML
-  const prices = searchResult ? extractPrices(searchResult) : extractPrices(html);
+  const decodeB64 = (b64: string) => {
+    try { return decodeURIComponent(escape(atob(b64))); } catch { return ''; }
+  };
+  
+  const searchHtmlB64 = getAttr('search-html');
+  const searchTextB64 = getAttr('search-text');
+  const loginTextB64 = getAttr('login-text');
+  const searchHtml = decodeB64(searchHtmlB64);
+  const searchText = decodeB64(searchTextB64);
+  const loginText = decodeB64(loginTextB64);
+  const loginLen = getAttr('login-len');
+  const searchLen = getAttr('search-len');
+  const inputsStr = getAttr('inputs');
+  const searchInputName = getAttr('search-input');
+  const submitName = getAttr('submit-name');
+  const error = getAttr('error');
+  
+  // Extract prices from the search result HTML
+  const prices = searchHtml ? extractPrices(searchHtml) : [];
 
   const debug = debugMode ? {
     htmlLength: html.length,
-    loginLen: loginLenMatch?.[1],
-    searchLen: searchLenMatch?.[1],
-    loginPreview: loginPreviewMatch?.[1]?.substring(0, 200),
-    error: errorMatch?.[1],
-    searchResultPreview: searchResult.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
+    loginLen,
+    searchLen,
+    inputs: inputsStr,
+    searchInputName,
+    submitName,
+    error,
+    searchTextPreview: searchText.substring(0, 500),
+    loginTextPreview: loginText.substring(0, 500),
     pricesFound: prices,
   } : {};
 
