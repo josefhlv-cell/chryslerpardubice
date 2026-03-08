@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Bot, Send, Phone, Wrench, AlertTriangle, Car, Loader2, Camera, ImagePlus, ShoppingCart } from "lucide-react";
+import { Send, Phone, Wrench, AlertTriangle, Car, Loader2, Camera, ImagePlus, ShoppingCart } from "lucide-react";
+import TondaAvatar from "@/components/TondaAvatar";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type Vehicle = { id: string; brand: string; model: string; year: number | null; engine: string | null; vin: string | null; mileage?: number | null };
