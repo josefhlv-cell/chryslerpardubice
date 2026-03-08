@@ -514,9 +514,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
               </div>
             )}
 
-            {partsLoading ? (
-              <div className="flex items-center justify-center py-12">
+            {partsLoading || batchGenerating ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                {batchGenerating && (
+                  <p className="text-xs text-muted-foreground">Generuji díly pro {selectedSubcategory || selectedCategory}...</p>
+                )}
               </div>
             ) : parts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
