@@ -25,6 +25,7 @@ import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
 import AdminServicePlans from "@/components/admin/AdminServicePlans";
 import AdminVehicleOffers from "@/components/admin/AdminVehicleOffers";
 import AICatalogImport from "@/components/admin/AICatalogImport";
+import AdminEPCDiagrams from "@/components/admin/AdminEPCDiagrams";
 
 // ---- Types ----
 
