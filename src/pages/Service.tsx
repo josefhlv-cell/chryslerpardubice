@@ -32,7 +32,6 @@ const Service = () => {
   const [serviceType, setServiceType] = useState("");
   const [date, setDate] = useState<Date>();
   const [note, setNote] = useState("");
-  const [wantsReplacement, setWantsReplacement] = useState(false);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
