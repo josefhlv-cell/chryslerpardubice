@@ -184,6 +184,10 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
               <RefreshCw className={`w-3 h-3 ${pricesLoading ? "animate-spin" : ""}`} />
             </Button>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleLoadDiagram} disabled={diagramLoading}>
+              {diagramLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutGrid className="w-3 h-3" />}
+              <span className="text-[10px] ml-1">Nákres</span>
+            </Button>
             <Badge variant="secondary" className="text-[10px]">
               {parts.length} dílů
             </Badge>
