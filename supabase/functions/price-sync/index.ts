@@ -207,7 +207,9 @@ async function catalogLogin(password: string, debugMode: boolean): Promise<{
   // GET page → get PHPSESSID
   const getResp = await fetch(CATALOG_URL, { redirect: 'follow', headers });
   const getCookies = collectCookies(getResp);
-  await getResp.text();
+  const getHtml = await getResp.text();
+  const getHasPassword = getHtml.includes('name="password"');
+  const getHasCloudflare = getHtml.includes('cf-') || getHtml.includes('challenge') || getHtml.includes('__cf');
 
   // POST login
   const postBody = `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`;
