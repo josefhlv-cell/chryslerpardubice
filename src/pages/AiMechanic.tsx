@@ -322,7 +322,7 @@ const AiMechanic = () => {
               {msg.role === "assistant" && (
                 <div className="flex flex-col items-center mr-2 shrink-0">
                   <span className="text-[9px] font-bold text-primary">Tonda</span>
-                  <Bot className="w-6 h-6 text-primary" />
+                  <TondaAvatar size="sm" />
                 </div>
               )}
               <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
