@@ -363,8 +363,6 @@ const Shop = () => {
                         Hledat
                       </Button>
                     )}
-                      </Button>
-                    )}
                   </div>
                   {subCategoriesMap[category] && (
                     <div className="flex flex-wrap gap-1">
