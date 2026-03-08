@@ -85,11 +85,15 @@ Deno.serve(async (req) => {
       catalogHtml = await loginResp.text();
     }
 
-    // Check if we're logged in (should see search form, not password form)
+    // Check if we're logged in
     const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte');
     const stillHasPassword = catalogHtml.includes('name="password"') && !catalogHtml.includes('name="search"');
     
+    // Extract all form fields for debugging
+    const formMatches = catalogHtml.match(/<form[^>]*>[\s\S]*?<\/form>/gi) || [];
+    const inputMatches = catalogHtml.match(/<input[^>]*>/gi) || [];
     console.log(`Login result: hasSearch=${hasSearchForm}, stillPassword=${stillHasPassword}, htmlLen=${catalogHtml.length}, cookies=${cookies.length}`);
+    console.log(`Forms found: ${formMatches.length}, Inputs: ${inputMatches.map(i => i.substring(0, 100))}`);
 
     if (debugMode && !hasSearchForm) {
       // Return debug info about login attempt
