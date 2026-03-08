@@ -35,6 +35,7 @@ import { PartDetailPanel, PartDetailSheet } from "@/components/catalog/PartDetai
 import { useFavorites } from "@/components/catalog/Favorites";
 import HistoryList, { useSearchHistory } from "@/components/catalog/History";
 import PhotoDialog from "@/components/catalog/PhotoDialog";
+import ServiceInterval from "@/components/catalog/ServiceInterval";
 
 // ---- API layer ----
 import {
@@ -511,6 +512,13 @@ const Shop = () => {
                     </Button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Service Intervals Module */}
+            {partType === "new" && !searching && (
+              <div className="mt-6">
+                <ServiceInterval />
               </div>
             )}
 
