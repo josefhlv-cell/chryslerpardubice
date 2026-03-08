@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { cacheGet, cacheSet } from "@/lib/epcCache";
 
 // ---- Types ----
 
