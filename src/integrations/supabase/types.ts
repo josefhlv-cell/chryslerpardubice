@@ -109,7 +109,11 @@ export type Database = {
           created_at: string
           epc_category_id: string
           id: string
-          part_id: string
+          manufacturer: string | null
+          note: string | null
+          oem_number: string | null
+          part_id: string | null
+          part_name: string | null
           position_label: string | null
           x_pos: number | null
           y_pos: number | null
@@ -118,7 +122,11 @@ export type Database = {
           created_at?: string
           epc_category_id: string
           id?: string
-          part_id: string
+          manufacturer?: string | null
+          note?: string | null
+          oem_number?: string | null
+          part_id?: string | null
+          part_name?: string | null
           position_label?: string | null
           x_pos?: number | null
           y_pos?: number | null
@@ -127,7 +135,11 @@ export type Database = {
           created_at?: string
           epc_category_id?: string
           id?: string
-          part_id?: string
+          manufacturer?: string | null
+          note?: string | null
+          oem_number?: string | null
+          part_id?: string | null
+          part_name?: string | null
           position_label?: string | null
           x_pos?: number | null
           y_pos?: number | null
