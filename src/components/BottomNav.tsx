@@ -33,7 +33,11 @@ const BottomNav = () => {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon className={cn("w-5 h-5 transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              {item.icon ? (
+                <item.icon className={cn("w-5 h-5 transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              ) : (
+                <TondaAvatar size="nav" className={cn("transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              )}
               <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
             </button>
           );
