@@ -69,7 +69,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
   // Load parts when category selected
   useEffect(() => {
-    if (!selectedCategory) { setParts([]); setPriceMap(new Map()); return; }
+    if (!selectedCategory) { setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); return; }
     setPartsLoading(true);
     const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
     getEPCParts(catIds)
