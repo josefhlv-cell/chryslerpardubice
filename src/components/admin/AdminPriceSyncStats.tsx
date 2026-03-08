@@ -56,9 +56,36 @@ const AdminPriceSyncStats = () => {
     setLoading(false);
   };
 
+  const fetchCronStatus = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("cron-control", {
+        body: { action: "status" },
+      });
+      if (!error && data) setCronActive(data.active);
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleCron = async () => {
+    setToggling(true);
+    try {
+      const action = cronActive ? "pause" : "resume";
+      const { data, error } = await supabase.functions.invoke("cron-control", {
+        body: { action },
+      });
+      if (error) throw error;
+      setCronActive(data.active);
+    } catch (e) {
+      console.error("Toggle cron error:", e);
+    }
+    setToggling(false);
+  };
+
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // refresh every 30s
+    fetchCronStatus();
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
