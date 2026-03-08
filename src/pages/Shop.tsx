@@ -608,8 +608,9 @@ const Shop = () => {
               </motion.div>
             )}
 
-            {/* Results list */}
-            {partType === "new" && !searching && results && results.length > 0 && (
+            {/* Results list - don't show when EPC Browser is visible */}
+            {partType === "new" && !searching && results && results.length > 0 && 
+              !(searchMode === "epc" && brand) && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
