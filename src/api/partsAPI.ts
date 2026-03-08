@@ -639,7 +639,7 @@ export async function decodeVINEnriched(vin: string): Promise<VINDecodeResult> {
   const cacheId = normalizeOem(vin);
 
   // Check localStorage cache (7-day TTL)
-  const cached = cacheGet<VINDecodeResult>('vin_decode', cacheId);
+  const cached = await cacheGet<VINDecodeResult>('vin_decode', cacheId);
   if (cached) return cached;
 
   const { data, error } = await supabase.functions.invoke("vin-decode-ai", {
@@ -667,7 +667,7 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
   const cacheId = normalizeOem(oemNumber);
 
   // 0. Check localStorage cache (30-day TTL)
-  const memoryCached = cacheGet<CrossRefResult>('oem_crossref', cacheId);
+  const memoryCached = await cacheGet<CrossRefResult>('oem_crossref', cacheId);
   if (memoryCached) return memoryCached;
 
   // 1. Check local DB cache first
@@ -720,7 +720,7 @@ export async function getEPCDiagram(
   const cacheId = `${vehicle}_${category}_${subcategory || ''}`.replace(/\s+/g, '_');
 
   // 0. Check localStorage cache (permanent)
-  const memoryCached = cacheGet<string>('diagram', cacheId);
+  const memoryCached = await cacheGet<string>('diagram', cacheId);
   if (memoryCached) return memoryCached;
 
   // 1. Check epc_diagrams table
