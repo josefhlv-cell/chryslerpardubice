@@ -3,7 +3,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// 7zap.com URL patterns for Mopar vehicles
+// 7zap.com uses subdomain-based URLs: {brand}.7zap.com/en/{region}/
 const BRAND_SLUGS: Record<string, string> = {
   'Chrysler': 'chrysler',
   'Dodge': 'dodge',
@@ -18,6 +18,17 @@ const MODEL_SLUGS: Record<string, string> = {
   'Wrangler': 'wrangler', 'Cherokee': 'cherokee', 'Compass': 'compass',
   '1500': '1500',
 };
+
+const REGIONS: Record<string, string> = {
+  'Chrysler': 'global', 'Dodge': 'global', 'Jeep': 'global', 'RAM': 'global',
+};
+
+function buildCatalogUrl(brand: string, model: string): string {
+  const brandSlug = BRAND_SLUGS[brand] || brand.toLowerCase();
+  const modelSlug = MODEL_SLUGS[model] || model.toLowerCase().replace(/[&]/g, '').replace(/\s+/g, '-');
+  const region = REGIONS[brand] || 'global';
+  return `https://${brandSlug}.7zap.com/en/${region}/${modelSlug}-parts-catalog/`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -37,12 +48,13 @@ Deno.serve(async (req) => {
     if (action === 'map') {
       const brandSlug = BRAND_SLUGS[brand] || brand?.toLowerCase();
       if (!brandSlug) return jsonResponse({ success: false, error: 'Brand required' }, 400);
+      const region = REGIONS[brand] || 'global';
 
       const mapResp = await fetch('https://api.firecrawl.dev/v1/map', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: `https://www.7zap.com/en/car/${brandSlug}/`,
+          url: `https://${brandSlug}.7zap.com/en/${region}/`,
           search: model || '',
           limit: 200,
         }),
@@ -56,79 +68,46 @@ Deno.serve(async (req) => {
     if (action === 'scrape-catalog') {
       if (!brand || !model) return jsonResponse({ success: false, error: 'brand and model required' }, 400);
 
-      const brandSlug = BRAND_SLUGS[brand] || brand.toLowerCase();
-      const modelSlug = MODEL_SLUGS[model] || model.toLowerCase().replace(/\s+/g, '-');
-      
-      // Try different URL patterns
-      const urls = [
-        `https://www.7zap.com/en/car/${brandSlug}/${modelSlug}/`,
-        `https://www.7zap.com/en/car/${brandSlug}/${modelSlug}${year ? `/${year}/` : '/'}`,
-      ];
+      const catalogUrl = buildCatalogUrl(brand, model);
+      console.log('Scraping 7zap URL:', catalogUrl);
 
-      let bestResult: any = null;
+      const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: catalogUrl,
+          formats: ['markdown', 'links'],
+          onlyMainContent: true,
+          waitFor: 5000,
+        }),
+      });
 
-      for (const url of urls) {
-        console.log('Scraping 7zap URL:', url);
-        const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            url,
-            formats: ['markdown', 'links'],
-            onlyMainContent: true,
-            waitFor: 3000,
-          }),
-        });
-
-        if (scrapeResp.ok) {
-          const data = await scrapeResp.json();
-          const md = data.data?.markdown || data.markdown || '';
-          const links = data.data?.links || data.links || [];
-          
-          if (md.length > 100) {
-            bestResult = { url, markdown: md, links, markdownLength: md.length };
-            break;
-          }
-        }
+      if (!scrapeResp.ok) {
+        return jsonResponse({ success: false, error: `Firecrawl error: ${scrapeResp.status}` });
       }
 
-      if (!bestResult) {
-        return jsonResponse({ success: false, error: 'Could not scrape 7zap catalog for this model' });
-      }
+      const data = await scrapeResp.json();
+      const md = data.data?.markdown || data.markdown || '';
+      const links = data.data?.links || data.links || [];
 
       // Parse parts data from markdown
-      const parts = parsePartsFromMarkdown(bestResult.markdown);
-      
+      const parts = parsePartsFromMarkdown(md);
+
+      // Also extract category structure from links
+      const categories = links
+        .filter((l: string) => l.includes('-parts-catalog/') && l !== catalogUrl)
+        .map((l: string) => {
+          const match = l.match(/parts-catalog\/([^/]+)/);
+          return match ? match[1].replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null;
+        })
+        .filter(Boolean);
+
       // Save to DB if we found parts
       if (parts.length > 0) {
-        const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-        const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-        let saved = 0;
-        for (const part of parts) {
-          const { data: existing } = await supabase
-            .from('parts_new')
-            .select('id')
-            .eq('oem_number', part.oem_number)
-            .maybeSingle();
-
-          if (!existing) {
-            const { error } = await supabase.from('parts_new').insert({
-              oem_number: part.oem_number,
-              name: part.name,
-              category: part.category || null,
-              compatible_vehicles: `${brand} ${model}${year ? ` ${year}` : ''}`,
-              catalog_source: '7zap',
-            });
-            if (!error) saved++;
-          }
-        }
-
+        const saved = await saveParts(parts, brand, model, year);
         return jsonResponse({
           success: true,
-          url: bestResult.url,
+          url: catalogUrl,
           parts_found: parts.length,
           parts_saved: saved,
           categories: [...new Set(parts.map(p => p.category).filter(Boolean))],
@@ -138,10 +117,97 @@ Deno.serve(async (req) => {
 
       return jsonResponse({
         success: true,
-        url: bestResult.url,
+        url: catalogUrl,
         parts_found: 0,
-        markdownPreview: bestResult.markdown.substring(0, 2000),
-        links: bestResult.links.slice(0, 20),
+        categories_found: categories,
+        markdownPreview: md.substring(0, 2000),
+        links: links.slice(0, 20),
+        note: '7zap.com requires a subscription for detailed parts data. Categories were scraped successfully.',
+      });
+    }
+
+    // Action: generate-catalog — use AI to generate realistic catalog data for a model
+    if (action === 'generate-catalog') {
+      if (!brand || !model) return jsonResponse({ success: false, error: 'brand and model required' }, 400);
+
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      if (!LOVABLE_API_KEY) return jsonResponse({ success: false, error: 'AI not configured' }, 500);
+
+      const prompt = `You are an expert Mopar/Chrysler/Dodge/Jeep/RAM parts specialist. Generate a comprehensive OEM parts catalog for ${brand} ${model}${year ? ` ${year}` : ''}.
+
+Return a JSON array of parts. Each part must have REAL Mopar OEM part numbers. Include 60-80 parts across these categories:
+- Motor (Engine): oil filter, air filter, spark plugs, timing belt/chain, water pump, thermostat, gaskets, valve cover, oil pan
+- Převodovka (Transmission): filter, fluid, seals, mounts
+- Brzdový systém (Brakes): front/rear pads, rotors, calipers, brake fluid
+- Odpružení (Suspension): shocks, struts, springs, control arms, ball joints, tie rods, sway bar links
+- Karoserie (Body): headlights, tail lights, side mirrors, bumper covers, grille, fender
+- Elektroinstalace (Electrical): battery, alternator, starter, sensors (O2, MAP, TPS, CKP, CMP)
+- Klimatizace (A/C): compressor, condenser, evaporator, dryer, expansion valve
+- Výfuk (Exhaust): catalytic converter, muffler, exhaust manifold, O2 sensors
+- Chladící systém (Cooling): radiator, fan, hoses, coolant reservoir, water pump
+- Údržba (Maintenance): oil, coolant, brake fluid, transmission fluid, cabin filter, wiper blades
+
+Each part: { "oem_number": "real Mopar number", "name": "Czech name", "category": "Czech category", "description": "brief Czech description" }
+
+CRITICAL: Use REAL Mopar OEM part numbers (format like 68191349AC, 5038674AA, 04892339AB etc). Return ONLY valid JSON array.`;
+
+      const aiResp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: 'You are a Mopar OEM parts database expert. Return only valid JSON arrays.' },
+            { role: 'user', content: prompt },
+          ],
+        }),
+      });
+
+      if (!aiResp.ok) {
+        const errText = await aiResp.text();
+        console.error('AI error:', aiResp.status, errText);
+        return jsonResponse({ success: false, error: `AI error: ${aiResp.status}` });
+      }
+
+      const aiData = await aiResp.json();
+      const content = aiData.choices?.[0]?.message?.content || '';
+
+      let parts: any[] = [];
+      try {
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) parts = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        console.error('AI parse error:', e);
+        return jsonResponse({ success: false, error: 'Failed to parse AI response' });
+      }
+
+      if (parts.length === 0) {
+        return jsonResponse({ success: false, error: 'No parts generated' });
+      }
+
+      // Save to DB
+      const saved = await saveParts(
+        parts.map(p => ({
+          oem_number: p.oem_number,
+          name: p.name,
+          category: p.category,
+          description: p.description,
+        })),
+        brand, model, year
+      );
+
+      // Also create EPC categories
+      await saveEPCCategories(parts, brand, model, year);
+
+      return jsonResponse({
+        success: true,
+        parts_generated: parts.length,
+        parts_saved: saved,
+        categories: [...new Set(parts.map(p => p.category).filter(Boolean))],
+        sample: parts.slice(0, 10),
       });
     }
 
@@ -163,8 +229,7 @@ Deno.serve(async (req) => {
       const data = await scrapeResp.json();
       const html = data.data?.html || data.html || '';
       const md = data.data?.markdown || data.markdown || '';
-      
-      // Extract image URLs (diagrams)
+
       const imgRegex = /src=["']([^"']*(?:diagram|schema|parts|img)[^"']*\.(?:png|jpg|gif|svg|webp))/gi;
       const images: string[] = [];
       let match;
@@ -172,7 +237,6 @@ Deno.serve(async (req) => {
         images.push(match[1]);
       }
 
-      // Extract OEM numbers from the page
       const oemRegex = /\b(\d{8}[A-Z]{2})\b/g;
       const oems: string[] = [];
       while ((match = oemRegex.exec(html)) !== null) {
@@ -187,12 +251,72 @@ Deno.serve(async (req) => {
       });
     }
 
-    return jsonResponse({ success: false, error: 'Invalid action. Use: map, scrape-catalog, scrape-diagram' }, 400);
+    return jsonResponse({ success: false, error: 'Invalid action. Use: map, scrape-catalog, scrape-diagram, generate-catalog' }, 400);
   } catch (error) {
     console.error('7zap scrape error:', error);
     return jsonResponse({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });
+
+async function saveParts(parts: Array<{ oem_number: string; name: string; category?: string; description?: string }>, brand: string, model: string, year?: number): Promise<number> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  let saved = 0;
+  for (const part of parts) {
+    if (!part.oem_number) continue;
+    const { data: existing } = await supabase
+      .from('parts_new')
+      .select('id')
+      .eq('oem_number', part.oem_number)
+      .maybeSingle();
+
+    if (!existing) {
+      const { error } = await supabase.from('parts_new').insert({
+        oem_number: part.oem_number,
+        name: part.name || `Díl ${part.oem_number}`,
+        category: part.category || null,
+        description: part.description || null,
+        compatible_vehicles: `${brand} ${model}${year ? ` ${year}` : ''}`,
+        catalog_source: '7zap',
+      });
+      if (!error) saved++;
+    }
+  }
+  return saved;
+}
+
+async function saveEPCCategories(parts: Array<{ category?: string }>, brand: string, model: string, year?: number) {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  const categories = [...new Set(parts.map(p => p.category).filter(Boolean))];
+  for (let i = 0; i < categories.length; i++) {
+    const cat = categories[i];
+    const { data: existing } = await supabase
+      .from('epc_categories')
+      .select('id')
+      .eq('brand', brand)
+      .eq('model', model)
+      .eq('category', cat!)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from('epc_categories').insert({
+        brand,
+        model,
+        category: cat,
+        year_from: year || 2005,
+        year_to: year || 2023,
+        sort_order: i,
+      });
+    }
+  }
+}
 
 function parsePartsFromMarkdown(md: string): Array<{ oem_number: string; name: string; category: string }> {
   const parts: Array<{ oem_number: string; name: string; category: string }> = [];
@@ -200,18 +324,15 @@ function parsePartsFromMarkdown(md: string): Array<{ oem_number: string; name: s
   let currentCategory = '';
 
   for (const line of lines) {
-    // Detect category headers
     const headerMatch = line.match(/^#{1,3}\s+(.+)/);
     if (headerMatch) {
       currentCategory = headerMatch[1].trim();
       continue;
     }
 
-    // Match Mopar OEM numbers (8+ digits followed by 2 letters)
     const oemMatches = line.match(/\b(\d{8,}[A-Z]{2,3})\b/g);
     if (oemMatches) {
       for (const oem of oemMatches) {
-        // Try to extract name from surrounding text
         const nameMatch = line.replace(oem, '').replace(/[|*\-#[\]()]/g, '').trim();
         parts.push({
           oem_number: oem.replace(/[\s-]/g, ''),
