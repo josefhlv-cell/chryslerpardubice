@@ -217,7 +217,7 @@ function parseCategoriesFromMarkdown(markdown: string): ScrapedCategory[] {
   const lines = markdown.split('\\n');
   
   // Look for links that point to category pages (contain "parts-catalog" or category patterns)
-  const categoryPattern = /\\[([^\\]]+)\\]\((https?:\/\/[^\s)]+)\)/g;
+  const categoryPattern = new RegExp('\\[([^\\]]+)\\]\\((https?://[^\\s)]+)\\)', 'g');
   let match;
   
   while ((match = categoryPattern.exec(markdown)) !== null) {
