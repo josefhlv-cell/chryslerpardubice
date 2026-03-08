@@ -41,6 +41,7 @@ import EPCBrowser from "@/components/catalog/EPCBrowser";
 // ---- API layer ----
 import {
   searchParts, searchByCategory, searchEPC, decodeVIN, downloadCSV,
+  decodeAndSetupVehicle, decodeVINEnriched,
   PAGE_SIZE, type PartResult, type SearchFilters,
 } from "@/api/partsAPI";
 
