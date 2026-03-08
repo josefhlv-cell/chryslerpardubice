@@ -150,6 +150,9 @@ const applyFilters = (parts: PartResult[], filters: SearchFilters): PartResult[]
   if (filters.availability && filters.availability !== "all") {
     filtered = filtered.filter((p) => p.availability === filters.availability);
   }
+  if (filters.catalogSource && filters.catalogSource !== "all") {
+    filtered = filtered.filter((p) => p.catalog_source === filters.catalogSource);
+  }
   return filtered;
 };
 
