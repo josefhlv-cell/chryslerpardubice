@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { Upload, FileSpreadsheet, Trash2, RefreshCw, Layers } from "lucide-react";
+import { Upload, FileSpreadsheet, Trash2, RefreshCw, Layers, Sparkles, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 
 interface EPCCategoryRow {
