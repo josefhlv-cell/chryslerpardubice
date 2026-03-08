@@ -1,11 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, Car, User, Bot, ShoppingCart } from "lucide-react";
+import { Search, Car, User, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TondaAvatar from "@/components/TondaAvatar";
 
 const navItems = [
   { path: "/shop", label: "Díly", icon: Search },
   { path: "/vehicles", label: "Vozy", icon: Car },
-  { path: "/ai-mechanic", label: "Tonda", icon: Bot },
+  { path: "/ai-mechanic", label: "Tonda", icon: null },
   { path: "/orders", label: "Objednávky", icon: ShoppingCart },
   { path: "/account", label: "Účet", icon: User },
 ];
@@ -32,7 +33,11 @@ const BottomNav = () => {
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <item.icon className={cn("w-5 h-5 transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              {item.icon ? (
+                <item.icon className={cn("w-5 h-5 transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              ) : (
+                <TondaAvatar size="nav" className={cn("transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              )}
               <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
             </button>
           );

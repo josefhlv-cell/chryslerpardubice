@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Bot, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
+import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
+import TondaAvatar from "@/components/TondaAvatar";
 
 const SERVICE_PHONE = "+420123456789";
 
@@ -83,7 +84,7 @@ const Emergency = () => {
             <span className="text-xs">Zavolat servis</span>
           </Button>
           <Button variant="default" className="h-16 flex-col gap-1" onClick={() => navigate("/ai-mechanic")}>
-            <Bot className="w-5 h-5" />
+            <TondaAvatar size="nav" />
             <span className="text-xs">AI Tonda</span>
           </Button>
           <Button variant="outline" className="h-16 flex-col gap-1" onClick={() => navigate("/service")}>
