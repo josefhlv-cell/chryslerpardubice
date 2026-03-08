@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
 
     for (const oem of oemCodes.slice(0, 10)) {
       const cleanOem = oem.replace(/[\s-]/g, '').toUpperCase();
-      const searchCode = `K${cleanOem}`;
+      const searchCode = `6${cleanOem}`;
 
       // Check cache in DB
       const { data: cached } = await supabase
@@ -215,7 +215,10 @@ async function searchCatalog(session: Session, searchCode: string, oem: string):
     body: `find-part=${encodeURIComponent(searchCode)}&search-part=${encodeURIComponent('Vyhledat')}`,
     redirect: 'follow',
   });
-  return parseSearchResult(await resp.text(), oem);
+  const html = await resp.text();
+  const textOnly = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  console.log(`Search ${searchCode}: HTML length=${html.length}, text snippet="${textOnly.substring(0, 500)}"`);
+  return parseSearchResult(html, oem);
 }
 
 function parseSearchResult(html: string, oem: string): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; category: string; family: string; segment: string; packaging: string } {
