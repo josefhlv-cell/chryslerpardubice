@@ -82,10 +82,9 @@ const ServiceRecommendations = () => {
       let daysRemaining: number | null = null;
       let urgency: "due" | "soon" | "upcoming" | null = null;
 
-      // Check km interval
-      if (plan.interval_km && vehicle.current_mileage != null) {
-        const lastKm = plan.last_service_km ?? 0;
-        const nextKm = lastKm + plan.interval_km;
+      // Check km interval – only when a baseline km is recorded
+      if (plan.interval_km && vehicle.current_mileage != null && plan.last_service_km != null) {
+        const nextKm = plan.last_service_km + plan.interval_km;
         kmRemaining = nextKm - vehicle.current_mileage;
         if (kmRemaining <= 0) urgency = "due";
         else if (kmRemaining <= plan.interval_km * 0.15) urgency = "soon";
