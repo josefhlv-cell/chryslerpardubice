@@ -343,14 +343,6 @@ const EPCImport = () => {
             </div>
           )}
         </div>
-        </p>
-
-        {catCount !== null && partCount !== null && (
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <span>Kategorie: <strong>{catCount.toLocaleString("cs")}</strong></span>
-            <span>Díly: <strong>{partCount.toLocaleString("cs")}</strong></span>
-          </div>
-        )}
 
         {importing && progress > 0 && (
           <Progress value={progress} className="h-2" />
