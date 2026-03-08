@@ -203,6 +203,8 @@ const ServiceRecommendations = () => {
             <Card className={`border ${style.bg}`}>
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <CarIcon car={rec.vehicle} size="sm" className="mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       {rec.urgency === "due" && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
