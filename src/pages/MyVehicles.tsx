@@ -96,7 +96,7 @@ const MyVehicles = () => {
 
   const resetForm = () => {
     setVin(""); setBrand(""); setModel(""); setYear(""); setEngine(""); setLicensePlate(""); setCurrentMileage("");
-    setEditVehicle(null);
+    setEditVehicle(null); setVinDecodeResult(null);
   };
 
   const openAdd = () => { resetForm(); setDialogOpen(true); };
