@@ -93,6 +93,32 @@ const Filters = ({
   const engines = brand && model && catalogTree[brand]?.[model] ? catalogTree[brand][model] : [];
   const currentSubs = category ? (subCategoriesMap[category] || []) : [];
 
+  const [sourceStats, setSourceStats] = useState<SourceStats[]>([]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      // Get counts per catalog_source from parts_new
+      const { data } = await supabase
+        .from("parts_new")
+        .select("catalog_source");
+      if (data) {
+        const counts: Record<string, number> = {};
+        data.forEach((r: any) => {
+          const src = r.catalog_source || "unknown";
+          counts[src] = (counts[src] || 0) + 1;
+        });
+        setSourceStats(
+          Object.entries(counts)
+            .map(([source, count]) => ({ source, count }))
+            .sort((a, b) => b.count - a.count)
+        );
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const totalParts = sourceStats.reduce((s, r) => s + r.count, 0);
+
   return (
     <div className="space-y-5">
       {/* Vehicle selectors (vehicle / epc mode) */}
