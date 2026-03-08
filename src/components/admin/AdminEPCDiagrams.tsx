@@ -234,6 +234,29 @@ const AdminEPCDiagrams = () => {
       {diagrams.length === 0 && (
         <p className="text-sm text-muted-foreground text-center py-8">Žádné EPC nákresy v databázi</p>
       )}
+
+      <Dialog open={!!previewDiagram} onOpenChange={(o) => !o && setPreviewDiagram(null)}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              {previewDiagram?.brand} {previewDiagram?.model} – {previewDiagram?.category}
+              {previewDiagram?.subcategory ? ` › ${previewDiagram.subcategory}` : ''}
+            </DialogTitle>
+          </DialogHeader>
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : previewDiagram?.svg_content ? (
+            <div
+              className="w-full bg-muted/30 rounded-md p-2 [&_svg]:w-full [&_svg]:h-auto"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewDiagram.svg_content) }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">SVG nákres není k dispozici</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
