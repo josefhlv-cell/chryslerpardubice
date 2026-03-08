@@ -49,8 +49,8 @@ Deno.serve(async (req) => {
     let updated = 0, errors = 0, skipped = 0;
 
     for (const partNumber of oemNumbers.slice(0, batchSize)) {
-      // Try OEM number directly first (as shown in catalog screenshot)
-      const searchCodes = [partNumber, `K${partNumber.replace(/^0+/, '')}`, partNumber.replace(/^0+/, '')];
+      // Try just the OEM number directly (as shown in catalog: "Zadejte kód hledaného dílu")
+      const searchCodes = [partNumber];
 
       // Check cache / freshness
       const { data: cached } = await supabase
