@@ -167,6 +167,60 @@ export type Database = {
         }
         Relationships: []
       }
+      epc_generation_queue: {
+        Row: {
+          batch_size: number | null
+          brand: string
+          category: string
+          completed_at: string | null
+          created_at: string
+          engine: string | null
+          error_message: string | null
+          id: string
+          model: string
+          parts_generated: number | null
+          retry_count: number | null
+          status: string
+          subcategory: string | null
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          batch_size?: number | null
+          brand: string
+          category: string
+          completed_at?: string | null
+          created_at?: string
+          engine?: string | null
+          error_message?: string | null
+          id?: string
+          model: string
+          parts_generated?: number | null
+          retry_count?: number | null
+          status?: string
+          subcategory?: string | null
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          batch_size?: number | null
+          brand?: string
+          category?: string
+          completed_at?: string | null
+          created_at?: string
+          engine?: string | null
+          error_message?: string | null
+          id?: string
+          model?: string
+          parts_generated?: number | null
+          retry_count?: number | null
+          status?: string
+          subcategory?: string | null
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
       epc_part_links: {
         Row: {
           created_at: string
