@@ -64,7 +64,7 @@ const ImportForm = () => {
         extras: values.extras || undefined,
         note: values.note || undefined,
       };
-      await createImportRequest(clean);
+      await createImportRequest(clean as any);
       setSubmitted(true);
       toast({ title: "Odesláno ✓", description: "Váš požadavek na dovoz byl přijat." });
     } catch {
