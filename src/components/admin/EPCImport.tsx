@@ -104,6 +104,62 @@ const EPCImport = () => {
   const [catCount, setCatCount] = useState<number | null>(null);
   const [partCount, setPartCount] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [aiVehicle, setAiVehicle] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiProgress, setAiProgress] = useState<Array<{ category: string; parts: number; status: string }>>([]);
+
+  const AI_VEHICLES = [
+    "Chrysler 300C", "Chrysler Pacifica", "Chrysler Town & Country", "Chrysler Voyager",
+    "Dodge Grand Caravan", "Dodge Durango", "Dodge Charger", "Dodge Challenger",
+  ];
+
+  const handleAiGenerate = async () => {
+    if (!aiVehicle) return;
+    setAiGenerating(true);
+    setAiProgress([]);
+    try {
+      const { data, error } = await supabase.functions.invoke("epc-scrape", {
+        body: { vehicle: aiVehicle, action: "generate-all" },
+      });
+      if (error) throw error;
+      if (data?.results) {
+        setAiProgress(data.results);
+        toast({
+          title: "AI generování dokončeno",
+          description: `${data.total_parts} dílů pro ${aiVehicle}`,
+        });
+      } else if (!data?.success) {
+        throw new Error(data?.error || "Neznámá chyba");
+      }
+      loadCounts();
+    } catch (err: any) {
+      toast({ title: "Chyba AI generování", description: err.message, variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleAiGenerateSingle = async (category: string) => {
+    if (!aiVehicle) return;
+    setAiGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("epc-scrape", {
+        body: { vehicle: aiVehicle, category, action: "generate" },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast({ title: `${category}`, description: `${data.parts_inserted} dílů vygenerováno` });
+        setAiProgress(prev => [...prev, { category, parts: data.parts_inserted, status: "ok" }]);
+      } else {
+        throw new Error(data?.error || "Chyba");
+      }
+      loadCounts();
+    } catch (err: any) {
+      toast({ title: "Chyba", description: err.message, variant: "destructive" });
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   const loadCounts = async () => {
     const [cats, parts] = await Promise.all([
