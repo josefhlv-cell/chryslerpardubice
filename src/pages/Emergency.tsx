@@ -84,7 +84,7 @@ const Emergency = () => {
             <span className="text-xs">Zavolat servis</span>
           </Button>
           <Button variant="default" className="h-16 flex-col gap-1" onClick={() => navigate("/ai-mechanic")}>
-            <Bot className="w-5 h-5" />
+            <TondaAvatar size="nav" />
             <span className="text-xs">AI Tonda</span>
           </Button>
           <Button variant="outline" className="h-16 flex-col gap-1" onClick={() => navigate("/service")}>
