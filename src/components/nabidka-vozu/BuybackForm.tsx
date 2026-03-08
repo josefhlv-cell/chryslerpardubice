@@ -56,7 +56,7 @@ const BuybackForm = () => {
   const onSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
-      await createBuybackRequest({ ...values, user_id: user?.id, vin: values.vin || undefined, note: values.note || undefined });
+      await createBuybackRequest({ ...values, user_id: user?.id, vin: values.vin || undefined, note: values.note || undefined } as any);
       setSubmitted(true);
       toast({ title: "Odesláno ✓", description: "Váš požadavek na výkup byl přijat. Ozveme se vám." });
     } catch {
