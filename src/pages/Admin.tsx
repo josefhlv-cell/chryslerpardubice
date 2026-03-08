@@ -408,8 +408,11 @@ const Admin = () => {
                             </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "–"} · {o.quantity}×</p>
-                          {o.customer_note && <p className="text-xs text-muted-foreground italic mt-1">"{o.customer_note}"</p>}
-                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)} · {o.id.slice(0, 8)}</p>
+                          {o.catalog_source && (
+                            <Badge variant="outline" className="text-[10px] mt-0.5 bg-secondary/50">
+                              Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-right">
                           <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
