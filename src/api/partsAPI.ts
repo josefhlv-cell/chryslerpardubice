@@ -527,6 +527,73 @@ export function exportToCSV(parts: PartResult[]): string {
 }
 
 /**
+ * Enriches EPC parts with prices from parts_new DB and triggers
+ * catalog-search for OEM numbers without cached prices.
+ * Returns a map of oem_number -> { price_without_vat, price_with_vat, availability }
+ */
+export async function enrichEPCPrices(
+  oemNumbers: string[]
+): Promise<Map<string, { price_without_vat: number; price_with_vat: number; availability: string; name?: string }>> {
+  const priceMap = new Map<string, { price_without_vat: number; price_with_vat: number; availability: string; name?: string }>();
+  if (oemNumbers.length === 0) return priceMap;
+
+  const unique = [...new Set(oemNumbers.map(normalizeOem))].filter(Boolean);
+
+  // 1. Check DB cache first
+  const { data: cached } = await supabase
+    .from("parts_new")
+    .select("oem_number, name, price_without_vat, price_with_vat, availability, last_price_update")
+    .in("oem_number", unique);
+
+  const needsFetch: string[] = [];
+  for (const oem of unique) {
+    const hit = cached?.find(c => c.oem_number === oem);
+    if (hit && hit.price_with_vat > 0) {
+      priceMap.set(oem, {
+        price_without_vat: hit.price_without_vat,
+        price_with_vat: hit.price_with_vat,
+        availability: hit.availability || "unknown",
+        name: hit.name,
+      });
+    } else {
+      needsFetch.push(oem);
+    }
+  }
+
+  // 2. Fetch missing prices from external catalog (batches of 10)
+  if (needsFetch.length > 0) {
+    const batches = [];
+    for (let i = 0; i < needsFetch.length; i += 10) {
+      batches.push(needsFetch.slice(i, i + 10));
+    }
+
+    for (const batch of batches) {
+      try {
+        const { data } = await supabase.functions.invoke("catalog-search", {
+          body: { oemCodes: batch },
+        });
+        if (data?.results) {
+          for (const r of data.results) {
+            if (r.found && r.price_with_vat > 0) {
+              priceMap.set(r.oem_number, {
+                price_without_vat: r.price_without_vat,
+                price_with_vat: r.price_with_vat,
+                availability: r.availability || "available",
+                name: r.name,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Price enrichment batch error:", e);
+      }
+    }
+  }
+
+  return priceMap;
+}
+
+/**
  * Download CSV file in the browser
  */
 export function downloadCSV(parts: PartResult[], filename = "dily-export.csv") {
