@@ -20,6 +20,8 @@ const AdminPriceSyncStats = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [cronActive, setCronActive] = useState<boolean | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   const fetchStats = async () => {
     setLoading(true);
