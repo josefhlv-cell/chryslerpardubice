@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, Map } from "lucide-react";
+import { Loader2, ChevronRight, ArrowLeft, Package, ExternalLink, Info, RefreshCw, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
