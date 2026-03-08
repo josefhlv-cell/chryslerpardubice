@@ -46,6 +46,18 @@ const AvailabilityDot = ({ availability }: { availability: string }) => {
 
 /** Inner content used in both desktop panel and mobile sheet */
 const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, onSearchOem, discountPercent, disabled }: PartDetailModalProps & { part: PartResult }) => {
+  const [crossRef, setCrossRef] = useState<CrossRefResult | null>(null);
+  const [crossRefLoading, setCrossRefLoading] = useState(false);
+  const [crossRefLoaded, setCrossRefLoaded] = useState(false);
+
+  const loadCrossRef = async () => {
+    setCrossRefLoading(true);
+    setCrossRefLoaded(true);
+    const result = await getOEMCrossReferences(part.oem_number, part.name);
+    setCrossRef(result);
+    setCrossRefLoading(false);
+  };
+
   const discounted = discountPercent > 0 ? {
     withVat: Math.round(part.price_without_vat * (1 - discountPercent / 100) * 1.21 * 100) / 100,
   } : null;
