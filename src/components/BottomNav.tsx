@@ -1,11 +1,12 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, Car, User, Bot, ShoppingCart } from "lucide-react";
+import { Search, Car, User, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
+import TondaAvatar from "@/components/TondaAvatar";
 
 const navItems = [
   { path: "/shop", label: "Díly", icon: Search },
   { path: "/vehicles", label: "Vozy", icon: Car },
-  { path: "/ai-mechanic", label: "Tonda", icon: Bot },
+  { path: "/ai-mechanic", label: "Tonda", icon: null },
   { path: "/orders", label: "Objednávky", icon: ShoppingCart },
   { path: "/account", label: "Účet", icon: User },
 ];
