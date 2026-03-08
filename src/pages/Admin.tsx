@@ -413,6 +413,8 @@ const Admin = () => {
                               Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}
                             </Badge>
                           )}
+                          {o.customer_note && <p className="text-xs text-muted-foreground italic mt-1">"{o.customer_note}"</p>}
+                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)} · {o.id.slice(0, 8)}</p>
                         </div>
                         <div className="text-right">
                           <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
