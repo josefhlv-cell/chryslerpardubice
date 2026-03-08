@@ -58,6 +58,8 @@ const BuybackForm = () => {
     setLoading(true);
     try {
       await createBuybackRequest({ ...values, user_id: user?.id, vin: values.vin || undefined, note: values.note || undefined } as any);
+      // Trigger email notification to admins
+      supabase.functions.invoke("notify-admin", { body: { type: "buyback", record: values } }).catch(() => {});
       setSubmitted(true);
       toast({ title: "Odesláno ✓", description: "Váš požadavek na výkup byl přijat. Ozveme se vám." });
     } catch {
