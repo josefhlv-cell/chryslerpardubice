@@ -344,8 +344,8 @@ function extractPrices(html: string): number[] {
   const prices: number[] = [];
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  // Primary: "X XXX.XX Kč" pattern (handles space-separated thousands)
-  const kcPattern = /(\d[\d\s]*[,.]\d{2})\s*Kč/gi;
+  // Primary: "X XXX.XX Kč" pattern – strict: 1-3 digits optionally followed by (space + 3 digits), then decimal
+  const kcPattern = /(?<!\d)(\d{1,3}(?:\s\d{3})*[,.]\d{2})\s*Kč/gi;
   let m;
   while ((m = kcPattern.exec(text)) !== null) {
     const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
