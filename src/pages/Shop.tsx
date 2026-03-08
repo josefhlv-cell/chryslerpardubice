@@ -514,6 +514,14 @@ const Shop = () => {
                       </Select>
                       <Input placeholder="Model" className="h-9 text-xs" value={model} onChange={(e) => setModel(e.target.value)} />
                     </div>
+                    <Select value={year} onValueChange={setYear}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Rok výroby" /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 30 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => (
+                          <SelectItem key={y} value={y}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Textarea placeholder="Poznámka..." className="text-xs" rows={2} value={usedNote} onChange={(e) => setUsedNote(e.target.value)} />
                     <Button className="w-full h-10" onClick={handleUsedSubmit} disabled={isPendingBusiness}>
                       <Send className="w-4 h-4 mr-1" />Odeslat poptávku
@@ -523,8 +531,10 @@ const Shop = () => {
               </AnimatePresence>
             )}
 
-            {/* EPC Browser — vehicle-based catalog */}
-            {partType === "new" && searchMode === "epc" && brand && !searching && (
+            {/* EPC Browser — vehicle-based catalog (EPC mode or Vehicle mode fallback) */}
+            {partType === "new" && brand && !searching && (
+              (searchMode === "epc" || (searchMode === "vehicle" && (!results || results.length === 0) && !query && !category && !subCategory))
+            ) && (
               <EPCBrowser
                 brand={brand}
                 model={model}
