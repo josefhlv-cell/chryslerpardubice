@@ -463,7 +463,26 @@ const Admin = () => {
                           {i.message && <p className="text-xs text-muted-foreground mt-1 italic">"{i.message}"</p>}
                           <p className="text-xs text-muted-foreground mt-1">{fmtDate(i.created_at)}</p>
                         </div>
-                        <Badge className={statusColors[i.status] || ""}>{statusLabel[i.status] || i.status}</Badge>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge className={statusColors[i.status] || ""}>{statusLabel[i.status] || i.status}</Badge>
+                          <Select
+                            value={i.status}
+                            onValueChange={async (newStatus) => {
+                              const { error } = await supabase.from("vehicle_inquiries").update({ status: newStatus }).eq("id", i.id);
+                              if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
+                              toast({ title: "Stav aktualizován" });
+                              fetchAll();
+                            }}
+                          >
+                            <SelectTrigger className="h-7 text-[10px] w-28"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="new">Nový</SelectItem>
+                              <SelectItem value="contacted">Kontaktován</SelectItem>
+                              <SelectItem value="completed">Dokončeno</SelectItem>
+                              <SelectItem value="cancelled">Zrušeno</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
