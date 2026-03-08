@@ -77,6 +77,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [partsPage, setPartsPage] = useState(0);
   const [generating, setGenerating] = useState(false);
+  const [autoExpanding, setAutoExpanding] = useState(false);
   const [scrapingOem, setScrapingOem] = useState<string | null>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
 
