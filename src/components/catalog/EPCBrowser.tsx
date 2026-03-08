@@ -160,7 +160,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             .finally(() => setPricesLoading(false));
         }
         // Auto-load cached diagram
-        const cacheKey = `${brand}-${model}-${selectedCategory}`;
+        const cacheKey = `${brand}-${model}-${selectedCategory}-${selectedSubcategory || ''}`;
         if (diagramCache.has(cacheKey)) {
           setDiagramSvg(diagramCache.get(cacheKey)!);
         }
