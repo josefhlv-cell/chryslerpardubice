@@ -357,10 +357,12 @@ const Shop = () => {
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
                       <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                     </Select>
-                    {category && (
+                    {(category || brand) && (
                       <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
                         {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
                         Hledat
+                      </Button>
+                    )}
                       </Button>
                     )}
                   </div>
