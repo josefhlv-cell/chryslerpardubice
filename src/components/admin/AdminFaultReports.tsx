@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle, Phone, Eye } from "lucide-react";
+import CarIcon from "@/components/CarIcon";
 
 type FaultReport = {
   id: string;
@@ -87,7 +88,11 @@ const AdminFaultReports = () => {
         <Card key={r.id} className={`cursor-pointer hover:border-primary/40 transition-colors ${r.ai_risk_level === "high" ? "border-destructive/50" : ""}`} onClick={() => openDetail(r)}>
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
-              <div className="min-w-0 flex-1">
+              <div className="flex gap-3 min-w-0 flex-1">
+                {r.vehicle_brand && r.vehicle_model && (
+                  <CarIcon car={{ brand: r.vehicle_brand, model: r.vehicle_model, year: r.vehicle_year }} size="sm" />
+                )}
+                <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   {r.ai_risk_level === "high" && <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />}
                   <p className="font-semibold text-sm truncate">
@@ -106,6 +111,7 @@ const AdminFaultReports = () => {
                   </div>
                 )}
               </div>
+              </div>
               <Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge>
             </div>
           </CardContent>
@@ -119,8 +125,15 @@ const AdminFaultReports = () => {
           {selected && (
             <div className="space-y-3">
               <div className="space-y-1 text-sm">
-                <p><span className="font-medium">Vozidlo:</span> {selected.vehicle_brand} {selected.vehicle_model} {selected.vehicle_year || ""}</p>
-                {selected.vin && <p><span className="font-medium">VIN:</span> {selected.vin}</p>}
+                <div className="flex items-center gap-3">
+                  {selected.vehicle_brand && selected.vehicle_model && (
+                    <CarIcon car={{ brand: selected.vehicle_brand, model: selected.vehicle_model, year: selected.vehicle_year }} size="md" />
+                  )}
+                  <div>
+                    <p className="font-semibold">{selected.vehicle_brand} {selected.vehicle_model} {selected.vehicle_year || ""}</p>
+                    {selected.vin && <p className="text-xs text-muted-foreground">VIN: {selected.vin}</p>}
+                  </div>
+                </div>
                 {selected.vehicle_engine && <p><span className="font-medium">Motor:</span> {selected.vehicle_engine}</p>}
                 {selected.mileage && <p><span className="font-medium">km:</span> {selected.mileage.toLocaleString("cs")}</p>}
                 <p><span className="font-medium">Čas:</span> {new Date(selected.created_at).toLocaleString("cs-CZ")}</p>
