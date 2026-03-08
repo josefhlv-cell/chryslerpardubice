@@ -28,6 +28,7 @@ import Emergency from "./pages/Emergency";
 import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
 import AppPresentation from "./pages/AppPresentation";
+import VehicleOffer from "./pages/VehicleOffer";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
