@@ -149,12 +149,14 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
       const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
       if (svg) {
-        diagramCache.set(cacheKey, svg);
-        setDiagramSvg(svg);
+        const sanitized = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_ATTR: ['data-oem', 'data-part-name'] });
+        diagramCache.set(cacheKey, sanitized);
+        setDiagramSvg(sanitized);
         attachDiagramHandlers();
       }
     } catch (e) {
       console.error('Diagram load error:', e);
+      toast.error("Nepodařilo se načíst nákres");
     }
     setDiagramLoading(false);
   };
