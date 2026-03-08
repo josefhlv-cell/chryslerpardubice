@@ -247,22 +247,29 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setDiagramLoading(false);
   };
 
-  /** Scrape missing OEM and reload */
+  /** Scrape missing OEM with retry */
   const handleScrapeMissing = async (oem: string) => {
     setScrapingOem(oem);
-    try {
-      // Try scraping via 7zap first
-      await scrape7zap(brand, model, year || undefined);
-      // Check if part now exists
-      const result = await searchParts(oem, 0);
-      if (result.results.length > 0) {
-        onSearchOem(oem);
-        toast.success("Díl nalezen po aktualizaci katalogu");
-      } else {
-        toast.info("Díl zatím nebyl nalezen – zkuste později");
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await scrape7zap(brand, model, year || undefined);
+        const result = await searchParts(oem, 0);
+        if (result.results.length > 0) {
+          onSearchOem(oem);
+          toast.success("Díl nalezen po aktualizaci katalogu");
+          setScrapingOem(null);
+          return;
+        }
+        if (attempt < maxRetries) {
+          toast.info("Katalog se načítá. Zkouším znovu...");
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      } catch {
+        if (attempt === maxRetries) {
+          toast.error("Katalog se načítá. Zkuste to prosím znovu.");
+        }
       }
-    } catch {
-      toast.error("Nepodařilo se načíst data");
     }
     setScrapingOem(null);
   };
