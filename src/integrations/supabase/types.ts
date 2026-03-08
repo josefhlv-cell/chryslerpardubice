@@ -416,6 +416,36 @@ export type Database = {
           },
         ]
       }
+      part_crossref: {
+        Row: {
+          created_at: string
+          id: string
+          manufacturer: string
+          note: string | null
+          oem_number: string
+          part_number: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          manufacturer: string
+          note?: string | null
+          oem_number: string
+          part_number: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          manufacturer?: string
+          note?: string | null
+          oem_number?: string
+          part_number?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       part_supersessions: {
         Row: {
           created_at: string
