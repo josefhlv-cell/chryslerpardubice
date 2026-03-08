@@ -153,6 +153,7 @@ async function firecrawlSearch(
           script: `
             (async function() {
               try {
+                // Login
                 var r1 = await fetch('/cnd/', {
                   method: 'POST',
                   headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -161,6 +162,7 @@ async function firecrawlSearch(
                 });
                 var loginHtml = await r1.text();
                 
+                // Search with the code
                 var r2 = await fetch('/cnd/', {
                   method: 'POST',
                   headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -169,10 +171,17 @@ async function firecrawlSearch(
                 });
                 var searchHtml = await r2.text();
                 
-                document.body.setAttribute('data-login-len', loginHtml.length);
-                document.body.setAttribute('data-search-len', searchHtml.length);
-                document.body.setAttribute('data-login-preview', loginHtml.substring(0, 200));
-                document.body.setAttribute('data-search-result', searchHtml);
+                // Extract just the content area text (strip HTML, keep numbers)
+                var tmp = document.createElement('div');
+                tmp.innerHTML = searchHtml;
+                var textContent = tmp.textContent || tmp.innerText || '';
+                
+                // Store results safely using base64
+                document.body.setAttribute('data-login-len', loginHtml.length.toString());
+                document.body.setAttribute('data-search-len', searchHtml.length.toString());
+                document.body.setAttribute('data-has-search-form', loginHtml.includes('submit-search') ? '1' : '0');
+                document.body.setAttribute('data-search-text', btoa(unescape(encodeURIComponent(textContent.substring(0, 2000)))));
+                document.body.setAttribute('data-search-html', btoa(unescape(encodeURIComponent(searchHtml.substring(0, 5000)))));
               } catch(e) {
                 document.body.setAttribute('data-error', e.message);
               }
@@ -192,24 +201,35 @@ async function firecrawlSearch(
 
   const html = data.data?.html || data.html || '';
   
-  // Extract search result from data attributes (injected by XHR)
-  const searchResultMatch = html.match(/data-search-result="([^"]*)"/);
-  const searchResult = searchResultMatch ? searchResultMatch[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"') : '';
-  const loginLenMatch = html.match(/data-login-len="(\d+)"/);
-  const searchLenMatch = html.match(/data-search-len="(\d+)"/);
-  const errorMatch = html.match(/data-error="([^"]*)"/);
-  const loginPreviewMatch = html.match(/data-login-preview="([^"]*)"/);
+  // Extract data attributes
+  const getAttr = (name: string) => {
+    const m = html.match(new RegExp(`data-${name}="([^"]*)"`));
+    return m?.[1] || '';
+  };
   
-  // Try extracting prices from the search result or full HTML
-  const prices = searchResult ? extractPrices(searchResult) : extractPrices(html);
+  const decodeB64 = (b64: string) => {
+    try { return decodeURIComponent(escape(atob(b64))); } catch { return ''; }
+  };
+  
+  const searchHtmlB64 = getAttr('search-html');
+  const searchTextB64 = getAttr('search-text');
+  const searchHtml = decodeB64(searchHtmlB64);
+  const searchText = decodeB64(searchTextB64);
+  const loginLen = getAttr('login-len');
+  const searchLen = getAttr('search-len');
+  const hasSearchForm = getAttr('has-search-form');
+  const error = getAttr('error');
+  
+  // Extract prices from the search result HTML
+  const prices = searchHtml ? extractPrices(searchHtml) : [];
 
   const debug = debugMode ? {
     htmlLength: html.length,
-    loginLen: loginLenMatch?.[1],
-    searchLen: searchLenMatch?.[1],
-    loginPreview: loginPreviewMatch?.[1]?.substring(0, 200),
-    error: errorMatch?.[1],
-    searchResultPreview: searchResult.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500),
+    loginLen,
+    searchLen,
+    hasSearchForm,
+    error,
+    searchTextPreview: searchText.substring(0, 500),
     pricesFound: prices,
   } : {};
 
