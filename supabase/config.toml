@@ -20,3 +20,18 @@ verify_jwt = false
 
 [functions.price-sync]
 verify_jwt = false
+
+[functions.epc-scrape]
+verify_jwt = false
+
+[functions.scrape-7zap]
+verify_jwt = false
+
+[functions.vin-decode-ai]
+verify_jwt = false
+
+[functions.oem-crossref]
+verify_jwt = false
+
+[functions.epc-diagram]
+verify_jwt = false
