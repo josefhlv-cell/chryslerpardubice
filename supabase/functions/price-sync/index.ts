@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
               'Cookie': sessionCookies,
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
-            body: `search=${encodeURIComponent(searchCode)}`,
+            body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
           });
           searchHtml = await searchResp.text();
         }
