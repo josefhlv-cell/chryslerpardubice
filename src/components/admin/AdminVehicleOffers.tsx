@@ -92,8 +92,8 @@ const AdminVehicleOffers = () => {
       supabase.from("vehicle_buyback_requests" as any).select("*").order("created_at", { ascending: false }),
       supabase.from("vehicle_import_requests" as any).select("*").order("created_at", { ascending: false }),
     ]);
-    setBuybacks((bRes.data as BuybackRow[]) || []);
-    setImports((iRes.data as ImportRow[]) || []);
+    setBuybacks((bRes.data as unknown as BuybackRow[]) || []);
+    setImports((iRes.data as unknown as ImportRow[]) || []);
     setLoading(false);
   };
 
