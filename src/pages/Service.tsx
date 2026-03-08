@@ -45,7 +45,6 @@ const Service = () => {
     setServiceType("");
     setDate(undefined);
     setNote("");
-    setWantsReplacement(false);
     setBrand("");
     setModel("");
     setYear("");
