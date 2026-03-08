@@ -535,6 +535,12 @@ const Admin = () => {
               <AdminServicePlans />
             </div>
           </TabsContent>
+
+          <TabsContent value="vehicle-offers">
+            <div className="mt-2">
+              <AdminVehicleOffers />
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
