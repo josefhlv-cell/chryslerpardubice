@@ -134,47 +134,76 @@ async function firecrawlSearch(
     },
     body: JSON.stringify({
       url: CATALOG_URL,
-      formats: ['html', 'markdown'],
+      formats: ['html'],
       timeout: 60000,
       actions: [
-        // Step 1: Wait for password form
         { type: 'wait', milliseconds: 2000 },
-        // Step 2: Fill password and submit via JS (most reliable)
         {
           type: 'executeJavascript',
           script: `
-            var pwdInput = document.querySelector('input[name="password"]');
-            if (pwdInput) {
-              pwdInput.value = '${password}';
-              pwdInput.dispatchEvent(new Event('input', {bubbles: true}));
-              var form = pwdInput.closest('form');
-              if (form) form.submit();
-            }
-          `
+            (async function() {
+              try {
+                // Step 1: Login via POST
+                var loginResp = await fetch('https://www.vernostsevyplaci.cz/cnd/', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: 'password=${password}&submit-password=P%C5%99ihl%C3%A1sit',
+                  credentials: 'include',
+                  redirect: 'follow'
+                });
+                var loginHtml = await loginResp.text();
+                
+                // Debug: store login page info
+                document.body.setAttribute('data-login-len', loginHtml.length.toString());
+                document.body.setAttribute('data-login-url', loginResp.url);
+                document.body.setAttribute('data-login-status', loginResp.status.toString());
+                
+                // Parse login page to find form fields
+                var parser = new DOMParser();
+                var loginDoc = parser.parseFromString(loginHtml, 'text/html');
+                var allInputs = loginDoc.querySelectorAll('input');
+                var inputInfo = [];
+                allInputs.forEach(function(inp) {
+                  inputInfo.push(inp.name + ':' + inp.type + ':' + (inp.placeholder || '').substring(0,20));
+                });
+                document.body.setAttribute('data-inputs', inputInfo.join('|'));
+                
+                // Check if we're still on login page
+                var hasPasswordField = loginDoc.querySelector('input[name="password"]');
+                document.body.setAttribute('data-still-login', hasPasswordField ? 'yes' : 'no');
+                
+                if (hasPasswordField) {
+                  // Login failed - store snippet of page
+                  document.body.setAttribute('data-login-snippet', btoa(unescape(encodeURIComponent(loginHtml.substring(0, 2000)))));
+                  return;
+                }
+                
+                // Step 2: Search - try field name "search" from screenshots
+                var searchBody = 'search=${searchCode}&submit-search=Vyhledat';
+                var searchResp = await fetch('https://www.vernostsevyplaci.cz/cnd/', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: searchBody,
+                  credentials: 'include',
+                  redirect: 'follow'
+                });
+                var searchHtml = await searchResp.text();
+                
+                document.body.setAttribute('data-search-len', searchHtml.length.toString());
+                document.body.setAttribute('data-search-status', searchResp.status.toString());
+                
+                // Store search results (base64 encoded)
+                var searchText = new DOMParser().parseFromString(searchHtml, 'text/html').body.textContent || '';
+                document.body.setAttribute('data-search-text', btoa(unescape(encodeURIComponent(searchText.substring(0, 5000)))));
+                document.body.setAttribute('data-search-html', btoa(unescape(encodeURIComponent(searchHtml.substring(0, 10000)))));
+                
+              } catch(e) {
+                document.body.setAttribute('data-error', e.message + ' ' + e.stack);
+              }
+            })();
+          `,
         },
-        // Step 3: Wait for navigation after login
-        { type: 'wait', milliseconds: 6000 },
-        // Step 4: Fill search and submit via JS
-        {
-          type: 'executeJavascript',
-          script: `
-            var searchInput = document.querySelector('input[type="text"], input[name="search"]');
-            var allInputs = document.querySelectorAll('input');
-            var inputInfo = [];
-            allInputs.forEach(function(i) { inputInfo.push(i.name + ':' + i.type); });
-            document.title = 'INPUTS:' + inputInfo.join('|');
-            if (searchInput) {
-              searchInput.value = '${searchCode}';
-              searchInput.dispatchEvent(new Event('input', {bubbles: true}));
-              var form = searchInput.closest('form');
-              if (form) form.submit();
-            }
-          `
-        },
-        // Step 5: Wait for results
-        { type: 'wait', milliseconds: 6000 },
-        // Step 6: Screenshot
-        { type: 'screenshot', fullPage: true },
+        { type: 'wait', milliseconds: 12000 },
       ],
     }),
   });
