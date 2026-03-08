@@ -114,7 +114,7 @@ const AdminEPCDiagrams = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("epc_diagrams" as any).delete().eq("id", id);
+    await supabase.from("epc_diagrams").delete().eq("id", id);
     toast({ title: "Nákres smazán" });
     fetchDiagrams();
   };
