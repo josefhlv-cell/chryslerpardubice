@@ -4,9 +4,8 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const RATE_LIMIT_MS = 1500;
-const MAX_RETRIES = 1; // temporarily 1 for faster debugging
-const RETRY_TIMEOUT_MS = 5000;
+const RATE_LIMIT_MS = 2000;
+const MAX_RETRIES = 3;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -15,13 +14,17 @@ Deno.serve(async (req) => {
 
   try {
     const { partNumbers, mode, batchSize = 20, offset = 0, debugMode = false, exportCsv = false } = await req.json();
-    
+
     const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
+    const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!CATALOG_PASS || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error('Missing required secrets');
+      throw new Error('Missing required secrets (CATALOG_PASS, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+    }
+    if (!FIRECRAWL_API_KEY) {
+      throw new Error('FIRECRAWL_API_KEY not configured – connect Firecrawl in Settings');
     }
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -39,41 +42,49 @@ Deno.serve(async (req) => {
     }
 
     if (!oemNumbers || oemNumbers.length === 0) {
-      return new Response(JSON.stringify({ success: true, summary: { total: 0 } }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ success: true, summary: { total: 0 } });
     }
 
-    // Step 1: Login to catalog with retries
-    let session: { success: boolean; cookies: string; debug?: any } | null = null;
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        session = await catalogLogin(CATALOG_PASS, debugMode);
-        if (session.success) break;
-        console.warn(`Login attempt ${attempt} failed, retrying...`);
-      } catch (e) {
-        console.error(`Login attempt ${attempt} error:`, e);
-      }
-      if (attempt < MAX_RETRIES) await new Promise(r => setTimeout(r, RETRY_TIMEOUT_MS));
+    // Step 1: Login via Firecrawl (handles Cloudflare)
+    console.log('Logging in via Firecrawl...');
+    const loginResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
+      formats: ['html'],
+      waitFor: 3000,
+      actions: [
+        { type: 'wait', milliseconds: 2000 },
+        {
+          type: 'executeJavascript',
+          script: `
+            const pw = document.querySelector('input[name="password"]');
+            if (pw) { pw.value = '${CATALOG_PASS}'; pw.closest('form')?.submit(); }
+          `,
+        },
+        { type: 'wait', milliseconds: 5000 },
+        { type: 'scrape' },
+      ],
+    });
+
+    const loginHtml = loginResult.data?.html || '';
+    const loggedIn = !loginHtml.includes('name="password"') && (loginHtml.includes('Zadejte') || loginHtml.includes('name="search"'));
+
+    if (!loggedIn) {
+      console.error('Login failed. HTML length:', loginHtml.length);
+      return json({
+        error: 'Catalog login failed via Firecrawl',
+        debug: debugMode ? { htmlLength: loginHtml.length, htmlPreview: loginHtml.substring(0, 1000) } : undefined,
+      }, 500);
     }
 
-    if (!session?.success) {
-      return new Response(JSON.stringify({
-        error: 'Login to catalog failed after retries',
-        debug: debugMode ? session?.debug : undefined,
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    console.log('Login OK, searching parts...');
 
-    // Step 2: Search each part
+    // Step 2: Search each part via Firecrawl actions
     const results: any[] = [];
     const notFound: string[] = [];
     const errorParts: string[] = [];
     let updated = 0, errors = 0, skipped = 0;
 
     for (const partNumber of oemNumbers.slice(0, batchSize)) {
+      // Check cache / lock
       const { data: cached } = await supabase
         .from('parts_new')
         .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
@@ -95,22 +106,59 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Search with K prefix (required by catalog)
       const searchCode = `K${partNumber}`;
       let found = false;
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          console.log(`[${attempt}/${MAX_RETRIES}] Searching ${searchCode}...`);
-          const searchResult = await catalogSearch(session.cookies, searchCode, debugMode);
+          console.log(`[${attempt}] Searching ${searchCode}...`);
+
+          // Use Firecrawl actions: fill search field, submit, scrape result
+          const searchResult = await firecrawlScrape(FIRECRAWL_API_KEY, CATALOG_URL, {
+            formats: ['html'],
+            waitFor: 3000,
+            actions: [
+              { type: 'wait', milliseconds: 2000 },
+              // First login again (session may not persist)
+              {
+                type: 'executeJavascript',
+                script: `
+                  const pw = document.querySelector('input[name="password"]');
+                  if (pw) { pw.value = '${CATALOG_PASS}'; pw.closest('form')?.submit(); }
+                `,
+              },
+              { type: 'wait', milliseconds: 4000 },
+              // Now search
+              {
+                type: 'executeJavascript',
+                script: `
+                  const searchInput = document.querySelector('input[type="text"]');
+                  if (searchInput) {
+                    searchInput.value = '${searchCode}';
+                    const form = searchInput.closest('form');
+                    if (form) form.submit();
+                  }
+                `,
+              },
+              { type: 'wait', milliseconds: 5000 },
+              { type: 'scrape' },
+            ],
+          });
+
+          const html = searchResult.data?.html || '';
+          const prices = extractPrices(html);
 
           if (debugMode) {
-            results.push({ oem_number: partNumber, searchCode, debug: true, ...searchResult.debug });
+            results.push({
+              oem_number: partNumber, searchCode, debug: true,
+              htmlLength: html.length, pricesFound: prices,
+              textSnippet: html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1000),
+            });
           }
 
-          if (searchResult.prices.length > 0) {
+          if (prices.length > 0) {
             found = true;
-            const { priceWithVat, priceWithoutVat } = pickBestPrices(searchResult.prices);
+            const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
             await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
             results.push({
               oem_number: partNumber, status: 'updated', searchCode,
@@ -118,7 +166,7 @@ Deno.serve(async (req) => {
             });
             updated++;
           }
-          break; // success - exit retry loop
+          break;
         } catch (e) {
           console.error(`Attempt ${attempt} error for ${searchCode}:`, e);
           if (attempt === MAX_RETRIES) {
@@ -126,13 +174,12 @@ Deno.serve(async (req) => {
             errorParts.push(partNumber);
             errors++;
           } else {
-            await new Promise(r => setTimeout(r, RETRY_TIMEOUT_MS));
+            await sleep(3000);
           }
         }
       }
 
       if (!found && !errorParts.includes(partNumber)) {
-        // Update last_price_update even if not found (to avoid re-checking too soon)
         if (cached) {
           await supabase.from('parts_new').update({
             last_price_update: new Date().toISOString(),
@@ -145,20 +192,13 @@ Deno.serve(async (req) => {
         errors++;
       }
 
-      // Rate limit
-      await new Promise(r => setTimeout(r, RATE_LIMIT_MS));
+      await sleep(RATE_LIMIT_MS);
     }
 
-    // Build response
     const summary = {
-      total: oemNumbers.length,
-      processed: results.length,
-      updated,
-      errors,
-      skipped,
-      notFoundCount: notFound.length,
-      notFoundParts: notFound,
-      errorParts,
+      total: oemNumbers.length, processed: results.length,
+      updated, errors, skipped,
+      notFoundCount: notFound.length, notFoundParts: notFound, errorParts,
     };
 
     // Optional CSV export
@@ -176,156 +216,32 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Sync complete: ${updated} updated, ${errors} errors, ${skipped} skipped, ${notFound.length} not found`);
+    console.log(`Sync complete: ${updated} updated, ${errors} errors, ${skipped} skipped`);
 
-    return new Response(JSON.stringify({
-      success: true, results, summary,
-      ...(csv ? { csv } : {}),
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
   } catch (e) {
     console.error('price-sync error:', e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'Unknown error' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
   }
 });
 
-// ─── Login ──────────────────────────────────────────────────────────────────
+// ─── Firecrawl helper ───────────────────────────────────────────────────────
 
-async function catalogLogin(password: string, debugMode: boolean): Promise<{
-  success: boolean; cookies: string; debug?: any;
-}> {
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'cs,en;q=0.5',
-  };
-
-  // GET page → get PHPSESSID
-  const getResp = await fetch(CATALOG_URL, { redirect: 'follow', headers });
-  const getCookies = collectCookies(getResp);
-  const getHtml = await getResp.text();
-  const getHasPassword = getHtml.includes('name="password"');
-  const getHasCloudflare = getHtml.includes('cf-') || getHtml.includes('challenge') || getHtml.includes('__cf');
-
-  // POST login
-  const postBody = `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`;
-  const loginResp = await fetch(CATALOG_URL, {
+async function firecrawlScrape(apiKey: string, url: string, options: any): Promise<any> {
+  const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
     method: 'POST',
-    redirect: 'follow',
     headers: {
-      ...headers,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': getCookies,
-      'Referer': CATALOG_URL,
-      'Origin': 'https://www.vernostsevyplaci.cz',
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
-    body: postBody,
+    body: JSON.stringify({ url, ...options }),
   });
 
-  const allCookies = mergeCookies(getCookies, collectCookies(loginResp));
-  const html = await loginResp.text();
-  const stillLogin = html.includes('name="password"');
-  const hasSearch = html.includes('Zadejte') || html.includes('name="search"');
-
-  // Find the actual search form field name
-  let searchFieldName = 'search';
-  const inputMatches = [...html.matchAll(/<input[^>]*name="([^"]*)"[^>]*type="text"[^>]*>/gi),
-                        ...html.matchAll(/<input[^>]*type="text"[^>]*name="([^"]*)"[^>]*>/gi)];
-  if (inputMatches.length > 0) {
-    searchFieldName = inputMatches[0][1];
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(`Firecrawl error ${resp.status}: ${JSON.stringify(data)}`);
   }
-
-  // Find submit button name
-  let submitFieldName = 'submit-search';
-  const submitMatches = [...html.matchAll(/<input[^>]*name="([^"]*)"[^>]*type="submit"[^>]*>/gi),
-                         ...html.matchAll(/<input[^>]*type="submit"[^>]*name="([^"]*)"[^>]*>/gi)];
-  for (const m of submitMatches) {
-    if (m[1] !== 'submit-password') {
-      submitFieldName = m[1];
-      break;
-    }
-  }
-
-  const debug = debugMode ? {
-    getHtmlLength: getHtml.length, getHasPassword, getHasCloudflare,
-    getStatus: getResp.status, getCookies, allCookies, loginStatus: loginResp.status,
-    stillLogin, hasSearch, searchFieldName, submitFieldName,
-    passwordLength: password.length, password: password.substring(0, 3) + '***',
-    htmlLength: html.length,
-    inputs: [...html.matchAll(/<input[^>]*name="([^"]*)"[^>]*/gi)].map(m => m[1]),
-  } : undefined;
-
-  return { success: !stillLogin, cookies: allCookies, debug };
-}
-
-// ─── Search ─────────────────────────────────────────────────────────────────
-
-async function catalogSearch(cookies: string, searchCode: string, debugMode: boolean): Promise<{
-  prices: number[]; debug?: any;
-}> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), RETRY_TIMEOUT_MS);
-
-  try {
-    const resp = await fetch(CATALOG_URL, {
-      method: 'POST',
-      redirect: 'follow',
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Cookie': cookies,
-        'Referer': CATALOG_URL,
-      },
-      body: `search=${encodeURIComponent(searchCode)}&submit-search=Vyhledat`,
-    });
-
-    const html = await resp.text();
-    const prices = extractPrices(html);
-    const textContent = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
-
-    const debug = debugMode ? {
-      searchStatus: resp.status,
-      htmlLength: html.length,
-      pricesFound: prices,
-      textSnippet: textContent.substring(0, 2000),
-    } : undefined;
-
-    return { prices, debug };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// ─── Cookie helpers ─────────────────────────────────────────────────────────
-
-function collectCookies(resp: Response): string {
-  const cookies: string[] = [];
-  // Headers.entries() may collapse set-cookie, try getSetCookie first
-  try {
-    const sc = (resp.headers as any).getSetCookie?.();
-    if (sc && sc.length > 0) {
-      for (const c of sc) cookies.push(c.split(';')[0]);
-      return cookies.join('; ');
-    }
-  } catch {}
-  for (const [k, v] of resp.headers.entries()) {
-    if (k.toLowerCase() === 'set-cookie') cookies.push(v.split(';')[0]);
-  }
-  return cookies.join('; ');
-}
-
-function mergeCookies(a: string, b: string): string {
-  const map = new Map<string, string>();
-  for (const c of [...a.split('; '), ...b.split('; ')].filter(Boolean)) {
-    const eq = c.indexOf('=');
-    if (eq > 0) map.set(c.substring(0, eq), c);
-  }
-  return [...map.values()].join('; ');
+  return data;
 }
 
 // ─── Price extraction ───────────────────────────────────────────────────────
@@ -334,7 +250,7 @@ function extractPrices(html: string): number[] {
   const prices: number[] = [];
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  // Semicolon-separated data (CSV-like table rows)
+  // Semicolon-separated data rows
   for (const line of html.split('\n')) {
     if (line.includes(';')) {
       for (const part of line.split(';')) {
@@ -345,7 +261,7 @@ function extractPrices(html: string): number[] {
     }
   }
 
-  // MOC s DPH / MOC bez DPH
+  // MOC s DPH / MOC bez DPH patterns
   for (const pat of [
     /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /MOC\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
@@ -359,7 +275,7 @@ function extractPrices(html: string): number[] {
     }
   }
 
-  // Generic Kč / table cell patterns
+  // Kč / table cell patterns
   for (const pat of [
     /(\d[\d\s]*[,.]?\d*)\s*Kč/gi,
     /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi,
@@ -413,4 +329,17 @@ async function savePriceUpdate(
       last_price_update: new Date().toISOString(),
     }).eq('id', cached.id);
   }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function sleep(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
 }
