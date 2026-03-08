@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_cache: {
+        Row: {
+          cache_key: string
+          cache_type: string
+          created_at: string
+          data: Json
+          id: string
+          ttl_seconds: number | null
+        }
+        Insert: {
+          cache_key: string
+          cache_type: string
+          created_at?: string
+          data: Json
+          id?: string
+          ttl_seconds?: number | null
+        }
+        Update: {
+          cache_key?: string
+          cache_type?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          ttl_seconds?: number | null
+        }
+        Relationships: []
+      }
       cars_for_sale: {
         Row: {
           brand: string
