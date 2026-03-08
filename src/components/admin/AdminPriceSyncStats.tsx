@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { RefreshCw, Activity, CheckCircle, Clock, AlertCircle, TrendingUp } from "lucide-react";
+import { RefreshCw, Activity, CheckCircle, Clock, AlertCircle, TrendingUp, Pause, Play } from "lucide-react";
 
 type Stats = {
   total: number;
@@ -20,6 +20,8 @@ const AdminPriceSyncStats = () => {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [cronActive, setCronActive] = useState<boolean | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -54,9 +56,36 @@ const AdminPriceSyncStats = () => {
     setLoading(false);
   };
 
+  const fetchCronStatus = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("cron-control", {
+        body: { action: "status" },
+      });
+      if (!error && data) setCronActive(data.active);
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleCron = async () => {
+    setToggling(true);
+    try {
+      const action = cronActive ? "pause" : "resume";
+      const { data, error } = await supabase.functions.invoke("cron-control", {
+        body: { action },
+      });
+      if (error) throw error;
+      setCronActive(data.active);
+    } catch (e) {
+      console.error("Toggle cron error:", e);
+    }
+    setToggling(false);
+  };
+
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 30000); // refresh every 30s
+    fetchCronStatus();
+    const interval = setInterval(fetchStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -81,19 +110,45 @@ const AdminPriceSyncStats = () => {
       <Card className="border-primary/30">
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-              </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {cronActive !== false ? (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                </span>
+              ) : (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-400" />
+                </span>
+              )}
               <h3 className="font-semibold text-sm">Automatický sync cen</h3>
-              <Badge variant="outline" className="text-[9px] text-green-600 border-green-300">
-                AKTIVNÍ — každé 2 min
+              <Badge
+                variant="outline"
+                className={`text-[9px] ${cronActive !== false ? 'text-green-600 border-green-300' : 'text-orange-600 border-orange-300'}`}
+              >
+                {cronActive !== false ? 'AKTIVNÍ — každé 2 min' : 'POZASTAVENO'}
               </Badge>
             </div>
-            <Button onClick={fetchStats} variant="ghost" size="icon" className="h-7 w-7" disabled={loading}>
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                onClick={toggleCron}
+                variant={cronActive !== false ? "outline" : "default"}
+                size="sm"
+                className="h-7 text-xs gap-1"
+                disabled={toggling || cronActive === null}
+              >
+                {toggling ? (
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                ) : cronActive !== false ? (
+                  <><Pause className="w-3 h-3" /> Pozastavit</>
+                ) : (
+                  <><Play className="w-3 h-3" /> Obnovit</>
+                )}
+              </Button>
+              <Button onClick={fetchStats} variant="ghost" size="icon" className="h-7 w-7" disabled={loading}>
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
 
           {/* Key metrics */}
