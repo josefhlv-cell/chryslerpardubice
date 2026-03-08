@@ -3,7 +3,8 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Bot, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
+import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
+import TondaAvatar from "@/components/TondaAvatar";
 
 const SERVICE_PHONE = "+420123456789";
 
