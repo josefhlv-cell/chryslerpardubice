@@ -135,7 +135,7 @@ async function firecrawlSearch(
     body: JSON.stringify({
       url: CATALOG_URL,
       formats: ['html', 'markdown'],
-      waitFor: 3000,
+      timeout: 60000,
       actions: [
         // Step 1: Wait for the password form to load
         { type: 'wait', selector: 'input[name="password"]' },
@@ -143,18 +143,18 @@ async function firecrawlSearch(
         { type: 'write', selector: 'input[name="password"]', text: password },
         // Step 3: Click submit
         { type: 'click', selector: 'input[name="submit-password"]' },
-        // Step 4: Wait for the page to reload with search form
+        // Step 4: Wait for the page to reload after login
         { type: 'wait', milliseconds: 5000 },
-        // Step 5: Wait for search input to appear
-        { type: 'wait', selector: 'input[name="search"]' },
-        // Step 6: Type the search code
-        { type: 'write', selector: 'input[name="search"]', text: searchCode },
-        // Step 7: Click search button
-        { type: 'click', selector: 'input[name="submit-search"]' },
-        // Step 8: Wait for results
+        // Step 5: Screenshot after login to see what's there
+        ...(debugMode ? [{ type: 'screenshot', fullPage: true }] : []),
+        // Step 6: Try to find and fill search - use broader selector
+        { type: 'write', selector: 'input[type="text"]', text: searchCode },
+        // Step 7: Press Enter to submit search
+        { type: 'press', key: 'Enter' },
+        // Step 8: Wait for results  
         { type: 'wait', milliseconds: 5000 },
-        // Step 9: Take screenshot for debug
-        ...(debugMode ? [{ type: 'screenshot' as const }] : []),
+        // Step 9: Screenshot of results
+        { type: 'screenshot', fullPage: true },
       ],
     }),
   });
