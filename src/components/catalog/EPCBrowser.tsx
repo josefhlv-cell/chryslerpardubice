@@ -297,7 +297,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Načítám EPC kategorie...</p>
+        <p className="text-sm text-muted-foreground">
+          {autoExpanding ? "Generuji EPC katalog pro toto vozidlo..." : "Načítám EPC kategorie..."}
+        </p>
+        {autoExpanding && (
+          <p className="text-xs text-muted-foreground/70">Tento proces může trvat 30-60s</p>
+        )}
       </div>
     );
   }
