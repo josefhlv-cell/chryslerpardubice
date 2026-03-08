@@ -96,6 +96,32 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       .finally(() => setPricesLoading(false));
   };
 
+  const handleLoadDiagram = async () => {
+    if (!selectedCategory || !brand) return;
+    setDiagramLoading(true);
+    try {
+      const vehicle = `${brand} ${model}`;
+      const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
+      const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
+      setDiagramSvg(svg);
+      // Attach click handlers to diagram parts
+      setTimeout(() => {
+        if (diagramRef.current) {
+          const clickables = diagramRef.current.querySelectorAll('[data-oem]');
+          clickables.forEach(el => {
+            el.addEventListener('click', () => {
+              const oem = el.getAttribute('data-oem');
+              if (oem) onSearchOem(oem);
+            });
+          });
+        }
+      }, 100);
+    } catch (e) {
+      console.error('Diagram load error:', e);
+    }
+    setDiagramLoading(false);
+  };
+
   if (!brand) return null;
 
   if (loading) {
