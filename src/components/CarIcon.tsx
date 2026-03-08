@@ -3,12 +3,20 @@
  * Priority: 1) Local bundled images  2) cdn.imagin.studio  3) SVG silhouette fallback
  */
 
-import { useState, memo, useRef } from "react";
+import { useState, memo } from "react";
 import { cn } from "@/lib/utils";
 
 // Local car images
 import dodgeGrandCaravan from "@/assets/cars/dodge-grand-caravan.png";
 import chrysler300 from "@/assets/cars/chrysler-300.png";
+import chryslerPacifica from "@/assets/cars/chrysler-pacifica.png";
+import chryslerVoyager from "@/assets/cars/chrysler-voyager.png";
+import chryslerTownCountry from "@/assets/cars/chrysler-town-country.png";
+import dodgeDurango from "@/assets/cars/dodge-durango.png";
+import dodgeChallenger from "@/assets/cars/dodge-challenger.png";
+import dodgeCharger from "@/assets/cars/dodge-charger.png";
+import jeepGrandCherokee from "@/assets/cars/jeep-grand-cherokee.png";
+import ram1500 from "@/assets/cars/ram-1500.png";
 
 type CarData = {
   brand: string;
@@ -36,6 +44,15 @@ const localImages: Record<string, string> = {
   "chrysler|300c": chrysler300,
   "chrysler|300": chrysler300,
   "chrysler|300s": chrysler300,
+  "chrysler|pacifica": chryslerPacifica,
+  "chrysler|voyager": chryslerVoyager,
+  "chrysler|town & country": chryslerTownCountry,
+  "chrysler|town country": chryslerTownCountry,
+  "dodge|durango": dodgeDurango,
+  "dodge|challenger": dodgeChallenger,
+  "dodge|charger": dodgeCharger,
+  "jeep|grand cherokee": jeepGrandCherokee,
+  "ram|1500": ram1500,
 };
 
 const getLocalImage = (brand: string, model: string): string | null => {
