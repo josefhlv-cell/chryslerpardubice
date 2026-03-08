@@ -716,7 +716,13 @@ export async function getEPCDiagram(
   category: string,
   parts: Array<{ oem_number?: string; part_name?: string }>
 ): Promise<string | null> {
-  // Check DB cache first
+  const cacheId = `${vehicle}_${category}`.replace(/\s+/g, '_');
+
+  // 0. Check localStorage cache (permanent)
+  const memoryCached = cacheGet<string>('diagram', cacheId);
+  if (memoryCached) return memoryCached;
+
+  // 1. Check DB cache
   const [brand, ...modelParts] = vehicle.split(" ");
   const model = modelParts.join(" ");
   
@@ -730,14 +736,20 @@ export async function getEPCDiagram(
     .limit(1)
     .maybeSingle();
 
-  if (cached?.diagram_svg) return cached.diagram_svg;
+  if (cached?.diagram_svg) {
+    cacheSet('diagram', cacheId, cached.diagram_svg);
+    return cached.diagram_svg;
+  }
 
-  // Generate via AI
+  // 2. Generate via AI
   const { data, error } = await supabase.functions.invoke("epc-diagram", {
     body: { vehicle, category, parts },
   });
   if (error || !data?.success) return null;
-  return data.svg || null;
+
+  const svg = data.svg || null;
+  if (svg) cacheSet('diagram', cacheId, svg);
+  return svg;
 }
 
 // ---- 7zap Scraping ----
