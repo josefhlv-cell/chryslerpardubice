@@ -554,6 +554,12 @@ const Admin = () => {
               <AdminVehicleOffers />
             </div>
           </TabsContent>
+
+          <TabsContent value="epc-diagrams">
+            <div className="mt-2">
+              <AdminEPCDiagrams />
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
