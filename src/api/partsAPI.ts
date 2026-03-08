@@ -40,6 +40,7 @@ export interface SearchFilters {
   maxPrice?: number;
   availability?: string;
   partType?: string;
+  catalogSource?: string;
 }
 
 export interface SearchResult {
