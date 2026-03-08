@@ -143,41 +143,23 @@ async function firecrawlSearch(
     body: JSON.stringify({
       url: CATALOG_URL,
       formats: ['html', 'markdown'],
-      waitFor: 3000,
+      waitFor: 5000,
       actions: [
-        // Wait for page to load
-        { type: 'wait', milliseconds: 2000 },
-        // Fill password and submit login form
-        {
-          type: 'executeJavascript',
-          script: `
-            const pwInput = document.querySelector('input[name="password"]');
-            if (pwInput) {
-              pwInput.value = '${password}';
-              const submitBtn = document.querySelector('input[name="submit-password"], button[name="submit-password"]');
-              if (submitBtn) submitBtn.click();
-              else { const form = pwInput.closest('form'); if (form) form.submit(); }
-            }
-          `,
-        },
-        // Wait for login redirect and page load
+        { type: 'wait', milliseconds: 3000 },
+        // Type password into the input field
+        { type: 'write', selector: 'input[name="password"]', text: password },
+        { type: 'wait', milliseconds: 500 },
+        // Click submit button
+        { type: 'click', selector: 'input[name="submit-password"]' },
         { type: 'wait', milliseconds: 5000 },
-        // Now fill the search form and submit
-        {
-          type: 'executeJavascript',
-          script: `
-            const searchInput = document.querySelector('input[name="search"]');
-            if (searchInput) {
-              searchInput.value = '${searchCode}';
-              const submitBtn = document.querySelector('input[name="submit-search"], button[name="submit-search"]');
-              if (submitBtn) submitBtn.click();
-              else { const form = searchInput.closest('form'); if (form) form.submit(); }
-            }
-          `,
-        },
-        // Wait for search results
+        // Now type the search code
+        { type: 'write', selector: 'input[name="search"]', text: searchCode },
+        { type: 'wait', milliseconds: 500 },
+        // Click search button
+        { type: 'click', selector: 'input[name="submit-search"]' },
         { type: 'wait', milliseconds: 5000 },
-        // Final scrape
+        // Take screenshot for debug + scrape
+        { type: 'screenshot' },
         { type: 'scrape' },
       ],
     }),
