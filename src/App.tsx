@@ -29,6 +29,7 @@ import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
 import AppPresentation from "./pages/AppPresentation";
 import VehicleOffer from "./pages/VehicleOffer";
+import EPC from "./pages/EPC";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/shop" element={<Shop />} />
+              <Route path="/epc" element={<EPC />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/service" element={<Service />} />

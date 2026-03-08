@@ -12,8 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
+  scrape7zap,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
+import { toast } from "sonner";
+import DOMPurify from "dompurify";
 
 interface EPCBrowserProps {
   brand: string;
@@ -146,12 +149,14 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
       const partsForDiagram = parts.map(p => ({ oem_number: p.oem_number || undefined, part_name: p.part_name || undefined }));
       const svg = await getEPCDiagram(vehicle, selectedCategory, partsForDiagram);
       if (svg) {
-        diagramCache.set(cacheKey, svg);
-        setDiagramSvg(svg);
+        const sanitized = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_ATTR: ['data-oem', 'data-part-name'] });
+        diagramCache.set(cacheKey, sanitized);
+        setDiagramSvg(sanitized);
         attachDiagramHandlers();
       }
     } catch (e) {
       console.error('Diagram load error:', e);
+      toast.error("Nepodařilo se načíst nákres");
     }
     setDiagramLoading(false);
   };
@@ -270,9 +275,29 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
             ) : parts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Package className="w-8 h-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Pro kategorii „{selectedCategory}" zatím nejsou díly.</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={async () => {
+                    try {
+                      toast.info("Hledám díly v externím katalogu...");
+                      await scrape7zap(brand, model, year || undefined);
+                      toast.success("Díly nalezeny – načítám znovu");
+                      // Reload parts
+                      const catIds = categories.filter((c) => c.category === selectedCategory).map((c) => c.id);
+                      const reloaded = await getEPCParts(catIds);
+                      setParts(reloaded);
+                    } catch {
+                      toast.error("Nepodařilo se načíst díly z externího katalogu");
+                    }
+                  }}
+                >
+                  <RefreshCw className="w-3 h-3 mr-1" /> Načíst z externího katalogu
+                </Button>
               </div>
             ) : (
               <div className="space-y-1">
