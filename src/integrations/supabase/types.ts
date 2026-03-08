@@ -401,6 +401,30 @@ export type Database = {
           },
         ]
       }
+      part_supersessions: {
+        Row: {
+          created_at: string
+          id: string
+          new_oem_number: string
+          old_oem_number: string
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_oem_number: string
+          old_oem_number: string
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_oem_number?: string
+          old_oem_number?: string
+          source?: string | null
+        }
+        Relationships: []
+      }
       parts_catalog: {
         Row: {
           available: boolean
@@ -441,12 +465,18 @@ export type Database = {
         Row: {
           admin_margin_percent: number | null
           admin_price: number | null
+          availability: string | null
+          catalog_source: string | null
           category: string | null
+          compatible_vehicles: string | null
           currency: string
+          description: string | null
           family: string | null
           id: string
+          image_urls: string[] | null
           internal_code: string | null
           last_price_update: string | null
+          manufacturer: string | null
           name: string
           oem_number: string
           packaging: string | null
@@ -459,12 +489,18 @@ export type Database = {
         Insert: {
           admin_margin_percent?: number | null
           admin_price?: number | null
+          availability?: string | null
+          catalog_source?: string | null
           category?: string | null
+          compatible_vehicles?: string | null
           currency?: string
+          description?: string | null
           family?: string | null
           id?: string
+          image_urls?: string[] | null
           internal_code?: string | null
           last_price_update?: string | null
+          manufacturer?: string | null
           name: string
           oem_number: string
           packaging?: string | null
@@ -477,12 +513,18 @@ export type Database = {
         Update: {
           admin_margin_percent?: number | null
           admin_price?: number | null
+          availability?: string | null
+          catalog_source?: string | null
           category?: string | null
+          compatible_vehicles?: string | null
           currency?: string
+          description?: string | null
           family?: string | null
           id?: string
+          image_urls?: string[] | null
           internal_code?: string | null
           last_price_update?: string | null
+          manufacturer?: string | null
           name?: string
           oem_number?: string
           packaging?: string | null
