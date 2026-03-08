@@ -29,6 +29,7 @@ import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
 import AppPresentation from "./pages/AppPresentation";
 import VehicleOffer from "./pages/VehicleOffer";
+import EPC from "./pages/EPC";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
