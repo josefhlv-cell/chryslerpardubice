@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
-  scrape7zap, generateEPCCatalog, searchParts,
+  scrape7zap, generateEPCCatalog, searchParts, autoExpandCatalog,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 import { toast } from "sonner";
@@ -77,6 +77,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [diagramLoading, setDiagramLoading] = useState(false);
   const [partsPage, setPartsPage] = useState(0);
   const [generating, setGenerating] = useState(false);
+  const [autoExpanding, setAutoExpanding] = useState(false);
   const [scrapingOem, setScrapingOem] = useState<string | null>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +88,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   }, [parts, partsPage]);
   const totalPartsPages = Math.ceil(parts.length / PARTS_PER_PAGE);
 
-  // Load categories when vehicle params change
+  // Load categories when vehicle params change — auto-expand if empty
   useEffect(() => {
     if (!brand) return;
     setLoading(true);
@@ -99,11 +100,40 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setPriceMap(() => new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
-      .then((cats) => {
-        setCategories(cats);
-        setCategoryTree(buildCategoryTree(cats));
+      .then(async (cats) => {
+        if (cats.length === 0 && !autoExpanding) {
+          // Auto-expand: generate catalog automatically
+          setAutoExpanding(true);
+          setLoading(true);
+          try {
+            const result = await autoExpandCatalog(
+              brand, model, year ? parseInt(year) : undefined, engine || undefined,
+              (msg) => toast.info(msg)
+            );
+            if (result.expanded) {
+              toast.success(`Katalog vygenerován: ${result.stats?.categories || 0} kategorií, ${result.stats?.parts || 0} dílů`);
+              // Reload categories after expansion
+              const newCats = await getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined);
+              setCategories(newCats);
+              setCategoryTree(buildCategoryTree(newCats));
+            } else {
+              setCategories([]);
+              setCategoryTree(new Map());
+            }
+          } catch {
+            setCategories([]);
+            setCategoryTree(new Map());
+          } finally {
+            setAutoExpanding(false);
+            setLoading(false);
+          }
+        } else {
+          setCategories(cats);
+          setCategoryTree(buildCategoryTree(cats));
+          setLoading(false);
+        }
       })
-      .finally(() => setLoading(false));
+      .catch(() => setLoading(false));
   }, [brand, model, engine, year]);
 
   // Load parts when category/subcategory selected
@@ -267,7 +297,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">Načítám EPC kategorie...</p>
+        <p className="text-sm text-muted-foreground">
+          {autoExpanding ? "Generuji EPC katalog pro toto vozidlo..." : "Načítám EPC kategorie..."}
+        </p>
+        {autoExpanding && (
+          <p className="text-xs text-muted-foreground/70">Tento proces může trvat 30-60s</p>
+        )}
       </div>
     );
   }
