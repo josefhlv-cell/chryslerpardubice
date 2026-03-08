@@ -29,7 +29,7 @@ import { toast } from "sonner";
 // ---- Modular components ----
 import SearchBar from "@/components/catalog/SearchBar";
 import type { SearchMode } from "@/components/catalog/SearchBar";
-import Filters, { brands } from "@/components/catalog/Filters";
+import Filters, { brands, catalogTree, partCategories, subCategoriesMap } from "@/components/catalog/Filters";
 import PartCard from "@/components/catalog/PartCard";
 import { PartDetailPanel, PartDetailSheet } from "@/components/catalog/PartDetailModal";
 import { useFavorites } from "@/components/catalog/Favorites";
@@ -269,44 +269,118 @@ const Shop = () => {
 
           {/* Search bar — new parts only */}
           {partType === "new" && (
-            <div className="mt-3 flex gap-2 items-start">
-              <div className="flex-1">
-                <SearchBar
-                  query={query}
-                  onQueryChange={(v) => { setQuery(v); setPage(0); }}
-                  onSearch={handleSearch}
-                  searching={searching}
-                  searchMode={searchMode}
-                  onModeChange={(mode) => { setSearchMode(mode); setResults(null); setPage(0); setCategory(""); setSubCategory(""); }}
-                />
+            <div className="mt-3 space-y-3">
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <SearchBar
+                    query={query}
+                    onQueryChange={(v) => { setQuery(v); setPage(0); }}
+                    onSearch={handleSearch}
+                    searching={searching}
+                    searchMode={searchMode}
+                    onModeChange={(mode) => { setSearchMode(mode); setResults(null); setPage(0); setCategory(""); setSubCategory(""); }}
+                  />
+                </div>
+                {/* Mobile filter toggle */}
+                <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" className="h-11 md:hidden px-3 mt-[2.75rem]">
+                      <SlidersHorizontal className="w-4 h-4" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-80 overflow-y-auto">
+                    <SheetHeader><SheetTitle>Filtry a historie</SheetTitle></SheetHeader>
+                    <div className="mt-4 space-y-4">
+                      <Filters
+                        searchMode={searchMode} brand={brand} setBrand={setBrand}
+                        model={model} setModel={setModel} motor={motor} setMotor={setMotor}
+                        category={category} setCategory={setCategory}
+                        subCategory={subCategory} setSubCategory={setSubCategory}
+                        filters={filters} setFilters={setFilters}
+                        onSearch={handleSearch} searching={searching}
+                        onReset={handleResetFilters}
+                        vinQuery={vinQuery} setVinQuery={setVinQuery}
+                        onVinDecode={handleVinDecode} vinLoading={vinLoading} vinDecoded={vinDecoded}
+                        onQuickSearch={handleSearchOem}
+                      />
+                      <Separator />
+                      <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
               </div>
-              {/* Mobile filter toggle */}
-              <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" className="h-11 md:hidden px-3 mt-[2.75rem]">
-                    <SlidersHorizontal className="w-4 h-4" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-80 overflow-y-auto">
-                  <SheetHeader><SheetTitle>Filtry a historie</SheetTitle></SheetHeader>
-                  <div className="mt-4 space-y-4">
-                    <Filters
-                      searchMode={searchMode} brand={brand} setBrand={setBrand}
-                      model={model} setModel={setModel} motor={motor} setMotor={setMotor}
-                      category={category} setCategory={setCategory}
-                      subCategory={subCategory} setSubCategory={setSubCategory}
-                      filters={filters} setFilters={setFilters}
-                      onSearch={handleSearch} searching={searching}
-                      onReset={handleResetFilters}
-                      vinQuery={vinQuery} setVinQuery={setVinQuery}
-                      onVinDecode={handleVinDecode} vinLoading={vinLoading} vinDecoded={vinDecoded}
-                      onQuickSearch={handleSearchOem}
-                    />
-                    <Separator />
-                    <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
+
+              {/* Inline vehicle selectors — always visible in vehicle/epc/vin mode */}
+              {(searchMode === "vehicle" || searchMode === "epc") && (
+                <div className="md:hidden space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
+                      <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {(brand && catalogTree[brand]) ? (
+                      <Select value={model} onValueChange={(v) => { setModel(v); setMotor(""); }}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger>
+                        <SelectContent>{Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                      </Select>
+                    ) : (
+                      <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger><SelectContent /></Select>
+                    )}
+                    {(brand && model && catalogTree[brand]?.[model]) ? (
+                      <Select value={motor} onValueChange={setMotor}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
+                        <SelectContent>{catalogTree[brand][model].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                      </Select>
+                    ) : (
+                      <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger><SelectContent /></Select>
+                    )}
                   </div>
-                </SheetContent>
-              </Sheet>
+                  {/* Inline category */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
+                      <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                    </Select>
+                    {category && (
+                      <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
+                        {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
+                        Hledat
+                      </Button>
+                    )}
+                  </div>
+                  {subCategoriesMap[category] && (
+                    <div className="flex flex-wrap gap-1">
+                      {subCategoriesMap[category].map((sub) => (
+                        <button key={sub} onClick={() => setSubCategory(subCategory === sub ? "" : sub)}
+                          className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${subCategory === sub ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                          {sub}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Inline VIN input — always visible in vin mode on mobile */}
+              {searchMode === "vin" && (
+                <div className="md:hidden space-y-2">
+                  <div className="flex gap-2">
+                    <Input placeholder="Zadejte VIN kód..." className="h-9 text-xs font-mono flex-1" value={vinQuery}
+                      onChange={(e) => setVinQuery(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && handleVinDecode()} />
+                    <Button size="sm" className="h-9" onClick={handleVinDecode} disabled={vinLoading}>
+                      {vinLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                  {vinDecoded && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-0.5">
+                      <p className="text-xs font-semibold text-primary">Rozpoznáno</p>
+                      <p className="text-sm font-semibold">{vinDecoded.brand} {vinDecoded.model}</p>
+                      <p className="text-xs text-muted-foreground">{vinDecoded.year} · {vinDecoded.engine}</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
