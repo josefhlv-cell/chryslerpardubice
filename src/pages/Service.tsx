@@ -35,6 +35,7 @@ const Service = () => {
   const [wantsReplacement, setWantsReplacement] = useState(false);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
+  const [year, setYear] = useState("");
 
   const handleSubmit = () => {
     if (!serviceType || !date) {
@@ -48,6 +49,7 @@ const Service = () => {
     setWantsReplacement(false);
     setBrand("");
     setModel("");
+    setYear("");
   };
 
   return (
@@ -66,7 +68,7 @@ const Service = () => {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Značka vozu</Label>
               <Input placeholder="např. Chrysler" value={brand} onChange={(e) => setBrand(e.target.value)} />
@@ -74,6 +76,10 @@ const Service = () => {
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Model</Label>
               <Input placeholder="např. 300C" value={model} onChange={(e) => setModel(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Rok výroby</Label>
+              <Input placeholder="např. 2018" value={year} onChange={(e) => setYear(e.target.value)} type="number" min="1990" max="2030" />
             </div>
           </div>
 
