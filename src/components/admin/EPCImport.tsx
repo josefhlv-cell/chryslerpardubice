@@ -283,7 +283,66 @@ const EPCImport = () => {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Import EPC dat ve dvou krocích: nejprve kategorie, poté díly.
+          Import EPC dat: AI generování nebo manuální CSV import.
+        </p>
+
+        {catCount !== null && partCount !== null && (
+          <div className="flex gap-4 text-xs text-muted-foreground">
+            <span>Kategorie: <strong>{catCount.toLocaleString("cs")}</strong></span>
+            <span>Díly: <strong>{partCount.toLocaleString("cs")}</strong></span>
+          </div>
+        )}
+
+        {/* AI Generation Section */}
+        <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p className="text-xs font-semibold flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-primary" />
+            AI generování EPC dílů
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            AI vygeneruje kategorie a OEM čísla dílů pro vybraný model vozidla.
+          </p>
+
+          <Select value={aiVehicle} onValueChange={setAiVehicle}>
+            <SelectTrigger className="text-xs h-8">
+              <SelectValue placeholder="Vyberte vozidlo..." />
+            </SelectTrigger>
+            <SelectContent>
+              {AI_VEHICLES.map(v => (
+                <SelectItem key={v} value={v} className="text-xs">{v}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={handleAiGenerate}
+              disabled={!aiVehicle || aiGenerating}
+              className="flex-1"
+            >
+              {aiGenerating ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+              {aiGenerating ? "Generuji..." : "Generovat VŠE (15 kategorií)"}
+            </Button>
+          </div>
+
+          {aiProgress.length > 0 && (
+            <div className="max-h-40 overflow-auto text-[10px] border rounded p-2 space-y-0.5 bg-background">
+              {aiProgress.map((r, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>{r.category}</span>
+                  <span className={r.status === "ok" ? "text-green-600" : "text-destructive"}>
+                    {r.status === "ok" ? `✓ ${r.parts} dílů` : `✗ ${r.status}`}
+                  </span>
+                </div>
+              ))}
+              <div className="border-t pt-1 mt-1 font-semibold flex justify-between">
+                <span>Celkem</span>
+                <span>{aiProgress.reduce((s, r) => s + r.parts, 0)} dílů</span>
+              </div>
+            </div>
+          )}
+        </div>
         </p>
 
         {catCount !== null && partCount !== null && (
