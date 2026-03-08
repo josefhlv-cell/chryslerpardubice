@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
-  scrape7zap, generateEPCCatalog, searchParts, autoExpandCatalog,
+  scrape7zap, generateEPCCatalog, generatePartsBatch, searchParts, autoExpandCatalog,
   type EPCCategory, type EPCPart,
 } from "@/api/partsAPI";
 import { toast } from "sonner";
