@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Wrench, Send } from "lucide-react";
@@ -32,7 +31,6 @@ const Service = () => {
   const [serviceType, setServiceType] = useState("");
   const [date, setDate] = useState<Date>();
   const [note, setNote] = useState("");
-  const [wantsReplacement, setWantsReplacement] = useState(false);
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
@@ -46,7 +44,6 @@ const Service = () => {
     setServiceType("");
     setDate(undefined);
     setNote("");
-    setWantsReplacement(false);
     setBrand("");
     setModel("");
     setYear("");
@@ -120,16 +117,6 @@ const Service = () => {
             <Textarea placeholder="Popište problém nebo požadavek..." value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
           </div>
 
-          <div className="flex items-center gap-3 glass-card p-4">
-            <Checkbox
-              id="replacement"
-              checked={wantsReplacement}
-              onCheckedChange={(checked) => setWantsReplacement(checked as boolean)}
-            />
-            <label htmlFor="replacement" className="text-sm cursor-pointer">
-              Požaduji náhradní vozidlo
-            </label>
-          </div>
 
           <Button variant="hero" className="w-full h-11 mt-2" onClick={handleSubmit}>
             <Send className="w-4 h-4" />
