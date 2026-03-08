@@ -31,7 +31,7 @@ async function createSession(password: string): Promise<{ cookies: string; logge
   await initResp.text();
   console.log('Got cookies:', Object.keys(cookieJar));
 
-  // Step 2: POST login with full form action URL
+  // Step 2: POST login with manual redirect to preserve cookies
   console.log('Step 2: POST login');
   const loginResp = await fetch(CATALOG_URL, {
     method: 'POST',
@@ -44,11 +44,36 @@ async function createSession(password: string): Promise<{ cookies: string; logge
       'Accept': 'text/html,application/xhtml+xml',
     },
     body: `password=${encodeURIComponent(password)}&submit-password=${encodeURIComponent('Přihlásit')}`,
-    redirect: 'follow',
+    redirect: 'manual',
   });
   collectCookies(loginResp);
-  const loginHtml = await loginResp.text();
-  console.log('Login status:', loginResp.status, 'URL:', loginResp.url);
+  await loginResp.text();
+  const loginLocation = loginResp.headers.get('location');
+  console.log('Login status:', loginResp.status, 'Location:', loginLocation, 'Cookies:', Object.keys(cookieJar));
+
+  // Step 3: Follow redirect(s) manually with cookies
+  let loginHtml = '';
+  if (loginLocation || loginResp.status === 301 || loginResp.status === 302) {
+    const redir = loginLocation?.startsWith('http') ? loginLocation : `https://www.vernostsevyplaci.cz${loginLocation || '/cnd/'}`;
+    console.log('Step 3: Following redirect to', redir);
+    const redirResp = await fetch(redir, {
+      headers: { 'User-Agent': ua, 'Cookie': getCookie(), 'Referer': CATALOG_URL, 'Accept': 'text/html,application/xhtml+xml' },
+      redirect: 'follow',
+    });
+    collectCookies(redirResp);
+    loginHtml = await redirResp.text();
+    console.log('Redirect status:', redirResp.status, 'URL:', redirResp.url);
+  } else {
+    // No redirect - re-GET with cookies
+    console.log('Step 3: No redirect, re-GET with cookies');
+    const getResp = await fetch(CATALOG_URL, {
+      headers: { 'User-Agent': ua, 'Cookie': getCookie(), 'Referer': CATALOG_URL, 'Accept': 'text/html,application/xhtml+xml' },
+      redirect: 'follow',
+    });
+    collectCookies(getResp);
+    loginHtml = await getResp.text();
+    console.log('Re-GET status:', getResp.status);
+  }
 
   // Check if we're past login
   const hasSearchForm = loginHtml.includes('Zadejte') || loginHtml.includes('hledaného') || 
