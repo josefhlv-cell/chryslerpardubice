@@ -351,6 +351,7 @@ export type Database = {
       orders: {
         Row: {
           admin_note: string | null
+          catalog_source: string | null
           created_at: string
           customer_note: string | null
           discount_percent: number | null
@@ -369,6 +370,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          catalog_source?: string | null
           created_at?: string
           customer_note?: string | null
           discount_percent?: number | null
@@ -387,6 +389,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          catalog_source?: string | null
           created_at?: string
           customer_note?: string | null
           discount_percent?: number | null
