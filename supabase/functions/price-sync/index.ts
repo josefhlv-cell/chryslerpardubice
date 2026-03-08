@@ -74,31 +74,41 @@ Deno.serve(async (req) => {
         }
       }
 
-      try {
-        console.log(`Searching price for ${priceCode} via Firecrawl...`);
-        const searchResult = await firecrawlSearch(FIRECRAWL_API_KEY, CATALOG_PASS, priceCode, debugMode);
+      let found = false;
+      for (const code of searchCodes) {
+        if (found) break;
+        try {
+          console.log(`Searching price for ${code} via Firecrawl...`);
+          const searchResult = await firecrawlSearch(FIRECRAWL_API_KEY, CATALOG_PASS, code, debugMode);
 
-        if (debugMode) {
-          results.push({
-            oem_number: partNumber,
-            debug: true,
-            searchCode: priceCode,
-            ...searchResult.debug,
-          });
-        }
+          if (debugMode) {
+            results.push({
+              oem_number: partNumber,
+              debug: true,
+              searchCode: code,
+              ...searchResult.debug,
+            });
+          }
 
-        if (searchResult.prices.length > 0) {
-          const { priceWithVat, priceWithoutVat } = pickBestPrices(searchResult.prices);
-          await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
-          results.push({ oem_number: partNumber, status: 'updated', price_with_vat: priceWithVat, price_without_vat: priceWithoutVat });
-          updated++;
-        } else {
-          results.push({ oem_number: partNumber, status: 'not_found', searchCode: priceCode });
-          errors++;
+          if (searchResult.prices.length > 0) {
+            found = true;
+            const { priceWithVat, priceWithoutVat } = pickBestPrices(searchResult.prices);
+            await savePriceUpdate(supabase, cached, partNumber, priceWithVat, priceWithoutVat, mode);
+            results.push({ oem_number: partNumber, status: 'updated', searchCode: code, price_with_vat: priceWithVat, price_without_vat: priceWithoutVat });
+            updated++;
+          }
+        } catch (e) {
+          console.error(`Error for ${code}:`, e);
+          if (debugMode) {
+            results.push({ oem_number: partNumber, debug: true, searchCode: code, error: String(e) });
+          }
         }
-      } catch (e) {
-        console.error(`Error for ${priceCode}:`, e);
-        results.push({ oem_number: partNumber, status: 'error', message: String(e) });
+        await new Promise(r => setTimeout(r, 500));
+      }
+      if (!found && !debugMode) {
+        results.push({ oem_number: partNumber, status: 'not_found', searchCodes });
+        errors++;
+      } else if (!found) {
         errors++;
       }
 
