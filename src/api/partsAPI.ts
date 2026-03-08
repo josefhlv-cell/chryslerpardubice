@@ -5,6 +5,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { cacheGet, cacheSet } from "@/lib/epcCache";
 
 // ---- Types ----
 
@@ -635,12 +636,21 @@ export interface VINDecodeResult {
 }
 
 export async function decodeVINEnriched(vin: string): Promise<VINDecodeResult> {
+  const cacheId = normalizeOem(vin);
+
+  // Check localStorage cache (7-day TTL)
+  const cached = cacheGet<VINDecodeResult>('vin_decode', cacheId);
+  if (cached) return cached;
+
   const { data, error } = await supabase.functions.invoke("vin-decode-ai", {
     body: { vin },
   });
   if (error) throw new Error(error.message);
   if (!data?.success) throw new Error(data?.error || "VIN decode failed");
-  return data as VINDecodeResult;
+
+  const result = data as VINDecodeResult;
+  cacheSet('vin_decode', cacheId, result);
+  return result;
 }
 
 // ---- OEM Cross-references ----
@@ -654,18 +664,26 @@ export interface CrossRefResult {
 }
 
 export async function getOEMCrossReferences(oemNumber: string, partName?: string): Promise<CrossRefResult | null> {
+  const cacheId = normalizeOem(oemNumber);
+
+  // 0. Check localStorage cache (30-day TTL)
+  const memoryCached = cacheGet<CrossRefResult>('oem_crossref', cacheId);
+  if (memoryCached) return memoryCached;
+
   // 1. Check local DB cache first
   const { data: cached } = await supabase
     .from("part_crossref")
     .select("manufacturer, part_number, note")
-    .eq("oem_number", normalizeOem(oemNumber));
+    .eq("oem_number", cacheId);
 
   if (cached && cached.length > 0) {
-    return {
+    const result: CrossRefResult = {
       oem_number: oemNumber,
       part_name: partName,
       alternatives: cached.map(c => ({ manufacturer: c.manufacturer, part_number: c.part_number, note: c.note || undefined })),
     };
+    cacheSet('oem_crossref', cacheId, result);
+    return result;
   }
 
   // 2. Call backend AI crossref
@@ -678,7 +696,7 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
   const result = data as CrossRefResult;
   if (result.alternatives && result.alternatives.length > 0) {
     const rows = result.alternatives.map(alt => ({
-      oem_number: normalizeOem(oemNumber),
+      oem_number: cacheId,
       manufacturer: alt.manufacturer,
       part_number: alt.part_number,
       note: alt.note || null,
@@ -687,6 +705,7 @@ export async function getOEMCrossReferences(oemNumber: string, partName?: string
     supabase.from("part_crossref").insert(rows).then(() => {});
   }
 
+  cacheSet('oem_crossref', cacheId, result);
   return result;
 }
 
@@ -697,7 +716,13 @@ export async function getEPCDiagram(
   category: string,
   parts: Array<{ oem_number?: string; part_name?: string }>
 ): Promise<string | null> {
-  // Check DB cache first
+  const cacheId = `${vehicle}_${category}`.replace(/\s+/g, '_');
+
+  // 0. Check localStorage cache (permanent)
+  const memoryCached = cacheGet<string>('diagram', cacheId);
+  if (memoryCached) return memoryCached;
+
+  // 1. Check DB cache
   const [brand, ...modelParts] = vehicle.split(" ");
   const model = modelParts.join(" ");
   
@@ -711,14 +736,20 @@ export async function getEPCDiagram(
     .limit(1)
     .maybeSingle();
 
-  if (cached?.diagram_svg) return cached.diagram_svg;
+  if (cached?.diagram_svg) {
+    cacheSet('diagram', cacheId, cached.diagram_svg);
+    return cached.diagram_svg;
+  }
 
-  // Generate via AI
+  // 2. Generate via AI
   const { data, error } = await supabase.functions.invoke("epc-diagram", {
     body: { vehicle, category, parts },
   });
   if (error || !data?.success) return null;
-  return data.svg || null;
+
+  const svg = data.svg || null;
+  if (svg) cacheSet('diagram', cacheId, svg);
+  return svg;
 }
 
 // ---- 7zap Scraping ----
