@@ -905,6 +905,132 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_buyback_requests: {
+        Row: {
+          admin_note: string | null
+          brand: string
+          condition: string
+          created_at: string
+          email: string | null
+          id: string
+          mileage: number
+          model: string
+          name: string | null
+          note: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+          user_id: string | null
+          vin: string | null
+          year: number
+        }
+        Insert: {
+          admin_note?: string | null
+          brand: string
+          condition: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          mileage: number
+          model: string
+          name?: string | null
+          note?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          vin?: string | null
+          year: number
+        }
+        Update: {
+          admin_note?: string | null
+          brand?: string
+          condition?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          mileage?: number
+          model?: string
+          name?: string | null
+          note?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          vin?: string | null
+          year?: number
+        }
+        Relationships: []
+      }
+      vehicle_import_requests: {
+        Row: {
+          admin_note: string | null
+          brand: string
+          budget_from: number | null
+          budget_to: number | null
+          color: string | null
+          created_at: string
+          email: string | null
+          extras: string | null
+          fuel: string | null
+          id: string
+          model: string
+          name: string | null
+          note: string | null
+          phone: string | null
+          status: string
+          transmission: string | null
+          updated_at: string
+          user_id: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          admin_note?: string | null
+          brand: string
+          budget_from?: number | null
+          budget_to?: number | null
+          color?: string | null
+          created_at?: string
+          email?: string | null
+          extras?: string | null
+          fuel?: string | null
+          id?: string
+          model: string
+          name?: string | null
+          note?: string | null
+          phone?: string | null
+          status?: string
+          transmission?: string | null
+          updated_at?: string
+          user_id?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          admin_note?: string | null
+          brand?: string
+          budget_from?: number | null
+          budget_to?: number | null
+          color?: string | null
+          created_at?: string
+          email?: string | null
+          extras?: string | null
+          fuel?: string | null
+          id?: string
+          model?: string
+          name?: string | null
+          note?: string | null
+          phone?: string | null
+          status?: string
+          transmission?: string | null
+          updated_at?: string
+          user_id?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
       vehicle_inquiries: {
         Row: {
           created_at: string
