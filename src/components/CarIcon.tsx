@@ -107,8 +107,10 @@ const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
   const alt = `${car.brand} ${car.model} ${car.year || ""}`.trim();
   const bodyType = detectBodyType(car.brand, car.model);
   const localImg = getLocalImage(car.brand, car.model);
+  const apiUrl = localImg ? "" : getApiUrl(car);
+  const [showFallback, setShowFallback] = useState(!localImg && failedApiUrls.has(apiUrl));
 
-  // If we have a local image, use it directly — no API needed
+  // Local image — direct render
   if (localImg) {
     return (
       <div className={cn(sizeMap[size], "rounded-lg overflow-hidden bg-muted/30 shrink-0", className)} title={alt}>
@@ -117,10 +119,7 @@ const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
     );
   }
 
-  // For unknown models, try API with fallback to SVG
-  const apiUrl = getApiUrl(car);
-  const [showFallback, setShowFallback] = useState(failedApiUrls.has(apiUrl));
-
+  // SVG fallback
   if (showFallback) {
     return (
       <div
@@ -132,6 +131,7 @@ const CarIcon = memo(({ car, size = "md", className }: CarIconProps) => {
     );
   }
 
+  // API image with error fallback
   return (
     <div className={cn(sizeMap[size], "rounded-lg overflow-hidden bg-muted/30 shrink-0", className)} title={alt}>
       <img
