@@ -284,12 +284,14 @@ async function processPart(
   });
   const searchHtml = await searchResp.text();
 
-  const prices = extractPricesDOM(searchHtml);
+  // Verify the part was actually found in search results
+  const partFound = verifyPartInResults(searchHtml, partNumber, searchCode);
+  const prices = partFound ? extractPricesDOM(searchHtml) : [];
 
   if (debugMode) {
     return {
       oem_number: partNumber, searchCode, debug: true,
-      htmlLength: searchHtml.length, pricesFound: prices,
+      htmlLength: searchHtml.length, partFound, pricesFound: prices,
       textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
     };
   }
