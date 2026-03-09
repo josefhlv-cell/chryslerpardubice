@@ -345,27 +345,15 @@ async function processPart(
 // ─── Part verification ──────────────────────────────────────────────────────
 
 function verifyPartInResults(html: string, partNumber: string, searchCode: string): boolean {
-  const text = html.replace(/<[^>]*>/g, ' ');
-  
-  // Check if the OEM number or search code appears in the results area
-  // The catalog shows parts in table rows - check for part number in content
   const partNumClean = partNumber.replace(/\s/g, '');
   
-  // Look for the part number in the page (not in form fields or scripts)
-  // Remove script tags and form fields first
+  // Remove only script tags (NOT forms - results may be inside forms)
   const contentOnly = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<form[\s\S]*?<\/form>/gi, '')
     .replace(/<[^>]*>/g, ' ');
   
-  // Check multiple formats the catalog might display the part number
-  const patterns = [
-    partNumClean,
-    partNumber,
-    searchCode,
-    // Without K prefix
-    partNumClean.replace(/^K/i, ''),
-  ];
+  // Check if OEM number appears in page content
+  const patterns = [partNumClean, partNumber, searchCode];
   
   for (const p of patterns) {
     if (p.length >= 5 && contentOnly.includes(p)) {
@@ -373,7 +361,7 @@ function verifyPartInResults(html: string, partNumber: string, searchCode: strin
     }
   }
   
-  // Also check in table cells specifically
+  // Check in table cells
   const tdPattern = new RegExp(`<td[^>]*>[^<]*${partNumClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*<\\/td>`, 'i');
   if (tdPattern.test(html)) {
     return true;
