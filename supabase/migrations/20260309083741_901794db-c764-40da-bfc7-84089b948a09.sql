@@ -1,0 +1,1 @@
+UPDATE parts_new SET last_price_update = NULL WHERE price_with_vat = 0;
