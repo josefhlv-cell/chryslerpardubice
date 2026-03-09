@@ -272,21 +272,32 @@ async function processPart(
     }
   }
 
-  const searchCode = `K${partNumber}`;
-  const searchResp = await fetch(CATALOG_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': cookieStr,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-    body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
-  });
-  const searchHtml = await searchResp.text();
+  // Try multiple search formats
+  const searchVariants = [`K${partNumber}`, partNumber, `6${partNumber}`];
+  let searchHtml = '';
+  let searchCode = '';
+  let partFound = false;
+  let prices: number[] = [];
 
-  // Verify the part was actually found in search results
-  const partFound = verifyPartInResults(searchHtml, partNumber, searchCode);
-  const prices = partFound ? extractPricesDOM(searchHtml) : [];
+  for (const variant of searchVariants) {
+    searchCode = variant;
+    const searchResp = await fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookieStr,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      body: `find-part=${encodeURIComponent(variant)}&search-part=Vyhledat`,
+    });
+    searchHtml = await searchResp.text();
+    partFound = verifyPartInResults(searchHtml, partNumber, variant);
+    if (partFound) {
+      prices = extractPricesDOM(searchHtml);
+      if (prices.length > 0) break;
+    }
+    await randomDelay();
+  }
 
   if (debugMode) {
     return {
