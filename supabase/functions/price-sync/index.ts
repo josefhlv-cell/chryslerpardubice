@@ -6,7 +6,14 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const CONCURRENCY = 5; // parallel requests
+const CONCURRENCY = 5;
+const BATCH_SIZE = 25;
+const CACHE_TTL_MINUTES = 15; // skip if updated within last 15 min
+const MAX_RETRIES = 3;
+const MIN_DELAY = 200;
+const MAX_DELAY = 500;
+const LOCK_KEY = 'price-sync-lock';
+const LOCK_TTL_SECONDS = 120; // 2 min lock
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -17,7 +24,7 @@ Deno.serve(async (req) => {
     const {
       partNumbers,
       mode = 'auto',
-      batchSize = 25,
+      batchSize = BATCH_SIZE,
       offset = 0,
       debugMode = false,
       exportCsv = false,
@@ -34,84 +41,153 @@ Deno.serve(async (req) => {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ── Resolve OEM numbers ─────────────────────────────────────────
-    let oemNumbers: string[] = partNumbers || [];
-    if (oemNumbers.length === 0) {
-      const { data: topParts } = await supabase
-        .from('parts_new')
-        .select('oem_number')
-        .order('last_price_update', { ascending: true, nullsFirst: true })
-        .range(offset, offset + batchSize - 1);
-      oemNumbers = (topParts || []).map((p: any) => p.oem_number);
+    // ── Lock mechanism ──────────────────────────────────────────────
+    const lockAcquired = await acquireLock(supabase);
+    if (!lockAcquired) {
+      console.log('Another sync is still running, skipping this run');
+      return json({ success: true, summary: { total: 0, message: 'Skipped - previous run still active' } });
     }
 
-    if (oemNumbers.length === 0) {
-      return json({ success: true, summary: { total: 0, message: 'No parts to sync' } });
-    }
+    try {
+      // ── Resolve OEM numbers ─────────────────────────────────────────
+      let oemNumbers: string[] = partNumbers || [];
+      if (oemNumbers.length === 0) {
+        const { data: topParts } = await supabase
+          .from('parts_new')
+          .select('oem_number')
+          .order('last_price_update', { ascending: true, nullsFirst: true })
+          .range(offset, offset + batchSize - 1);
+        oemNumbers = (topParts || []).map((p: any) => p.oem_number);
+      }
 
-    const batch = oemNumbers.slice(0, batchSize);
-    console.log(`Processing batch of ${batch.length} parts (offset ${offset})`);
+      if (oemNumbers.length === 0) {
+        return json({ success: true, summary: { total: 0, message: 'No parts to sync' } });
+      }
 
-    // ── Step 1: Login ───────────────────────────────────────────────
-    const cookieStr = await loginToCatalog(CATALOG_PASS);
-    if (!cookieStr) {
-      return json({ error: 'Catalog login failed' }, 500);
-    }
+      const batch = oemNumbers.slice(0, batchSize);
+      console.log(`Processing batch of ${batch.length} parts (offset ${offset})`);
 
-    // ── Step 2: Process parts in parallel chunks ────────────────────
-    const results: any[] = [];
-    let updated = 0, errors = 0, skipped = 0;
+      // ── Login ───────────────────────────────────────────────────────
+      const cookieStr = await loginWithRetry(CATALOG_PASS);
+      if (!cookieStr) {
+        return json({ error: 'Catalog login failed after retries' }, 500);
+      }
 
-    // Process in chunks of CONCURRENCY
-    for (let i = 0; i < batch.length; i += CONCURRENCY) {
-      const chunk = batch.slice(i, i + CONCURRENCY);
-      const chunkResults = await Promise.allSettled(
-        chunk.map(partNumber => processPart(partNumber, cookieStr, supabase, mode, debugMode))
+      // ── Process with promise pool ──────────────────────────────────
+      const results = await processWithPool(batch, CONCURRENCY, (partNumber) =>
+        processPartWithRetry(partNumber, cookieStr, supabase, mode, debugMode)
       );
 
-      for (const result of chunkResults) {
-        if (result.status === 'fulfilled') {
-          const r = result.value;
-          results.push(r);
-          if (r.status === 'updated') updated++;
-          else if (r.status === 'locked' || r.status === 'fresh') skipped++;
-          else if (r.status === 'not_found' || r.status === 'error') errors++;
-        } else {
-          results.push({ status: 'error', error: String(result.reason) });
-          errors++;
+      let updated = 0, errors = 0, skipped = 0;
+      for (const r of results) {
+        if (r.status === 'updated') updated++;
+        else if (r.status === 'locked' || r.status === 'fresh') skipped++;
+        else if (r.status === 'not_found' || r.status === 'error') errors++;
+      }
+
+      const summary = {
+        total: oemNumbers.length, batchProcessed: batch.length,
+        updated, errors, skipped,
+        nextOffset: offset + batch.length,
+      };
+
+      let csv: string | undefined;
+      if (exportCsv) {
+        const { data: allParts } = await supabase
+          .from('parts_new')
+          .select('oem_number, name, price_without_vat, price_with_vat, last_price_update, availability')
+          .order('oem_number');
+        if (allParts) {
+          csv = 'OEM;Název;Cena bez DPH;Cena s DPH;Poslední aktualizace;Dostupnost\n';
+          for (const p of allParts) {
+            csv += `${p.oem_number};${p.name};${p.price_without_vat};${p.price_with_vat};${p.last_price_update || ''};${p.availability || ''}\n`;
+          }
         }
       }
+
+      console.log(`Sync complete: ${updated} updated, ${errors} errors, ${skipped} skipped`);
+      return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
+    } finally {
+      await releaseLock(supabase);
     }
-
-    const summary = {
-      total: oemNumbers.length, batchProcessed: batch.length,
-      updated, errors, skipped,
-      nextOffset: offset + batch.length,
-    };
-
-    let csv: string | undefined;
-    if (exportCsv) {
-      const { data: allParts } = await supabase
-        .from('parts_new')
-        .select('oem_number, name, price_without_vat, price_with_vat, last_price_update, availability')
-        .order('oem_number');
-      if (allParts) {
-        csv = 'OEM;Název;Cena bez DPH;Cena s DPH;Poslední aktualizace;Dostupnost\n';
-        for (const p of allParts) {
-          csv += `${p.oem_number};${p.name};${p.price_without_vat};${p.price_with_vat};${p.last_price_update || ''};${p.availability || ''}\n`;
-        }
-      }
-    }
-
-    console.log(`Sync complete: ${updated} updated, ${errors} errors, ${skipped} skipped`);
-    return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
   } catch (e) {
     console.error('price-sync error:', e);
     return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
   }
 });
 
-// ─── Login ──────────────────────────────────────────────────────────────────
+// ─── Lock ───────────────────────────────────────────────────────────────────
+
+async function acquireLock(supabase: any): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('api_cache')
+    .select('created_at')
+    .eq('cache_key', LOCK_KEY)
+    .eq('cache_type', 'lock')
+    .single();
+
+  if (existing) {
+    const age = (Date.now() - new Date(existing.created_at).getTime()) / 1000;
+    if (age < LOCK_TTL_SECONDS) return false;
+    // Stale lock, remove it
+    await supabase.from('api_cache').delete().eq('cache_key', LOCK_KEY).eq('cache_type', 'lock');
+  }
+
+  const { error } = await supabase.from('api_cache').insert({
+    cache_key: LOCK_KEY,
+    cache_type: 'lock',
+    data: { started: new Date().toISOString() },
+    ttl_seconds: LOCK_TTL_SECONDS,
+  });
+
+  return !error;
+}
+
+async function releaseLock(supabase: any): Promise<void> {
+  await supabase.from('api_cache').delete().eq('cache_key', LOCK_KEY).eq('cache_type', 'lock');
+}
+
+// ─── Random delay ───────────────────────────────────────────────────────────
+
+function randomDelay(): Promise<void> {
+  const ms = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── Promise Pool ───────────────────────────────────────────────────────────
+
+async function processWithPool<T>(
+  items: string[],
+  concurrency: number,
+  fn: (item: string) => Promise<T>
+): Promise<T[]> {
+  const results: T[] = new Array(items.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      await randomDelay();
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+// ─── Login with retry ───────────────────────────────────────────────────────
+
+async function loginWithRetry(password: string): Promise<string | null> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const cookie = await loginToCatalog(password);
+    if (cookie) return cookie;
+    console.warn(`Login attempt ${attempt} failed, retrying...`);
+    await randomDelay();
+  }
+  return null;
+}
 
 async function loginToCatalog(password: string): Promise<string | null> {
   console.log('Logging in to catalog...');
@@ -149,7 +225,27 @@ async function loginToCatalog(password: string): Promise<string | null> {
   return cookieStr;
 }
 
-// ─── Process single part ────────────────────────────────────────────────────
+// ─── Process single part with retry ─────────────────────────────────────────
+
+async function processPartWithRetry(
+  partNumber: string,
+  cookieStr: string,
+  supabase: any,
+  mode: string,
+  debugMode: boolean
+): Promise<any> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await processPart(partNumber, cookieStr, supabase, mode, debugMode);
+    } catch (e) {
+      console.warn(`Part ${partNumber} attempt ${attempt} failed: ${e}`);
+      if (attempt === MAX_RETRIES) {
+        return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt };
+      }
+      await randomDelay();
+    }
+  }
+}
 
 async function processPart(
   partNumber: string,
@@ -158,87 +254,82 @@ async function processPart(
   mode: string,
   debugMode: boolean
 ): Promise<any> {
-  try {
-    const { data: cached } = await supabase
-      .from('parts_new')
-      .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
-      .eq('oem_number', partNumber)
-      .single();
+  const { data: cached } = await supabase
+    .from('parts_new')
+    .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
+    .eq('oem_number', partNumber)
+    .single();
 
-    if (cached?.price_locked) {
-      return { oem_number: partNumber, status: 'locked' };
+  if (cached?.price_locked) {
+    return { oem_number: partNumber, status: 'locked' };
+  }
+
+  // Cache: skip if updated within CACHE_TTL_MINUTES (unless forced)
+  if (cached?.last_price_update && mode !== 'force') {
+    const minutesAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60);
+    if (minutesAgo < CACHE_TTL_MINUTES) {
+      return { oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat };
+    }
+  }
+
+  const searchCode = `K${partNumber}`;
+  const searchResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Cookie': cookieStr,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
+  });
+  const searchHtml = await searchResp.text();
+
+  const prices = extractPricesDOM(searchHtml);
+
+  if (debugMode) {
+    return {
+      oem_number: partNumber, searchCode, debug: true,
+      htmlLength: searchHtml.length, pricesFound: prices,
+      textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
+    };
+  }
+
+  if (prices.length > 0) {
+    const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
+
+    if (cached && cached.price_with_vat !== priceWithVat) {
+      await supabase.from('price_history').insert({
+        part_id: cached.id,
+        old_price_without_vat: cached.price_without_vat || 0,
+        new_price_without_vat: priceWithoutVat,
+        old_price_with_vat: cached.price_with_vat || 0,
+        new_price_with_vat: priceWithVat,
+        source: mode === 'force' ? 'manual' : 'auto',
+      });
+    }
+    if (cached) {
+      await supabase.from('parts_new').update({
+        price_without_vat: priceWithoutVat,
+        price_with_vat: priceWithVat,
+        last_price_update: new Date().toISOString(),
+      }).eq('id', cached.id);
     }
 
-    // Freshness: skip if updated within last day (unless forced)
-    if (cached?.last_price_update && mode !== 'force') {
-      const daysAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60 * 60 * 24);
-      if (daysAgo < 1) {
-        return { oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat };
-      }
+    return {
+      oem_number: partNumber, status: 'updated', searchCode,
+      price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
+    };
+  } else {
+    if (cached) {
+      await supabase.from('parts_new').update({
+        last_price_update: new Date().toISOString(),
+      }).eq('id', cached.id);
     }
-
-    const searchCode = `K${partNumber}`;
-    const searchResp = await fetch(CATALOG_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Cookie': cookieStr,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
-    });
-    const searchHtml = await searchResp.text();
-
-    const prices = extractPricesDOM(searchHtml);
-
-    if (debugMode) {
-      return {
-        oem_number: partNumber, searchCode, debug: true,
-        htmlLength: searchHtml.length, pricesFound: prices,
-        textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
-      };
-    }
-
-    if (prices.length > 0) {
-      const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
-
-      if (cached && cached.price_with_vat !== priceWithVat) {
-        await supabase.from('price_history').insert({
-          part_id: cached.id,
-          old_price_without_vat: cached.price_without_vat || 0,
-          new_price_without_vat: priceWithoutVat,
-          old_price_with_vat: cached.price_with_vat || 0,
-          new_price_with_vat: priceWithVat,
-          source: mode === 'force' ? 'manual' : 'auto',
-        });
-      }
-      if (cached) {
-        await supabase.from('parts_new').update({
-          price_without_vat: priceWithoutVat,
-          price_with_vat: priceWithVat,
-          last_price_update: new Date().toISOString(),
-        }).eq('id', cached.id);
-      }
-
-      return {
-        oem_number: partNumber, status: 'updated', searchCode,
-        price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
-      };
-    } else {
-      if (cached) {
-        await supabase.from('parts_new').update({
-          last_price_update: new Date().toISOString(),
-        }).eq('id', cached.id);
-      }
-      return { oem_number: partNumber, status: 'not_found', searchCode };
-    }
-  } catch (e) {
-    console.error(`Error processing ${partNumber}:`, e);
-    return { oem_number: partNumber, status: 'error', error: String(e) };
+    return { oem_number: partNumber, status: 'not_found', searchCode };
   }
 }
 
-// ─── Price extraction with DOMParser ────────────────────────────────────────
+// ─── Price extraction ───────────────────────────────────────────────────────
 
 function extractPricesDOM(html: string): number[] {
   const prices: number[] = [];
