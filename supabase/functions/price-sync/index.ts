@@ -6,14 +6,27 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const CONCURRENCY = 5;
-const BATCH_SIZE = 25;
-const CACHE_TTL_MINUTES = 15; // skip if updated within last 15 min
+const CONCURRENCY = 8;
+const BATCH_SIZE = 50;
+const CACHE_TTL_MINUTES = 20;
 const MAX_RETRIES = 3;
 const MIN_DELAY = 200;
-const MAX_DELAY = 500;
+const MAX_DELAY = 600;
 const LOCK_KEY = 'price-sync-lock';
-const LOCK_TTL_SECONDS = 120; // 2 min lock
+const LOCK_TTL_SECONDS = 180; // 3 min lock
+
+// User-Agent rotation pool
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.0.0',
+];
+
+function randomUA(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -44,20 +57,17 @@ Deno.serve(async (req) => {
     // ── Lock mechanism ──────────────────────────────────────────────
     const lockAcquired = await acquireLock(supabase);
     if (!lockAcquired) {
-      console.log('Another sync is still running, skipping this run');
+      console.log('⏭️ Another sync is still running, skipping');
       return json({ success: true, summary: { total: 0, message: 'Skipped - previous run still active' } });
     }
 
+    const startTime = Date.now();
+
     try {
-      // ── Resolve OEM numbers ─────────────────────────────────────────
+      // ── Resolve OEM numbers with priority ─────────────────────────
       let oemNumbers: string[] = partNumbers || [];
       if (oemNumbers.length === 0) {
-        const { data: topParts } = await supabase
-          .from('parts_new')
-          .select('oem_number')
-          .order('last_price_update', { ascending: true, nullsFirst: true })
-          .range(offset, offset + batchSize - 1);
-        oemNumbers = (topParts || []).map((p: any) => p.oem_number);
+        oemNumbers = await getPrioritizedParts(supabase, batchSize, offset);
       }
 
       if (oemNumbers.length === 0) {
@@ -65,7 +75,7 @@ Deno.serve(async (req) => {
       }
 
       const batch = oemNumbers.slice(0, batchSize);
-      console.log(`Processing batch of ${batch.length} parts (offset ${offset})`);
+      console.log(`🚀 Processing batch of ${batch.length} parts (offset ${offset}, concurrency ${CONCURRENCY})`);
 
       // ── Login ───────────────────────────────────────────────────────
       const cookieStr = await loginWithRetry(CATALOG_PASS);
@@ -73,22 +83,38 @@ Deno.serve(async (req) => {
         return json({ error: 'Catalog login failed after retries' }, 500);
       }
 
-      // ── Process with promise pool ──────────────────────────────────
-      const results = await processWithPool(batch, CONCURRENCY, (partNumber) =>
-        processPartWithRetry(partNumber, cookieStr, supabase, mode, debugMode)
+      // ── Adaptive throttle state ────────────────────────────────────
+      const throttle: ThrottleState = {
+        errorCount: 0,
+        currentDelay: MIN_DELAY,
+        currentConcurrency: CONCURRENCY,
+      };
+
+      // ── Process with adaptive promise pool ─────────────────────────
+      const results = await processWithPool(batch, throttle, (partNumber) =>
+        processPartWithRetry(partNumber, cookieStr, supabase, mode, debugMode, throttle)
       );
 
-      let updated = 0, errors = 0, skipped = 0;
+      // ── Stats ──────────────────────────────────────────────────────
+      let updated = 0, errors = 0, skipped = 0, notFound = 0;
       for (const r of results) {
         if (r.status === 'updated') updated++;
         else if (r.status === 'locked' || r.status === 'fresh') skipped++;
-        else if (r.status === 'not_found' || r.status === 'error') errors++;
+        else if (r.status === 'not_found') notFound++;
+        else if (r.status === 'error') errors++;
       }
 
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const avgMs = batch.length > 0 ? ((Date.now() - startTime) / batch.length).toFixed(0) : '0';
+
       const summary = {
-        total: oemNumbers.length, batchProcessed: batch.length,
-        updated, errors, skipped,
+        total: oemNumbers.length,
+        batchProcessed: batch.length,
+        updated, errors, notFound, skipped,
         nextOffset: offset + batch.length,
+        elapsedSeconds: parseFloat(elapsed),
+        avgMsPerPart: parseInt(avgMs),
+        successRate: batch.length > 0 ? `${Math.round(((updated + skipped) / batch.length) * 100)}%` : '0%',
       };
 
       let csv: string | undefined;
@@ -105,7 +131,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`Sync complete: ${updated} updated, ${errors} errors, ${skipped} skipped`);
+      console.log(`✅ Sync done in ${elapsed}s: ${updated} updated, ${notFound} not found, ${errors} errors, ${skipped} skipped | ${avgMs}ms/part`);
       return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
     } finally {
       await releaseLock(supabase);
@@ -115,6 +141,45 @@ Deno.serve(async (req) => {
     return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
   }
 });
+
+// ─── Priority-based part selection ──────────────────────────────────────────
+
+async function getPrioritizedParts(supabase: any, limit: number, offset: number): Promise<string[]> {
+  const results: string[] = [];
+
+  // Priority 1: Parts from recent orders (last 7 days)
+  if (offset === 0) {
+    const { data: orderParts } = await supabase
+      .from('orders')
+      .select('oem_number')
+      .not('oem_number', 'is', null)
+      .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (orderParts) {
+      for (const p of orderParts) {
+        if (p.oem_number && !results.includes(p.oem_number)) results.push(p.oem_number);
+      }
+    }
+  }
+
+  // Priority 2+3: Rest by oldest update
+  const remaining = limit - results.length;
+  if (remaining > 0) {
+    const { data: topParts } = await supabase
+      .from('parts_new')
+      .select('oem_number')
+      .order('last_price_update', { ascending: true, nullsFirst: true })
+      .range(offset, offset + remaining - 1);
+    if (topParts) {
+      for (const p of topParts) {
+        if (!results.includes(p.oem_number)) results.push(p.oem_number);
+      }
+    }
+  }
+
+  return results;
+}
 
 // ─── Lock ───────────────────────────────────────────────────────────────────
 
@@ -129,7 +194,6 @@ async function acquireLock(supabase: any): Promise<boolean> {
   if (existing) {
     const age = (Date.now() - new Date(existing.created_at).getTime()) / 1000;
     if (age < LOCK_TTL_SECONDS) return false;
-    // Stale lock, remove it
     await supabase.from('api_cache').delete().eq('cache_key', LOCK_KEY).eq('cache_type', 'lock');
   }
 
@@ -147,18 +211,49 @@ async function releaseLock(supabase: any): Promise<void> {
   await supabase.from('api_cache').delete().eq('cache_key', LOCK_KEY).eq('cache_type', 'lock');
 }
 
+// ─── Adaptive throttle ─────────────────────────────────────────────────────
+
+interface ThrottleState {
+  errorCount: number;
+  currentDelay: number;
+  currentConcurrency: number;
+}
+
+function adaptThrottle(throttle: ThrottleState, success: boolean) {
+  if (!success) {
+    throttle.errorCount++;
+    // After 3 consecutive errors, slow down
+    if (throttle.errorCount >= 3) {
+      throttle.currentDelay = Math.min(throttle.currentDelay * 1.5, 2000);
+      throttle.currentConcurrency = Math.max(Math.floor(throttle.currentConcurrency * 0.6), 2);
+      console.warn(`⚠️ Throttling: delay=${throttle.currentDelay}ms, concurrency=${throttle.currentConcurrency}`);
+    }
+  } else {
+    // Gradually recover
+    if (throttle.errorCount > 0) throttle.errorCount = Math.max(0, throttle.errorCount - 1);
+    if (throttle.currentDelay > MAX_DELAY) {
+      throttle.currentDelay = Math.max(MIN_DELAY, throttle.currentDelay * 0.9);
+    }
+    if (throttle.currentConcurrency < CONCURRENCY) {
+      throttle.currentConcurrency = Math.min(CONCURRENCY, throttle.currentConcurrency + 1);
+    }
+  }
+}
+
 // ─── Random delay ───────────────────────────────────────────────────────────
 
-function randomDelay(): Promise<void> {
-  const ms = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
+function randomDelay(throttle: ThrottleState): Promise<void> {
+  const base = throttle.currentDelay;
+  const jitter = base * 0.5;
+  const ms = base + Math.random() * jitter;
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Promise Pool ───────────────────────────────────────────────────────────
+// ─── Promise Pool (adaptive) ───────────────────────────────────────────────
 
 async function processWithPool<T>(
   items: string[],
-  concurrency: number,
+  throttle: ThrottleState,
   fn: (item: string) => Promise<T>
 ): Promise<T[]> {
   const results: T[] = new Array(items.length);
@@ -167,12 +262,13 @@ async function processWithPool<T>(
   async function worker() {
     while (index < items.length) {
       const i = index++;
-      await randomDelay();
+      await randomDelay(throttle);
       results[i] = await fn(items[i]);
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  const workerCount = Math.min(throttle.currentConcurrency, items.length);
+  const workers = Array.from({ length: workerCount }, () => worker());
   await Promise.all(workers);
   return results;
 }
@@ -184,18 +280,18 @@ async function loginWithRetry(password: string): Promise<string | null> {
     const cookie = await loginToCatalog(password);
     if (cookie) return cookie;
     console.warn(`Login attempt ${attempt} failed, retrying...`);
-    await randomDelay();
+    await new Promise(r => setTimeout(r, 1000 * attempt));
   }
   return null;
 }
 
 async function loginToCatalog(password: string): Promise<string | null> {
-  console.log('Logging in to catalog...');
+  const ua = randomUA();
   const loginResp = await fetch(CATALOG_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent': ua,
     },
     body: `password=${encodeURIComponent(password)}&submit-password=P%C5%99ihl%C3%A1sit`,
     redirect: 'manual',
@@ -208,7 +304,7 @@ async function loginToCatalog(password: string): Promise<string | null> {
   if (loginResp.status >= 300 && loginResp.status < 400) {
     const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
     const followResp = await fetch(redirectUrl, {
-      headers: { 'Cookie': cookieStr, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      headers: { 'Cookie': cookieStr, 'User-Agent': ua },
     });
     catalogHtml = await followResp.text();
   } else {
@@ -217,11 +313,11 @@ async function loginToCatalog(password: string): Promise<string | null> {
 
   const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte') || catalogHtml.includes('find-part');
   if (!hasSearchForm) {
-    console.error('Login failed - no search form found');
+    console.error('Login failed - no search form');
     return null;
   }
 
-  console.log(`Login OK, cookies=${cookies.length}`);
+  console.log(`🔑 Login OK (${cookies.length} cookies)`);
   return cookieStr;
 }
 
@@ -232,17 +328,20 @@ async function processPartWithRetry(
   cookieStr: string,
   supabase: any,
   mode: string,
-  debugMode: boolean
+  debugMode: boolean,
+  throttle: ThrottleState
 ): Promise<any> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await processPart(partNumber, cookieStr, supabase, mode, debugMode);
+      const result = await processPart(partNumber, cookieStr, supabase, mode, debugMode);
+      adaptThrottle(throttle, result.status !== 'error');
+      return result;
     } catch (e) {
-      console.warn(`Part ${partNumber} attempt ${attempt} failed: ${e}`);
+      adaptThrottle(throttle, false);
       if (attempt === MAX_RETRIES) {
         return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt };
       }
-      await randomDelay();
+      await randomDelay(throttle);
     }
   }
 }
@@ -264,7 +363,7 @@ async function processPart(
     return { oem_number: partNumber, status: 'locked' };
   }
 
-  // Cache: skip if updated within CACHE_TTL_MINUTES (unless forced)
+  // Cache TTL check
   if (cached?.last_price_update && mode !== 'force') {
     const minutesAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60);
     if (minutesAgo < CACHE_TTL_MINUTES) {
@@ -272,29 +371,29 @@ async function processPart(
     }
   }
 
-  // Try multiple search formats (pad with leading zero if needed)
+  // Search variants with zero-padding
   const padded = partNumber.length <= 9 ? `0${partNumber}` : partNumber;
-  const searchVariants = [
-    `K${padded}`,      // K + zero-padded (primary format)
-    `K${partNumber}`,  // K + original
-    padded,            // zero-padded without K
-    partNumber,        // raw OEM
-  ];
-  // Deduplicate
-  const uniqueVariants = [...new Set(searchVariants)];
+  const searchVariants = [...new Set([
+    `K${padded}`,
+    `K${partNumber}`,
+    padded,
+    partNumber,
+  ])];
+
   let searchHtml = '';
   let searchCode = '';
   let partFound = false;
   let prices: number[] = [];
+  const ua = randomUA();
 
-  for (const variant of uniqueVariants) {
+  for (const variant of searchVariants) {
     searchCode = variant;
     const searchResp = await fetch(CATALOG_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Cookie': cookieStr,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': ua,
       },
       body: `find-part=${encodeURIComponent(variant)}&search-part=Vyhledat`,
     });
@@ -304,7 +403,8 @@ async function processPart(
       prices = extractPricesDOM(searchHtml);
       if (prices.length > 0) break;
     }
-    await randomDelay();
+    // Small delay between variant attempts
+    await new Promise(r => setTimeout(r, 150));
   }
 
   if (debugMode) {
@@ -354,27 +454,18 @@ async function processPart(
 
 function verifyPartInResults(html: string, partNumber: string, searchCode: string): boolean {
   const partNumClean = partNumber.replace(/\s/g, '');
-  
-  // Remove only script tags (NOT forms - results may be inside forms)
   const contentOnly = html
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<[^>]*>/g, ' ');
-  
-  // Check if OEM number appears in page content
+
   const patterns = [partNumClean, partNumber, searchCode];
-  
   for (const p of patterns) {
-    if (p.length >= 5 && contentOnly.includes(p)) {
-      return true;
-    }
+    if (p.length >= 5 && contentOnly.includes(p)) return true;
   }
-  
-  // Check in table cells
+
   const tdPattern = new RegExp(`<td[^>]*>[^<]*${partNumClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*<\\/td>`, 'i');
-  if (tdPattern.test(html)) {
-    return true;
-  }
-  
+  if (tdPattern.test(html)) return true;
+
   return false;
 }
 
