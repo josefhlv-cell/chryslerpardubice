@@ -272,8 +272,16 @@ async function processPart(
     }
   }
 
-  // Try multiple search formats
-  const searchVariants = [`K${partNumber}`, partNumber, `6${partNumber}`];
+  // Try multiple search formats (pad with leading zero if needed)
+  const padded = partNumber.length <= 9 ? `0${partNumber}` : partNumber;
+  const searchVariants = [
+    `K${padded}`,      // K + zero-padded (primary format)
+    `K${partNumber}`,  // K + original
+    padded,            // zero-padded without K
+    partNumber,        // raw OEM
+  ];
+  // Deduplicate
+  const uniqueVariants = [...new Set(searchVariants)];
   let searchHtml = '';
   let searchCode = '';
   let partFound = false;
