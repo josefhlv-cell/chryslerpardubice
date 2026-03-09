@@ -6,6 +6,7 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
+const CONCURRENCY = 5; // parallel requests
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -16,7 +17,7 @@ Deno.serve(async (req) => {
     const {
       partNumbers,
       mode = 'auto',
-      batchSize = 10,
+      batchSize = 25,
       offset = 0,
       debugMode = false,
       exportCsv = false,
@@ -49,149 +50,36 @@ Deno.serve(async (req) => {
     }
 
     const batch = oemNumbers.slice(0, batchSize);
-    console.log(`Processing batch of ${batch.length} parts (offset ${offset}):`, batch);
+    console.log(`Processing batch of ${batch.length} parts (offset ${offset})`);
 
-    // ── Step 1: Login via direct POST ───────────────────────────────
-    console.log('Logging in to catalog...');
-    const loginResp = await fetch(CATALOG_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-      body: `password=${encodeURIComponent(CATALOG_PASS)}&submit-password=P%C5%99ihl%C3%A1sit`,
-      redirect: 'manual',
-    });
-
-    const cookies = loginResp.headers.getSetCookie?.() || [];
-    const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
-
-    let catalogHtml = '';
-    if (loginResp.status >= 300 && loginResp.status < 400) {
-      const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
-      const followResp = await fetch(redirectUrl, {
-        headers: { 'Cookie': cookieStr, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      });
-      catalogHtml = await followResp.text();
-    } else {
-      catalogHtml = await loginResp.text();
+    // ── Step 1: Login ───────────────────────────────────────────────
+    const cookieStr = await loginToCatalog(CATALOG_PASS);
+    if (!cookieStr) {
+      return json({ error: 'Catalog login failed' }, 500);
     }
 
-    const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte') || catalogHtml.includes('find-part');
-    const stillHasPassword = catalogHtml.includes('name="password"') && !hasSearchForm;
-
-    console.log(`Login: hasSearch=${hasSearchForm}, stillPassword=${stillHasPassword}, cookies=${cookies.length}, htmlLen=${catalogHtml.length}`);
-
-    if (debugMode && !hasSearchForm) {
-      return json({
-        success: false,
-        loginDebug: {
-          status: loginResp.status,
-          cookieCount: cookies.length,
-          htmlLength: catalogHtml.length,
-          hasSearchForm,
-          stillHasPassword,
-          htmlPreview: catalogHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 2000),
-        },
-      });
-    }
-
-    if (!hasSearchForm) {
-      return json({ error: 'Catalog login failed', loginStatus: loginResp.status }, 500);
-    }
-
-    // ── Step 2: Search each part ────────────────────────────────────
+    // ── Step 2: Process parts in parallel chunks ────────────────────
     const results: any[] = [];
     let updated = 0, errors = 0, skipped = 0;
 
-    for (const partNumber of batch) {
-      try {
-        const { data: cached } = await supabase
-          .from('parts_new')
-          .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
-          .eq('oem_number', partNumber)
-          .single();
+    // Process in chunks of CONCURRENCY
+    for (let i = 0; i < batch.length; i += CONCURRENCY) {
+      const chunk = batch.slice(i, i + CONCURRENCY);
+      const chunkResults = await Promise.allSettled(
+        chunk.map(partNumber => processPart(partNumber, cookieStr, supabase, mode, debugMode))
+      );
 
-        if (cached?.price_locked) {
-          results.push({ oem_number: partNumber, status: 'locked' });
-          skipped++;
-          continue;
-        }
-
-        // Freshness: skip if updated within last day (unless forced)
-        if (cached?.last_price_update && mode !== 'force') {
-          const daysAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60 * 60 * 24);
-          if (daysAgo < 1) {
-            results.push({ oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat });
-            skipped++;
-            continue;
-          }
-        }
-
-        const searchCode = `K${partNumber}`;
-        console.log(`Searching ${searchCode}...`);
-
-        const searchResp = await fetch(CATALOG_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': cookieStr,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-          body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
-        });
-        const searchHtml = await searchResp.text();
-
-        // Parse with DOMParser for structured extraction
-        const prices = extractPricesDOM(searchHtml);
-
-        if (debugMode) {
-          results.push({
-            oem_number: partNumber, searchCode, debug: true,
-            htmlLength: searchHtml.length, pricesFound: prices,
-            textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
-          });
-        }
-
-        if (prices.length > 0) {
-          const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
-
-          if (cached && cached.price_with_vat !== priceWithVat) {
-            await supabase.from('price_history').insert({
-              part_id: cached.id,
-              old_price_without_vat: cached.price_without_vat || 0,
-              new_price_without_vat: priceWithoutVat,
-              old_price_with_vat: cached.price_with_vat || 0,
-              new_price_with_vat: priceWithVat,
-              source: mode === 'force' ? 'manual' : 'auto',
-            });
-          }
-          if (cached) {
-            await supabase.from('parts_new').update({
-              price_without_vat: priceWithoutVat,
-              price_with_vat: priceWithVat,
-              last_price_update: new Date().toISOString(),
-            }).eq('id', cached.id);
-          }
-
-          results.push({
-            oem_number: partNumber, status: 'updated', searchCode,
-            price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
-          });
-          updated++;
+      for (const result of chunkResults) {
+        if (result.status === 'fulfilled') {
+          const r = result.value;
+          results.push(r);
+          if (r.status === 'updated') updated++;
+          else if (r.status === 'locked' || r.status === 'fresh') skipped++;
+          else if (r.status === 'not_found' || r.status === 'error') errors++;
         } else {
-          if (cached) {
-            await supabase.from('parts_new').update({
-              last_price_update: new Date().toISOString(),
-            }).eq('id', cached.id);
-          }
-          results.push({ oem_number: partNumber, status: 'not_found', searchCode });
+          results.push({ status: 'error', error: String(result.reason) });
           errors++;
         }
-      } catch (e) {
-        console.error(`Error processing ${partNumber}:`, e);
-        results.push({ oem_number: partNumber, status: 'error', error: String(e) });
-        errors++;
       }
     }
 
@@ -223,16 +111,141 @@ Deno.serve(async (req) => {
   }
 });
 
+// ─── Login ──────────────────────────────────────────────────────────────────
+
+async function loginToCatalog(password: string): Promise<string | null> {
+  console.log('Logging in to catalog...');
+  const loginResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    body: `password=${encodeURIComponent(password)}&submit-password=P%C5%99ihl%C3%A1sit`,
+    redirect: 'manual',
+  });
+
+  const cookies = loginResp.headers.getSetCookie?.() || [];
+  const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
+
+  let catalogHtml = '';
+  if (loginResp.status >= 300 && loginResp.status < 400) {
+    const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
+    const followResp = await fetch(redirectUrl, {
+      headers: { 'Cookie': cookieStr, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    });
+    catalogHtml = await followResp.text();
+  } else {
+    catalogHtml = await loginResp.text();
+  }
+
+  const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte') || catalogHtml.includes('find-part');
+  if (!hasSearchForm) {
+    console.error('Login failed - no search form found');
+    return null;
+  }
+
+  console.log(`Login OK, cookies=${cookies.length}`);
+  return cookieStr;
+}
+
+// ─── Process single part ────────────────────────────────────────────────────
+
+async function processPart(
+  partNumber: string,
+  cookieStr: string,
+  supabase: any,
+  mode: string,
+  debugMode: boolean
+): Promise<any> {
+  try {
+    const { data: cached } = await supabase
+      .from('parts_new')
+      .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
+      .eq('oem_number', partNumber)
+      .single();
+
+    if (cached?.price_locked) {
+      return { oem_number: partNumber, status: 'locked' };
+    }
+
+    // Freshness: skip if updated within last day (unless forced)
+    if (cached?.last_price_update && mode !== 'force') {
+      const daysAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysAgo < 1) {
+        return { oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat };
+      }
+    }
+
+    const searchCode = `K${partNumber}`;
+    const searchResp = await fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookieStr,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
+    });
+    const searchHtml = await searchResp.text();
+
+    const prices = extractPricesDOM(searchHtml);
+
+    if (debugMode) {
+      return {
+        oem_number: partNumber, searchCode, debug: true,
+        htmlLength: searchHtml.length, pricesFound: prices,
+        textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
+      };
+    }
+
+    if (prices.length > 0) {
+      const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
+
+      if (cached && cached.price_with_vat !== priceWithVat) {
+        await supabase.from('price_history').insert({
+          part_id: cached.id,
+          old_price_without_vat: cached.price_without_vat || 0,
+          new_price_without_vat: priceWithoutVat,
+          old_price_with_vat: cached.price_with_vat || 0,
+          new_price_with_vat: priceWithVat,
+          source: mode === 'force' ? 'manual' : 'auto',
+        });
+      }
+      if (cached) {
+        await supabase.from('parts_new').update({
+          price_without_vat: priceWithoutVat,
+          price_with_vat: priceWithVat,
+          last_price_update: new Date().toISOString(),
+        }).eq('id', cached.id);
+      }
+
+      return {
+        oem_number: partNumber, status: 'updated', searchCode,
+        price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
+      };
+    } else {
+      if (cached) {
+        await supabase.from('parts_new').update({
+          last_price_update: new Date().toISOString(),
+        }).eq('id', cached.id);
+      }
+      return { oem_number: partNumber, status: 'not_found', searchCode };
+    }
+  } catch (e) {
+    console.error(`Error processing ${partNumber}:`, e);
+    return { oem_number: partNumber, status: 'error', error: String(e) };
+  }
+}
+
 // ─── Price extraction with DOMParser ────────────────────────────────────────
 
 function extractPricesDOM(html: string): number[] {
   const prices: number[] = [];
 
-  // Try DOMParser first for structured data
   try {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     if (doc) {
-      // Extract from table cells
       const tds = doc.querySelectorAll('td');
       for (const td of tds) {
         const text = (td as any).textContent || '';
@@ -243,7 +256,6 @@ function extractPricesDOM(html: string): number[] {
         }
       }
 
-      // Extract from elements with price-like classes
       const priceEls = doc.querySelectorAll('.price, .cena, [class*="price"], [class*="cena"]');
       for (const el of priceEls) {
         const text = (el as any).textContent || '';
@@ -258,10 +270,8 @@ function extractPricesDOM(html: string): number[] {
     console.log('DOMParser fallback to regex:', e);
   }
 
-  // Regex fallback (always run to catch more)
   const text = html.replace(/<[^>]*>/g, ' ');
 
-  // "X XXX.XX Kč" pattern
   const kcPattern = /(?<!\d)(\d{1,3}(?:\s\d{3})*[,.]\d{2})\s*Kč/gi;
   let m;
   while ((m = kcPattern.exec(text)) !== null) {
@@ -269,7 +279,6 @@ function extractPricesDOM(html: string): number[] {
     if (p > 10 && p < 1000000) prices.push(p);
   }
 
-  // DPH patterns
   const dphPatterns = [
     /Cena\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
     /Cena\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
@@ -286,7 +295,6 @@ function extractPricesDOM(html: string): number[] {
     }
   }
 
-  // Table cell prices from raw HTML
   const tdPattern = /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi;
   let m3;
   while ((m3 = tdPattern.exec(html)) !== null) {
