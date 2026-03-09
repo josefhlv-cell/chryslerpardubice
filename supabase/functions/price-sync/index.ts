@@ -287,7 +287,7 @@ async function processPart(
   let partFound = false;
   let prices: number[] = [];
 
-  for (const variant of searchVariants) {
+  for (const variant of uniqueVariants) {
     searchCode = variant;
     const searchResp = await fetch(CATALOG_URL, {
       method: 'POST',
