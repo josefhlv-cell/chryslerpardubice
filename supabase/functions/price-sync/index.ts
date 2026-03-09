@@ -272,24 +272,37 @@ async function processPart(
     }
   }
 
-  const searchCode = `K${partNumber}`;
-  const searchResp = await fetch(CATALOG_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Cookie': cookieStr,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    },
-    body: `find-part=${encodeURIComponent(searchCode)}&search-part=Vyhledat`,
-  });
-  const searchHtml = await searchResp.text();
+  // Try multiple search formats
+  const searchVariants = [`K${partNumber}`, partNumber, `6${partNumber}`];
+  let searchHtml = '';
+  let searchCode = '';
+  let partFound = false;
+  let prices: number[] = [];
 
-  const prices = extractPricesDOM(searchHtml);
+  for (const variant of searchVariants) {
+    searchCode = variant;
+    const searchResp = await fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookieStr,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      body: `find-part=${encodeURIComponent(variant)}&search-part=Vyhledat`,
+    });
+    searchHtml = await searchResp.text();
+    partFound = verifyPartInResults(searchHtml, partNumber, variant);
+    if (partFound) {
+      prices = extractPricesDOM(searchHtml);
+      if (prices.length > 0) break;
+    }
+    await randomDelay();
+  }
 
   if (debugMode) {
     return {
       oem_number: partNumber, searchCode, debug: true,
-      htmlLength: searchHtml.length, pricesFound: prices,
+      htmlLength: searchHtml.length, partFound, pricesFound: prices,
       textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
     };
   }
@@ -327,6 +340,34 @@ async function processPart(
     }
     return { oem_number: partNumber, status: 'not_found', searchCode };
   }
+}
+
+// ─── Part verification ──────────────────────────────────────────────────────
+
+function verifyPartInResults(html: string, partNumber: string, searchCode: string): boolean {
+  const partNumClean = partNumber.replace(/\s/g, '');
+  
+  // Remove only script tags (NOT forms - results may be inside forms)
+  const contentOnly = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]*>/g, ' ');
+  
+  // Check if OEM number appears in page content
+  const patterns = [partNumClean, partNumber, searchCode];
+  
+  for (const p of patterns) {
+    if (p.length >= 5 && contentOnly.includes(p)) {
+      return true;
+    }
+  }
+  
+  // Check in table cells
+  const tdPattern = new RegExp(`<td[^>]*>[^<]*${partNumClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*<\\/td>`, 'i');
+  if (tdPattern.test(html)) {
+    return true;
+  }
+  
+  return false;
 }
 
 // ─── Price extraction ───────────────────────────────────────────────────────
