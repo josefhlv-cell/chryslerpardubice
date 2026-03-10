@@ -86,6 +86,9 @@ Return ONLY valid JSON.`;
       });
 
       if (!aiResp.ok) {
+        if (aiResp.status === 402) {
+          return jsonResponse({ success: false, error: 'AI kredity vyčerpány.' }, 503);
+        }
         return jsonResponse({ success: false, error: `AI error: ${aiResp.status}` }, 500);
       }
 

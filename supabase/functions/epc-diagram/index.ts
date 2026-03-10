@@ -88,6 +88,9 @@ Requirements:
     });
 
     if (!aiResp.ok) {
+      if (aiResp.status === 402) {
+        return jsonResponse({ success: false, error: 'AI kredity vyčerpány. Generování nákresů je dočasně nedostupné.' }, 503);
+      }
       return jsonResponse({ success: false, error: `AI error: ${aiResp.status}` }, 500);
     }
 

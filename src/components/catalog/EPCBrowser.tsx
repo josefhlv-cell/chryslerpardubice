@@ -113,7 +113,6 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             );
             if (result.expanded) {
               toast.success(`Katalog vygenerován: ${result.stats?.categories || 0} kategorií, ${result.stats?.parts || 0} dílů`);
-              // Reload categories after expansion
               const newCats = await getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined);
               setCategories(newCats);
               setCategoryTree(buildCategoryTree(newCats));
@@ -121,7 +120,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
               setCategories([]);
               setCategoryTree(new Map());
             }
-          } catch {
+          } catch (e: any) {
+            console.error("Auto-expand error:", e);
+            const msg = e?.message || '';
+            if (msg.includes('kredity') || msg.includes('402') || msg.includes('503')) {
+              toast.error("AI generátor je dočasně nedostupný (vyčerpané kredity).");
+            }
             setCategories([]);
             setCategoryTree(new Map());
           } finally {
@@ -169,7 +173,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             }
           } catch (e: any) {
             console.error('Batch generation error:', e);
-            toast.error("Generace dílů selhala – zkuste to znovu");
+            const msg = e?.message || '';
+            if (msg.includes('kredity') || msg.includes('402') || msg.includes('503')) {
+              toast.error("AI generátor je dočasně nedostupný");
+            } else {
+              toast.error("Generace dílů selhala – zkuste to znovu");
+            }
           }
           setBatchGenerating(false);
         }
