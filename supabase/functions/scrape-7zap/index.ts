@@ -169,6 +169,9 @@ CRITICAL: Use REAL Mopar OEM part numbers (format like 68191349AC, 5038674AA, 04
       if (!aiResp.ok) {
         const errText = await aiResp.text();
         console.error('AI error:', aiResp.status, errText);
+        if (aiResp.status === 402) {
+          return jsonResponse({ success: false, error: 'AI kredity vyčerpány. Generování katalogu je dočasně nedostupné. Kontaktujte administrátora.' }, 503);
+        }
         return jsonResponse({ success: false, error: `AI error: ${aiResp.status}` });
       }
 
