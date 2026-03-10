@@ -173,7 +173,12 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             }
           } catch (e: any) {
             console.error('Batch generation error:', e);
-            toast.error("Generace dílů selhala – zkuste to znovu");
+            const msg = e?.message || '';
+            if (msg.includes('kredity') || msg.includes('402') || msg.includes('503')) {
+              toast.error("AI generátor je dočasně nedostupný");
+            } else {
+              toast.error("Generace dílů selhala – zkuste to znovu");
+            }
           }
           setBatchGenerating(false);
         }
