@@ -110,6 +110,9 @@ Requirements:
     });
 
     if (!aiResp.ok) {
+      if (aiResp.status === 402) {
+        return jsonResponse({ success: false, error: 'AI kredity vyčerpány. Generování katalogu je dočasně nedostupné.' }, 503);
+      }
       return jsonResponse({ success: false, error: `AI error: ${aiResp.status}` }, aiResp.status >= 500 ? 500 : aiResp.status);
     }
 

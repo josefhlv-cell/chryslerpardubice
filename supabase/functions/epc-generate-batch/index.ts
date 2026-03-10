@@ -113,7 +113,8 @@ Requirements:
     });
 
     if (!aiResp.ok) {
-      const errMsg = `AI error: ${aiResp.status}`;
+      const is402 = aiResp.status === 402;
+      const errMsg = is402 ? 'AI kredity vyčerpány' : `AI error: ${aiResp.status}`;
       if (queue_id) {
         const retryCount = body.retry_count || 0;
         await supabase.from('epc_generation_queue')
