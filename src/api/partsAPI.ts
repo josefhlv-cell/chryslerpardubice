@@ -765,6 +765,7 @@ export async function scrape7zap(brand: string, model: string, year?: string) {
 
 /** Generate AI catalog for a brand/model via scrape-7zap edge function */
 export async function generateAICatalog(brand: string, model: string, year?: number) {
+  if (!brand || !model) return null;
   const { data, error } = await supabase.functions.invoke("scrape-7zap", {
     body: { brand, model, year, action: "generate-catalog" },
   });
