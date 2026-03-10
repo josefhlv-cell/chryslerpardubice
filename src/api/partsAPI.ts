@@ -755,6 +755,7 @@ export async function getEPCDiagram(
 // ---- 7zap Scraping ----
 
 export async function scrape7zap(brand: string, model: string, year?: string) {
+  if (!brand || !model) return null;
   const { data, error } = await supabase.functions.invoke("scrape-7zap", {
     body: { brand, model, year, action: "scrape-catalog" },
   });
