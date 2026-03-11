@@ -1,3 +1,7 @@
+// Previous AI model used:
+// model: "google/gemini-3-flash-preview"
+// Changed to: google/gemini-2.5-flash-lite for lower cost and higher stability
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -41,21 +45,32 @@ Formát odpovědi:
 
 Vždy odpovídej česky. Buď stručný ale odborný.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...messages,
-        ],
-        stream: true,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash-lite',
+          temperature: 0.3,
+          max_tokens: 300,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages,
+          ],
+          stream: true,
+        }),
+      });
+    } catch (fetchErr) {
+      console.error('AI fetch failed:', fetchErr);
+      return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -65,15 +80,15 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'Nedostatek kreditů pro AI.' }), {
-          status: 402,
+        return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
+          status: 503,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       const t = await response.text();
       console.error('AI gateway error:', response.status, t);
-      return new Response(JSON.stringify({ error: 'Chyba AI služby' }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
+        status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -83,8 +98,8 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
     });
   } catch (e) {
     console.error('ai-mechanic error:', e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'Unknown error' }), {
-      status: 500,
+    return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
+      status: 503,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
