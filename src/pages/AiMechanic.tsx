@@ -157,7 +157,8 @@ const AiMechanic = () => {
 
       if (!resp.ok || !resp.body) {
         const err = await resp.json().catch(() => ({ error: "Chyba" }));
-        toast.error(err.error || "Chyba AI služby");
+        const errorMsg = err.error || "Chyba AI služby";
+        setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${errorMsg}\n\nMůžete zavolat přímo do servisu na ${SERVICE_PHONE}.` }]);
         setIsLoading(false);
         return;
       }
