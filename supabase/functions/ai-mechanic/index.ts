@@ -74,22 +74,14 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
     }
 
     if (!response.ok) {
-      const t = await response.text();
-      console.error('AI gateway error:', response.status, t);
+      const errText = await response.text();
+      console.error('AI gateway error:', response.status, errText);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: 'Příliš mnoho požadavků, zkuste to později.' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
-          status: 503,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const t = await response.text();
-      console.error('AI gateway error:', response.status, t);
       return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
