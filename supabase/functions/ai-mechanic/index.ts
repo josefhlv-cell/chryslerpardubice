@@ -1,6 +1,7 @@
-// Previous AI model used:
-// model: "google/gemini-3-flash-preview"
-// Changed to: google/gemini-2.5-flash-lite for lower cost and higher stability
+// Previous AI models used:
+// model: "google/gemini-3-flash-preview" (original)
+// model: "google/gemini-2.5-flash-lite" (cost optimization attempt - failed with 402/503)
+// Changed to: google/gemini-2.5-flash for balance of cost and reliability
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
