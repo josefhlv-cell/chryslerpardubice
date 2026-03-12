@@ -1,6 +1,7 @@
-// Previous AI model used:
-// model: "google/gemini-3-flash-preview"
-// Changed to: google/gemini-2.5-flash-lite for lower cost and higher stability
+// Previous AI models used:
+// model: "google/gemini-3-flash-preview" (original)
+// model: "google/gemini-2.5-flash-lite" (cost optimization attempt - failed with 402/503)
+// Changed to: google/gemini-2.5-flash for balance of cost and reliability
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,7 +55,7 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash-lite',
+          model: 'google/gemini-2.5-flash',
           temperature: 0.3,
           max_tokens: 300,
           messages: [
@@ -65,7 +66,7 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
         }),
       });
     } catch (fetchErr) {
-      console.error('AI fetch failed:', fetchErr);
+      console.error('AI fetch failed:', fetchErr?.message || fetchErr);
       return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -73,20 +74,14 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
     }
 
     if (!response.ok) {
+      const errText = await response.text();
+      console.error('AI gateway error:', response.status, errText);
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: 'Příliš mnoho požadavků, zkuste to později.' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
-          status: 503,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      const t = await response.text();
-      console.error('AI gateway error:', response.status, t);
       return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
