@@ -143,6 +143,7 @@ const statusLabel: Record<string, string> = {
 const Admin = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
+  const { isEnabled } = useFeatureFlags();
 
   // Data
   const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
