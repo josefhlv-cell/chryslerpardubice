@@ -238,12 +238,13 @@ const MyVehicles = () => {
           vehicle_id: (newV as any).id, user_id: user.id, mileage: parseInt(currentMileage), source: "user",
         } as any);
       }
-      // Notify admin about new vehicle
-      await supabase.from("notifications").insert({
-        user_id: user.id,
-        title: "🚗 Nové vozidlo přidáno",
-        message: `${brand} ${model} ${year || ""} ${vin ? `(VIN: ${vin})` : ""}`,
-      });
+      // Notify admins via edge function
+      supabase.functions.invoke("notify-admin", {
+        body: {
+          type: "vehicle",
+          record: { title: "🚗 Nové vozidlo přidáno", message: `${brand} ${model} ${year || ""} ${vin ? `(VIN: ${vin})` : ""}` },
+        },
+      }).catch(() => {});
       toast({ title: "Vozidlo přidáno" });
     }
     setDialogOpen(false);
