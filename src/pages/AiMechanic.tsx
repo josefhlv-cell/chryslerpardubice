@@ -91,12 +91,16 @@ const AiMechanic = () => {
       } as any);
     } catch {}
 
-    // Notify admin
-    await supabase.from("notifications").insert({
-      user_id: user.id,
-      title: "🚨 Hlášení poruchy",
-      message: `${vehicle ? `${vehicle.brand} ${vehicle.model}` : "Neznámé vozidlo"}: ${description.substring(0, 200)}`,
-    });
+    // Notify admins via edge function
+    supabase.functions.invoke("notify-admin", {
+      body: {
+        type: "fault_report",
+        record: {
+          title: "🚨 Hlášení poruchy",
+          message: `${vehicle ? `${vehicle.brand} ${vehicle.model}` : "Neznámé vozidlo"}: ${description.substring(0, 200)}`,
+        },
+      },
+    }).catch(() => {});
   };
 
   const checkForDanger = (text: string) => {

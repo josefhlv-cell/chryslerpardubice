@@ -164,12 +164,13 @@ const ServiceRecommendations = () => {
     if (error) {
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
     } else {
-      // Notify admin
-      await supabase.from("notifications").insert({
-        user_id: user.id,
-        title: "🔧 Nová servisní poptávka",
-        message: `${rec.vehicle.brand} ${rec.vehicle.model} – ${rec.plan.service_name} (VIN: ${rec.vehicle.vin || "–"}, ${rec.vehicle.current_mileage?.toLocaleString("cs") || "?"} km)`,
-      });
+      // Notify admins via edge function
+      supabase.functions.invoke("notify-admin", {
+        body: {
+          type: "service_booking",
+          record: { title: "🔧 Nová servisní poptávka", message: `${rec.vehicle.brand} ${rec.vehicle.model} – ${rec.plan.service_name} (VIN: ${rec.vehicle.vin || "–"}, ${rec.vehicle.current_mileage?.toLocaleString("cs") || "?"} km)` },
+        },
+      }).catch(() => {});
       toast({ title: "Servis objednán", description: "Budeme vás kontaktovat s potvrzením termínu." });
     }
     setBooking(null);

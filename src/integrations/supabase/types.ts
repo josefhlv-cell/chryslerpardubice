@@ -276,6 +276,13 @@ export type Database = {
             referencedRelation: "parts_new"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "epc_part_links_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       fault_reports: {
@@ -627,6 +634,13 @@ export type Database = {
             referencedRelation: "parts_new"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "orders_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       part_crossref: {
@@ -831,6 +845,13 @@ export type Database = {
             columns: ["part_id"]
             isOneToOne: false
             referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_history_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
             referencedColumns: ["id"]
           },
         ]
@@ -1148,6 +1169,13 @@ export type Database = {
             columns: ["part_id"]
             isOneToOne: false
             referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_order_parts_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
             referencedColumns: ["id"]
           },
           {
@@ -1716,7 +1744,72 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      parts_new_public: {
+        Row: {
+          availability: string | null
+          catalog_source: string | null
+          category: string | null
+          compatible_vehicles: string | null
+          currency: string | null
+          description: string | null
+          family: string | null
+          id: string | null
+          image_urls: string[] | null
+          internal_code: string | null
+          last_price_update: string | null
+          manufacturer: string | null
+          name: string | null
+          oem_number: string | null
+          packaging: string | null
+          price_with_vat: number | null
+          price_without_vat: number | null
+          segment: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          availability?: string | null
+          catalog_source?: string | null
+          category?: string | null
+          compatible_vehicles?: string | null
+          currency?: string | null
+          description?: string | null
+          family?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          internal_code?: string | null
+          last_price_update?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          oem_number?: string | null
+          packaging?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          segment?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          availability?: string | null
+          catalog_source?: string | null
+          category?: string | null
+          compatible_vehicles?: string | null
+          currency?: string | null
+          description?: string | null
+          family?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          internal_code?: string | null
+          last_price_update?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          oem_number?: string | null
+          packaging?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          segment?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_discounted_price: {
