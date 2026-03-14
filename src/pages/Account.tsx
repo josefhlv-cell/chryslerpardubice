@@ -3,12 +3,12 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList } from "lucide-react";
+import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList, HardHat } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Account = () => {
   const navigate = useNavigate();
-  const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading } = useAuth();
+  const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading, employee } = useAuth();
 
   if (isLoading) {
     return (
@@ -104,6 +104,12 @@ const Account = () => {
             <span className="flex items-center gap-2"><ClipboardList className="w-4 h-4" />Servisní zakázky</span>
             <ChevronRight className="w-4 h-4" />
           </Button>
+          {employee?.role === "mechanic" && (
+            <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/mechanic-dashboard")}>
+              <span className="flex items-center gap-2"><HardHat className="w-4 h-4 text-primary" />Dashboard mechanika</span>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          )}
           {isAdmin && (
             <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/admin")}>
               <span className="flex items-center gap-2"><Shield className="w-4 h-4 text-primary" />Admin panel</span>

@@ -89,6 +89,36 @@ export type Database = {
         }
         Relationships: []
       }
+      employees: {
+        Row: {
+          active: boolean
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          role: string
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          role?: string
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          role?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       epc_categories: {
         Row: {
           brand: string
@@ -385,6 +415,7 @@ export type Database = {
           id: string
           mechanic_id: string | null
           service_order_id: string
+          started_at: string | null
           status: string
           title: string
         }
@@ -395,6 +426,7 @@ export type Database = {
           id?: string
           mechanic_id?: string | null
           service_order_id: string
+          started_at?: string | null
           status?: string
           title: string
         }
@@ -405,6 +437,7 @@ export type Database = {
           id?: string
           mechanic_id?: string | null
           service_order_id?: string
+          started_at?: string | null
           status?: string
           title?: string
         }
@@ -429,6 +462,7 @@ export type Database = {
         Row: {
           active: boolean
           created_at: string
+          employee_id: string | null
           id: string
           name: string
           specialization: string | null
@@ -436,6 +470,7 @@ export type Database = {
         Insert: {
           active?: boolean
           created_at?: string
+          employee_id?: string | null
           id?: string
           name: string
           specialization?: string | null
@@ -443,11 +478,20 @@ export type Database = {
         Update: {
           active?: boolean
           created_at?: string
+          employee_id?: string | null
           id?: string
           name?: string
           specialization?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mechanics_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mileage_history: {
         Row: {
@@ -1741,6 +1785,74 @@ export type Database = {
           year?: number
         }
         Relationships: []
+      }
+      work_reports: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          employee_id: string | null
+          id: string
+          mechanic_id: string | null
+          note: string | null
+          photos: string[] | null
+          service_order_id: string | null
+          started_at: string | null
+          task_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          mechanic_id?: string | null
+          note?: string | null
+          photos?: string[] | null
+          service_order_id?: string | null
+          started_at?: string | null
+          task_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          employee_id?: string | null
+          id?: string
+          mechanic_id?: string | null
+          note?: string | null
+          photos?: string[] | null
+          service_order_id?: string | null
+          started_at?: string | null
+          task_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_reports_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_reports_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_reports_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_reports_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "mechanic_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

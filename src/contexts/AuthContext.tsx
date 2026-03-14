@@ -18,10 +18,20 @@ interface Profile {
   service_history_enabled: boolean;
 }
 
+interface Employee {
+  id: string;
+  user_id: string | null;
+  name: string;
+  role: string;
+  email: string | null;
+  active: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  employee: Employee | null;
   isAdmin: boolean;
   isLoading: boolean;
   isPendingBusiness: boolean;
@@ -47,6 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [employee, setEmployee] = useState<Employee | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -69,6 +80,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsAdmin(!!data);
   };
 
+  const fetchEmployee = async (userId: string) => {
+    const { data } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("active", true)
+      .maybeSingle();
+    setEmployee(data as Employee | null);
+  };
+
   const refreshProfile = async () => {
     if (user) {
       await fetchProfile(user.id);
@@ -84,10 +105,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setTimeout(() => {
             fetchProfile(session.user.id);
             checkAdmin(session.user.id);
+            fetchEmployee(session.user.id);
           }, 0);
         } else {
           setProfile(null);
           setIsAdmin(false);
+          setEmployee(null);
         }
         setIsLoading(false);
       }
@@ -99,6 +122,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         fetchProfile(session.user.id);
         checkAdmin(session.user.id);
+        fetchEmployee(session.user.id);
       }
       setIsLoading(false);
     });
@@ -145,7 +169,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, isAdmin, isLoading,
+      user, session, profile, employee, isAdmin, isLoading,
       isPendingBusiness, canPlaceOrder,
       signUp, signIn, signOut, refreshProfile, resetPassword,
     }}>

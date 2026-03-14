@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -32,6 +32,8 @@ import AdminFeatureSettings from "@/components/admin/AdminFeatureSettings";
 import AdminServiceOrders from "@/components/admin/AdminServiceOrders";
 import AdminMechanics from "@/components/admin/AdminMechanics";
 import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
+import AdminServiceScheduler from "@/components/admin/AdminServiceScheduler";
+import AdminEmployees from "@/components/admin/AdminEmployees";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -326,7 +328,9 @@ const Admin = () => {
             <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>
             <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>
             {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-xs gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
+            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-xs gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
             <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>
+            <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
             <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
@@ -590,6 +594,16 @@ const Admin = () => {
               <div className="mt-2"><AdminServiceStatistics /></div>
             </TabsContent>
           )}
+
+          {isEnabled("service_scheduler") && (
+            <TabsContent value="scheduler">
+              <div className="mt-2"><AdminServiceScheduler /></div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="employees">
+            <div className="mt-2"><AdminEmployees /></div>
+          </TabsContent>
 
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
