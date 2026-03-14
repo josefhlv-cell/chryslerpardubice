@@ -1,285 +1,386 @@
+import { motion } from "framer-motion";
+import { 
+  Bot, Car, Wrench, BookOpen, ShoppingCart, Shield, 
+  AlertTriangle, Users, BarChart3, Smartphone, 
+  CheckCircle2, ArrowRight, Calendar, Camera,
+  FileDown, Presentation, ChevronDown
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FileDown, Presentation } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-const features = [
+import heroImg from "@/assets/presentation/hero-car.jpg";
+import aiMechanicImg from "@/assets/presentation/ai-mechanic.jpg";
+import vehicleMgmtImg from "@/assets/presentation/vehicle-management.jpg";
+import partsCatalogImg from "@/assets/presentation/parts-catalog.jpg";
+import serviceDashImg from "@/assets/presentation/service-dashboard.jpg";
+import serviceBookImg from "@/assets/presentation/service-book.jpg";
+import emergencyImg from "@/assets/presentation/emergency.jpg";
+import adminPanelImg from "@/assets/presentation/admin-panel.jpg";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 40 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1] as const } },
+};
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
+
+const featureSections = [
   {
-    title: "🔧 AI Mechanik – Tonda",
-    items: [
-      "Inteligentní diagnostika poruch vozidla pomocí AI",
-      "Analýza fotografií závad a kontrolek na palubní desce",
-      "Rozpoznání zvuků motoru a doporučení oprav",
-      "Bezpečnostní varování při riziku poškození motoru",
-      "Propojení s Mopar katalogem – doporučení originálních dílů",
-      "Automatické vytvoření servisní poptávky po analýze",
-      "Tlačítko pro okamžité volání servisu",
-    ],
-  },
-  {
-    title: "🚗 Správa vozidel",
-    items: [
-      "Přidání vozidla ručně, pomocí VIN nebo fotografie VIN štítku",
-      "OCR rozpoznání VIN z fotografií (technický průkaz, štítek)",
-      "OCR rozpoznání SPZ z fotografie",
-      "Automatické dekódování VIN přes NHTSA databázi",
-      "Sledování aktuálního stavu kilometrů",
-      "Historie nájezdů kilometrů (uživatel i servis)",
-    ],
-  },
-  {
-    title: "📋 Servisní plán",
-    items: [
-      "Automatické generování servisního plánu podle vozidla",
-      "11 standardních servisních úkonů (olej, filtry, brzdy, rozvody…)",
-      "Intervaly v kilometrech i měsících",
-      "Sledování stavu údržby – nutný / brzy / nadcházející",
-      "Doporučení konkrétních Mopar dílů ke každému úkonu",
-      "Push notifikace při blížícím se servisu",
-    ],
-  },
-  {
-    title: "📖 Digitální servisní kniha",
-    items: [
-      "Kompletní historie servisů vozidla v časové ose",
-      "Záznamy: datum, km, typ servisu, popis, díly, cena",
-      "Fotografie a dokumenty ke každému servisu",
-      "Export servisní knihy do PDF",
-      "Propojení s AI mechanikem pro přesnější diagnostiku",
-    ],
-  },
-  {
-    title: "🛒 Mopar katalog a objednávky",
-    items: [
-      "EPC katalog s rozpadovými diagramy dílů",
-      "Hierarchická struktura: značka → model → motor → kategorie",
-      "Propojení s VIN – zobrazení pouze kompatibilních dílů",
-      "Automatické načítání českých cen (prefix 6 + OEM)",
-      "Cache cen v databázi pro rychlé zobrazení",
-      "Objednávka nových i použitých originálních dílů",
-      "Alternativní katalogy AutoKelly a InterCars (připraveno)",
-    ],
-  },
-  {
-    title: "📊 Servisní doporučení",
-    items: [
-      "Automatická analýza servisních plánů a kilometrů",
-      "Zobrazení doporučení na hlavní obrazovce aplikace",
-      "Urgence: nutný servis / brzy / nadcházející",
-      "Odhadovaná cena servisního úkonu",
-      "Tlačítko Objednat servis – vytvoření poptávky jedním kliknutím",
-      "Notifikace adminovi při objednání servisu",
-    ],
-  },
-  {
-    title: "🆘 Nouzový režim",
-    items: [
-      "Rychlý přístup k AI Tondovi při poruše",
+    id: "ai-mechanic",
+    icon: Bot,
+    badge: "AI Powered",
+    badgeColor: "bg-blue-500/20 text-blue-400",
+    title: "AI Mechanik – Tonda",
+    subtitle: "Váš osobní automechanik v kapse",
+    description: "Inteligentní AI asistent, který analyzuje problémy vašeho vozidla pomocí popisu příznaků, fotografií závad i kontrolek na palubní desce. Rozpozná zvuky motoru, doporučí opravu a navrhne originální díly.",
+    image: aiMechanicImg,
+    features: [
+      "Analýza fotografií závad a kontrolek",
+      "Rozpoznání zvuků motoru",
+      "Bezpečnostní varování při riziku poškození",
+      "Propojení s Mopar katalogem originálních dílů",
+      "Automatické vytvoření servisní poptávky",
       "Okamžité volání servisu",
+    ],
+    reverse: false,
+  },
+  {
+    id: "vehicles",
+    icon: Car,
+    badge: "OCR & VIN",
+    badgeColor: "bg-emerald-500/20 text-emerald-400",
+    title: "Správa vozidel",
+    subtitle: "Kompletní přehled o vašich vozech",
+    description: "Přidejte vozidlo ručně, pomocí VIN kódu nebo jednoduše vyfotografujte VIN štítek či technický průkaz. Aplikace automaticky dekóduje VIN a získá všechny specifikace vozu.",
+    image: vehicleMgmtImg,
+    features: [
+      "OCR rozpoznání VIN z fotografie",
+      "OCR rozpoznání SPZ",
+      "Automatické dekódování VIN přes NHTSA",
+      "Sledování stavu kilometrů",
+      "Historie nájezdů",
+      "Propojení se servisní knihou",
+    ],
+    reverse: true,
+  },
+  {
+    id: "parts",
+    icon: ShoppingCart,
+    badge: "EPC Katalog",
+    badgeColor: "bg-amber-500/20 text-amber-400",
+    title: "Mopar katalog autodílů",
+    subtitle: "Originální díly s českými cenami",
+    description: "Profesionální EPC katalog s rozpadovými diagramy dílů. Vyhledávejte podle OEM čísla, značky nebo modelu. Objednávejte nové i použité originální díly Chrysler, Dodge, Jeep a RAM.",
+    image: partsCatalogImg,
+    features: [
+      "EPC rozpadové diagramy",
+      "Hierarchická struktura: značka → model → motor",
+      "Propojení s VIN – pouze kompatibilní díly",
+      "Automatické načítání českých cen",
+      "Cache cen pro rychlé zobrazení",
+      "Objednávka nových i použitých dílů",
+    ],
+    reverse: false,
+  },
+  {
+    id: "service-book",
+    icon: BookOpen,
+    badge: "Digitální",
+    badgeColor: "bg-violet-500/20 text-violet-400",
+    title: "Digitální servisní kniha",
+    subtitle: "Kompletní historie údržby vašeho vozu",
+    description: "Digitální servisní kniha s kompletní historií servisů, fotografiemi a dokumenty. Automatické generování servisního plánu s 11 standardními úkony a sledování stavu údržby.",
+    image: serviceBookImg,
+    features: [
+      "Kompletní timeline servisních úkonů",
+      "Fotografie a dokumenty ke každému servisu",
+      "Servisní plán s intervaly v km i měsících",
+      "Sledování: nutný / brzy / nadcházející",
+      "Doporučení originálních Mopar dílů",
+      "Export servisní knihy do PDF",
+    ],
+    reverse: true,
+  },
+  {
+    id: "service-mgmt",
+    icon: Calendar,
+    badge: "Pro servis",
+    badgeColor: "bg-cyan-500/20 text-cyan-400",
+    title: "Řízení servisu",
+    subtitle: "Dashboard pro mechaniky a plánování práce",
+    description: "Kompletní systém pro řízení servisní dílny. Admin plánuje práci, přiřazuje mechaniky a zvedáky. Mechanici vidí své denní úkoly, zaznamenávají práci a nahrávají fotografie.",
+    image: serviceDashImg,
+    features: [
+      "Kalendář plánování s denním/týdenním pohledem",
+      "Dashboard mechanika s denními úkoly",
+      "Přiřazení mechaniků a zvedáků",
+      "Výkazy práce s fotografiemi",
+      "Real-time aktualizace úkolů",
+      "Automatické notifikace zákazníkům",
+    ],
+    reverse: false,
+  },
+  {
+    id: "emergency",
+    icon: AlertTriangle,
+    badge: "SOS",
+    badgeColor: "bg-red-500/20 text-red-400",
+    title: "Nouzový režim",
+    subtitle: "Pomoc při poruše na cestě",
+    description: "Rychlý přístup k AI Tondovi při poruše na cestě. Okamžité volání servisu, rychlá servisní poptávka a návody k řešení běžných problémů jako vybití baterie, přehřátí motoru nebo defekt.",
+    image: emergencyImg,
+    features: [
+      "Okamžité volání servisu jedním tlačítkem",
+      "AI diagnostika poruchy na místě",
       "Rychlá servisní poptávka",
-      "Návody k řešení běžných problémů (baterie, přehřátí, defekt…)",
+      "Návody pro řešení běžných poruch",
     ],
+    reverse: true,
   },
   {
-    title: "👤 Uživatelský účet",
-    items: [
-      "Registrace soukromá i firemní (IČO, DIČ)",
-      "Schvalování firemních účtů adminem",
-      "Individuální slevy pro firemní zákazníky",
-      "Věrnostní program",
-      "Přehled objednávek a poptávek",
-      "Správa notifikací",
+    id: "admin",
+    icon: Shield,
+    badge: "Admin",
+    badgeColor: "bg-orange-500/20 text-orange-400",
+    title: "Administrace",
+    subtitle: "Kompletní správa obchodu a servisu",
+    description: "Administrátorský panel pro řízení celého obchodu — správa objednávek, servisních zakázek, cen, katalogů, zaměstnanců, notifikací a statistik. Monitoring AI diagnostik a hlášení poruch.",
+    image: adminPanelImg,
+    features: [
+      "Správa objednávek nových i použitých dílů",
+      "Servisní zakázky a rezervace",
+      "Správa cen: marže, zámky, historie",
+      "Správa zaměstnanců a mechaniků",
+      "Monitoring AI diagnostik a poruch",
+      "Cílené notifikace zákazníkům",
     ],
+    reverse: false,
   },
-  {
-    title: "🔒 Admin panel",
-    items: [
-      "Správa objednávek nových a použitých dílů",
-      "Správa servisních poptávek a rezervací",
-      "Monitoring hlášení poruch od AI Tondy",
-      "Správa cen: marže, zámky, historie změn",
-      "Správa katalogů (Mopar, AutoKelly, InterCars)",
-      "Správa servisních plánů a intervalů",
-      "Digitální servisní knížky zákazníků",
-      "Odesílání cílených notifikací uživatelům",
-      "Import katalogu z CSV",
-    ],
-  },
-  {
-    title: "⚙️ Technologie",
-    items: [
-      "React + TypeScript + Tailwind CSS",
-      "Supabase (databáze, autentizace, storage, edge functions)",
-      "AI modely pro diagnostiku a OCR",
-      "NHTSA API pro dekódování VIN",
-      "Responsivní design pro mobil i desktop",
-      "Capacitor – připraveno pro nativní mobilní aplikaci (iOS/Android)",
-    ],
-  },
+];
+
+const stats = [
+  { value: "30+", label: "Databázových tabulek" },
+  { value: "15+", label: "Edge Functions" },
+  { value: "50+", label: "Komponent" },
+  { value: "5", label: "Uživatelských rolí" },
+];
+
+const techStack = [
+  { name: "React + TypeScript", desc: "Moderní frontend framework" },
+  { name: "Tailwind CSS", desc: "Utility-first styling" },
+  { name: "Supabase", desc: "Backend, Auth, Storage" },
+  { name: "Edge Functions", desc: "Serverless logika" },
+  { name: "AI modely", desc: "Diagnostika & OCR" },
+  { name: "Capacitor", desc: "iOS & Android ready" },
 ];
 
 const AppPresentation = () => {
   const printPresentation = () => {
-    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Chrysler CZ – Přehled funkcí aplikace</title>
-<style>
-  @page { size: A4; margin: 20mm; }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a2e; max-width: 800px; margin: 0 auto; padding: 24px; }
-  h1 { font-size: 28px; text-align: center; border-bottom: 3px solid #d4a853; padding-bottom: 12px; margin-bottom: 8px; }
-  .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 32px; }
-  .feature { page-break-inside: avoid; margin-bottom: 24px; }
-  .feature h2 { font-size: 18px; color: #1a1a2e; margin-bottom: 8px; padding: 8px 12px; background: #f8f6f0; border-left: 4px solid #d4a853; border-radius: 0 8px 8px 0; }
-  .feature ul { margin: 0; padding-left: 24px; }
-  .feature li { font-size: 13px; line-height: 1.8; color: #444; }
-  .footer { margin-top: 40px; padding-top: 16px; border-top: 2px solid #eee; text-align: center; font-size: 11px; color: #999; }
-  .page-break { page-break-before: always; }
-</style></head><body>
-<h1>Chrysler CZ – Přehled funkcí aplikace</h1>
-<p class="subtitle">Kompletní digitální platforma pro servis, díly a správu vozidel | ${new Date().toLocaleDateString("cs-CZ")}</p>
-${features.map((f, i) => `
-  ${i === 5 ? '<div class="page-break"></div>' : ''}
-  <div class="feature">
-    <h2>${f.title}</h2>
-    <ul>${f.items.map(item => `<li>${item}</li>`).join("")}</ul>
-  </div>
-`).join("")}
-<div class="footer">
-  <p>Chrysler CZ – Originální díly · Servis · Prodej vozů</p>
-  <p>Vygenerováno: ${new Date().toLocaleString("cs-CZ")}</p>
-</div>
-</body></html>`;
-
-    const w = window.open("", "_blank");
-    if (w) {
-      w.document.write(html);
-      w.document.close();
-      setTimeout(() => w.print(), 500);
-    }
-  };
-
-  const downloadCodeBackup = () => {
-    const info = `CHRYSLER CZ – ZÁLOHA PROJEKTU
-================================
-Datum: ${new Date().toLocaleString("cs-CZ")}
-
-STRUKTURA PROJEKTU
-------------------
-Framework: React + TypeScript + Vite
-Styling: Tailwind CSS + shadcn/ui
-Backend: Supabase (Lovable Cloud)
-Mobile: Capacitor (iOS/Android ready)
-
-HLAVNÍ SOUBORY
---------------
-src/App.tsx – routing a layout
-src/pages/Landing.tsx – úvodní stránka
-src/pages/Shop.tsx – Mopar EPC katalog
-src/pages/AiMechanic.tsx – AI Tonda diagnostika
-src/pages/Emergency.tsx – nouzový režim
-src/pages/MyVehicles.tsx – správa vozidel
-src/pages/ServicePlan.tsx – servisní plán
-src/pages/ServiceBook.tsx – digitální servisní kniha
-src/pages/Service.tsx – rezervace servisu
-src/pages/Cart.tsx – košík
-src/pages/Checkout.tsx – pokladna
-src/pages/Account.tsx – uživatelský účet
-src/pages/MyOrders.tsx – moje objednávky
-src/pages/Notifications.tsx – notifikace
-src/pages/Admin.tsx – admin panel
-src/pages/Auth.tsx – přihlášení/registrace
-src/pages/Vehicles.tsx – vozy na prodej
-src/pages/Contact.tsx – kontakt
-
-KOMPONENTY
-----------
-src/components/ServiceRecommendations.tsx – servisní doporučení
-src/components/admin/AdminFaultReports.tsx – monitoring poruch
-src/components/admin/AdminPriceManagement.tsx – správa cen
-src/components/admin/AdminServicePlans.tsx – správa servisních plánů
-src/components/admin/AdminServiceHistory.tsx – servisní knížky
-src/components/admin/AdminNotifications.tsx – notifikace
-src/components/admin/AdminCatalogSettings.tsx – správa katalogů
-src/components/admin/CatalogImport.tsx – import katalogu
-
-EDGE FUNCTIONS (BACKEND)
-------------------------
-supabase/functions/ai-mechanic/ – AI diagnostika
-supabase/functions/vin-ocr/ – OCR rozpoznání VIN/SPZ
-supabase/functions/price-sync/ – synchronizace cen
-supabase/functions/catalog-fetch/ – načítání katalogu
-supabase/functions/catalog-proxy/ – proxy pro katalog
-supabase/functions/catalog-probe/ – testování spojení
-
-DATABÁZOVÉ TABULKY
-------------------
-profiles – uživatelské profily
-user_vehicles – vozidla zákazníků
-user_roles – role (admin/customer)
-service_history – servisní záznamy
-service_plans – servisní plány
-service_bookings – rezervace servisu
-mileage_history – historie kilometrů
-fault_reports – hlášení poruch
-parts_new – katalog dílů
-parts_catalog – starý katalog
-price_history – historie cen
-orders – objednávky (sjednocené)
-new_part_orders – objednávky nových dílů
-used_part_requests – poptávky použitých dílů
-notifications – notifikace
-vehicles – vozy na prodej
-vehicle_inquiries – poptávky vozů
-cars_for_sale – inzerce vozů
-epc_categories – EPC kategorie
-epc_part_links – propojení dílů s EPC
-
-POZNÁMKA
---------
-Pro kompletní zálohu kódu doporučujeme propojit projekt s GitHub.
-V editoru: Settings → GitHub → Connect project.
-`;
-
-    const blob = new Blob([info], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `chrysler-cz-backup-${new Date().toISOString().split("T")[0]}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    window.print();
   };
 
   return (
-    <div className="min-h-screen pb-20 bg-background">
-      <div className="p-4 max-w-2xl mx-auto space-y-6">
-        <div className="text-center pt-6 pb-2">
-          <img src="/images/logo_chrysler.webp" alt="Chrysler CZ" className="h-14 mx-auto mb-3" />
-          <h1 className="font-display text-2xl font-bold">Přehled funkcí aplikace</h1>
-          <p className="text-sm text-muted-foreground mt-1">Kompletní digitální platforma pro servis, díly a správu vozidel</p>
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* Hero Section */}
+      <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0">
+          <img src={heroImg} alt="Chrysler workshop" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/60 to-background" />
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent" />
         </div>
 
-        <div className="flex gap-2">
-          <Button onClick={printPresentation} className="flex-1">
-            <Presentation className="w-4 h-4 mr-2" />
-            Exportovat PDF prezentaci
-          </Button>
-          <Button variant="outline" onClick={downloadCodeBackup} className="flex-1">
-            <FileDown className="w-4 h-4 mr-2" />
-            Stáhnout zálohu projektu
-          </Button>
-        </div>
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer}
+          className="relative z-10 text-center px-6 max-w-3xl mx-auto"
+        >
+          <motion.div variants={fadeUp}>
+            <img src="/images/logo_chrysler.webp" alt="Chrysler CZ" className="h-16 md:h-20 mx-auto mb-6" />
+          </motion.div>
+          <motion.h1 variants={fadeUp} className="font-display text-3xl md:text-5xl lg:text-6xl font-bold mb-4">
+            Kompletní digitální platforma
+          </motion.h1>
+          <motion.p variants={fadeUp} className="text-lg md:text-xl text-muted-foreground mb-8 max-w-xl mx-auto">
+            Servis · Originální díly · Správa vozidel · AI diagnostika
+          </motion.p>
+          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button variant="hero" size="lg" onClick={printPresentation}>
+              <Presentation className="w-5 h-5 mr-2" />
+              Exportovat prezentaci
+            </Button>
+            <Button variant="outline" size="lg" onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}>
+              Prozkoumat funkce
+              <ChevronDown className="w-4 h-4 ml-2" />
+            </Button>
+          </motion.div>
+        </motion.div>
+      </section>
 
-        {features.map((f, i) => (
-          <div key={i} className="border rounded-lg p-4 bg-card">
-            <h2 className="font-display font-semibold text-base mb-2">{f.title}</h2>
-            <ul className="space-y-1">
-              {f.items.map((item, j) => (
-                <li key={j} className="text-sm text-muted-foreground flex items-start gap-2">
-                  <span className="text-primary mt-1">•</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
+      {/* Stats */}
+      <section className="py-12 border-y border-border bg-card/50">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {stats.map((stat, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="text-center"
+              >
+                <p className="font-display text-3xl md:text-4xl font-bold text-primary">{stat.value}</p>
+                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+              </motion.div>
+            ))}
           </div>
-        ))}
+        </div>
+      </section>
+
+      {/* Feature Sections */}
+      <div id="features" className="py-16 space-y-24 md:space-y-32">
+        {featureSections.map((section, idx) => {
+          const Icon = section.icon;
+          return (
+            <motion.section
+              key={section.id}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-100px" }}
+              variants={staggerContainer}
+              className="max-w-6xl mx-auto px-6"
+            >
+              <div className={`flex flex-col ${section.reverse ? "lg:flex-row-reverse" : "lg:flex-row"} gap-8 lg:gap-16 items-center`}>
+                {/* Image */}
+                <motion.div variants={fadeUp} className="lg:w-1/2 w-full">
+                  <div className="relative rounded-2xl overflow-hidden shadow-2xl shadow-primary/10 border border-border">
+                    <img
+                      src={section.image}
+                      alt={section.title}
+                      className="w-full h-auto"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/20 to-transparent" />
+                  </div>
+                </motion.div>
+
+                {/* Content */}
+                <motion.div variants={fadeUp} className="lg:w-1/2 w-full space-y-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <Badge className={section.badgeColor}>{section.badge}</Badge>
+                  </div>
+
+                  <div>
+                    <h2 className="font-display text-2xl md:text-3xl font-bold">{section.title}</h2>
+                    <p className="text-primary text-sm font-medium mt-1">{section.subtitle}</p>
+                  </div>
+
+                  <p className="text-muted-foreground leading-relaxed">{section.description}</p>
+
+                  <ul className="space-y-2.5">
+                    {section.features.map((feat, j) => (
+                      <li key={j} className="flex items-start gap-2.5 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                        <span className="text-foreground/90">{feat}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </motion.div>
+              </div>
+            </motion.section>
+          );
+        })}
       </div>
+
+      {/* User Accounts Section */}
+      <section className="py-16 bg-card/50 border-y border-border">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={staggerContainer}
+          className="max-w-5xl mx-auto px-6"
+        >
+          <motion.div variants={fadeUp} className="text-center mb-12">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <Users className="w-6 h-6 text-primary" />
+            </div>
+            <h2 className="font-display text-2xl md:text-3xl font-bold">Uživatelské role</h2>
+            <p className="text-muted-foreground mt-2">Aplikace rozlišuje 5 typů uživatelů s přizpůsobeným rozhraním</p>
+          </motion.div>
+
+          <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {[
+              { role: "Zákazník", desc: "Správa vozidel, objednávky, servisní kniha", color: "border-blue-500/30" },
+              { role: "Admin", desc: "Kompletní správa obchodu a servisu", color: "border-amber-500/30" },
+              { role: "Mechanik", desc: "Dashboard úkolů, výkazy práce, foto", color: "border-emerald-500/30" },
+              { role: "Prodej dílů", desc: "Katalog, objednávky, cenotvorba", color: "border-violet-500/30" },
+              { role: "Prodej vozů", desc: "Inzerce, poptávky, dovoz", color: "border-red-500/30" },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                variants={fadeUp}
+                className={`rounded-xl border-2 ${item.color} bg-card p-4 text-center`}
+              >
+                <p className="font-display font-semibold text-sm">{item.role}</p>
+                <p className="text-xs text-muted-foreground mt-1.5">{item.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Tech Stack */}
+      <section className="py-16">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={staggerContainer}
+          className="max-w-5xl mx-auto px-6"
+        >
+          <motion.div variants={fadeUp} className="text-center mb-12">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <Smartphone className="w-6 h-6 text-primary" />
+            </div>
+            <h2 className="font-display text-2xl md:text-3xl font-bold">Technologický stack</h2>
+            <p className="text-muted-foreground mt-2">Moderní a škálovatelná architektura</p>
+          </motion.div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {techStack.map((tech, i) => (
+              <motion.div
+                key={i}
+                variants={fadeUp}
+                className="rounded-xl border border-border bg-card p-5 hover:border-primary/30 transition-colors"
+              >
+                <p className="font-display font-semibold text-sm">{tech.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">{tech.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </section>
+
+      {/* Footer */}
+      <section className="py-12 border-t border-border bg-card/30">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <img src="/images/logo_chrysler.webp" alt="Chrysler CZ" className="h-10 mx-auto mb-4 opacity-60" />
+          <p className="text-sm text-muted-foreground">
+            Chrysler CZ – Originální díly · Servis · Prodej vozů
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            © {new Date().getFullYear()} | Pardubice
+          </p>
+        </div>
+      </section>
     </div>
   );
 };
