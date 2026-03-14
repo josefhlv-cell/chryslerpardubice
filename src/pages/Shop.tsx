@@ -86,8 +86,8 @@ const Shop = () => {
   // Photo dialog
   const [photoDialog, setPhotoDialog] = useState({ open: false, oem: "", loading: false, urls: [] as string[] });
 
-  // Submitting state
   const [submitting, setSubmitting] = useState(false);
+  const [searchCollapsed, setSearchCollapsed] = useState(false);
 
   // Hooks
   const { favorites, isFavorite, toggleFavorite } = useFavorites();
