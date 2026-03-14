@@ -790,7 +790,11 @@ export async function generateEPCCatalog(
   const { data, error } = await supabase.functions.invoke("epc-generate", {
     body: { brand, model, year, engine },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Prefer the actual error message from the response body over the generic SDK message
+    const detail = data?.error || error.message;
+    throw new Error(detail);
+  }
   if (!data?.success) throw new Error(data?.error || "EPC generation failed");
   return data as EPCGenerateResult;
 }
