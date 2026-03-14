@@ -611,6 +611,10 @@ const Admin = () => {
             </TabsContent>
           )}
 
+          <TabsContent value="procedures">
+            <AdminServiceProcedures />
+          </TabsContent>
+
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
