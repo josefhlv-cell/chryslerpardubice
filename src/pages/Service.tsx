@@ -158,9 +158,9 @@ const Service = () => {
           </div>
 
 
-          <Button variant="hero" className="w-full h-11 mt-2" onClick={handleSubmit}>
-            <Send className="w-4 h-4" />
-            Odeslat rezervaci
+          <Button variant="hero" className="w-full h-11 mt-2" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+            {submitting ? "Odesílám..." : "Odeslat rezervaci"}
           </Button>
         </motion.div>
       </div>

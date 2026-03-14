@@ -8,9 +8,10 @@ const TopBar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { totalItems } = useCart();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
 
-  if (location.pathname === "/") return null;
+  // Hide only on landing page for non-logged-in users
+  if (location.pathname === "/" && !user) return null;
 
   const menuItems = [
     { path: "/shop", label: "Katalog dílů" },

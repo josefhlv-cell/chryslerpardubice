@@ -27,8 +27,8 @@ const BottomNav = () => {
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/90 backdrop-blur-2xl safe-bottom">
       <div className="flex items-center justify-around h-[68px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
-          const isActive = item.path === "/shop"
-            ? location.pathname === "/shop" || location.pathname === "/index"
+          const isActive = item.path === "/"
+            ? location.pathname === "/" || location.pathname === "/index"
             : location.pathname.startsWith(item.path);
           const isTonda = !item.icon;
 
