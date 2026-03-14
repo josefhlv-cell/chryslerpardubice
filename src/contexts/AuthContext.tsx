@@ -105,10 +105,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setTimeout(() => {
             fetchProfile(session.user.id);
             checkAdmin(session.user.id);
+            fetchEmployee(session.user.id);
           }, 0);
         } else {
           setProfile(null);
           setIsAdmin(false);
+          setEmployee(null);
         }
         setIsLoading(false);
       }
