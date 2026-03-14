@@ -16,7 +16,7 @@ const navItems = [
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { employee } = useAuth();
+  const { employee, user } = useAuth();
 
   // Hide for landing, checkout, and employee roles (mechanics, parts_sales, car_sales)
   if (location.pathname === "/" && !user) return null;
