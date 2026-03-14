@@ -3,11 +3,16 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Search, ShoppingCart, Wrench } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import ServiceRecommendations from "@/components/ServiceRecommendations";
+import Dashboard from "@/components/dashboard/Dashboard";
 
 const Landing = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+
+  // Show dashboard for logged-in users
+  if (!isLoading && user) {
+    return <Dashboard />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col gradient-dark overflow-hidden">
@@ -76,18 +81,6 @@ const Landing = () => {
               <img key={i} src={src} alt="" className="h-8 object-contain opacity-40" />
             ))}
           </motion.div>
-
-          {/* Service Recommendations for logged-in users */}
-          {user && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.85 }}
-              className="w-full"
-            >
-              <ServiceRecommendations />
-            </motion.div>
-          )}
 
           {/* CTA */}
           <motion.div
