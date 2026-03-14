@@ -541,43 +541,43 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="notifications">
-            <div className="mt-2">
-              <AdminNotifications />
-            </div>
-          </TabsContent>
+          {isEnabled("notifications") && (
+            <TabsContent value="notifications">
+              <div className="mt-2"><AdminNotifications /></div>
+            </TabsContent>
+          )}
 
-          <TabsContent value="faults">
-            <div className="mt-2">
-              <AdminFaultReports />
-            </div>
-          </TabsContent>
+          {isEnabled("fault_reports") && (
+            <TabsContent value="faults">
+              <div className="mt-2"><AdminFaultReports /></div>
+            </TabsContent>
+          )}
 
-          <TabsContent value="prices">
-            <div className="mt-2 space-y-4">
-              <AdminPriceSyncStats />
-              <AdminBulkPriceSync />
-              <AdminPriceManagement />
-            </div>
-          </TabsContent>
+          {isEnabled("price_management") && (
+            <TabsContent value="prices">
+              <div className="mt-2 space-y-4">
+                <AdminPriceSyncStats />
+                <AdminBulkPriceSync />
+                <AdminPriceManagement />
+              </div>
+            </TabsContent>
+          )}
 
           <TabsContent value="service-plans">
-            <div className="mt-2">
-              <AdminServicePlans />
-            </div>
+            <div className="mt-2"><AdminServicePlans /></div>
           </TabsContent>
 
-          <TabsContent value="vehicle-offers">
-            <div className="mt-2">
-              <AdminVehicleOffers />
-            </div>
-          </TabsContent>
+          {isEnabled("vehicle_offers") && (
+            <TabsContent value="vehicle-offers">
+              <div className="mt-2"><AdminVehicleOffers /></div>
+            </TabsContent>
+          )}
 
-          <TabsContent value="epc-diagrams">
-            <div className="mt-2">
-              <AdminEPCDiagrams />
-            </div>
-          </TabsContent>
+          {isEnabled("epc_diagrams") && (
+            <TabsContent value="epc-diagrams">
+              <div className="mt-2"><AdminEPCDiagrams /></div>
+            </TabsContent>
+          )}
 
           {isEnabled("service_orders") && (
             <TabsContent value="service-orders">
@@ -585,9 +585,11 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          <TabsContent value="mechanics">
-            <div className="mt-2"><AdminMechanics /></div>
-          </TabsContent>
+          {isEnabled("mechanics_management") && (
+            <TabsContent value="mechanics">
+              <div className="mt-2"><AdminMechanics /></div>
+            </TabsContent>
+          )}
 
           {isEnabled("service_statistics") && (
             <TabsContent value="statistics">
@@ -601,9 +603,11 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          <TabsContent value="employees">
-            <div className="mt-2"><AdminEmployees /></div>
-          </TabsContent>
+          {isEnabled("employees") && (
+            <TabsContent value="employees">
+              <div className="mt-2"><AdminEmployees /></div>
+            </TabsContent>
+          )}
 
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
