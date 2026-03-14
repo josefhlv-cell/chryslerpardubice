@@ -31,6 +31,7 @@ import MyServiceOrders from "./pages/MyServiceOrders";
 import AppPresentation from "./pages/AppPresentation";
 import VehicleOffer from "./pages/VehicleOffer";
 import EPC from "./pages/EPC";
+import MechanicDashboard from "./pages/MechanicDashboard";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
