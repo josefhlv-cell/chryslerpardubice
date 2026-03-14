@@ -574,6 +574,26 @@ const Admin = () => {
               <AdminEPCDiagrams />
             </div>
           </TabsContent>
+
+          {isEnabled("service_orders") && (
+            <TabsContent value="service-orders">
+              <div className="mt-2"><AdminServiceOrders /></div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="mechanics">
+            <div className="mt-2"><AdminMechanics /></div>
+          </TabsContent>
+
+          {isEnabled("service_statistics") && (
+            <TabsContent value="statistics">
+              <div className="mt-2"><AdminServiceStatistics /></div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="features">
+            <div className="mt-2"><AdminFeatureSettings /></div>
+          </TabsContent>
         </Tabs>
       </div>
 
