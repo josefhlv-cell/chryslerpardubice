@@ -18,10 +18,20 @@ interface Profile {
   service_history_enabled: boolean;
 }
 
+interface Employee {
+  id: string;
+  user_id: string | null;
+  name: string;
+  role: string;
+  email: string | null;
+  active: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
+  employee: Employee | null;
   isAdmin: boolean;
   isLoading: boolean;
   isPendingBusiness: boolean;
