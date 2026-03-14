@@ -333,6 +333,7 @@ const Admin = () => {
             {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
             {isEnabled("employees") && <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
+            <TabsTrigger value="procedures" className="text-xs gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
             <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
