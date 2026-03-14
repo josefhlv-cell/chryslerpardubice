@@ -316,21 +316,21 @@ const Admin = () => {
               )}
             </TabsTrigger>
             <TabsTrigger value="orders" className="text-xs gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
-            <TabsTrigger value="service" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>
-            <TabsTrigger value="inquiries" className="text-xs gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>
-            <TabsTrigger value="catalog" className="text-xs gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>
-            <TabsTrigger value="settings" className="text-xs gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>
-            <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>
-            <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>
-            <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>
+            {isEnabled("bookings") && <TabsTrigger value="service" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
+            {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-xs gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-xs gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="settings" className="text-xs gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>}
+            {isEnabled("service_history") && <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
+            {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
+            {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
+            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
             <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
-            <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>
-            <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>
+            {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
+            {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
             {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-xs gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
             {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-xs gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
-            <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>
-            <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>
+            {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
+            {isEnabled("employees") && <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
             <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
@@ -541,43 +541,43 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="notifications">
-            <div className="mt-2">
-              <AdminNotifications />
-            </div>
-          </TabsContent>
+          {isEnabled("notifications") && (
+            <TabsContent value="notifications">
+              <div className="mt-2"><AdminNotifications /></div>
+            </TabsContent>
+          )}
 
-          <TabsContent value="faults">
-            <div className="mt-2">
-              <AdminFaultReports />
-            </div>
-          </TabsContent>
+          {isEnabled("fault_reports") && (
+            <TabsContent value="faults">
+              <div className="mt-2"><AdminFaultReports /></div>
+            </TabsContent>
+          )}
 
-          <TabsContent value="prices">
-            <div className="mt-2 space-y-4">
-              <AdminPriceSyncStats />
-              <AdminBulkPriceSync />
-              <AdminPriceManagement />
-            </div>
-          </TabsContent>
+          {isEnabled("price_management") && (
+            <TabsContent value="prices">
+              <div className="mt-2 space-y-4">
+                <AdminPriceSyncStats />
+                <AdminBulkPriceSync />
+                <AdminPriceManagement />
+              </div>
+            </TabsContent>
+          )}
 
           <TabsContent value="service-plans">
-            <div className="mt-2">
-              <AdminServicePlans />
-            </div>
+            <div className="mt-2"><AdminServicePlans /></div>
           </TabsContent>
 
-          <TabsContent value="vehicle-offers">
-            <div className="mt-2">
-              <AdminVehicleOffers />
-            </div>
-          </TabsContent>
+          {isEnabled("vehicle_offers") && (
+            <TabsContent value="vehicle-offers">
+              <div className="mt-2"><AdminVehicleOffers /></div>
+            </TabsContent>
+          )}
 
-          <TabsContent value="epc-diagrams">
-            <div className="mt-2">
-              <AdminEPCDiagrams />
-            </div>
-          </TabsContent>
+          {isEnabled("epc_diagrams") && (
+            <TabsContent value="epc-diagrams">
+              <div className="mt-2"><AdminEPCDiagrams /></div>
+            </TabsContent>
+          )}
 
           {isEnabled("service_orders") && (
             <TabsContent value="service-orders">
@@ -585,9 +585,11 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          <TabsContent value="mechanics">
-            <div className="mt-2"><AdminMechanics /></div>
-          </TabsContent>
+          {isEnabled("mechanics_management") && (
+            <TabsContent value="mechanics">
+              <div className="mt-2"><AdminMechanics /></div>
+            </TabsContent>
+          )}
 
           {isEnabled("service_statistics") && (
             <TabsContent value="statistics">
@@ -601,9 +603,11 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          <TabsContent value="employees">
-            <div className="mt-2"><AdminEmployees /></div>
-          </TabsContent>
+          {isEnabled("employees") && (
+            <TabsContent value="employees">
+              <div className="mt-2"><AdminEmployees /></div>
+            </TabsContent>
+          )}
 
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>

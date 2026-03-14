@@ -11,7 +11,19 @@ export type FeatureKey =
   | "service_scheduler"
   | "mechanic_tasks"
   | "service_statistics"
-  | "notifications";
+  | "notifications"
+  | "catalog"
+  | "epc_diagrams"
+  | "vehicle_offers"
+  | "fault_reports"
+  | "service_history"
+  | "price_management"
+  | "ai_mechanic"
+  | "mechanic_dashboard"
+  | "employees"
+  | "mechanics_management"
+  | "vehicle_health"
+  | "bookings";
 
 type FeatureFlag = {
   id: string;
