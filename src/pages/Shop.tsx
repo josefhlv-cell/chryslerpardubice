@@ -15,7 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Search, Send, Sparkles, Package, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, SlidersHorizontal, Star, Download, CheckCircle, Heart } from "lucide-react";
+import { Loader2, Search, Send, Sparkles, Package, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, SlidersHorizontal, Star, Download, CheckCircle, Heart, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -86,8 +86,8 @@ const Shop = () => {
   // Photo dialog
   const [photoDialog, setPhotoDialog] = useState({ open: false, oem: "", loading: false, urls: [] as string[] });
 
-  // Submitting state
   const [submitting, setSubmitting] = useState(false);
+  const [searchCollapsed, setSearchCollapsed] = useState(false);
 
   // Hooks
   const { favorites, isFavorite, toggleFavorite } = useFavorites();
@@ -186,7 +186,7 @@ const Shop = () => {
     }
   }, [debouncedQuery, page, partType, doSearch, searchMode]);
 
-  const handleSearch = () => { setPage(0); doSearch(query, 0); };
+  const handleSearch = () => { setPage(0); setSearchCollapsed(true); doSearch(query, 0); };
 
   // ---- VIN decode ----
   const handleVinDecode = async () => {
@@ -350,17 +350,46 @@ const Shop = () => {
 
           {/* Search bar — new parts only */}
           {partType === "new" && (
-            <div className="mt-3 space-y-3">
+            <div className="mt-3">
+              {/* Collapsed summary bar */}
+              {searchCollapsed && (results && results.length > 0) && (
+                <button
+                  onClick={() => setSearchCollapsed(false)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-secondary/80 hover:bg-secondary transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
+                    <Search className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {query || [brand, model, category].filter(Boolean).join(" · ") || "Vyhledávání"}
+                    </span>
+                    <span className="text-primary font-medium">{totalCount} výsledků</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
+                </button>
+              )}
+
+              {/* Full search UI */}
+              <AnimatePresence initial={false}>
+                {!searchCollapsed && (
+                  <motion.div
+                    key="search-panel"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-3">
               <div className="flex gap-2 items-start">
                 <div className="flex-1">
                   <SearchBar
                     query={query}
-                    onQueryChange={(v) => { setQuery(v); setPage(0); }}
+                    onQueryChange={(v) => { setQuery(v); setPage(0); setSearchCollapsed(false); }}
                     onSearch={handleSearch}
                     searching={searching}
                     searchMode={searchMode}
                     onModeChange={(mode) => { 
-                      cancelPrevious(); // Abort any in-flight requests
+                      cancelPrevious();
                       setSearchMode(mode); 
                       setResults(null); 
                       setPage(0); 
@@ -368,7 +397,7 @@ const Shop = () => {
                       setSubCategory(""); 
                       setSearching(false);
                       setPriceFetching(false);
-                      // Clear query when switching to EPC/Vehicle mode
+                      setSearchCollapsed(false);
                       if (mode === "epc" || mode === "vehicle") {
                         setQuery("");
                       }
@@ -475,6 +504,10 @@ const Shop = () => {
                   )}
                 </div>
               )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>
