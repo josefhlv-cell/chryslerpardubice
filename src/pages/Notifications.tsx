@@ -4,9 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Bell, Check, Loader2 } from "lucide-react";
+import { Bell, Check, Loader2, Wrench, ShoppingCart, AlertTriangle, Info } from "lucide-react";
 
 type Notification = {
   id: string;
@@ -14,6 +13,13 @@ type Notification = {
   message: string;
   is_read: boolean;
   created_at: string;
+};
+
+const getNotificationIcon = (title: string) => {
+  if (title.includes("servis") || title.includes("🔧")) return { icon: Wrench, color: "text-primary", bg: "bg-primary/10" };
+  if (title.includes("objednávk") || title.includes("📦")) return { icon: ShoppingCart, color: "text-warning", bg: "bg-warning/10" };
+  if (title.includes("⚠") || title.includes("urgentní")) return { icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10" };
+  return { icon: Info, color: "text-muted-foreground", bg: "bg-secondary" };
 };
 
 const Notifications = () => {
@@ -42,7 +48,6 @@ const Notifications = () => {
     if (user) fetchNotifications();
   }, [user]);
 
-  // Realtime subscription
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -74,8 +79,8 @@ const Notifications = () => {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen pb-20">
-        <PageHeader title="Oznámení" />
+      <div className="min-h-screen pb-20 bg-background">
+        <PageHeader title="Oznámení" showBack />
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
@@ -84,43 +89,60 @@ const Notifications = () => {
   }
 
   return (
-    <div className="min-h-screen pb-20">
-      <PageHeader title="Oznámení" />
-      <div className="p-4 space-y-4 max-w-lg mx-auto">
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" className="w-full" onClick={markAllRead}>
-            <Check className="w-4 h-4 mr-1" />Označit vše jako přečtené ({unreadCount})
-          </Button>
-        )}
-
+    <div className="min-h-screen pb-20 bg-background">
+      <PageHeader
+        title="Oznámení"
+        showBack
+        rightElement={
+          unreadCount > 0 ? (
+            <Button variant="ghost" size="sm" className="text-xs text-primary h-8" onClick={markAllRead}>
+              <Check className="w-3.5 h-3.5 mr-1" /> Přečíst vše
+            </Button>
+          ) : undefined
+        }
+      />
+      <div className="p-4 space-y-2.5 max-w-lg mx-auto">
         {notifications.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            <Bell className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p>Žádná oznámení</p>
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+              <Bell className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground font-medium">Žádná oznámení</p>
           </div>
         )}
 
-        {notifications.map((n, i) => (
-          <motion.div key={n.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-            <Card
-              className={`transition-colors cursor-pointer ${!n.is_read ? "border-primary/40 bg-primary/5" : ""}`}
-              onClick={() => !n.is_read && markRead(n.id)}
+        {notifications.map((n, i) => {
+          const { icon: NIcon, color, bg } = getNotificationIcon(n.title);
+          return (
+            <motion.div
+              key={n.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.02 }}
             >
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${n.is_read ? "bg-transparent" : "bg-primary"}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-display font-semibold text-sm">{n.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(n.created_at).toLocaleString("cs-CZ")}
-                    </p>
-                  </div>
+              <button
+                onClick={() => !n.is_read && markRead(n.id)}
+                className={`w-full text-left glass-card p-4 flex items-start gap-3.5 transition-all ${
+                  !n.is_read ? "border-primary/30 bg-primary/[0.03]" : "opacity-60"
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-xl ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
+                  <NIcon className={`w-4 h-4 ${color}`} />
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-display font-semibold text-sm">{n.title}</p>
+                    {!n.is_read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                  <p className="text-[10px] text-muted-foreground/50 mt-1.5">
+                    {new Date(n.created_at).toLocaleString("cs-CZ")}
+                  </p>
+                </div>
+              </button>
+            </motion.div>
+          );
+        })}
       </div>
     </div>
   );
