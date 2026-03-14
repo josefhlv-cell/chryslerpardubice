@@ -34,6 +34,7 @@ import AdminMechanics from "@/components/admin/AdminMechanics";
 import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
 import AdminServiceScheduler from "@/components/admin/AdminServiceScheduler";
 import AdminEmployees from "@/components/admin/AdminEmployees";
+import AdminServiceProcedures from "@/components/admin/AdminServiceProcedures";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
