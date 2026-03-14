@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Search, Car, User, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TondaAvatar from "@/components/TondaAvatar";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { path: "/shop", label: "Díly", icon: Search },
@@ -14,8 +15,11 @@ const navItems = [
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { employee } = useAuth();
 
+  // Hide for landing, checkout, and employee roles (mechanics, parts_sales, car_sales)
   if (location.pathname === "/" || location.pathname.startsWith("/checkout")) return null;
+  if (employee && employee.role !== "admin") return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl safe-bottom">
