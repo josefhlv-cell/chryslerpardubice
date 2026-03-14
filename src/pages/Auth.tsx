@@ -6,13 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Car, Building2, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-type ViewMode = "login" | "register" | "forgot";
-
-const Auth = () => {
-  const navigate = useNavigate();
-  const { signIn, signUp, resetPassword } = useAuth();
   const [view, setView] = useState<ViewMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
