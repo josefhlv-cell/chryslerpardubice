@@ -80,6 +80,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsAdmin(!!data);
   };
 
+  const fetchEmployee = async (userId: string) => {
+    const { data } = await supabase
+      .from("employees")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("active", true)
+      .maybeSingle();
+    setEmployee(data as Employee | null);
+  };
+
   const refreshProfile = async () => {
     if (user) {
       await fetchProfile(user.id);
