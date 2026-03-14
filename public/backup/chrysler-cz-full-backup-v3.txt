@@ -1,0 +1,239 @@
+
+=============================================================
+  CHRYSLER CZ - KOMPLETNÍ ZÁLOHA v3
+  Datum: 2026-03-14
+  Před vizuálním redesignem podle mockupů
+=============================================================
+
+================================================================
+FILE: src/App.tsx
+================================================================
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { CartProvider } from "@/contexts/CartContext";
+import TopBar from "@/components/TopBar";
+import BottomNav from "@/components/BottomNav";
+import Landing from "./pages/Landing";
+import Shop from "./pages/Shop";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import Service from "./pages/Service";
+import Vehicles from "./pages/Vehicles";
+import VehicleDetail from "./pages/VehicleDetail";
+import Account from "./pages/Account";
+import Auth from "./pages/Auth";
+import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
+import Contact from "./pages/Contact";
+import ResetPassword from "./pages/ResetPassword";
+import MyOrders from "./pages/MyOrders";
+import MyVehicles from "./pages/MyVehicles";
+import Notifications from "./pages/Notifications";
+import AiMechanic from "./pages/AiMechanic";
+import Terms from "./pages/Terms";
+import Emergency from "./pages/Emergency";
+import ServicePlan from "./pages/ServicePlan";
+import ServiceBook from "./pages/ServiceBook";
+import MyServiceOrders from "./pages/MyServiceOrders";
+import AppPresentation from "./pages/AppPresentation";
+import VehicleOffer from "./pages/VehicleOffer";
+import EPC from "./pages/EPC";
+import MechanicDashboard from "./pages/MechanicDashboard";
+import { AuthProvider } from "@/contexts/AuthContext";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <CartProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <TopBar />
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/shop" element={<Shop />} />
+              <Route path="/epc" element={<EPC />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/service" element={<Service />} />
+              <Route path="/vehicles" element={<Vehicles />} />
+              <Route path="/vehicles/:id" element={<VehicleDetail />} />
+              <Route path="/vehicle-offer" element={<VehicleOffer />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/orders" element={<MyOrders />} />
+              <Route path="/my-vehicles" element={<MyVehicles />} />
+              <Route path="/notifications" element={<Notifications />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/ai-mechanic" element={<AiMechanic />} />
+              <Route path="/emergency" element={<Emergency />} />
+              <Route path="/service-plan" element={<ServicePlan />} />
+              <Route path="/service-book" element={<ServiceBook />} />
+              <Route path="/my-service-orders" element={<MyServiceOrders />} />
+              <Route path="/presentation" element={<AppPresentation />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <BottomNav />
+          </BrowserRouter>
+        </TooltipProvider>
+      </CartProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
+
+export default App;
+
+================================================================
+FILE: src/pages/Landing.tsx
+================================================================
+[SEE: src/pages/Landing.tsx - úvodní stránka s logem, feature cards, CTA]
+
+================================================================
+FILE: src/components/TopBar.tsx
+================================================================
+[SEE: src/components/TopBar.tsx - horní navigační lišta s logem, menu, košík]
+
+================================================================
+FILE: src/components/BottomNav.tsx
+================================================================
+[SEE: src/components/BottomNav.tsx - spodní navigace, skrytá pro zaměstnance]
+
+================================================================
+FILE: src/components/PageHeader.tsx
+================================================================
+[SEE: src/components/PageHeader.tsx - sticky hlavička stránek]
+
+================================================================
+FILE: src/pages/Auth.tsx
+================================================================
+[SEE: src/pages/Auth.tsx - přihlášení/registrace/reset hesla]
+
+================================================================
+FILE: src/pages/Account.tsx
+================================================================
+[SEE: src/pages/Account.tsx - profil uživatele, navigace]
+
+================================================================
+FILE: src/pages/MyVehicles.tsx
+================================================================
+[SEE: src/pages/MyVehicles.tsx - správa vozidel, OCR VIN/SPZ]
+
+================================================================
+FILE: src/pages/VehicleDetail.tsx
+================================================================
+[SEE: src/pages/VehicleDetail.tsx - detail nabízeného vozu]
+
+================================================================
+FILE: src/pages/Shop.tsx
+================================================================
+[SEE: src/pages/Shop.tsx - katalog dílů, 775 řádků]
+
+================================================================
+FILE: src/pages/Cart.tsx
+================================================================
+[SEE: src/pages/Cart.tsx - nákupní košík]
+
+================================================================
+FILE: src/pages/Checkout.tsx
+================================================================
+[SEE: src/pages/Checkout.tsx - objednávka, 2 kroky]
+
+================================================================
+FILE: src/pages/MyOrders.tsx
+================================================================
+[SEE: src/pages/MyOrders.tsx - přehled objednávek]
+
+================================================================
+FILE: src/pages/AiMechanic.tsx
+================================================================
+[SEE: src/pages/AiMechanic.tsx - AI chat s Tondou, 438 řádků]
+
+================================================================
+FILE: src/pages/Emergency.tsx
+================================================================
+[SEE: src/pages/Emergency.tsx - nouzový režim, SOS]
+
+================================================================
+FILE: src/pages/ServiceBook.tsx
+================================================================
+[SEE: src/pages/ServiceBook.tsx - digitální servisní kniha]
+
+================================================================
+FILE: src/pages/Service.tsx
+================================================================
+[SEE: src/pages/Service.tsx - formulář objednání servisu]
+
+================================================================
+FILE: src/pages/MyServiceOrders.tsx
+================================================================
+[SEE: src/pages/MyServiceOrders.tsx - servisní zakázky zákazníka]
+
+================================================================
+FILE: src/pages/MechanicDashboard.tsx
+================================================================
+[SEE: src/pages/MechanicDashboard.tsx - dashboard mechanika]
+
+================================================================
+FILE: src/pages/Notifications.tsx
+================================================================
+[SEE: src/pages/Notifications.tsx - oznámení s realtime]
+
+================================================================
+FILE: src/contexts/AuthContext.tsx
+================================================================
+[SEE: src/contexts/AuthContext.tsx - auth provider, profil, role]
+
+================================================================
+FILE: src/contexts/CartContext.tsx
+================================================================
+[SEE: src/contexts/CartContext.tsx - košík context]
+
+================================================================
+FILE: src/components/ServiceRecommendations.tsx
+================================================================
+[SEE: src/components/ServiceRecommendations.tsx - servisní doporučení]
+
+================================================================
+FILE: src/index.css
+================================================================
+[SEE: src/index.css - design tokens, utility classes]
+
+================================================================
+FILE: tailwind.config.ts
+================================================================
+[SEE: tailwind.config.ts - Tailwind konfigurace]
+
+================================================================
+POZNÁMKA K ZÁLOZE
+================================================================
+Toto je referenční záloha v3 vytvořená před vizuálním redesignem.
+Všechny soubory jsou v aktuálním stavu k datu zálohy.
+Pro kompletní obnovu použijte historii verzí v Lovable editoru.
+
+Klíčové soubory, které NEBYLY zálohovány (auto-generované):
+- src/integrations/supabase/client.ts
+- src/integrations/supabase/types.ts
+- supabase/config.toml
+- .env
+
+Další soubory v projektu (nezměněny, viz backup v2):
+- src/pages/Admin.tsx (rozsáhlý admin panel)
+- src/pages/ServicePlan.tsx
+- src/pages/Vehicles.tsx
+- src/pages/VehicleOffer.tsx
+- src/pages/EPC.tsx
+- src/components/admin/* (admin komponenty)
+- src/components/catalog/* (katalogové komponenty)
+- src/components/service/* (servisní komponenty)
+- src/api/* (API layer)
+- supabase/functions/* (edge functions)
