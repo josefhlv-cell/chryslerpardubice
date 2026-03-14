@@ -529,8 +529,46 @@ const Shop = () => {
 
           {/* LEFT SIDEBAR — desktop (filters + history + favorites) */}
           {partType === "new" && (
-            <div className="hidden md:block w-60 shrink-0">
-              <div className="sticky top-36 space-y-2 max-h-[calc(100vh-10rem)] overflow-y-auto pr-1">
+            <AnimatePresence initial={false} mode="wait">
+              {searchCollapsed ? (
+                <motion.div
+                  key="sidebar-collapsed"
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 48, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="hidden md:block shrink-0 overflow-hidden"
+                >
+                  <div className="sticky top-36 space-y-2">
+                    <button
+                      onClick={() => setSearchCollapsed(false)}
+                      className="w-10 h-10 rounded-lg bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-colors"
+                      title="Zobrazit filtry"
+                    >
+                      <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                    {favorites.length > 0 && (
+                      <button
+                        onClick={() => { setSearchCollapsed(false); setSidebarTab("favorites"); }}
+                        className="w-10 h-10 rounded-lg bg-secondary hover:bg-secondary/80 flex items-center justify-center transition-colors relative"
+                        title="Oblíbené"
+                      >
+                        <Heart className="w-4 h-4 text-muted-foreground" />
+                        <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[9px] rounded-full w-4 h-4 flex items-center justify-center">{favorites.length}</span>
+                      </button>
+                    )}
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="sidebar-expanded"
+                  initial={{ width: 0, opacity: 0 }}
+                  animate={{ width: 240, opacity: 1 }}
+                  exit={{ width: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="hidden md:block shrink-0 overflow-hidden"
+                >
+              <div className="w-60 sticky top-36 space-y-2 max-h-[calc(100vh-10rem)] overflow-y-auto pr-1">
                 {/* Sidebar tabs */}
                 <div className="flex rounded-lg bg-secondary p-0.5 gap-0.5 mb-3">
                   {([["filters", "Filtry", SlidersHorizontal], ["favorites", "Oblíbené", Heart], ["history", "Historie", RefreshCw]] as const).map(([tab, label, Icon]) => (
@@ -590,7 +628,9 @@ const Shop = () => {
                   <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
                 )}
               </div>
-            </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           )}
 
           {/* CENTER — Results */}
