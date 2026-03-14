@@ -86,7 +86,7 @@ const DesktopSidebar = () => {
     </button>
   );
 
-  const NavSection = ({ title, items }: { title: string; items: typeof mainNav }) => (
+  const NavSection = ({ title, items }: { title: string; items: { path: string; label: string; icon: any; isTonda?: boolean }[] }) => (
     <div className="space-y-1">
       {!collapsed && (
         <p className="px-3 text-[10px] uppercase tracking-widest text-muted-foreground/60 font-medium mb-2">

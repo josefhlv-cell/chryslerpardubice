@@ -243,7 +243,7 @@ const OBDDiagnostics = () => {
 
   return (
     <div className="min-h-screen pb-24 bg-background">
-      <PageHeader title="OBD Diagnostika" subtitle="Live data z vozidla přes ELM327" />
+      <PageHeader title="OBD Diagnostika" />
 
       <div className="px-4 max-w-4xl mx-auto space-y-5">
         {/* Connection card */}
