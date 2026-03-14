@@ -1445,6 +1445,48 @@ export type Database = {
           },
         ]
       }
+      service_procedures: {
+        Row: {
+          brand: string
+          category: string
+          content: string | null
+          created_at: string
+          id: string
+          model: string
+          procedure_type: string | null
+          source: string | null
+          source_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          brand?: string
+          category: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          model: string
+          procedure_type?: string | null
+          source?: string | null
+          source_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          category?: string
+          content?: string | null
+          created_at?: string
+          id?: string
+          model?: string
+          procedure_type?: string | null
+          source?: string | null
+          source_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       used_part_requests: {
         Row: {
           admin_available: boolean | null

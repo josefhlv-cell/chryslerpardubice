@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -34,6 +34,7 @@ import AdminMechanics from "@/components/admin/AdminMechanics";
 import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
 import AdminServiceScheduler from "@/components/admin/AdminServiceScheduler";
 import AdminEmployees from "@/components/admin/AdminEmployees";
+import AdminServiceProcedures from "@/components/admin/AdminServiceProcedures";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -332,6 +333,7 @@ const Admin = () => {
             {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
             {isEnabled("employees") && <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
+            <TabsTrigger value="procedures" className="text-xs gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
             <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
@@ -608,6 +610,10 @@ const Admin = () => {
               <div className="mt-2"><AdminEmployees /></div>
             </TabsContent>
           )}
+
+          <TabsContent value="procedures">
+            <AdminServiceProcedures />
+          </TabsContent>
 
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
