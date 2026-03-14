@@ -150,9 +150,7 @@ const PartCard = ({
             <Eye className="w-3.5 h-3.5 mr-1" />Detail
           </Button>
           <div className="flex-1" />
-          <Button size="sm" variant="outline" className="text-[11px] h-7 px-3" onClick={onOrderUsed} disabled={disabled}>
-            <Package className="w-3 h-3 mr-1" />Použitý
-          </Button>
+          
           <Button size="sm" className="text-[11px] h-7 px-3" onClick={onOrderNew} disabled={disabled}>
             <ShoppingCart className="w-3 h-3 mr-1" />Objednat
           </Button>
