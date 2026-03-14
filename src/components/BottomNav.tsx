@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/shop", label: "Domů", icon: Home },
+  { path: "/", label: "Domů", icon: Home },
   { path: "/my-service-orders", label: "Servis", icon: Wrench },
   { path: "/ai-mechanic", label: "Tonda", icon: null },
   { path: "/vehicles", label: "Vozy", icon: Car },
