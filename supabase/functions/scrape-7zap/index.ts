@@ -23,6 +23,81 @@ const REGIONS: Record<string, string> = {
   'Chrysler': 'global', 'Dodge': 'global', 'Jeep': 'global', 'RAM': 'global',
 };
 
+// Czech category translations
+const CATEGORY_MAP: Record<string, string> = {
+  'Engine': 'Motor',
+  'Transmission/Drivetrain': 'Převodovka a pohon',
+  'Chassis Systems': 'Podvozek',
+  'Body/Exterior': 'Karoserie',
+  'Interior/Safety': 'Interiér a bezpečnost',
+  'Electrical/Electronic': 'Elektroinstalace',
+  'Accessories/Tools': 'Příslušenství',
+  'Maintenance Parts': 'Údržba',
+  'Factory': 'Tovární díly',
+  'Classifier': 'Klasifikátor',
+};
+
+// Known subcategories per main category (English -> Czech)
+const SUBCATEGORY_MAP: Record<string, Array<{ en: string; cs: string }>> = {
+  'Motor': [
+    { en: 'Engine block', cs: 'Blok motoru' },
+    { en: 'Cylinder head', cs: 'Hlava válců' },
+    { en: 'Pistons', cs: 'Písty' },
+    { en: 'Timing', cs: 'Rozvody' },
+    { en: 'Intake', cs: 'Sání' },
+    { en: 'Exhaust manifold', cs: 'Výfukové svody' },
+    { en: 'Fuel system', cs: 'Palivový systém' },
+    { en: 'Cooling', cs: 'Chlazení' },
+    { en: 'Lubrication', cs: 'Mazání' },
+  ],
+  'Převodovka a pohon': [
+    { en: 'Gearbox', cs: 'Převodovka' },
+    { en: 'Driveshafts', cs: 'Hřídele' },
+    { en: 'Differentials', cs: 'Diferenciály' },
+    { en: 'CV joints', cs: 'Homokinetické klouby' },
+  ],
+  'Podvozek': [
+    { en: 'Suspension', cs: 'Odpružení' },
+    { en: 'Steering', cs: 'Řízení' },
+    { en: 'Brakes', cs: 'Brzdy' },
+    { en: 'Wheels', cs: 'Kola' },
+  ],
+  'Karoserie': [
+    { en: 'Body panels', cs: 'Karosářské díly' },
+    { en: 'Doors', cs: 'Dveře' },
+    { en: 'Bumpers', cs: 'Nárazníky' },
+    { en: 'Lighting', cs: 'Osvětlení' },
+    { en: 'Glass', cs: 'Skla' },
+    { en: 'Mirrors', cs: 'Zrcátka' },
+  ],
+  'Elektroinstalace': [
+    { en: 'Battery', cs: 'Baterie a nabíjení' },
+    { en: 'Starter', cs: 'Startér' },
+    { en: 'Sensors', cs: 'Senzory' },
+    { en: 'Climate control', cs: 'Klimatizace' },
+    { en: 'Wiring', cs: 'Kabeláž' },
+    { en: 'Fuses', cs: 'Pojistky' },
+  ],
+  'Údržba': [
+    { en: 'Oil filters', cs: 'Olejové filtry' },
+    { en: 'Air filters', cs: 'Vzduchové filtry' },
+    { en: 'Fuel filters', cs: 'Palivové filtry' },
+    { en: 'Spark plugs', cs: 'Zapalovací svíčky' },
+    { en: 'Brake pads', cs: 'Brzdové destičky' },
+    { en: 'Belts', cs: 'Řemeny' },
+    { en: 'Wiper blades', cs: 'Stěrače' },
+  ],
+};
+
+// All Chrysler models with year ranges
+const CHRYSLER_MODELS: Array<{ model: string; yearFrom: number; yearTo: number }> = [
+  { model: '300C', yearFrom: 2005, yearTo: 2023 },
+  { model: '300', yearFrom: 2005, yearTo: 2023 },
+  { model: 'Pacifica', yearFrom: 2004, yearTo: 2024 },
+  { model: 'Town & Country', yearFrom: 1996, yearTo: 2016 },
+  { model: 'Voyager', yearFrom: 2001, yearTo: 2024 },
+];
+
 function buildCatalogUrl(brand: string, model: string): string {
   const brandSlug = BRAND_SLUGS[brand] || brand.toLowerCase();
   const modelSlug = MODEL_SLUGS[model] || model.toLowerCase().replace(/[&]/g, '').replace(/\s+/g, '-');
@@ -64,6 +139,60 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: mapResp.ok, links: mapData.links || [], total: mapData.links?.length || 0 });
     }
 
+    // Action: scrape-all-chrysler — scrape all Chrysler models, save categories+subcategories
+    if (action === 'scrape-all-chrysler') {
+      const results: any[] = [];
+
+      for (const m of CHRYSLER_MODELS) {
+        console.log(`Scraping Chrysler ${m.model}...`);
+        try {
+          const catalogUrl = buildCatalogUrl('Chrysler', m.model);
+          const scrapeResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: catalogUrl,
+              formats: ['markdown'],
+              onlyMainContent: true,
+              waitFor: 5000,
+            }),
+          });
+
+          if (!scrapeResp.ok) {
+            results.push({ model: m.model, success: false, error: `Firecrawl ${scrapeResp.status}` });
+            continue;
+          }
+
+          const data = await scrapeResp.json();
+          const md = data.data?.markdown || data.markdown || '';
+
+          // Extract categories from markdown
+          const cats = extractCategoriesFromMarkdown(md);
+          
+          // Save categories and subcategories to DB
+          const saved = await saveFullCategoryTree('Chrysler', m.model, m.yearFrom, m.yearTo, cats);
+
+          results.push({
+            model: m.model,
+            success: true,
+            categories_found: cats.length,
+            categories_saved: saved,
+            url: catalogUrl,
+          });
+        } catch (e) {
+          results.push({ model: m.model, success: false, error: e instanceof Error ? e.message : 'Unknown' });
+        }
+      }
+
+      const totalSaved = results.reduce((sum, r) => sum + (r.categories_saved || 0), 0);
+      return jsonResponse({
+        success: true,
+        models_processed: results.length,
+        total_categories_saved: totalSaved,
+        results,
+      });
+    }
+
     // Action: scrape-catalog — scrape a specific model's parts catalog page
     if (action === 'scrape-catalog') {
       if (!brand || !model) return jsonResponse({ success: false, error: 'brand and model required' }, 400);
@@ -93,6 +222,10 @@ Deno.serve(async (req) => {
       // Parse parts data from markdown
       const parts = parsePartsFromMarkdown(md);
 
+      // Extract and save categories
+      const cats = extractCategoriesFromMarkdown(md);
+      const catsSaved = await saveFullCategoryTree(brand, model, year || 2005, year || 2024, cats);
+
       // Also extract category structure from links
       const categories = links
         .filter((l: string) => l.includes('-parts-catalog/') && l !== catalogUrl)
@@ -110,6 +243,7 @@ Deno.serve(async (req) => {
           url: catalogUrl,
           parts_found: parts.length,
           parts_saved: saved,
+          categories_saved: catsSaved,
           categories: [...new Set(parts.map(p => p.category).filter(Boolean))],
           sample: parts.slice(0, 10),
         });
@@ -119,10 +253,10 @@ Deno.serve(async (req) => {
         success: true,
         url: catalogUrl,
         parts_found: 0,
-        categories_found: categories,
-        markdownPreview: md.substring(0, 2000),
-        links: links.slice(0, 20),
-        note: '7zap.com requires a subscription for detailed parts data. Categories were scraped successfully.',
+        categories_saved: catsSaved,
+        categories_from_scrape: cats.map(c => c.cs),
+        categories_from_links: categories,
+        note: 'Categories saved. Parts data requires 7zap subscription.',
       });
     }
 
@@ -170,7 +304,7 @@ CRITICAL: Use REAL Mopar OEM part numbers (format like 68191349AC, 5038674AA, 04
         const errText = await aiResp.text();
         console.error('AI error:', aiResp.status, errText);
         if (aiResp.status === 402) {
-          return jsonResponse({ success: false, error: 'AI kredity vyčerpány. Generování katalogu je dočasně nedostupné. Kontaktujte administrátora.' }, 503);
+          return jsonResponse({ success: false, error: 'AI kredity vyčerpány. Generování katalogu je dočasně nedostupné.' }, 503);
         }
         return jsonResponse({ success: false, error: `AI error: ${aiResp.status}` });
       }
@@ -254,12 +388,107 @@ CRITICAL: Use REAL Mopar OEM part numbers (format like 68191349AC, 5038674AA, 04
       });
     }
 
-    return jsonResponse({ success: false, error: 'Invalid action. Use: map, scrape-catalog, scrape-diagram, generate-catalog' }, 400);
+    return jsonResponse({ success: false, error: 'Invalid action. Use: map, scrape-catalog, scrape-diagram, generate-catalog, scrape-all-chrysler' }, 400);
   } catch (error) {
     console.error('7zap scrape error:', error);
     return jsonResponse({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });
+
+function extractCategoriesFromMarkdown(md: string): Array<{ en: string; cs: string }> {
+  const found: Array<{ en: string; cs: string }> = [];
+  
+  for (const [en, cs] of Object.entries(CATEGORY_MAP)) {
+    if (md.includes(en)) {
+      found.push({ en, cs });
+    }
+  }
+
+  // Fallback: if we didn't find any, add standard set
+  if (found.length === 0) {
+    return [
+      { en: 'Engine', cs: 'Motor' },
+      { en: 'Transmission/Drivetrain', cs: 'Převodovka a pohon' },
+      { en: 'Chassis Systems', cs: 'Podvozek' },
+      { en: 'Body/Exterior', cs: 'Karoserie' },
+      { en: 'Interior/Safety', cs: 'Interiér a bezpečnost' },
+      { en: 'Electrical/Electronic', cs: 'Elektroinstalace' },
+      { en: 'Accessories/Tools', cs: 'Příslušenství' },
+      { en: 'Maintenance Parts', cs: 'Údržba' },
+    ];
+  }
+
+  return found;
+}
+
+async function saveFullCategoryTree(
+  brand: string, model: string, yearFrom: number, yearTo: number,
+  cats: Array<{ en: string; cs: string }>
+): Promise<number> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  let saved = 0;
+
+  for (let i = 0; i < cats.length; i++) {
+    const cat = cats[i];
+    // Skip non-useful categories
+    if (cat.cs === 'Klasifikátor' || cat.cs === 'Tovární díly') continue;
+
+    // Save main category
+    const { data: existing } = await supabase
+      .from('epc_categories')
+      .select('id')
+      .eq('brand', brand)
+      .eq('model', model)
+      .eq('category', cat.cs)
+      .is('subcategory', null)
+      .maybeSingle();
+
+    if (!existing) {
+      await supabase.from('epc_categories').insert({
+        brand,
+        model,
+        category: cat.cs,
+        year_from: yearFrom,
+        year_to: yearTo,
+        sort_order: i,
+      });
+      saved++;
+    }
+
+    // Save subcategories
+    const subs = SUBCATEGORY_MAP[cat.cs] || [];
+    for (let j = 0; j < subs.length; j++) {
+      const sub = subs[j];
+      const { data: existingSub } = await supabase
+        .from('epc_categories')
+        .select('id')
+        .eq('brand', brand)
+        .eq('model', model)
+        .eq('category', cat.cs)
+        .eq('subcategory', sub.cs)
+        .maybeSingle();
+
+      if (!existingSub) {
+        await supabase.from('epc_categories').insert({
+          brand,
+          model,
+          category: cat.cs,
+          subcategory: sub.cs,
+          year_from: yearFrom,
+          year_to: yearTo,
+          sort_order: i * 100 + j,
+        });
+        saved++;
+      }
+    }
+  }
+
+  return saved;
+}
 
 async function saveParts(parts: Array<{ oem_number: string; name: string; category?: string; description?: string }>, brand: string, model: string, year?: number): Promise<number> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
