@@ -116,15 +116,18 @@ Poznámka zákazníka: ${record.customer_note || "—"}
       body = record.message || "";
     }
 
-    // Use Lovable AI to send email via fetch to a simple SMTP relay
-    // For now, store the email intent as a notification log
-    // The in-app notification is already created by the DB trigger
-    console.log(`Email notification prepared for: ${adminEmails.join(", ")}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body: ${body}`);
+    // Create in-app notifications for all admins
+    const notifRows = adminIds.map((uid: string) => ({
+      user_id: uid,
+      title: subject,
+      message: body.substring(0, 500),
+    }));
+    await supabase.from("notifications").insert(notifRows);
+
+    console.log(`Notification sent to ${adminIds.length} admin(s): ${subject}`);
 
     return new Response(
-      JSON.stringify({ ok: true, emails: adminEmails, subject }),
+      JSON.stringify({ ok: true, admins: adminIds.length, subject }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
