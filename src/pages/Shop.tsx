@@ -15,7 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Search, Send, Sparkles, Package, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, SlidersHorizontal, Star, Download, CheckCircle, Heart } from "lucide-react";
+import { Loader2, Search, Send, Sparkles, Package, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw, SlidersHorizontal, Star, Download, CheckCircle, Heart, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
