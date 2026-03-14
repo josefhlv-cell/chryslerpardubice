@@ -52,7 +52,7 @@ const Auth = () => {
 
     if (adminRole) return "/admin";
 
-    return "/shop";
+    return "/";  // Dashboard for all users
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

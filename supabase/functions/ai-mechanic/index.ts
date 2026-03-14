@@ -65,8 +65,8 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
           stream: true,
         }),
       });
-    } catch (fetchErr) {
-      console.error('AI fetch failed:', fetchErr?.message || fetchErr);
+    } catch (fetchErr: unknown) {
+      console.error('AI fetch failed:', fetchErr instanceof Error ? fetchErr.message : fetchErr);
       return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
         status: 503,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

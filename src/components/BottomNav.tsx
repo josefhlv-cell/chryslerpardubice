@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/shop", label: "Domů", icon: Home },
+  { path: "/", label: "Domů", icon: Home },
   { path: "/my-service-orders", label: "Servis", icon: Wrench },
   { path: "/ai-mechanic", label: "Tonda", icon: null },
   { path: "/vehicles", label: "Vozy", icon: Car },
@@ -16,18 +16,19 @@ const navItems = [
 const BottomNav = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { employee } = useAuth();
+  const { employee, user } = useAuth();
 
   // Hide for landing, checkout, and employee roles (mechanics, parts_sales, car_sales)
-  if (location.pathname === "/" || location.pathname.startsWith("/checkout")) return null;
+  if (location.pathname === "/" && !user) return null;
+  if (location.pathname.startsWith("/checkout")) return null;
   if (employee && employee.role !== "admin") return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/90 backdrop-blur-2xl safe-bottom">
       <div className="flex items-center justify-around h-[68px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
-          const isActive = item.path === "/shop"
-            ? location.pathname === "/shop" || location.pathname === "/index"
+          const isActive = item.path === "/"
+            ? location.pathname === "/" || location.pathname === "/index"
             : location.pathname.startsWith(item.path);
           const isTonda = !item.icon;
 

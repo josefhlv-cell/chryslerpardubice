@@ -8,11 +8,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Wrench, Send } from "lucide-react";
+import { CalendarIcon, Wrench, Send, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const serviceTypes = [
   "Výměna oleje a filtrů",
@@ -28,25 +31,62 @@ const serviceTypes = [
 ];
 
 const Service = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [serviceType, setServiceType] = useState("");
   const [date, setDate] = useState<Date>();
   const [note, setNote] = useState("");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!serviceType || !date) {
       toast.error("Vyberte typ servisu a termín");
       return;
     }
-    toast.success("Rezervace servisu odeslána! Potvrdíme termín a cenu.");
-    setServiceType("");
-    setDate(undefined);
-    setNote("");
-    setBrand("");
-    setModel("");
-    setYear("");
+    if (!user) {
+      toast.error("Pro rezervaci se přihlaste");
+      navigate("/auth");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const { error } = await supabase.from("service_bookings").insert({
+        user_id: user.id,
+        service_type: serviceType,
+        vehicle_brand: brand || null,
+        vehicle_model: model || null,
+        preferred_date: format(date, "yyyy-MM-dd"),
+        note: note || null,
+        wants_replacement_vehicle: false,
+      });
+      if (error) throw error;
+
+      // Notify admins
+      supabase.functions.invoke("notify-admin", {
+        body: {
+          type: "service_booking",
+          record: {
+            title: "🔧 Nová rezervace servisu",
+            message: `${brand || "?"} ${model || "?"} – ${serviceType}, termín: ${format(date, "d.M.yyyy")}`,
+          },
+        },
+      }).catch(() => {});
+
+      toast.success("Rezervace servisu odeslána! Potvrdíme termín a cenu.");
+      setServiceType("");
+      setDate(undefined);
+      setNote("");
+      setBrand("");
+      setModel("");
+      setYear("");
+    } catch (err: any) {
+      toast.error(err.message || "Chyba při odesílání rezervace");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -118,9 +158,9 @@ const Service = () => {
           </div>
 
 
-          <Button variant="hero" className="w-full h-11 mt-2" onClick={handleSubmit}>
-            <Send className="w-4 h-4" />
-            Odeslat rezervaci
+          <Button variant="hero" className="w-full h-11 mt-2" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+            {submitting ? "Odesílám..." : "Odeslat rezervaci"}
           </Button>
         </motion.div>
       </div>

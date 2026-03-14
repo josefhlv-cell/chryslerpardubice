@@ -8,9 +8,10 @@ const TopBar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { totalItems } = useCart();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
 
-  if (location.pathname === "/") return null;
+  // Hide only on landing page for non-logged-in users
+  if (location.pathname === "/" && !user) return null;
 
   const menuItems = [
     { path: "/shop", label: "Katalog dílů" },
@@ -21,7 +22,7 @@ const TopBar = () => {
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/40 bg-background/80 backdrop-blur-2xl safe-top">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate("/shop")} className="flex items-center gap-2.5">
+        <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
           <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-11 object-contain" />
         </button>
         <nav className="hidden sm:flex items-center gap-1">
