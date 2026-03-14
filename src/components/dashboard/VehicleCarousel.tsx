@@ -52,7 +52,7 @@ const VehicleCarousel = () => {
           onClick={() => navigate("/my-vehicles")}
           className="glass-card w-full p-6 flex flex-col items-center gap-3 hover:border-primary/30 transition-colors"
         >
-          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
             <Plus className="w-6 h-6 text-primary" />
           </div>
           <div className="text-center">
@@ -77,10 +77,10 @@ const VehicleCarousel = () => {
         <Button
           variant="ghost"
           size="sm"
-          className="text-xs text-muted-foreground"
+          className="text-xs text-muted-foreground h-7"
           onClick={() => navigate("/my-vehicles")}
         >
-          Vše <ChevronRight className="w-3.5 h-3.5" />
+          Vše <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
         </Button>
       </div>
 
@@ -92,7 +92,7 @@ const VehicleCarousel = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.25 + i * 0.08 }}
             onClick={() => navigate(`/my-vehicles`)}
-            className="glass-card min-w-[200px] snap-start p-4 flex flex-col gap-3 hover:border-primary/30 transition-all shrink-0"
+            className="glass-card-elevated min-w-[220px] snap-start p-4 flex flex-col gap-3 hover:border-primary/20 transition-all shrink-0 active:scale-[0.98]"
           >
             <div className="flex items-center gap-3">
               <CarIcon car={v} size="md" />
@@ -110,7 +110,7 @@ const VehicleCarousel = () => {
               </div>
             )}
             {v.license_plate && (
-              <div className="bg-secondary/50 rounded-md px-2 py-1 text-xs font-mono text-center tracking-wider">
+              <div className="bg-secondary/60 rounded-lg px-2.5 py-1.5 text-xs font-mono text-center tracking-wider border border-border/30">
                 {v.license_plate}
               </div>
             )}

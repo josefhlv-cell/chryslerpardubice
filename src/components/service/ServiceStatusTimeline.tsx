@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Clock } from "lucide-react";
+import { motion } from "framer-motion";
+import { Clock, Package, Search, Wrench, FlaskConical, CheckCircle2, Hourglass, AlertCircle } from "lucide-react";
 
 type StatusEntry = {
   id: string;
@@ -11,15 +11,15 @@ type StatusEntry = {
   created_at: string;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  received: "Přijato do servisu",
-  diagnostics: "Diagnostika",
-  waiting_approval: "Čeká na schválení",
-  waiting_parts: "Čeká na díly",
-  in_repair: "Oprava probíhá",
-  testing: "Testování vozidla",
-  ready_pickup: "Připraveno k vyzvednutí",
-  completed: "Dokončeno",
+const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
+  received: { label: "Přijato do servisu", icon: Package, color: "text-warning" },
+  diagnostics: { label: "Diagnostika", icon: Search, color: "text-blue-400" },
+  waiting_approval: { label: "Čeká na schválení", icon: Hourglass, color: "text-orange-400" },
+  waiting_parts: { label: "Čeká na díly", icon: AlertCircle, color: "text-purple-400" },
+  in_repair: { label: "Oprava probíhá", icon: Wrench, color: "text-primary" },
+  testing: { label: "Testování vozidla", icon: FlaskConical, color: "text-cyan-400" },
+  ready_pickup: { label: "Připraveno k vyzvednutí", icon: CheckCircle2, color: "text-success" },
+  completed: { label: "Dokončeno", icon: CheckCircle2, color: "text-success" },
 };
 
 const ServiceStatusTimeline = ({ orderId }: { orderId: string }) => {
@@ -46,28 +46,42 @@ const ServiceStatusTimeline = ({ orderId }: { orderId: string }) => {
   if (history.length === 0) return null;
 
   return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-sm font-medium flex items-center gap-2 mb-3">
-          <Clock className="w-4 h-4 text-primary" /> Historie stavu
-        </p>
-        <div className="relative">
-          <div className="absolute left-2 top-0 bottom-0 w-0.5 bg-border" />
-          <div className="space-y-3">
-            {history.map((h) => (
-              <div key={h.id} className="relative pl-6">
-                <div className="absolute left-[5px] top-1.5 w-2 h-2 rounded-full bg-primary" />
-                <p className="text-xs font-medium">{STATUS_LABELS[h.new_status] || h.new_status}</p>
-                {h.note && <p className="text-xs text-muted-foreground">{h.note}</p>}
-                <p className="text-[10px] text-muted-foreground">
-                  {new Date(h.created_at).toLocaleString("cs-CZ")}
-                </p>
-              </div>
-            ))}
-          </div>
+    <div className="glass-card p-4">
+      <p className="text-sm font-display font-semibold flex items-center gap-2 mb-4">
+        <Clock className="w-4 h-4 text-primary" /> Historie stavu
+      </p>
+      <div className="relative">
+        <div className="absolute left-[15px] top-2 bottom-2 w-px bg-border/60" />
+        <div className="space-y-4">
+          {history.map((h, i) => {
+            const config = STATUS_CONFIG[h.new_status] || { label: h.new_status, icon: Clock, color: "text-muted-foreground" };
+            const Icon = config.icon;
+            return (
+              <motion.div
+                key={h.id}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="relative pl-9"
+              >
+                <div className={`absolute left-[7px] top-0.5 w-[17px] h-[17px] rounded-full bg-card border-2 border-border flex items-center justify-center ${i === 0 ? "border-primary" : ""}`}>
+                  <Icon className={`w-2.5 h-2.5 ${i === 0 ? "text-primary" : config.color}`} />
+                </div>
+                <div>
+                  <p className={`text-xs font-semibold ${i === 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                    {config.label}
+                  </p>
+                  {h.note && <p className="text-[11px] text-muted-foreground mt-0.5">{h.note}</p>}
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                    {new Date(h.created_at).toLocaleString("cs-CZ")}
+                  </p>
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };
 

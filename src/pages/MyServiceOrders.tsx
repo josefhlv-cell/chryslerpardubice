@@ -3,10 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import PageHeader from "@/components/PageHeader";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Wrench, ChevronRight } from "lucide-react";
+import { motion } from "framer-motion";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
+import ServiceProgressIndicator from "@/components/ServiceProgressIndicator";
 
 const STATUS_LABELS: Record<string, string> = {
   received: "Přijato do servisu",
@@ -19,15 +20,15 @@ const STATUS_LABELS: Record<string, string> = {
   completed: "Dokončeno",
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  received: "bg-yellow-100 text-yellow-800",
-  diagnostics: "bg-blue-100 text-blue-800",
-  waiting_approval: "bg-orange-100 text-orange-800",
-  waiting_parts: "bg-purple-100 text-purple-800",
-  in_repair: "bg-indigo-100 text-indigo-800",
-  testing: "bg-cyan-100 text-cyan-800",
-  ready_pickup: "bg-green-100 text-green-800",
-  completed: "bg-green-200 text-green-900",
+const STATUS_STYLES: Record<string, string> = {
+  received: "bg-warning/15 text-warning border-0",
+  diagnostics: "bg-blue-500/15 text-blue-400 border-0",
+  waiting_approval: "bg-orange-500/15 text-orange-400 border-0",
+  waiting_parts: "bg-purple-500/15 text-purple-400 border-0",
+  in_repair: "bg-primary/15 text-primary border-0",
+  testing: "bg-cyan-500/15 text-cyan-400 border-0",
+  ready_pickup: "bg-success/15 text-success border-0",
+  completed: "bg-success/20 text-success border-0",
 };
 
 const MyServiceOrders = () => {
@@ -76,8 +77,8 @@ const MyServiceOrders = () => {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen pb-20">
-        <PageHeader title="Moje servisní zakázky" />
+      <div className="min-h-screen pb-20 bg-background">
+        <PageHeader title="Moje servisní zakázky" showBack />
         <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
       </div>
     );
@@ -85,8 +86,8 @@ const MyServiceOrders = () => {
 
   if (selectedOrder) {
     return (
-      <div className="min-h-screen pb-20">
-        <PageHeader title="Detail zakázky" />
+      <div className="min-h-screen pb-20 bg-background">
+        <PageHeader title="Detail zakázky" showBack />
         <div className="p-4 max-w-lg mx-auto">
           <ServiceOrderDetail
             order={selectedOrder}
@@ -100,33 +101,48 @@ const MyServiceOrders = () => {
   }
 
   return (
-    <div className="min-h-screen pb-20">
-      <PageHeader title="Moje servisní zakázky" />
+    <div className="min-h-screen pb-20 bg-background">
+      <PageHeader title="Servisní zakázky" showBack />
       <div className="p-4 max-w-lg mx-auto space-y-3">
         {orders.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <Wrench className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Žádné servisní zakázky</p>
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+              <Wrench className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground font-medium">Žádné servisní zakázky</p>
           </div>
         ) : (
-          orders.map((o) => (
-            <Card key={o.id} className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => setSelectedOrder(o)}>
-              <CardContent className="p-3">
+          orders.map((o, i) => (
+            <motion.div
+              key={o.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03 }}
+            >
+              <button
+                onClick={() => setSelectedOrder(o)}
+                className="w-full text-left glass-card-elevated p-4 space-y-3 hover:border-primary/20 transition-all active:scale-[0.99]"
+              >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">{getVehicleLabel(o.vehicle_id)}</p>
-                    <p className="text-xs text-muted-foreground truncate">{o.description || o.planned_work || "—"}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {new Date(o.created_at).toLocaleDateString("cs-CZ")}
-                    </p>
+                    <p className="text-sm font-display font-semibold truncate">{getVehicleLabel(o.vehicle_id)}</p>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{o.description || o.planned_work || "—"}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge className={STATUS_COLORS[o.status] || ""}>{STATUS_LABELS[o.status] || o.status}</Badge>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    <Badge className={STATUS_STYLES[o.status] || ""}>{STATUS_LABELS[o.status] || o.status}</Badge>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+                
+                {o.status !== "completed" && (
+                  <ServiceProgressIndicator status={o.status} compact />
+                )}
+
+                <p className="text-[10px] text-muted-foreground/50">
+                  {new Date(o.created_at).toLocaleDateString("cs-CZ")}
+                </p>
+              </button>
+            </motion.div>
           ))
         )}
       </div>

@@ -1,14 +1,15 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search, Car, User, ShoppingCart } from "lucide-react";
+import { Home, Wrench, Car, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TondaAvatar from "@/components/TondaAvatar";
 import { useAuth } from "@/contexts/AuthContext";
+import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/shop", label: "Díly", icon: Search },
-  { path: "/vehicles", label: "Vozy", icon: Car },
+  { path: "/shop", label: "Domů", icon: Home },
+  { path: "/my-service-orders", label: "Servis", icon: Wrench },
   { path: "/ai-mechanic", label: "Tonda", icon: null },
-  { path: "/orders", label: "Objednávky", icon: ShoppingCart },
+  { path: "/vehicles", label: "Vozy", icon: Car },
   { path: "/account", label: "Účet", icon: User },
 ];
 
@@ -22,27 +23,51 @@ const BottomNav = () => {
   if (employee && employee.role !== "admin") return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-xl safe-bottom">
-      <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/90 backdrop-blur-2xl safe-bottom">
+      <div className="flex items-center justify-around h-[68px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
-          const isActive = location.pathname.startsWith(item.path);
+          const isActive = item.path === "/shop"
+            ? location.pathname === "/shop" || location.pathname === "/index"
+            : location.pathname.startsWith(item.path);
+          const isTonda = !item.icon;
+
           return (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                "flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all duration-200",
+                "relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all duration-200",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {item.icon ? (
-                <item.icon className={cn("w-5 h-5 transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
-              ) : (
-                <TondaAvatar size="nav" className={cn("transition-all", isActive && "drop-shadow-[0_0_6px_hsl(213,70%,45%)]")} />
+              {isActive && (
+                <motion.div
+                  layoutId="nav-indicator"
+                  className="absolute -top-px left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
               )}
-              <span className="text-[10px] font-medium tracking-wide">{item.label}</span>
+              {isTonda ? (
+                <div className={cn(
+                  "w-10 h-10 -mt-4 rounded-full border-2 flex items-center justify-center transition-all",
+                  isActive
+                    ? "border-primary bg-primary/10 glow-primary"
+                    : "border-border bg-card"
+                )}>
+                  <TondaAvatar size="nav" />
+                </div>
+              ) : (
+                <item.icon className={cn(
+                  "w-5 h-5 transition-all",
+                  isActive && "drop-shadow-[0_0_8px_hsl(347,77%,50%)]"
+                )} />
+              )}
+              <span className={cn(
+                "text-[10px] font-medium tracking-wide",
+                isTonda && "-mt-0.5"
+              )}>{item.label}</span>
             </button>
           );
         })}
