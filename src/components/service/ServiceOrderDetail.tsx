@@ -32,14 +32,14 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_ORDER = ["received", "diagnostics", "waiting_approval", "waiting_parts", "in_repair", "testing", "ready_pickup", "completed"];
 
 const STATUS_COLORS: Record<string, string> = {
-  received: "bg-yellow-100 text-yellow-800",
-  diagnostics: "bg-blue-100 text-blue-800",
-  waiting_approval: "bg-orange-100 text-orange-800",
-  waiting_parts: "bg-purple-100 text-purple-800",
-  in_repair: "bg-indigo-100 text-indigo-800",
-  testing: "bg-cyan-100 text-cyan-800",
-  ready_pickup: "bg-green-100 text-green-800",
-  completed: "bg-green-200 text-green-900",
+  received: "bg-warning/15 text-warning border-0",
+  diagnostics: "bg-blue-500/15 text-blue-400 border-0",
+  waiting_approval: "bg-orange-500/15 text-orange-400 border-0",
+  waiting_parts: "bg-purple-500/15 text-purple-400 border-0",
+  in_repair: "bg-primary/15 text-primary border-0",
+  testing: "bg-cyan-500/15 text-cyan-400 border-0",
+  ready_pickup: "bg-success/15 text-success border-0",
+  completed: "bg-success/20 text-success border-0",
 };
 
 interface Props {
@@ -175,12 +175,8 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
-        <ArrowLeft className="w-4 h-4" /> Zpět
-      </Button>
-
       {/* Order header */}
-      <Card className="border-primary/20">
+      <Card className="glass-card-elevated border-border/40">
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-2">
             <div>
@@ -206,7 +202,7 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
 
       {/* Customer approval */}
       {!isAdmin && order.status === "waiting_approval" && isEnabled("service_approval") && (
-        <Card className="border-orange-400/30 bg-orange-500/5">
+        <Card className="glass-card border-warning/20">
           <CardContent className="p-4">
             <p className="text-sm font-semibold mb-2">Servis čeká na vaše schválení opravy</p>
             <div className="flex gap-2">

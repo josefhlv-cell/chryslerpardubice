@@ -87,7 +87,15 @@ const MyServiceOrders = () => {
   if (selectedOrder) {
     return (
       <div className="min-h-screen pb-20 bg-background">
-        <PageHeader title="Detail zakázky" showBack />
+        <PageHeader 
+          title="Detail zakázky" 
+          showBack 
+          rightElement={
+            <button onClick={() => { setSelectedOrder(null); fetchData(); }} className="text-sm text-muted-foreground">
+              Zpět na seznam
+            </button>
+          }
+        />
         <div className="p-4 max-w-lg mx-auto">
           <ServiceOrderDetail
             order={selectedOrder}
