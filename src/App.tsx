@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
+import DesktopSidebar from "@/components/layout/DesktopSidebar";
 import Landing from "./pages/Landing";
 import Shop from "./pages/Shop";
 import Cart from "./pages/Cart";
@@ -32,6 +33,7 @@ import AppPresentation from "./pages/AppPresentation";
 import VehicleOffer from "./pages/VehicleOffer";
 import EPC from "./pages/EPC";
 import MechanicDashboard from "./pages/MechanicDashboard";
+import OBDDiagnostics from "./pages/OBDDiagnostics";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -45,34 +47,40 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <TopBar />
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/shop" element={<Shop />} />
-              <Route path="/epc" element={<EPC />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/service" element={<Service />} />
-              <Route path="/vehicles" element={<Vehicles />} />
-              <Route path="/vehicles/:id" element={<VehicleDetail />} />
-              <Route path="/vehicle-offer" element={<VehicleOffer />} />
-              <Route path="/account" element={<Account />} />
-              <Route path="/orders" element={<MyOrders />} />
-              <Route path="/my-vehicles" element={<MyVehicles />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/ai-mechanic" element={<AiMechanic />} />
-              <Route path="/emergency" element={<Emergency />} />
-              <Route path="/service-plan" element={<ServicePlan />} />
-              <Route path="/service-book" element={<ServiceBook />} />
-              <Route path="/my-service-orders" element={<MyServiceOrders />} />
-              <Route path="/presentation" element={<AppPresentation />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <div className="flex w-full">
+              <DesktopSidebar />
+              <div className="flex-1 min-w-0">
+                <Routes>
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/shop" element={<Shop />} />
+                  <Route path="/epc" element={<EPC />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/checkout" element={<Checkout />} />
+                  <Route path="/service" element={<Service />} />
+                  <Route path="/vehicles" element={<Vehicles />} />
+                  <Route path="/vehicles/:id" element={<VehicleDetail />} />
+                  <Route path="/vehicle-offer" element={<VehicleOffer />} />
+                  <Route path="/account" element={<Account />} />
+                  <Route path="/orders" element={<MyOrders />} />
+                  <Route path="/my-vehicles" element={<MyVehicles />} />
+                  <Route path="/notifications" element={<Notifications />} />
+                  <Route path="/contact" element={<Contact />} />
+                  <Route path="/ai-mechanic" element={<AiMechanic />} />
+                  <Route path="/emergency" element={<Emergency />} />
+                  <Route path="/service-plan" element={<ServicePlan />} />
+                  <Route path="/service-book" element={<ServiceBook />} />
+                  <Route path="/my-service-orders" element={<MyServiceOrders />} />
+                  <Route path="/obd" element={<OBDDiagnostics />} />
+                  <Route path="/presentation" element={<AppPresentation />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/terms" element={<Terms />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </div>
+            </div>
             <BottomNav />
           </BrowserRouter>
         </TooltipProvider>
