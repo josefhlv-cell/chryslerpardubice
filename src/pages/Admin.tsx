@@ -328,7 +328,9 @@ const Admin = () => {
             <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>
             <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>
             {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-xs gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
+            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-xs gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
             <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>
+            <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
             <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
