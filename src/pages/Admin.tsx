@@ -595,6 +595,16 @@ const Admin = () => {
             </TabsContent>
           )}
 
+          {isEnabled("service_scheduler") && (
+            <TabsContent value="scheduler">
+              <div className="mt-2"><AdminServiceScheduler /></div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="employees">
+            <div className="mt-2"><AdminEmployees /></div>
+          </TabsContent>
+
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
