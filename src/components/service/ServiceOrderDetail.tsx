@@ -15,6 +15,7 @@ import ServiceOrderPhotos from "./ServiceOrderPhotos";
 import ServiceOrderParts from "./ServiceOrderParts";
 import ServiceOrderTasks from "./ServiceOrderTasks";
 import ServiceStatusTimeline from "./ServiceStatusTimeline";
+import HandoverProtocol from "./HandoverProtocol";
 
 type Vehicle = { id: string; brand: string; model: string; year: number | null; license_plate: string | null; user_id: string };
 
@@ -245,7 +246,14 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
       {/* Status timeline */}
       <ServiceStatusTimeline orderId={order.id} />
 
-      {/* Checkin */}
+      {/* Handover Protocol */}
+      <HandoverProtocol
+        orderId={order.id}
+        vehicleInfo={vehicle ? `${vehicle.brand} ${vehicle.model} ${vehicle.year || ""}` : undefined}
+        isAdmin={isAdmin}
+      />
+
+      {/* Checkin (legacy) */}
       {isEnabled("service_checkin") && (
         <ServiceCheckinForm orderId={order.id} isAdmin={isAdmin} />
       )}
