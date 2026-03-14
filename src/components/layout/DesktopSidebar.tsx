@@ -63,7 +63,7 @@ const DesktopSidebar = () => {
       ? location.pathname === "/" || location.pathname === "/index"
       : location.pathname.startsWith(path);
 
-  const NavItem = ({ item }: { item: typeof mainNav[0] & { isTonda?: boolean } }) => (
+  const NavItem = ({ item }: { item: { path: string; label: string; icon: any; isTonda?: boolean } }) => (
     <button
       onClick={() => navigate(item.path)}
       className={cn(
