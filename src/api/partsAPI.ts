@@ -820,7 +820,10 @@ export async function generatePartsBatch(
   const { data, error } = await supabase.functions.invoke("epc-generate-batch", {
     body: { brand, model, category, subcategory, engine, year, queue_id: queueId },
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    const detail = data?.error || error.message;
+    throw new Error(detail);
+  }
   if (!data?.success) throw new Error(data?.error || "Batch generation failed");
   return data as BatchGenerateResult;
 }
