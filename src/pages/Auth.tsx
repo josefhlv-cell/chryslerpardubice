@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Car, Building2, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
@@ -23,14 +24,47 @@ const Auth = () => {
   const [dic, setDic] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const getRedirectPath = async (userId: string): Promise<string> => {
+    // Check if user is an employee
+    const { data: emp } = await supabase
+      .from("employees")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (emp) {
+      switch (emp.role) {
+        case "mechanic": return "/mechanic-dashboard";
+        case "parts_sales": return "/shop";
+        case "car_sales": return "/vehicles";
+        default: return "/shop";
+      }
+    }
+
+    // Check if admin
+    const { data: adminRole } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (adminRole) return "/admin";
+
+    return "/shop";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       if (view === "login") {
         await signIn(email, password);
+        const { data: { user: loggedUser } } = await supabase.auth.getUser();
+        const path = loggedUser ? await getRedirectPath(loggedUser.id) : "/shop";
         toast.success("Přihlášení úspěšné!");
-        navigate("/shop");
+        navigate(path);
       } else if (view === "register") {
         if (accountType === "business" && !companyName) {
           toast.error("Vyplňte název firmy");
