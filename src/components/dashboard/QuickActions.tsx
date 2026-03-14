@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Search, Wrench, Car, AlertTriangle } from "lucide-react";
+import { Search, Wrench, Car, AlertTriangle, Activity } from "lucide-react";
 
 const actions = [
   {
@@ -20,12 +20,20 @@ const actions = [
     bg: "bg-warning/10",
   },
   {
+    icon: Activity,
+    label: "OBD",
+    desc: "Diagnostika",
+    path: "/obd",
+    color: "text-success",
+    bg: "bg-success/10",
+  },
+  {
     icon: Car,
     label: "Moje vozy",
     desc: "Správa vozidel",
     path: "/my-vehicles",
-    color: "text-success",
-    bg: "bg-success/10",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
   },
   {
     icon: AlertTriangle,
@@ -41,7 +49,7 @@ const QuickActions = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-5 gap-2">
       {actions.map((action, i) => (
         <motion.button
           key={action.path}
