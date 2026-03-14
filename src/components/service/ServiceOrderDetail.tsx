@@ -202,7 +202,7 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
 
       {/* Customer approval */}
       {!isAdmin && order.status === "waiting_approval" && isEnabled("service_approval") && (
-        <Card className="border-orange-400/30 bg-orange-500/5">
+        <Card className="glass-card border-warning/20">
           <CardContent className="p-4">
             <p className="text-sm font-semibold mb-2">Servis čeká na vaše schválení opravy</p>
             <div className="flex gap-2">
