@@ -27,6 +27,7 @@ import Terms from "./pages/Terms";
 import Emergency from "./pages/Emergency";
 import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
+import MyServiceOrders from "./pages/MyServiceOrders";
 import AppPresentation from "./pages/AppPresentation";
 import VehicleOffer from "./pages/VehicleOffer";
 import EPC from "./pages/EPC";
