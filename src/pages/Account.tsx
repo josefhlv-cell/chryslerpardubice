@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList } from "lucide-react";
+import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList, HardHat } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Account = () => {
