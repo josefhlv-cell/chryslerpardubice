@@ -19,7 +19,8 @@ const BottomNav = () => {
   const { employee } = useAuth();
 
   // Hide for landing, checkout, and employee roles (mechanics, parts_sales, car_sales)
-  if (location.pathname === "/" || location.pathname.startsWith("/checkout")) return null;
+  if (location.pathname === "/" && !user) return null;
+  if (location.pathname.startsWith("/checkout")) return null;
   if (employee && employee.role !== "admin") return null;
 
   return (
