@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell } from "lucide-react";
+import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const Account = () => {
@@ -98,6 +98,10 @@ const Account = () => {
           </Button>
           <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/service")}>
             <span className="flex items-center gap-2"><Wrench className="w-4 h-4" />Servis</span>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" className="w-full justify-between" onClick={() => navigate("/my-service-orders")}>
+            <span className="flex items-center gap-2"><ClipboardList className="w-4 h-4" />Servisní zakázky</span>
             <ChevronRight className="w-4 h-4" />
           </Button>
           {isAdmin && (

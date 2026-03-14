@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -28,6 +28,11 @@ import AICatalogImport from "@/components/admin/AICatalogImport";
 import AdminEPCDiagrams from "@/components/admin/AdminEPCDiagrams";
 import AdminBulkPriceSync from "@/components/admin/AdminBulkPriceSync";
 import AdminPriceSyncStats from "@/components/admin/AdminPriceSyncStats";
+import AdminFeatureSettings from "@/components/admin/AdminFeatureSettings";
+import AdminServiceOrders from "@/components/admin/AdminServiceOrders";
+import AdminMechanics from "@/components/admin/AdminMechanics";
+import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
 
@@ -138,6 +143,7 @@ const statusLabel: Record<string, string> = {
 const Admin = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
+  const { isEnabled } = useFeatureFlags();
 
   // Data
   const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
@@ -319,6 +325,10 @@ const Admin = () => {
             <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
             <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>
             <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>
+            {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-xs gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
+            <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>
+            {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
+            <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -563,6 +573,26 @@ const Admin = () => {
             <div className="mt-2">
               <AdminEPCDiagrams />
             </div>
+          </TabsContent>
+
+          {isEnabled("service_orders") && (
+            <TabsContent value="service-orders">
+              <div className="mt-2"><AdminServiceOrders /></div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="mechanics">
+            <div className="mt-2"><AdminMechanics /></div>
+          </TabsContent>
+
+          {isEnabled("service_statistics") && (
+            <TabsContent value="statistics">
+              <div className="mt-2"><AdminServiceStatistics /></div>
+            </TabsContent>
+          )}
+
+          <TabsContent value="features">
+            <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
         </Tabs>
       </div>

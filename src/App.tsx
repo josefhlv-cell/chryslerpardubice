@@ -27,6 +27,7 @@ import Terms from "./pages/Terms";
 import Emergency from "./pages/Emergency";
 import ServicePlan from "./pages/ServicePlan";
 import ServiceBook from "./pages/ServiceBook";
+import MyServiceOrders from "./pages/MyServiceOrders";
 import AppPresentation from "./pages/AppPresentation";
 import VehicleOffer from "./pages/VehicleOffer";
 import EPC from "./pages/EPC";
@@ -62,6 +63,7 @@ const App = () => (
               <Route path="/emergency" element={<Emergency />} />
               <Route path="/service-plan" element={<ServicePlan />} />
               <Route path="/service-book" element={<ServiceBook />} />
+              <Route path="/my-service-orders" element={<MyServiceOrders />} />
               <Route path="/presentation" element={<AppPresentation />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
