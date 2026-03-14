@@ -28,6 +28,11 @@ import AICatalogImport from "@/components/admin/AICatalogImport";
 import AdminEPCDiagrams from "@/components/admin/AdminEPCDiagrams";
 import AdminBulkPriceSync from "@/components/admin/AdminBulkPriceSync";
 import AdminPriceSyncStats from "@/components/admin/AdminPriceSyncStats";
+import AdminFeatureSettings from "@/components/admin/AdminFeatureSettings";
+import AdminServiceOrders from "@/components/admin/AdminServiceOrders";
+import AdminMechanics from "@/components/admin/AdminMechanics";
+import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
 
