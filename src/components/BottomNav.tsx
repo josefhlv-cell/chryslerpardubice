@@ -24,7 +24,17 @@ const BottomNav = () => {
   if (employee && employee.role !== "admin") return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/90 backdrop-blur-2xl safe-bottom">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 backdrop-blur-2xl safe-bottom overflow-hidden">
+      {/* USA flag background */}
+      <div className="absolute inset-0 opacity-[0.07] pointer-events-none">
+        <div className="absolute inset-0 flex flex-col">
+          {[...Array(13)].map((_, i) => (
+            <div key={i} className="flex-1" style={{ background: i % 2 === 0 ? '#B22234' : '#FFFFFF' }} />
+          ))}
+        </div>
+        <div className="absolute top-0 left-0 w-[40%] h-[54%] bg-[#3C3B6E]" />
+      </div>
+      <div className="absolute inset-0 bg-background/85 pointer-events-none" />
       <div className="flex items-center justify-around h-[68px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const isActive = item.path === "/"
