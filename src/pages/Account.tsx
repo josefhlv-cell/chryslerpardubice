@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const Account = () => {
   const navigate = useNavigate();
-  const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading } = useAuth();
+  const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading, employee } = useAuth();
 
   if (isLoading) {
     return (
