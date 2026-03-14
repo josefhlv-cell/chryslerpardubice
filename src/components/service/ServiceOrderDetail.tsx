@@ -15,6 +15,7 @@ import ServiceOrderPhotos from "./ServiceOrderPhotos";
 import ServiceOrderParts from "./ServiceOrderParts";
 import ServiceOrderTasks from "./ServiceOrderTasks";
 import ServiceStatusTimeline from "./ServiceStatusTimeline";
+import HandoverProtocol from "./HandoverProtocol";
 
 type Vehicle = { id: string; brand: string; model: string; year: number | null; license_plate: string | null; user_id: string };
 
