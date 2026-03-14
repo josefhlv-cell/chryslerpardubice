@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { RefreshCw, Download, Search, BookOpen, Wrench, Zap, Eye, FileText } from "lucide-react";
+import { RefreshCw, Download, Search, BookOpen, Wrench, Zap, Eye, FileText, Cpu, LayoutGrid } from "lucide-react";
 
 type Procedure = {
   id: string;
@@ -23,14 +23,19 @@ type Procedure = {
 };
 
 const MODELS = ["300", "Pacifica", "Town & Country", "Voyager", "PT Cruiser", "Sebring"];
-const CATEGORIES = ["Motor", "Převodovka", "Brzdy", "Odpružení", "Elektroinstalace", "Klimatizace", "Chladící systém", "Palivový systém", "Řízení", "Výfuk"];
+const CATEGORIES = [
+  "Motor", "Převodovka", "Brzdy", "Odpružení", "Elektroinstalace", "Klimatizace",
+  "Chladící systém", "Palivový systém", "Řízení", "Výfuk", "Karoserie", "Osvětlení",
+  "Startování", "Tempomat", "Přístroje", "Stěrače", "Relé a moduly", "Chlazení",
+  "Okna", "Příslušenství",
+];
 
 const typeIcons: Record<string, typeof Wrench> = {
   repair: Wrench,
   diagnostic: Zap,
   inspection: Eye,
   specification: FileText,
-  wiring: Zap,
+  wiring: Cpu,
 };
 
 const typeLabels: Record<string, string> = {
@@ -41,13 +46,21 @@ const typeLabels: Record<string, string> = {
   wiring: "Schéma zapojení",
 };
 
+const MODES = [
+  { value: "service", label: "Servisní postupy", icon: Wrench },
+  { value: "technical", label: "Technická data", icon: FileText },
+  { value: "diagrams", label: "Nákresy / schémata", icon: LayoutGrid },
+] as const;
+
 const AdminServiceProcedures = () => {
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
+  const [scrapingMode, setScrapingMode] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [modelFilter, setModelFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [selected, setSelected] = useState<Procedure | null>(null);
 
   const fetchProcedures = async () => {
@@ -63,32 +76,43 @@ const AdminServiceProcedures = () => {
 
   useEffect(() => { fetchProcedures(); }, []);
 
-  const startScrape = async (model?: string, category?: string) => {
+  const startScrape = async (mode: string, model?: string) => {
     setScraping(true);
-    toast({ title: "Stahování zahájeno", description: `${model || 'Všechny modely'} / ${category || 'Všechny kategorie'}` });
+    setScrapingMode(mode);
+    const modeLabel = MODES.find(m => m.value === mode)?.label || mode;
+    toast({ title: "Stahování zahájeno", description: `${modeLabel} — ${model || 'Všechny modely'}` });
 
     try {
       const { data, error } = await supabase.functions.invoke("scrape-service-procedures", {
-        body: { model: model === "all" ? null : model, category: category === "all" ? null : category },
+        body: {
+          model: model === "all" ? null : model,
+          mode,
+        },
       });
 
       if (error) throw error;
 
-      toast({
-        title: "Stahování dokončeno",
-        description: `Uloženo ${data?.savedCount || 0} postupů`,
-      });
+      if (data?.error) {
+        toast({ title: "Chyba", description: data.error, variant: "destructive" });
+      } else {
+        toast({
+          title: "Stahování dokončeno",
+          description: `Uloženo ${data?.savedCount || 0} záznamů (${modeLabel})`,
+        });
+      }
       fetchProcedures();
     } catch (err: any) {
       toast({ title: "Chyba", description: err.message, variant: "destructive" });
     } finally {
       setScraping(false);
+      setScrapingMode(null);
     }
   };
 
   const filtered = procedures.filter(p => {
     if (modelFilter !== "all" && p.model !== modelFilter) return false;
     if (categoryFilter !== "all" && p.category !== categoryFilter) return false;
+    if (typeFilter !== "all" && p.procedure_type !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return p.title.toLowerCase().includes(q) || p.content?.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
@@ -101,54 +125,90 @@ const AdminServiceProcedures = () => {
     return acc;
   }, {} as Record<string, number>);
 
+  const typeCounts = Object.keys(typeLabels).reduce((acc, t) => {
+    acc[t] = procedures.filter(p => p.procedure_type === t).length;
+    return acc;
+  }, {} as Record<string, number>);
+
   return (
     <div className="space-y-4 mt-2">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Card><CardContent className="p-3 text-center">
           <p className="text-2xl font-bold text-primary">{procedures.length}</p>
-          <p className="text-xs text-muted-foreground">Celkem postupů</p>
+          <p className="text-xs text-muted-foreground">Celkem</p>
         </CardContent></Card>
         <Card><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold text-primary">{new Set(procedures.map(p => p.model)).size}</p>
-          <p className="text-xs text-muted-foreground">Modelů</p>
+          <p className="text-2xl font-bold text-primary">{typeCounts.specification || 0}</p>
+          <p className="text-xs text-muted-foreground">Specifikace</p>
         </CardContent></Card>
         <Card><CardContent className="p-3 text-center">
-          <p className="text-2xl font-bold text-primary">{new Set(procedures.map(p => p.category)).size}</p>
-          <p className="text-xs text-muted-foreground">Kategorií</p>
+          <p className="text-2xl font-bold text-primary">{typeCounts.wiring || 0}</p>
+          <p className="text-xs text-muted-foreground">Schémata</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-3 text-center">
+          <p className="text-2xl font-bold text-primary">{typeCounts.repair || 0}</p>
+          <p className="text-xs text-muted-foreground">Opravy</p>
         </CardContent></Card>
       </div>
 
-      {/* Scrape controls */}
+      {/* Scrape controls — 3 modes */}
       <Card>
         <CardContent className="p-4 space-y-3">
           <h3 className="text-sm font-semibold flex items-center gap-2">
-            <Download className="w-4 h-4" /> Stáhnout servisní postupy
+            <Download className="w-4 h-4" /> Stáhnout z workshop-manuals.com
           </h3>
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              size="sm"
-              onClick={() => startScrape()}
-              disabled={scraping}
-            >
-              {scraping ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}
-              Stáhnout vše
-            </Button>
-            {MODELS.slice(0, 4).map(m => (
-              <Button
-                key={m}
-                size="sm"
-                variant="outline"
-                onClick={() => startScrape(m)}
-                disabled={scraping}
-              >
-                {m}
-                {modelCounts[m] > 0 && <Badge variant="secondary" className="ml-1 text-[10px]">{modelCounts[m]}</Badge>}
-              </Button>
-            ))}
-          </div>
+
+          {MODES.map(mode => {
+            const ModeIcon = mode.icon;
+            return (
+              <div key={mode.value} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <ModeIcon className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-medium">{mode.label}</span>
+                </div>
+                <div className="flex gap-2 flex-wrap pl-6">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => startScrape(mode.value)}
+                    disabled={scraping}
+                  >
+                    {scrapingMode === mode.value ? <RefreshCw className="w-3 h-3 mr-1 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
+                    Vše
+                  </Button>
+                  {MODELS.slice(0, 4).map(m => (
+                    <Button
+                      key={m}
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => startScrape(mode.value, m)}
+                      disabled={scraping}
+                    >
+                      {m}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
+
+      {/* Per-model badge counts */}
+      <div className="flex flex-wrap gap-1">
+        {MODELS.map(m => (
+          <Badge
+            key={m}
+            variant={modelFilter === m ? "default" : "outline"}
+            className="text-[10px] cursor-pointer"
+            onClick={() => setModelFilter(modelFilter === m ? "all" : m)}
+          >
+            {m}: {modelCounts[m]}
+          </Badge>
+        ))}
+      </div>
 
       {/* Filters */}
       <div className="flex gap-2">
@@ -161,15 +221,17 @@ const AdminServiceProcedures = () => {
             className="pl-9"
           />
         </div>
-        <Select value={modelFilter} onValueChange={setModelFilter}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-32"><SelectValue placeholder="Typ" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Vše</SelectItem>
-            {MODELS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            {Object.entries(typeLabels).map(([k, v]) => (
+              <SelectItem key={k} value={k}>{v} ({typeCounts[k] || 0})</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-32"><SelectValue placeholder="Kategorie" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Vše</SelectItem>
             {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
@@ -184,7 +246,7 @@ const AdminServiceProcedures = () => {
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-center text-muted-foreground py-8 text-sm">
-          {procedures.length === 0 ? "Zatím žádné postupy. Klikněte 'Stáhnout vše' pro zahájení." : "Žádné výsledky"}
+          {procedures.length === 0 ? "Zatím žádné záznamy. Spusťte stahování výše." : "Žádné výsledky"}
         </p>
       ) : (
         <div className="space-y-2">
