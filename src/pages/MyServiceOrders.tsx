@@ -88,7 +88,7 @@ const MyServiceOrders = () => {
     return (
       <div className="min-h-screen pb-20 bg-background">
         <PageHeader title="Detail zakázky" showBack />
-        <div className="p-4 max-w-lg mx-auto">
+      <div className="p-4 max-w-lg mx-auto">
           <ServiceOrderDetail
             order={selectedOrder}
             vehicles={vehicles}

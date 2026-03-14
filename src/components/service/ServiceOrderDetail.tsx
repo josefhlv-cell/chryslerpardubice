@@ -175,12 +175,8 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onBack} className="gap-1">
-        <ArrowLeft className="w-4 h-4" /> Zpět
-      </Button>
-
       {/* Order header */}
-      <Card className="border-primary/20">
+      <Card className="glass-card-elevated border-border/40">
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-2">
             <div>
