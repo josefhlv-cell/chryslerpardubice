@@ -1,0 +1,237 @@
+========================================================================
+ CHRYSLER & DODGE PARDUBICE — KOMPLETNÍ ZÁLOHA APLIKACE v4
+ Datum: 2026-03-14
+========================================================================
+
+TECHNOLOGIE:
+- React 18 + TypeScript + Vite
+- Tailwind CSS + shadcn/ui
+- Framer Motion (animace)
+- Supabase (Lovable Cloud) — auth, DB, edge functions, storage
+- TanStack React Query
+- React Router DOM v6
+
+========================================================================
+STRUKTURA ROUTOVÁNÍ (App.tsx)
+========================================================================
+
+/                 → Landing (veřejná) / Dashboard (přihlášený)
+/shop             → Katalog náhradních dílů (nové + použité)
+/epc              → Elektronický katalog dílů (EPC)
+/cart             → Nákupní košík
+/checkout         → Pokladna
+/service          → Rezervace servisu
+/vehicles         → Seznam vozů k prodeji
+/vehicles/:id     → Detail vozu
+/vehicle-offer    → Nabídka vozu (výkup + dovoz)
+/account          → Uživatelský účet
+/orders           → Moje objednávky
+/my-vehicles      → Moje vozidla (garáž)
+/notifications    → Notifikace
+/contact          → Kontakt
+/ai-mechanic      → AI Mechanik (chatbot)
+/emergency        → Nouzové příručky
+/service-plan     → Servisní plány
+/service-book     → Servisní knížka
+/my-service-orders→ Moje servisní zakázky
+/presentation     → Prezentace aplikace (interní)
+/auth             → Přihlášení / Registrace
+/reset-password   → Reset hesla
+/terms            → Obchodní podmínky
+/admin            → Admin panel
+/mechanic-dashboard → Dashboard mechanika
+
+========================================================================
+DATABÁZOVÉ TABULKY (Supabase)
+========================================================================
+
+1. profiles — Uživatelské profily (full_name, email, phone, account_type, status, company_name, ico, dic, discount_percent, loyalty_active, service_history_enabled)
+2. user_roles — Role uživatelů (admin, customer)
+3. user_vehicles — Vozidla uživatelů (brand, model, year, engine, vin, license_plate, current_mileage)
+4. parts_new — Katalog dílů (name, oem_number, price_with_vat, price_without_vat, manufacturer, category, family, segment, availability, catalog_source, admin_price, admin_margin_percent, price_locked)
+5. parts_new_public — Veřejný view na parts_new (bez admin cen)
+6. parts_catalog — Starší katalog dílů
+7. orders — Objednávky (part_id, part_name, oem_number, order_type new/used, quantity, status, unit_price, discount_percent, discounted_price, price_with_vat, admin_note, customer_note, catalog_source)
+8. new_part_orders — Legacy objednávky nových dílů
+9. used_part_requests — Poptávky použitých dílů
+10. service_bookings — Rezervace servisu (service_type, preferred_date, confirmed_date, status, estimated_price, final_price, wants_replacement_vehicle)
+11. service_orders — Servisní zakázky (vehicle_id, mechanic_id, lift_id, status, description, planned_work, estimated_price, labor_price, parts_total, total_price, eta_completion, customer_approved)
+12. service_order_parts — Díly na zakázce
+13. service_order_photos — Foto na zakázce (phase: before/during/after)
+14. service_order_status_history — Historie stavů zakázky
+15. service_checkins — Příjem vozu do servisu (mileage, fuel_level, visible_damage, photos, signature)
+16. service_invoices — Faktury za servis
+17. service_plans — Servisní plány (interval_km, interval_months, last_service_date, last_service_km)
+18. service_history — Historie servisu
+19. service_procedures — Servisní postupy (brand, model, category, content, source_url)
+20. service_lifts — Servisní zdviže
+21. mechanic_tasks — Úkoly mechanika
+22. mechanics — Seznam mechaniků
+23. employees — Zaměstnanci
+24. work_reports — Pracovní výkazy
+25. mileage_history — Historie nájezdů
+26. fault_reports — Hlášení poruch (s AI analýzou)
+27. notifications — Notifikace uživatelů
+28. vehicles — Vozy k prodeji
+29. vehicle_inquiries — Poptávky na vozy
+30. vehicle_buyback_requests — Žádosti o výkup vozu
+31. vehicle_import_requests — Žádosti o dovoz vozu
+32. cars_for_sale — Legacy nabídka vozů
+33. epc_categories — EPC kategorie
+34. epc_diagrams — EPC nákresy (SVG)
+35. epc_part_links — Propojení EPC pozic s díly
+36. epc_generation_queue — Fronta generování EPC
+37. part_crossref — Křížové reference dílů
+38. part_supersessions — Supersese dílů (starý → nový OEM)
+39. price_history — Historie cen
+40. api_cache — API cache
+41. feature_flags — Feature flags (zapínání modulů)
+
+========================================================================
+EDGE FUNCTIONS (Supabase)
+========================================================================
+
+1. ai-mechanic — AI chatbot mechanik (diagnostika, rady)
+2. catalog-fetch — Stahování dílů z externích katalogů
+3. catalog-probe — Testování dostupnosti katalogových API
+4. catalog-proxy — Proxy pro katalogové dotazy
+5. catalog-search — Vyhledávání v externích katalozích
+6. cron-control — Správa CRON úloh (price-sync)
+7. epc-diagram — Generování EPC diagramů
+8. epc-generate — Generování EPC dat pro model
+9. epc-generate-batch — Dávkové generování EPC
+10. epc-scrape — Scraping EPC dat
+11. notify-admin — Notifikace adminům (nová objednávka, booking atd.)
+12. oem-crossref — Křížové reference OEM čísel
+13. price-sync — Synchronizace cen z externích zdrojů
+14. scrape-7zap — Scraping 7zap.com
+15. scrape-service-procedures — Scraping servisních postupů
+16. service-status-notify — Notifikace o změně stavu zakázky
+17. vin-decode-ai — AI dekódování VIN
+18. vin-ocr — OCR rozpoznání VIN z fotky
+
+========================================================================
+KONTEXTY (React Context)
+========================================================================
+
+1. AuthContext — Autentizace, profil, role, employee, signUp/signIn/signOut, resetPassword
+2. CartContext — Nákupní košík (items, addItem, removeItem, updateQuantity, clearCart, discountPercent)
+
+========================================================================
+API VRSTVY
+========================================================================
+
+1. partsAPI.ts — Vyhledávání dílů, stránkování, filtrování, VIN dekódování, CSV export, EPC search, kategorie, crossref, supersese
+2. serviceAPI.ts — Servisní intervaly, výpočty km_start, effective_km logika
+3. buyImportAPI.ts — API pro výkup a dovoz vozů
+4. epcCache.ts — Cache pro EPC data (localStorage)
+
+========================================================================
+ADMIN PANEL (Tabs)
+========================================================================
+
+- Firmy — Schvalování firemních účtů, nastavení slev
+- Objednávky — Správa objednávek (nové/použité), změna stavu, poznámky
+- Servis — Správa rezervací servisu
+- Vozy — Poptávky na vozy z nabídky
+- Ceník — Import katalogu (CSV), AI import
+- Katalogy — Nastavení katalogových zdrojů
+- Knížka — Admin view servisní historie
+- Zprávy — Odesílání notifikací uživatelům
+- Poruchy — Hlášení poruch s AI analýzou
+- Ceny — Správa cen, marže, uzamčení cen
+- Plány — Servisní plány vozidel
+- Výkup/Dovoz — Žádosti o výkup a dovoz vozů
+- Nákresy — EPC diagramy (SVG), generování, import
+- Zakázky — Servisní zakázky (kompletní workflow)
+- Plánování — Servisní kalendář, zdviže
+- Mechanici — Správa mechaniků
+- Zaměstnanci — Správa zaměstnanců
+- Statistiky — Servisní statistiky
+- Postupy — Servisní postupy (scraping, editace)
+- Moduly — Feature flags (zapínání/vypínání modulů)
+
+========================================================================
+KOMPONENTY
+========================================================================
+
+Layout:
+- TopBar — Horní navigace (logo, menu, notifikace, košík)
+- BottomNav — Spodní navigace (mobilní)
+- PageHeader — Hlavička stránky
+
+Dashboard:
+- Dashboard — Hlavní dashboard přihlášeného uživatele
+- QuickActions — Rychlé akce na dashboardu
+- VehicleCarousel — Karusel vozidel uživatele
+- DashboardStatCard — Statistická karta
+
+Katalog:
+- SearchBar — Multi-mode vyhledávání (OEM, vozidlo, EPC)
+- Filters — Filtry (značka, model, cena, dostupnost, kategorie)
+- PartCard — Karta dílu
+- PartDetailModal — Detail dílu (panel + sheet)
+- PhotoDialog — Dialog s fotkami dílu
+- Favorites — Oblíbené díly (localStorage)
+- History — Historie vyhledávání
+- Recommendations — Doporučení dílů
+- ServiceInterval — Servisní intervaly
+- EPCBrowser — Procházení EPC kategorií a diagramů
+- VINDecoder — VIN dekodér s OCR
+
+Servis:
+- ServiceCheckinForm — Formulář příjmu vozu
+- ServiceOrderDetail — Detail zakázky
+- ServiceOrderParts — Díly na zakázce
+- ServiceOrderPhotos — Fotky na zakázce
+- ServiceOrderTasks — Úkoly na zakázce
+- ServiceStatusTimeline — Timeline stavů
+- ServiceProgressIndicator — Progress indikátor
+- ServiceRecommendations — Doporučení servisu
+
+Vozidla:
+- CarIcon — Ikona vozu podle značky/modelu
+- VINDetailPanel — Detail dekódovaného VIN
+- VehicleHealthDiagram — Diagram zdraví vozu
+
+Nabídka vozů:
+- BuyAndImport — Výkup a dovoz vozů
+- BuybackForm — Formulář výkupu
+- ImportForm — Formulář dovozu
+
+Admin (20+ komponent):
+- AdminServiceOrders, AdminMechanics, AdminEmployees, AdminServiceScheduler
+- AdminServiceStatistics, AdminServiceProcedures, AdminServicePlans
+- AdminNotifications, AdminServiceHistory, AdminCatalogSettings
+- AdminFaultReports, AdminPriceManagement, AdminVehicleOffers
+- AdminEPCDiagrams, AdminBulkPriceSync, AdminPriceSyncStats
+- AdminFeatureSettings, CatalogImport, EPCImport, AICatalogImport
+
+Ostatní:
+- TondaAvatar — Avatar AI mechanika "Tondy"
+- NavLink — Navigační odkaz
+
+========================================================================
+ENUM TYPY (DB)
+========================================================================
+
+app_role: admin, customer
+booking_status: pending, confirmed, in_progress, completed, cancelled
+order_status: pending, confirmed, shipped, delivered, cancelled
+order_status_v2: nova, zpracovava_se, vyrizena, zrusena
+order_type: new, used
+request_status: pending, quoted, accepted, rejected, fulfilled
+service_order_status: received, diagnostics, waiting_approval, waiting_parts, in_repair, testing, ready_pickup, completed
+
+========================================================================
+FEATURE FLAGS
+========================================================================
+
+Modulární systém — každý modul lze zapnout/vypnout z admin panelu:
+bookings, catalog, service_history, notifications, fault_reports,
+price_management, vehicle_offers, epc_diagrams, service_orders,
+service_scheduler, mechanics_management, employees, service_statistics
+
+========================================================================
+KONEC ZÁLOHY v4
+========================================================================
