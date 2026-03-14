@@ -93,12 +93,10 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
 
     if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
 
-    // Send notification to customer
+    // Send notification to customer via edge function
     if (isEnabled("notifications")) {
-      await supabase.from("notifications").insert({
-        user_id: order.user_id,
-        title: "Změna stavu zakázky",
-        message: `Vaše vozidlo je nyní ve fázi: ${STATUS_LABELS[newStatus] || newStatus}`,
+      await supabase.functions.invoke("service-status-notify", {
+        body: { order_id: order.id, new_status: newStatus, user_id: order.user_id },
       });
     }
 
