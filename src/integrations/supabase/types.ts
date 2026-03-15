@@ -1777,6 +1777,7 @@ export type Database = {
           id: string
           images: string[] | null
           is_active: boolean
+          listing_url: string | null
           mileage: number | null
           model: string
           power: string | null
@@ -1797,6 +1798,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           is_active?: boolean
+          listing_url?: string | null
           mileage?: number | null
           model: string
           power?: string | null
@@ -1817,6 +1819,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           is_active?: boolean
+          listing_url?: string | null
           mileage?: number | null
           model?: string
           power?: string | null
