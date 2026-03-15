@@ -56,24 +56,25 @@ const GaugeCircle = ({ value, max, label, unit, color, icon: Icon }: {
     <div className="flex flex-col items-center gap-2">
       <div className="relative w-24 h-24">
         <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
-          <circle cx="48" cy="48" r="40" fill="none" stroke="hsl(var(--border))" strokeWidth="6" />
+          <circle cx="48" cy="48" r="40" fill="none" stroke="hsl(0 0% 12%)" strokeWidth="5" />
           <circle
             cx="48" cy="48" r="40" fill="none"
             stroke={color}
-            strokeWidth="6"
+            strokeWidth="5"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
             className="transition-all duration-500 ease-out"
+            style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <Icon className="w-4 h-4 mb-0.5" style={{ color }} />
+          <Icon className="w-3.5 h-3.5 mb-0.5" style={{ color }} />
           <span className="font-display font-bold text-lg leading-none">{Math.round(value)}</span>
           <span className="text-[9px] text-muted-foreground">{unit}</span>
         </div>
       </div>
-      <span className="text-[11px] font-medium text-muted-foreground text-center">{label}</span>
+      <span className="text-[10px] font-medium text-muted-foreground text-center">{label}</span>
     </div>
   );
 };
@@ -93,8 +94,8 @@ const LiveGraph = ({ data, label, color, unit }: {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Grid
-    ctx.strokeStyle = "hsl(230, 8%, 20%)";
+    // Grid lines
+    ctx.strokeStyle = "hsl(0 0% 15%)";
     ctx.lineWidth = 0.5;
     for (let i = 0; i < 5; i++) {
       const y = (h / 4) * i;
@@ -109,7 +110,7 @@ const LiveGraph = ({ data, label, color, unit }: {
     const min = Math.min(...data, 0);
     const range = max - min || 1;
 
-    // Fill
+    // Fill gradient
     ctx.beginPath();
     ctx.moveTo(0, h);
     data.forEach((v, i) => {
@@ -120,8 +121,8 @@ const LiveGraph = ({ data, label, color, unit }: {
     ctx.lineTo(w, h);
     ctx.lineTo(0, h);
     const gradient = ctx.createLinearGradient(0, 0, 0, h);
-    gradient.addColorStop(0, color + "33");
-    gradient.addColorStop(1, color + "05");
+    gradient.addColorStop(0, color + "25");
+    gradient.addColorStop(1, color + "03");
     ctx.fillStyle = gradient;
     ctx.fill();
 
@@ -140,17 +141,15 @@ const LiveGraph = ({ data, label, color, unit }: {
   const currentValue = data.length > 0 ? data[data.length - 1] : 0;
 
   return (
-    <Card className="glass-card border-border/40">
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          <span className="font-display font-bold text-sm" style={{ color }}>
-            {Math.round(currentValue)} {unit}
-          </span>
-        </div>
-        <canvas ref={canvasRef} width={300} height={60} className="w-full h-[60px] rounded-lg" />
-      </CardContent>
-    </Card>
+    <div className="luxury-card p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+        <span className="font-display font-bold text-sm" style={{ color }}>
+          {Math.round(currentValue)} {unit}
+        </span>
+      </div>
+      <canvas ref={canvasRef} width={300} height={60} className="w-full h-[60px] rounded-lg" />
+    </div>
   );
 };
 
@@ -193,7 +192,6 @@ const OBDDiagnostics = () => {
 
   const handleConnect = async () => {
     setConnecting(true);
-    // Check for Web Bluetooth API
     if ("bluetooth" in navigator) {
       try {
         const device = await (navigator as any).bluetooth.requestDevice({
@@ -205,7 +203,6 @@ const OBDDiagnostics = () => {
         setObdData({ rpm: 850, coolantTemp: 78, intakeTemp: 28, speed: 0, throttle: 12, fuelPressure: 45, engineLoad: 22, voltage: 13.8, boostPressure: 0 });
         setDtcCodes(MOCK_DTC_CODES);
       } catch {
-        // Fallback to demo mode
         toast({ title: "Demo režim", description: "Bluetooth nedostupný – spuštěn demo režim" });
         setConnected(true);
         setObdData({ rpm: 850, coolantTemp: 78, intakeTemp: 28, speed: 0, throttle: 12, fuelPressure: 45, engineLoad: 22, voltage: 13.8, boostPressure: 0 });
@@ -243,51 +240,50 @@ const OBDDiagnostics = () => {
 
   return (
     <div className="min-h-screen pb-24 bg-background">
-      <PageHeader title="OBD Diagnostika" />
+      <PageHeader title="OBD Diagnostika" subtitle="Bluetooth · ELM327" />
 
-      <div className="px-4 max-w-4xl mx-auto space-y-5">
+      <div className="px-4 max-w-4xl mx-auto space-y-4">
         {/* Connection card */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className={`glass-card-elevated border-border/40 ${connected ? "border-success/30" : ""}`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {connected ? (
-                    <div className="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center">
-                      <BluetoothConnected className="w-5 h-5 text-success" />
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
-                      <Bluetooth className="w-5 h-5 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-display font-semibold text-sm">
-                      {connected ? "Připojeno" : "ELM327 Adaptér"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {connected ? "Live data aktivní" : "Připojte přes Bluetooth"}
-                    </p>
+          <div className={`luxury-card p-4 ${connected ? "border-success/30" : ""}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {connected ? (
+                  <div className="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center glow-success">
+                    <BluetoothConnected className="w-5 h-5 text-success" />
                   </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-xl brushed-metal border border-border/40 flex items-center justify-center">
+                    <Bluetooth className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                )}
+                <div>
+                  <p className="font-display font-semibold text-sm">
+                    {connected ? "Připojeno" : "ELM327 Adaptér"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {connected ? "Live data aktivní" : "Připojte přes Bluetooth"}
+                  </p>
                 </div>
-                <Button
-                  size="sm"
-                  variant={connected ? "destructive" : "default"}
-                  onClick={connected ? handleDisconnect : handleConnect}
-                  disabled={connecting}
-                >
-                  {connecting ? (
-                    <RefreshCw className="w-4 h-4 animate-spin mr-1" />
-                  ) : connected ? (
-                    <WifiOff className="w-4 h-4 mr-1" />
-                  ) : (
-                    <Wifi className="w-4 h-4 mr-1" />
-                  )}
-                  {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
-                </Button>
               </div>
-            </CardContent>
-          </Card>
+              <Button
+                size="sm"
+                variant={connected ? "destructive" : "hero"}
+                onClick={connected ? handleDisconnect : handleConnect}
+                disabled={connecting}
+                className="text-xs"
+              >
+                {connecting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+                ) : connected ? (
+                  <WifiOff className="w-4 h-4 mr-1" />
+                ) : (
+                  <Wifi className="w-4 h-4 mr-1" />
+                )}
+                {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
+              </Button>
+            </div>
+          </div>
         </motion.div>
 
         <AnimatePresence>
@@ -296,28 +292,26 @@ const OBDDiagnostics = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-5"
+              className="space-y-4"
             >
               {/* Gauges grid */}
-              <Card className="glass-card border-border/40">
-                <CardContent className="p-4">
-                  <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-primary" />
-                    Živé hodnoty
-                  </h3>
-                  <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    <GaugeCircle value={obdData.rpm} max={7000} label="Otáčky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
-                    <GaugeCircle value={obdData.coolantTemp} max={120} label="Chladič" unit="°C" color={obdData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
-                    <GaugeCircle value={obdData.speed} max={220} label="Rychlost" unit="km/h" color="hsl(142, 71%, 45%)" icon={Gauge} />
-                    <GaugeCircle value={obdData.throttle} max={100} label="Plyn" unit="%" color="hsl(38, 92%, 50%)" icon={Zap} />
-                    <GaugeCircle value={obdData.engineLoad} max={100} label="Zatížení" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
-                    <GaugeCircle value={obdData.voltage} max={15} label="Napětí" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
-                    <GaugeCircle value={obdData.fuelPressure} max={70} label="Palivo" unit="kPa" color="hsl(20, 90%, 50%)" icon={Fuel} />
-                    <GaugeCircle value={obdData.intakeTemp} max={70} label="Sání" unit="°C" color="hsl(180, 60%, 50%)" icon={Wind} />
-                    <GaugeCircle value={obdData.boostPressure} max={2.5} label="Turbo" unit="bar" color="hsl(340, 80%, 55%)" icon={Wind} />
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="luxury-card p-4">
+                <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  Živé hodnoty
+                </h3>
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  <GaugeCircle value={obdData.rpm} max={7000} label="Otáčky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
+                  <GaugeCircle value={obdData.coolantTemp} max={120} label="Chladič" unit="°C" color={obdData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
+                  <GaugeCircle value={obdData.speed} max={220} label="Rychlost" unit="km/h" color="hsl(142, 71%, 45%)" icon={Gauge} />
+                  <GaugeCircle value={obdData.throttle} max={100} label="Plyn" unit="%" color="hsl(38, 92%, 50%)" icon={Zap} />
+                  <GaugeCircle value={obdData.engineLoad} max={100} label="Zatížení" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
+                  <GaugeCircle value={obdData.voltage} max={15} label="Napětí" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
+                  <GaugeCircle value={obdData.fuelPressure} max={70} label="Palivo" unit="kPa" color="hsl(20, 90%, 50%)" icon={Fuel} />
+                  <GaugeCircle value={obdData.intakeTemp} max={70} label="Sání" unit="°C" color="hsl(180, 60%, 50%)" icon={Wind} />
+                  <GaugeCircle value={obdData.boostPressure} max={2.5} label="Turbo" unit="bar" color="hsl(340, 80%, 55%)" icon={Wind} />
+                </div>
+              </div>
 
               {/* Live graphs */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -327,41 +321,39 @@ const OBDDiagnostics = () => {
               </div>
 
               {/* DTC Codes */}
-              <Card className="glass-card border-border/40">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-warning" />
-                      Chybové kódy (DTC)
-                    </h3>
-                    {dtcCodes.length > 0 && (
-                      <Button size="sm" variant="ghost" onClick={clearDTC} className="text-xs">
-                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Vymazat
-                      </Button>
-                    )}
-                  </div>
-                  {dtcCodes.length === 0 ? (
-                    <div className="text-center py-6 text-muted-foreground">
-                      <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">Žádné chybové kódy</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {dtcCodes.map((dtc) => (
-                        <div key={dtc.code} className="flex items-center justify-between p-3 rounded-xl bg-secondary/50">
-                          <div className="flex items-center gap-3">
-                            <code className="font-display font-bold text-sm">{dtc.code}</code>
-                            <span className="text-xs text-muted-foreground">{dtc.description}</span>
-                          </div>
-                          <Badge className={severityColor(dtc.severity)}>
-                            {dtc.severity === "high" ? "Vážné" : dtc.severity === "medium" ? "Střední" : "Nízké"}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
+              <div className="luxury-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning" />
+                    Chybové kódy (DTC)
+                  </h3>
+                  {dtcCodes.length > 0 && (
+                    <Button size="sm" variant="ghost" onClick={clearDTC} className="text-xs h-7">
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Vymazat
+                    </Button>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+                {dtcCodes.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">Žádné chybové kódy</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {dtcCodes.map((dtc) => (
+                      <div key={dtc.code} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20">
+                        <div className="flex items-center gap-3">
+                          <code className="font-display font-bold text-sm text-foreground">{dtc.code}</code>
+                          <span className="text-xs text-muted-foreground">{dtc.description}</span>
+                        </div>
+                        <Badge className={severityColor(dtc.severity)}>
+                          {dtc.severity === "high" ? "Vážné" : dtc.severity === "medium" ? "Střední" : "Nízké"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -369,29 +361,28 @@ const OBDDiagnostics = () => {
         {/* Info when disconnected */}
         {!connected && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
-            <Card className="glass-card border-border/40">
-              <CardContent className="p-6 text-center space-y-3">
-                <Bluetooth className="w-12 h-12 mx-auto text-muted-foreground/30" />
-                <h3 className="font-display font-semibold">Připojte ELM327 adaptér</h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Zasuňte OBD-II adaptér (ELM327) do diagnostického konektoru vozidla,
-                  zapněte Bluetooth a klikněte na "Připojit". Zobrazí se živá data z řídící jednotky.
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-                  {[
-                    { icon: Gauge, label: "Otáčky & rychlost" },
-                    { icon: Thermometer, label: "Teploty motoru" },
-                    { icon: AlertTriangle, label: "Chybové kódy" },
-                    { icon: Activity, label: "Live grafy" },
-                  ].map(f => (
-                    <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30">
-                      <f.icon className="w-5 h-5 text-primary" />
-                      <span className="text-[11px] text-muted-foreground text-center">{f.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            <div className="luxury-card p-6 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full brushed-metal border border-border/40 mx-auto flex items-center justify-center">
+                <Bluetooth className="w-8 h-8 text-muted-foreground/40" />
+              </div>
+              <h3 className="font-display font-semibold text-lg">Připojte ELM327 adaptér</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                Zasuňte OBD-II adaptér do diagnostického konektoru, zapněte Bluetooth a klikněte „Připojit".
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                {[
+                  { icon: Gauge, label: "Otáčky & rychlost" },
+                  { icon: Thermometer, label: "Teploty motoru" },
+                  { icon: AlertTriangle, label: "Chybové kódy" },
+                  { icon: Activity, label: "Live grafy" },
+                ].map(f => (
+                  <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15">
+                    <f.icon className="w-5 h-5 text-primary" />
+                    <span className="text-[10px] text-muted-foreground text-center">{f.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </motion.div>
         )}
       </div>

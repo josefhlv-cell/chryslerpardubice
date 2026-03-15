@@ -87,14 +87,33 @@
 }
 
 @layer utilities {
+  /* ---- Glass morphism cards ---- */
   .glass-card {
     @apply bg-card/60 border border-border/20 rounded-xl;
+    box-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.3), inset 0 1px 0 0 hsl(0 0% 100% / 0.02);
   }
 
   .glass-card-elevated {
     @apply bg-card/80 border border-border/25 rounded-xl;
+    box-shadow: 0 4px 24px -4px hsl(0 0% 0% / 0.5), 0 1px 2px 0 hsl(0 0% 0% / 0.3), inset 0 1px 0 0 hsl(0 0% 100% / 0.03);
   }
 
+  /* ---- Luxury card with chrome edge ---- */
+  .luxury-card {
+    @apply bg-card/70 border border-border/30 rounded-xl relative overflow-hidden;
+    box-shadow: 0 4px 20px -4px hsl(0 0% 0% / 0.4), inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
+  }
+  .luxury-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(32, 60%, 50% / 0.3), transparent);
+  }
+
+  /* ---- Gradients ---- */
   .gradient-primary {
     background: linear-gradient(135deg, hsl(32, 70%, 45%), hsl(28, 65%, 35%));
   }
@@ -115,6 +134,15 @@
     background: linear-gradient(135deg, hsl(0, 0%, 9%), hsl(0, 0%, 6%));
   }
 
+  .gradient-chrome {
+    background: linear-gradient(180deg, hsl(0, 0%, 22%), hsl(0, 0%, 12%));
+  }
+
+  .gradient-surface {
+    background: linear-gradient(180deg, hsl(0 0% 7%), hsl(0 0% 5%));
+  }
+
+  /* ---- Text gradients ---- */
   .text-gradient {
     background: linear-gradient(135deg, hsl(32, 70%, 55%), hsl(32, 60%, 70%));
     -webkit-background-clip: text;
@@ -129,6 +157,14 @@
     background-clip: text;
   }
 
+  .text-gradient-chrome {
+    background: linear-gradient(180deg, hsl(0, 0%, 95%), hsl(0, 0%, 60%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ---- Safe areas ---- */
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 16px);
   }
@@ -137,6 +173,7 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
+  /* ---- Glow effects ---- */
   .shimmer {
     background: linear-gradient(90deg, transparent, hsl(32, 70%, 50% / 0.04), transparent);
     animation: shimmer 2s infinite;
@@ -146,10 +183,42 @@
     box-shadow: 0 0 15px hsl(32, 70%, 50% / 0.1), 0 0 40px hsl(32, 70%, 50% / 0.03);
   }
 
+  .glow-gold {
+    box-shadow: 0 0 20px hsl(32, 70%, 50% / 0.15), 0 0 60px hsl(32, 70%, 50% / 0.05);
+  }
+
   .glow-success {
     box-shadow: 0 0 15px hsl(142, 71%, 45% / 0.12);
   }
 
+  /* ---- Focus ring gold ---- */
+  .focus-gold:focus-within {
+    box-shadow: 0 0 0 2px hsl(32, 70%, 50% / 0.3);
+    border-color: hsl(32, 70%, 50% / 0.5);
+  }
+
+  /* ---- Brushed metal texture ---- */
+  .brushed-metal {
+    background: linear-gradient(135deg, hsl(0 0% 10%), hsl(0 0% 8%));
+    background-image: repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 100% / 0.008) 2px,
+      hsl(0 0% 100% / 0.008) 3px
+    );
+  }
+
+  /* ---- Chrome border ---- */
+  .border-chrome {
+    border-color: hsl(0 0% 25%);
+  }
+
+  .border-gold {
+    border-color: hsl(32, 60%, 40% / 0.4);
+  }
+
+  /* ---- Scrollbar hiding ---- */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -158,8 +227,13 @@
     display: none;
   }
 
+  /* ---- Animations ---- */
   .pulse-ring {
     animation: pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.4s ease-out;
   }
 }
 
@@ -171,4 +245,9 @@
 @keyframes pulseRing {
   0%, 100% { box-shadow: 0 0 0 0 hsl(32, 70%, 50% / 0.2); }
   50% { box-shadow: 0 0 0 6px hsl(32, 70%, 50% / 0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }

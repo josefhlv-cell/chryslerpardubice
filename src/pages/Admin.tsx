@@ -104,23 +104,23 @@ type Inquiry = {
 };
 
 const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  confirmed: "bg-blue-100 text-blue-800 border-blue-300",
-  in_progress: "bg-purple-100 text-purple-800 border-purple-300",
-  completed: "bg-green-100 text-green-800 border-green-300",
-  cancelled: "bg-red-100 text-red-800 border-red-300",
-  shipped: "bg-indigo-100 text-indigo-800 border-indigo-300",
-  delivered: "bg-green-100 text-green-800 border-green-300",
-  quoted: "bg-blue-100 text-blue-800 border-blue-300",
-  accepted: "bg-green-100 text-green-800 border-green-300",
-  rejected: "bg-red-100 text-red-800 border-red-300",
-  fulfilled: "bg-green-100 text-green-800 border-green-300",
-  new: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  nova: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  zpracovava_se: "bg-blue-100 text-blue-800 border-blue-300",
-  vyrizena: "bg-green-100 text-green-800 border-green-300",
-  zrusena: "bg-red-100 text-red-800 border-red-300",
-  active: "bg-green-100 text-green-800 border-green-300",
+  pending: "bg-warning/15 text-warning border-warning/30",
+  confirmed: "bg-primary/15 text-primary border-primary/30",
+  in_progress: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  completed: "bg-success/15 text-success border-success/30",
+  cancelled: "bg-destructive/15 text-destructive border-destructive/30",
+  shipped: "bg-primary/15 text-primary border-primary/30",
+  delivered: "bg-success/15 text-success border-success/30",
+  quoted: "bg-primary/15 text-primary border-primary/30",
+  accepted: "bg-success/15 text-success border-success/30",
+  rejected: "bg-destructive/15 text-destructive border-destructive/30",
+  fulfilled: "bg-success/15 text-success border-success/30",
+  new: "bg-warning/15 text-warning border-warning/30",
+  nova: "bg-warning/15 text-warning border-warning/30",
+  zpracovava_se: "bg-primary/15 text-primary border-primary/30",
+  vyrizena: "bg-success/15 text-success border-success/30",
+  zrusena: "bg-destructive/15 text-destructive border-destructive/30",
+  active: "bg-success/15 text-success border-success/30",
 };
 
 const statusLabel: Record<string, string> = {
@@ -295,46 +295,51 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen pb-20">
-      <PageHeader title="Admin panel" />
+      <PageHeader title="Admin panel" subtitle="Správa systému" />
       <div className="p-4 max-w-4xl mx-auto">
         <div className="flex items-center gap-2 mb-4">
-          <Shield className="w-5 h-5 text-primary" />
-          <span className="text-sm text-muted-foreground">Správa firem, objednávek a požadavků</span>
-          <Button size="sm" variant="outline" className="ml-auto" onClick={fetchAll}>
-            <RefreshCw className="w-4 h-4 mr-1" /> Obnovit
+          <div className="w-8 h-8 rounded-lg gradient-bronze flex items-center justify-center">
+            <Shield className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <span className="text-sm font-display font-semibold">Řídící centrum</span>
+            <p className="text-[10px] text-muted-foreground">Firmy · Objednávky · Servis · Katalog</p>
+          </div>
+          <Button size="sm" variant="outline" className="border-border/30 h-8" onClick={fetchAll}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Obnovit
           </Button>
         </div>
 
         <Tabs defaultValue="firms">
-          <TabsList className="w-full flex overflow-x-auto">
-            <TabsTrigger value="firms" className="text-xs gap-1 shrink-0">
+          <TabsList className="w-full flex overflow-x-auto scrollbar-hide bg-secondary/40 border border-border/20 p-0.5">
+            <TabsTrigger value="firms" className="text-[11px] gap-1 shrink-0">
               <Users className="w-3 h-3" />
               Firmy
               {pendingOnly.length > 0 && (
-                <span className="ml-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-bold">
+                <span className="ml-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                   {pendingOnly.length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="orders" className="text-xs gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
-            {isEnabled("bookings") && <TabsTrigger value="service" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
-            {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-xs gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
-            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-xs gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>}
-            {isEnabled("catalog") && <TabsTrigger value="settings" className="text-xs gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>}
-            {isEnabled("service_history") && <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
-            {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
-            {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
-            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
-            <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
-            {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
-            {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
-            {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-xs gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
-            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-xs gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
-            {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
-            {isEnabled("employees") && <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
-            {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
-            <TabsTrigger value="procedures" className="text-xs gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
-            <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
+            <TabsTrigger value="orders" className="text-[11px] gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
+            {isEnabled("bookings") && <TabsTrigger value="service" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
+            {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-[11px] gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-[11px] gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="settings" className="text-[11px] gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>}
+            {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
+            {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
+            {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
+            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-[11px] gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
+            <TabsTrigger value="service-plans" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
+            {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-[11px] gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
+            {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-[11px] gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
+            {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-[11px] gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
+            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-[11px] gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
+            {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-[11px] gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
+            {isEnabled("employees") && <TabsTrigger value="employees" className="text-[11px] gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
+            {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-[11px] gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
+            <TabsTrigger value="procedures" className="text-[11px] gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
+            <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -345,7 +350,7 @@ const Admin = () => {
               )}
               {pendingOnly.map((p) => (
                 <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="border-yellow-300">
+                  <Card className="border-warning/30">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
@@ -356,7 +361,7 @@ const Admin = () => {
                         </div>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => openProfileEdit(p)}>
-                            <CheckCircle className="w-4 h-4 mr-1 text-green-600" />
+                            <CheckCircle className="w-4 h-4 mr-1 text-success" />
                             Schválit
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => rejectProfile(p.id)}>
