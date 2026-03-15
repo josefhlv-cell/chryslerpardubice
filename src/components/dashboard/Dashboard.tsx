@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Bell, ChevronRight, Wrench, BookOpen, Phone } from "lucide-react";
+import { Bell, ChevronRight, Wrench, BookOpen, Phone, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import VehicleCarousel from "./VehicleCarousel";
 import ServiceRecommendations from "@/components/ServiceRecommendations";
@@ -157,9 +157,9 @@ const Dashboard = () => {
         </div>
       </motion.div>
 
-      {/* Two action cards side by side */}
+      {/* Three action cards */}
       <div className="px-5 mt-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <motion.button
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -170,7 +170,7 @@ const Dashboard = () => {
             <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
               <Wrench className="w-5 h-5 text-primary" />
             </div>
-            <span className="text-xs font-medium tracking-wide">Objednat Servis</span>
+            <span className="text-xs font-medium tracking-wide">Servis</span>
           </motion.button>
           <motion.button
             initial={{ opacity: 0, y: 8 }}
@@ -183,6 +183,18 @@ const Dashboard = () => {
               <BookOpen className="w-5 h-5 text-primary" />
             </div>
             <span className="text-xs font-medium tracking-wide">Katalog</span>
+          </motion.button>
+          <motion.button
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            onClick={() => navigate("/vehicles")}
+            className="glass-card p-4 flex flex-col items-center gap-3 hover:border-primary/30 transition-all group"
+          >
+            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Car className="w-5 h-5 text-primary" />
+            </div>
+            <span className="text-xs font-medium tracking-wide">Vozy</span>
           </motion.button>
         </div>
       </div>

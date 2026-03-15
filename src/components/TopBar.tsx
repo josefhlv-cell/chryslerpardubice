@@ -14,8 +14,9 @@ const TopBar = () => {
 
   const menuItems = [
     { path: "/shop", label: "Katalog dílů" },
-    { path: "/service-book", label: "Servisní intervaly" },
-    { path: "/vehicle-offer", label: "Nabídka vozu" },
+    { path: "/vehicles", label: "Vozy k prodeji" },
+    { path: "/service", label: "Servis" },
+    { path: "/vehicle-offer", label: "Výkup / Dovoz" },
   ];
 
   return (
