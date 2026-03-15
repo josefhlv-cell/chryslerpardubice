@@ -86,6 +86,17 @@ const Vehicles = () => {
                     {vehicle.mileage && <span className="flex items-center gap-1"><Gauge className="w-3 h-3" />{(vehicle.mileage / 1000).toFixed(0)}tis km</span>}
                     {vehicle.fuel && <span className="flex items-center gap-1"><Fuel className="w-3 h-3" />{vehicle.fuel}</span>}
                     {vehicle.power && <span>{vehicle.power}</span>}
+                    {vehicle.listing_url && (
+                      <a
+                        href={vehicle.listing_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="ml-auto flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <ExternalLink className="w-3 h-3" />chrysler.cz
+                      </a>
+                    )}
                   </div>
                 </div>
               </motion.div>
