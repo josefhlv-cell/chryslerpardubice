@@ -361,7 +361,7 @@ const Admin = () => {
                         </div>
                         <div className="flex gap-1">
                           <Button size="sm" variant="outline" onClick={() => openProfileEdit(p)}>
-                            <CheckCircle className="w-4 h-4 mr-1 text-green-600" />
+                            <CheckCircle className="w-4 h-4 mr-1 text-success" />
                             Schválit
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => rejectProfile(p.id)}>
