@@ -206,6 +206,11 @@ const Service = () => {
             <Textarea placeholder="Popište problém nebo požadavek..." value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="focus-gold" />
           </div>
 
+          {/* Info note */}
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground leading-relaxed">
+            Děkujeme za vaši důvěru! Termín, který zadáváte do kalendáře, je zatím orientační. Brzy vás kontaktujeme, abychom ho společně potvrdili.
+          </div>
+
           {/* Submit */}
           <Button variant="hero" className="w-full h-12 mt-2 text-sm" onClick={handleSubmit} disabled={submitting}>
             {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Phone className="w-4 h-4 mr-2" />}
