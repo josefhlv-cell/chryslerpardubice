@@ -46,6 +46,7 @@ type ServiceRecord = {
 
 const MyVehicles = () => {
   const { user, profile, isLoading: authLoading } = useAuth();
+  const { isEnabled } = useFeatureFlags();
   const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<UserVehicle[]>([]);
   const [loading, setLoading] = useState(true);
