@@ -350,7 +350,7 @@ const Admin = () => {
               )}
               {pendingOnly.map((p) => (
                 <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="border-yellow-300">
+                  <Card className="border-warning/30">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
                         <div>
