@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
 import TondaAvatar from "@/components/TondaAvatar";
 
-const SERVICE_PHONE = "+420123456789";
+const SERVICE_PHONE = "+420603372911";
 
 const emergencyGuides = [
   {

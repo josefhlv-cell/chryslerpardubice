@@ -24,10 +24,10 @@ interface Order {
 }
 
 const statusColors: Record<string, string> = {
-  nova: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  zpracovava_se: "bg-blue-100 text-blue-800 border-blue-300",
-  vyrizena: "bg-green-100 text-green-800 border-green-300",
-  zrusena: "bg-red-100 text-red-800 border-red-300",
+  nova: "bg-warning/15 text-warning border-0",
+  zpracovava_se: "bg-primary/15 text-primary border-0",
+  vyrizena: "bg-success/15 text-success border-0",
+  zrusena: "bg-destructive/15 text-destructive border-0",
 };
 
 const statusLabel: Record<string, string> = {

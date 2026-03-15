@@ -126,8 +126,24 @@ const VehicleDetail = () => {
           <Button variant="outline" size="lg" className="shrink-0" onClick={() => toast.success("Přidáno do oblíbených")}>
             <Heart className="w-5 h-5" />
           </Button>
-          <Button variant="hero" size="lg" className="flex-1" onClick={() => toast.success("Poptávka odeslána! Budeme vás kontaktovat.")}>
-            <MessageSquare className="w-4 h-4" />
+          <Button variant="hero" size="lg" className="flex-1" disabled={inquiryLoading} onClick={async () => {
+            if (!vehicle) return;
+            setInquiryLoading(true);
+            try {
+              await createVehicleInquiry({
+                vehicle_id: vehicle.id,
+                user_id: user?.id,
+                name: user?.email?.split("@")[0] || undefined,
+                email: user?.email || undefined,
+              });
+              toast.success("Poptávka odeslána! Budeme vás kontaktovat.");
+            } catch (err: any) {
+              toast.error(err.message || "Chyba při odesílání poptávky");
+            } finally {
+              setInquiryLoading(false);
+            }
+          }}>
+            {inquiryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
             Mám zájem
           </Button>
         </div>
