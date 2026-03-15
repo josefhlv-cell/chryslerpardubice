@@ -134,6 +134,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isPendingBusiness = profile?.account_type === "business" && profile?.status === "pending";
   const canPlaceOrder = !!profile && profile.status === "active";
 
+  // Track admin session time
+  useAdminSessionTracker(user?.id, isAdmin);
+
   const signUp = async (email: string, password: string, meta: SignUpMeta) => {
     const { error } = await supabase.auth.signUp({
       email,
