@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Bell, ChevronRight, Wrench, BookOpen, Phone } from "lucide-react";
+import { Bell, ChevronRight, Wrench, BookOpen, Phone, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import VehicleCarousel from "./VehicleCarousel";
 import ServiceRecommendations from "@/components/ServiceRecommendations";
