@@ -14,15 +14,15 @@ const TopBar = () => {
 
   const menuItems = [
     { path: "/shop", label: "Katalog dílů" },
-    { path: "/vehicles", label: "Vozy k prodeji" },
     { path: "/service", label: "Servis" },
-    { path: "/vehicle-offer", label: "Výkup / Dovoz" },
+    { path: "/vehicles", label: "Vozy k prodeji" },
+    { path: "/garage", label: "Garáž" },
   ];
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/20 bg-background/95 backdrop-blur-xl safe-top">
       <div className="flex items-center gap-3">
-        <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
+        <button onClick={() => navigate("/shop")} className="flex items-center gap-2.5">
           <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-10 object-contain" />
         </button>
         <nav className="hidden sm:flex items-center gap-1">
@@ -31,7 +31,7 @@ const TopBar = () => {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium tracking-wide transition-colors ${
-                location.pathname === item.path
+                location.pathname === item.path || (item.path === "/shop" && (location.pathname === "/" || location.pathname === "/index"))
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               }`}
