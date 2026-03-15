@@ -912,6 +912,7 @@ export type Database = {
           ico: string | null
           id: string
           loyalty_active: boolean
+          notifications_enabled: boolean
           phone: string | null
           service_history_enabled: boolean
           status: string
@@ -929,6 +930,7 @@ export type Database = {
           ico?: string | null
           id?: string
           loyalty_active?: boolean
+          notifications_enabled?: boolean
           phone?: string | null
           service_history_enabled?: boolean
           status?: string
@@ -946,6 +948,7 @@ export type Database = {
           ico?: string | null
           id?: string
           loyalty_active?: boolean
+          notifications_enabled?: boolean
           phone?: string | null
           service_history_enabled?: boolean
           status?: string
@@ -953,6 +956,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      service_book_shares: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          owner_id: string
+          share_token: string
+          transfer_status: string
+          transfer_to_email: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          owner_id: string
+          share_token?: string
+          transfer_status?: string
+          transfer_to_email?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          owner_id?: string
+          share_token?: string
+          transfer_status?: string
+          transfer_to_email?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_book_shares_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "user_vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_bookings: {
         Row: {
@@ -1175,6 +1219,44 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      service_order_messages: {
+        Row: {
+          created_at: string
+          id: string
+          is_from_service: boolean
+          message: string
+          photos: string[] | null
+          sender_id: string
+          service_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_from_service?: boolean
+          message: string
+          photos?: string[] | null
+          sender_id: string
+          service_order_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_from_service?: boolean
+          message?: string
+          photos?: string[] | null
+          sender_id?: string
+          service_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_messages_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       service_order_parts: {
         Row: {
