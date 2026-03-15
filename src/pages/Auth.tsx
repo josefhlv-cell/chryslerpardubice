@@ -104,14 +104,14 @@ const Auth = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-sm space-y-8"
       >
-        {/* Logo - preserved */}
+        {/* Logo */}
         <div className="flex flex-col items-center gap-5">
           <img
             src="/images/logo-cd-pardubice.png"
             alt="Chrysler&Dodge Pardubice"
             className="h-16 object-contain"
           />
-          <div className="w-12 h-px bg-primary/40" />
+          <div className="w-12 h-px bg-primary/30" />
           <h1 className="text-lg font-display font-semibold tracking-wide uppercase text-foreground/90">
             {view === "login" ? "Přihlášení" : view === "register" ? "Registrace" : "Reset hesla"}
           </h1>
@@ -128,8 +128,8 @@ const Auth = () => {
                     onClick={() => setAccountType("private")}
                     className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 border ${
                       accountType === "private"
-                        ? "border-primary text-primary bg-primary/5"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                        ? "border-primary/50 text-primary bg-primary/5"
+                        : "border-border/30 text-muted-foreground hover:text-foreground hover:border-border/50"
                     }`}
                   >
                     <User className="w-4 h-4" />
@@ -140,8 +140,8 @@ const Auth = () => {
                     onClick={() => setAccountType("business")}
                     className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 border ${
                       accountType === "business"
-                        ? "border-primary text-primary bg-primary/5"
-                        : "border-border text-muted-foreground hover:text-foreground hover:border-border/80"
+                        ? "border-primary/50 text-primary bg-primary/5"
+                        : "border-border/30 text-muted-foreground hover:text-foreground hover:border-border/50"
                     }`}
                   >
                     <Building2 className="w-4 h-4" />
@@ -193,7 +193,7 @@ const Auth = () => {
             </div>
           )}
 
-          <Button className="w-full h-11 mt-2 gradient-primary text-primary-foreground font-semibold tracking-wide uppercase text-xs" type="submit" disabled={loading}>
+          <Button className="w-full h-11 mt-2 gradient-bronze text-white font-semibold tracking-wide uppercase text-xs" type="submit" disabled={loading}>
             {loading
               ? "Zpracovávám..."
               : view === "login"
