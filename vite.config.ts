@@ -48,6 +48,12 @@ export default defineConfig(({ mode }) => ({
             type: "image/png",
             purpose: "maskable",
           },
+          {
+            src: "/icons/icon-android-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any",
+          },
         ],
       },
       workbox: {
