@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Tracks admin session time. Creates a row on mount, updates ended_at on unmount/beforeunload.
+ * Tracks admin session time. Creates a row on mount, updates ended_at periodically and on unmount.
  */
 export const useAdminSessionTracker = (userId: string | undefined, isAdmin: boolean) => {
   const sessionIdRef = useRef<string | null>(null);
@@ -24,41 +24,39 @@ export const useAdminSessionTracker = (userId: string | undefined, isAdmin: bool
 
     const endSession = () => {
       if (!sessionIdRef.current) return;
-      // Use sendBeacon-style approach for reliability
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_sessions?id=eq.${sessionIdRef.current}`;
-      const body = JSON.stringify({ ended_at: new Date().toISOString() });
-      
-      if (navigator.sendBeacon) {
-        const blob = new Blob([body], { type: "application/json" });
-        // sendBeacon doesn't support custom headers well, so fall back to fetch
-      }
-      
-      // Best-effort update
-      fetch(url, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          "Authorization": `Bearer ${sessionIdRef.current ? "" : ""}`,
-          "Prefer": "return=minimal",
-        },
-        keepalive: true,
-      }).catch(() => {});
-      
-      // Also try supabase client
       supabase
         .from("admin_sessions")
         .update({ ended_at: new Date().toISOString() })
-        .eq("id", sessionIdRef.current!)
-        .then(() => {});
+        .eq("id", sessionIdRef.current)
+        .then(() => {
+          sessionIdRef.current = null;
+        });
     };
 
     startSession();
 
-    const handleBeforeUnload = () => endSession();
+    const handleBeforeUnload = () => {
+      if (!sessionIdRef.current) return;
+      // Best-effort sync update using keepalive fetch
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/admin_sessions?id=eq.${sessionIdRef.current}`;
+      const body = JSON.stringify({ ended_at: new Date().toISOString() });
+      try {
+        fetch(url, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Authorization": `Bearer ${supabase.auth.getSession ? "" : ""}`,
+            "Prefer": "return=minimal",
+          },
+          keepalive: true,
+        }).catch(() => {});
+      } catch {}
+    };
+
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Heartbeat: update ended_at every 60s so we have approximate time even on crash
+    // Heartbeat every 60s — so if browser crashes we still have approximate end time
     const heartbeat = setInterval(async () => {
       if (sessionIdRef.current) {
         await supabase
