@@ -5,10 +5,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, FileDown, Wrench, Calendar, Gauge, Package, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, FileDown, Wrench, Filter, Download } from "lucide-react";
 import { motion } from "framer-motion";
 
 type Vehicle = {
@@ -44,7 +43,6 @@ const ServiceBook = () => {
   const [selectedVehicleId, setSelectedVehicleId] = useState(preselectedVehicle || "");
   const [records, setRecords] = useState<ServiceRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -70,71 +68,28 @@ const ServiceBook = () => {
   }, [selectedVehicleId]);
 
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
+  const totalCost = records.reduce((sum, r) => sum + (r.price ?? 0), 0);
 
   const exportPdf = async () => {
     if (!selectedVehicle || !records.length) return;
     setExporting(true);
-
-    // Generate a printable HTML and use browser print
     const v = selectedVehicle;
-    const html = `
-      <!DOCTYPE html>
-      <html><head><meta charset="utf-8"><title>Servisní kniha – ${v.brand} ${v.model}</title>
-      <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }
-        h1 { font-size: 20px; border-bottom: 2px solid #1a1a2e; padding-bottom: 8px; }
-        .vehicle-info { background: #f5f5f5; padding: 12px; border-radius: 8px; margin: 16px 0; }
-        .vehicle-info p { margin: 4px 0; font-size: 13px; }
-        .record { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin: 8px 0; }
-        .record-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
-        .record-header h3 { margin: 0; font-size: 14px; }
-        .record-header span { font-size: 12px; color: #888; }
-        .record p { margin: 2px 0; font-size: 12px; color: #555; }
-        .meta { display: flex; gap: 16px; font-size: 12px; color: #666; }
-        .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #ddd; font-size: 11px; color: #999; text-align: center; }
-        @media print { body { padding: 0; } }
-      </style></head><body>
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Servisní kniha – ${v.brand} ${v.model}</title>
+      <style>body{font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:20px;color:#333}h1{font-size:20px;border-bottom:2px solid #1a1a2e;padding-bottom:8px}.vi{background:#f5f5f5;padding:12px;border-radius:8px;margin:16px 0}.vi p{margin:4px 0;font-size:13px}.r{border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin:8px 0}.rh{display:flex;justify-content:space-between;margin-bottom:6px}.rh h3{margin:0;font-size:14px}.rh span{font-size:12px;color:#888}.r p{margin:2px 0;font-size:12px;color:#555}.m{display:flex;gap:16px;font-size:12px;color:#666}.f{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:11px;color:#999;text-align:center}@media print{body{padding:0}}</style></head><body>
       <h1>🔧 Servisní kniha</h1>
-      <div class="vehicle-info">
-        <p><strong>${v.brand} ${v.model} ${v.year || ""}</strong></p>
-        ${v.vin ? `<p>VIN: ${v.vin}</p>` : ""}
-        ${v.engine ? `<p>Motor: ${v.engine}</p>` : ""}
-        ${v.license_plate ? `<p>SPZ: ${v.license_plate}</p>` : ""}
-        ${v.current_mileage ? `<p>Aktuální km: ${v.current_mileage.toLocaleString("cs")}</p>` : ""}
-      </div>
-      ${records.map(r => `
-        <div class="record">
-          <div class="record-header">
-            <h3>${r.service_type}</h3>
-            <span>${new Date(r.service_date).toLocaleDateString("cs-CZ")}</span>
-          </div>
-          ${r.description ? `<p>${r.description}</p>` : ""}
-          <div class="meta">
-            ${r.mileage != null ? `<span>${r.mileage.toLocaleString("cs")} km</span>` : ""}
-            ${r.price != null ? `<span>${r.price.toLocaleString("cs")} Kč</span>` : ""}
-          </div>
-          ${r.parts_used ? `<p>Díly: ${r.parts_used}</p>` : ""}
-        </div>
-      `).join("")}
-      <div class="footer">Vygenerováno: ${new Date().toLocaleDateString("cs-CZ")} | Chrysler CZ Servisní systém</div>
-      </body></html>
-    `;
-
+      <div class="vi"><p><strong>${v.brand} ${v.model} ${v.year || ""}</strong></p>${v.vin ? `<p>VIN: ${v.vin}</p>` : ""}${v.engine ? `<p>Motor: ${v.engine}</p>` : ""}${v.license_plate ? `<p>SPZ: ${v.license_plate}</p>` : ""}${v.current_mileage ? `<p>Aktuální km: ${v.current_mileage.toLocaleString("cs")}</p>` : ""}</div>
+      ${records.map(r => `<div class="r"><div class="rh"><h3>${r.service_type}</h3><span>${new Date(r.service_date).toLocaleDateString("cs-CZ")}</span></div>${r.description ? `<p>${r.description}</p>` : ""}<div class="m">${r.mileage != null ? `<span>${r.mileage.toLocaleString("cs")} km</span>` : ""}${r.price != null ? `<span>${r.price.toLocaleString("cs")} Kč</span>` : ""}</div>${r.parts_used ? `<p>Díly: ${r.parts_used}</p>` : ""}</div>`).join("")}
+      <div class="f">Vygenerováno: ${new Date().toLocaleDateString("cs-CZ")} | Chrysler CZ Servisní systém</div></body></html>`;
     const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(html);
       printWindow.document.close();
-      setTimeout(() => {
-        printWindow.print();
-        setExporting(false);
-      }, 500);
+      setTimeout(() => { printWindow.print(); setExporting(false); }, 500);
     } else {
       toast({ title: "Povolte vyskakovací okna pro export", variant: "destructive" });
       setExporting(false);
     }
   };
-
-  const totalCost = records.reduce((sum, r) => sum + (r.price ?? 0), 0);
 
   if (authLoading) {
     return (
@@ -149,10 +104,10 @@ const ServiceBook = () => {
     <div className="min-h-screen pb-20">
       <PageHeader title="Servisní kniha" />
       <div className="p-4 max-w-lg mx-auto space-y-4">
-        {/* Vehicle selector */}
+        {/* Vehicle selector — minimal */}
         {vehicles.length > 0 ? (
           <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
-            <SelectTrigger>
+            <SelectTrigger className="border-border/40">
               <SelectValue placeholder="Vyberte vozidlo" />
             </SelectTrigger>
             <SelectContent>
@@ -172,35 +127,30 @@ const ServiceBook = () => {
           </Card>
         )}
 
-        {/* Vehicle summary */}
+        {/* Heading + filter row */}
         {selectedVehicle && (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="p-3">
-              <p className="font-display font-semibold text-sm">{selectedVehicle.brand} {selectedVehicle.model} {selectedVehicle.year || ""}</p>
-              <div className="flex gap-3 text-xs text-muted-foreground mt-1 flex-wrap">
-                {selectedVehicle.vin && <span>VIN: {selectedVehicle.vin}</span>}
-                {selectedVehicle.engine && <span>{selectedVehicle.engine}</span>}
-                {selectedVehicle.current_mileage != null && <span>{selectedVehicle.current_mileage.toLocaleString("cs")} km</span>}
-              </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-display font-bold text-lg">Servisní knížka</h2>
+              <p className="text-xs text-muted-foreground">
+                {records.length} záznamů · {totalCost.toLocaleString("cs")} Kč celkem
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               {records.length > 0 && (
-                <div className="flex gap-4 mt-2 text-xs">
-                  <span>Záznamů: <strong>{records.length}</strong></span>
-                  <span>Celkem: <strong>{totalCost.toLocaleString("cs")} Kč</strong></span>
-                </div>
+                <Button variant="outline" size="sm" onClick={exportPdf} disabled={exporting} className="h-8">
+                  {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                </Button>
               )}
-            </CardContent>
-          </Card>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                <Filter className="w-3.5 h-3.5" />
+                <span className="text-xs">Filtrovat</span>
+              </Button>
+            </div>
+          </div>
         )}
 
-        {/* Export button */}
-        {records.length > 0 && (
-          <Button variant="outline" size="sm" className="w-full" onClick={exportPdf} disabled={exporting}>
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileDown className="w-4 h-4 mr-2" />}
-            Exportovat servisní knihu (PDF)
-          </Button>
-        )}
-
-        {/* Timeline */}
+        {/* Records — clean card list with bronze left border */}
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
         ) : records.length === 0 ? (
@@ -209,90 +159,49 @@ const ServiceBook = () => {
             <p className="text-sm">Žádné servisní záznamy</p>
           </div>
         ) : (
-          <div className="relative">
-            {/* Timeline line */}
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
-
-            <div className="space-y-0">
-              {records.map((r, i) => {
-                const isExpanded = expandedRecord === r.id;
-                return (
-                  <motion.div
-                    key={r.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="relative pl-10 pb-4"
-                  >
-                    {/* Timeline dot */}
-                    <div className="absolute left-[11px] top-1 w-3 h-3 rounded-full bg-primary border-2 border-background" />
-
-                    <Card
-                      className="cursor-pointer hover:border-primary/30 transition-colors"
-                      onClick={() => setExpandedRecord(isExpanded ? null : r.id)}
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <Wrench className="w-3.5 h-3.5 text-primary shrink-0" />
-                              <p className="font-semibold text-sm truncate">{r.service_type}</p>
-                            </div>
-                            <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-3 h-3" />
-                                {new Date(r.service_date).toLocaleDateString("cs-CZ")}
-                              </span>
-                              {r.mileage != null && (
-                                <span className="flex items-center gap-1">
-                                  <Gauge className="w-3 h-3" />
-                                  {r.mileage.toLocaleString("cs")} km
-                                </span>
-                              )}
-                              {r.price != null && (
-                                <span className="font-medium text-foreground">{r.price.toLocaleString("cs")} Kč</span>
-                              )}
-                            </div>
-                          </div>
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          <div className="space-y-2.5">
+            {records.map((r, i) => (
+              <motion.div
+                key={r.id}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.03 }}
+              >
+                <Card className="border-border/40 hover:border-primary/30 transition-colors overflow-hidden">
+                  <div className="flex">
+                    {/* Bronze left accent */}
+                    <div className="w-1 shrink-0 gradient-bronze" />
+                    <CardContent className="p-3.5 flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold truncate">{r.service_type}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {new Date(r.service_date).toLocaleDateString("cs-CZ")}
+                            {r.description && ` · ${r.description}`}
+                          </p>
                         </div>
-
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
-                            className="mt-3 pt-3 border-t space-y-2"
-                          >
-                            {r.description && (
-                              <p className="text-xs text-muted-foreground">{r.description}</p>
-                            )}
-                            {r.parts_used && (
-                              <div className="flex items-start gap-1.5">
-                                <Package className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
-                                <p className="text-xs text-muted-foreground">{r.parts_used}</p>
-                              </div>
-                            )}
-                            {r.photos && r.photos.length > 0 && (
-                              <div className="flex gap-1.5 flex-wrap">
-                                {r.photos.map((url, pi) => (
-                                  <img
-                                    key={pi}
-                                    src={url}
-                                    alt="Foto"
-                                    className="w-20 h-20 rounded object-cover border cursor-pointer"
-                                    onClick={(e) => { e.stopPropagation(); window.open(url, "_blank"); }}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </motion.div>
+                        {r.price != null && (
+                          <span className="text-xs font-semibold text-foreground whitespace-nowrap">
+                            {r.price.toLocaleString("cs")} Kč
+                          </span>
                         )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </div>
+                      </div>
+                      {/* Meta row */}
+                      <div className="flex items-center justify-between mt-2">
+                        <div className="flex gap-3 text-[11px] text-muted-foreground">
+                          {r.mileage != null && <span>{r.mileage.toLocaleString("cs")} km</span>}
+                          {r.parts_used && <span>{r.parts_used}</span>}
+                        </div>
+                        <button className="flex items-center gap-1 text-[11px] text-primary hover:underline">
+                          <Download className="w-3 h-3" />
+                          Protokol
+                        </button>
+                      </div>
+                    </CardContent>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
           </div>
         )}
       </div>

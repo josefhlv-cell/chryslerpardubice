@@ -1,15 +1,15 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, FileText, Car, User, Settings } from "lucide-react";
+import { Home, CircleDot, Search, Bell, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/", label: "Domů", icon: Home },
-  { path: "/my-service-orders", label: "Zakázky", icon: FileText },
-  { path: "/my-vehicles", label: "Vozy", icon: Car },
-  { path: "/ai-mechanic", label: "Tonda", icon: Settings },
-  { path: "/account", label: "Účet", icon: User },
+  { path: "/", icon: Home },
+  { path: "/my-service-orders", icon: CircleDot },
+  { path: "/shop", icon: Search },
+  { path: "/notifications", icon: Bell },
+  { path: "/account", icon: Settings },
 ];
 
 const BottomNav = () => {
@@ -23,7 +23,7 @@ const BottomNav = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/20 bg-background/95 backdrop-blur-xl safe-bottom">
-      <div className="flex items-center justify-around h-[60px] max-w-lg mx-auto px-2">
+      <div className="flex items-center justify-around h-[56px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const isActive = item.path === "/"
             ? location.pathname === "/" || location.pathname === "/index"
@@ -35,7 +35,7 @@ const BottomNav = () => {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                "relative flex flex-col items-center gap-1 px-4 py-2 transition-all duration-200",
+                "relative flex items-center justify-center w-12 h-10 transition-all duration-200",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
@@ -49,9 +49,6 @@ const BottomNav = () => {
                 />
               )}
               <Icon className="w-5 h-5" />
-              <span className="text-[9px] font-medium tracking-wider uppercase">
-                {item.label}
-              </span>
             </button>
           );
         })}
