@@ -35,7 +35,7 @@ import { PartDetailPanel, PartDetailSheet } from "@/components/catalog/PartDetai
 import { useFavorites } from "@/components/catalog/Favorites";
 import HistoryList, { useSearchHistory } from "@/components/catalog/History";
 import PhotoDialog from "@/components/catalog/PhotoDialog";
-import ServiceInterval from "@/components/catalog/ServiceInterval";
+
 import EPCBrowser from "@/components/catalog/EPCBrowser";
 
 // ---- API layer ----
@@ -795,12 +795,6 @@ const Shop = () => {
               </div>
             )}
 
-            {/* Service Intervals Module */}
-            {partType === "new" && !searching && (
-              <div className="mt-6">
-                <ServiceInterval />
-              </div>
-            )}
 
             <div className="text-center pt-6 pb-4">
               <a href="/terms" className="text-[10px] text-muted-foreground underline hover:text-foreground transition-colors">Obchodní podmínky</a>
