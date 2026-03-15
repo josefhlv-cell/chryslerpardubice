@@ -19,7 +19,7 @@ const TopBar = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/30 bg-background/95 backdrop-blur-xl safe-top">
+    <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/20 bg-background/95 backdrop-blur-xl safe-top">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
           <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-10 object-contain" />
@@ -69,7 +69,7 @@ const TopBar = () => {
         >
           <ShoppingCart className="w-4.5 h-4.5 text-foreground" />
           {totalItems > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">
+            <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full gradient-bronze text-[9px] font-bold text-white flex items-center justify-center">
               {totalItems > 9 ? "9+" : totalItems}
             </span>
           )}

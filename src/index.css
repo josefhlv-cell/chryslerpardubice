@@ -15,7 +15,7 @@
     --popover: 0 0% 7%;
     --popover-foreground: 0 0% 95%;
 
-    --primary: 30 90% 50%;
+    --primary: 32 80% 50%;
     --primary-foreground: 0 0% 4%;
 
     --secondary: 0 0% 10%;
@@ -24,7 +24,7 @@
     --muted: 0 0% 12%;
     --muted-foreground: 0 0% 50%;
 
-    --accent: 30 90% 50%;
+    --accent: 32 80% 50%;
     --accent-foreground: 0 0% 4%;
 
     --destructive: 0 72% 51%;
@@ -32,9 +32,9 @@
 
     --border: 0 0% 14%;
     --input: 0 0% 12%;
-    --ring: 30 90% 50%;
+    --ring: 32 80% 50%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --success: 142 71% 45%;
     --success-foreground: 0 0% 100%;
@@ -44,12 +44,12 @@
 
     --sidebar-background: 0 0% 3%;
     --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 30 90% 50%;
+    --sidebar-primary: 32 80% 50%;
     --sidebar-primary-foreground: 0 0% 4%;
     --sidebar-accent: 0 0% 10%;
     --sidebar-accent-foreground: 0 0% 85%;
     --sidebar-border: 0 0% 12%;
-    --sidebar-ring: 30 90% 50%;
+    --sidebar-ring: 32 80% 50%;
 
     --font-display: 'Space Grotesk', sans-serif;
     --font-body: 'Inter', sans-serif;
@@ -88,19 +88,23 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/50 border border-border/30 rounded-lg;
+    @apply bg-card/60 border border-border/20 rounded-xl;
   }
 
   .glass-card-elevated {
-    @apply bg-card/70 border border-border/30 rounded-lg;
+    @apply bg-card/80 border border-border/25 rounded-xl;
   }
 
   .gradient-primary {
-    background: linear-gradient(135deg, hsl(30, 90%, 50%), hsl(25, 85%, 42%));
+    background: linear-gradient(135deg, hsl(32, 70%, 45%), hsl(28, 65%, 35%));
   }
 
   .gradient-accent {
-    background: linear-gradient(135deg, hsl(30, 90%, 50%), hsl(20, 85%, 45%));
+    background: linear-gradient(135deg, hsl(32, 70%, 48%), hsl(24, 65%, 38%));
+  }
+
+  .gradient-bronze {
+    background: linear-gradient(135deg, hsl(32, 55%, 48%), hsl(25, 50%, 35%));
   }
 
   .gradient-dark {
@@ -112,14 +116,14 @@
   }
 
   .text-gradient {
-    background: linear-gradient(135deg, hsl(30, 90%, 55%), hsl(30, 80%, 70%));
+    background: linear-gradient(135deg, hsl(32, 70%, 55%), hsl(32, 60%, 70%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
   .text-gradient-accent {
-    background: linear-gradient(135deg, hsl(30, 90%, 50%), hsl(20, 85%, 55%));
+    background: linear-gradient(135deg, hsl(32, 70%, 50%), hsl(24, 60%, 55%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -134,12 +138,12 @@
   }
 
   .shimmer {
-    background: linear-gradient(90deg, transparent, hsl(30, 90%, 50% / 0.04), transparent);
+    background: linear-gradient(90deg, transparent, hsl(32, 70%, 50% / 0.04), transparent);
     animation: shimmer 2s infinite;
   }
 
   .glow-primary {
-    box-shadow: 0 0 15px hsl(30, 90%, 50% / 0.12), 0 0 40px hsl(30, 90%, 50% / 0.04);
+    box-shadow: 0 0 15px hsl(32, 70%, 50% / 0.1), 0 0 40px hsl(32, 70%, 50% / 0.03);
   }
 
   .glow-success {
@@ -165,6 +169,6 @@
 }
 
 @keyframes pulseRing {
-  0%, 100% { box-shadow: 0 0 0 0 hsl(30, 90%, 50% / 0.2); }
-  50% { box-shadow: 0 0 0 6px hsl(30, 90%, 50% / 0); }
+  0%, 100% { box-shadow: 0 0 0 0 hsl(32, 70%, 50% / 0.2); }
+  50% { box-shadow: 0 0 0 6px hsl(32, 70%, 50% / 0); }
 }
