@@ -79,6 +79,7 @@ const App = () => (
                   <Route path="/terms" element={<Terms />} />
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
+                  <Route path="/index" element={<Navigate to="/" replace />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </div>
