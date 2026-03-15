@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Search, Wrench, Car, Warehouse, User } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,7 +13,7 @@ const navItems = [
   { path: "/account", icon: User, label: "Účet" },
 ];
 
-const BottomNav = () => {
+const BottomNav = forwardRef<HTMLElement>((_, ref) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { employee, user } = useAuth();
@@ -32,7 +33,7 @@ const BottomNav = () => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/20 bg-background/95 backdrop-blur-xl safe-bottom lg:hidden">
+    <nav ref={ref} className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/20 bg-background/95 backdrop-blur-xl safe-bottom lg:hidden">
       <div className="flex items-center justify-around h-[60px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const active = isActive(item.path);
@@ -64,6 +65,8 @@ const BottomNav = () => {
       </div>
     </nav>
   );
-};
+});
+
+BottomNav.displayName = "BottomNav";
 
 export default BottomNav;
