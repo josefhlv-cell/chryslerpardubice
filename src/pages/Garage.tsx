@@ -10,6 +10,8 @@ import CarIcon from "@/components/CarIcon";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import ServiceProgressIndicator from "@/components/ServiceProgressIndicator";
+import VehicleCarousel from "@/components/dashboard/VehicleCarousel";
+import ServiceRecommendations from "@/components/ServiceRecommendations";
 
 const Garage = () => {
   const navigate = useNavigate();
