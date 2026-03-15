@@ -276,6 +276,11 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
       {isEnabled("mechanic_tasks") && (
         <ServiceOrderTasks orderId={order.id} isAdmin={isAdmin} />
       )}
+
+      {/* Chat */}
+      {isEnabled("service_chat") && (
+        <ServiceOrderChat orderId={order.id} isAdmin={isAdmin} />
+      )}
     </div>
   );
 };

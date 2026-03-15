@@ -623,6 +623,12 @@ const Admin = () => {
             <AdminServiceProcedures />
           </TabsContent>
 
+          {isEnabled("push_notifications") && (
+            <TabsContent value="push-notif">
+              <div className="mt-2"><AdminNotificationToggle /></div>
+            </TabsContent>
+          )}
+
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
