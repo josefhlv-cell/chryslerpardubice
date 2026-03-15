@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Calendar, Fuel, Gauge, Heart, MessageSquare, Loader2 } from "lucide-react";
+import { Calendar, Fuel, Gauge, Heart, MessageSquare, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { fetchVehicleById, createVehicleInquiry } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -103,6 +103,26 @@ const VehicleDetail = () => {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-4">
             <h3 className="font-display font-semibold text-sm mb-2">Popis</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">{vehicle.description}</p>
+          </motion.div>
+        )}
+
+        {/* Listing URL */}
+        {vehicle.listing_url && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+            <a
+              href={vehicle.listing_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass-card p-4 flex items-center gap-3 hover:border-primary/40 transition-colors group block"
+            >
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <ExternalLink className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold">Zobrazit inzerát na chrysler.cz</p>
+                <p className="text-[11px] text-muted-foreground truncate">{vehicle.listing_url}</p>
+              </div>
+            </a>
           </motion.div>
         )}
 
