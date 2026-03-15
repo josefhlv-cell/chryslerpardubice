@@ -35,7 +35,7 @@ import { PartDetailPanel, PartDetailSheet } from "@/components/catalog/PartDetai
 import { useFavorites } from "@/components/catalog/Favorites";
 import HistoryList, { useSearchHistory } from "@/components/catalog/History";
 import PhotoDialog from "@/components/catalog/PhotoDialog";
-import ServiceInterval from "@/components/catalog/ServiceInterval";
+
 import EPCBrowser from "@/components/catalog/EPCBrowser";
 
 // ---- API layer ----
