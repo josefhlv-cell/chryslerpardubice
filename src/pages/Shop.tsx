@@ -314,29 +314,29 @@ const Shop = () => {
   return (
     <div className="min-h-screen pb-20">
       {/* ---- HEADER ---- */}
-      <div className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-12 z-30">
+      <div className="border-b border-border/30 bg-background/90 backdrop-blur-2xl sticky top-12 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <h1 className="font-display text-xl md:text-2xl font-bold">Katalog náhradních dílů</h1>
-              <p className="text-xs text-muted-foreground hidden md:block">Originální díly Chrysler · Jeep · Dodge · RAM · Fiat</p>
+              <h1 className="font-display text-xl md:text-2xl font-bold tracking-tight">Katalog náhradních dílů</h1>
+              <p className="text-[11px] text-muted-foreground hidden md:block">Originální díly Chrysler · Jeep · Dodge · RAM · Fiat</p>
             </div>
 
             {/* Part type toggle */}
-            <div className="flex rounded-lg bg-secondary p-0.5 gap-0.5">
+            <div className="flex rounded-lg bg-secondary/60 border border-border/20 p-0.5 gap-0.5">
               <button onClick={() => { setPartType("new"); setResults(null); setUsedSubmitted(false); setPage(0); }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${partType === "new" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${partType === "new" ? "gradient-bronze text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 <Sparkles className="w-3.5 h-3.5" />Nové
               </button>
               <button onClick={() => { setPartType("used"); setResults(null); }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${partType === "used" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${partType === "used" ? "gradient-bronze text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 <Package className="w-3.5 h-3.5" />Použité
               </button>
             </div>
 
             {/* CSV export */}
             {results && results.length > 0 && (
-              <Button size="sm" variant="outline" className="hidden md:flex text-xs h-8" onClick={() => downloadCSV(results)}>
+              <Button size="sm" variant="outline" className="hidden md:flex text-xs h-8 border-border/30" onClick={() => downloadCSV(results)}>
                 <Download className="w-3.5 h-3.5 mr-1" />CSV
               </Button>
             )}

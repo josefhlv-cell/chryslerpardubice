@@ -295,46 +295,51 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen pb-20">
-      <PageHeader title="Admin panel" />
+      <PageHeader title="Admin panel" subtitle="Správa systému" />
       <div className="p-4 max-w-4xl mx-auto">
         <div className="flex items-center gap-2 mb-4">
-          <Shield className="w-5 h-5 text-primary" />
-          <span className="text-sm text-muted-foreground">Správa firem, objednávek a požadavků</span>
-          <Button size="sm" variant="outline" className="ml-auto" onClick={fetchAll}>
-            <RefreshCw className="w-4 h-4 mr-1" /> Obnovit
+          <div className="w-8 h-8 rounded-lg gradient-bronze flex items-center justify-center">
+            <Shield className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <span className="text-sm font-display font-semibold">Řídící centrum</span>
+            <p className="text-[10px] text-muted-foreground">Firmy · Objednávky · Servis · Katalog</p>
+          </div>
+          <Button size="sm" variant="outline" className="border-border/30 h-8" onClick={fetchAll}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Obnovit
           </Button>
         </div>
 
         <Tabs defaultValue="firms">
-          <TabsList className="w-full flex overflow-x-auto">
-            <TabsTrigger value="firms" className="text-xs gap-1 shrink-0">
+          <TabsList className="w-full flex overflow-x-auto scrollbar-hide bg-secondary/40 border border-border/20 p-0.5">
+            <TabsTrigger value="firms" className="text-[11px] gap-1 shrink-0">
               <Users className="w-3 h-3" />
               Firmy
               {pendingOnly.length > 0 && (
-                <span className="ml-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-bold">
+                <span className="ml-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
                   {pendingOnly.length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="orders" className="text-xs gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
-            {isEnabled("bookings") && <TabsTrigger value="service" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
-            {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-xs gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
-            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-xs gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>}
-            {isEnabled("catalog") && <TabsTrigger value="settings" className="text-xs gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>}
-            {isEnabled("service_history") && <TabsTrigger value="history" className="text-xs gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
-            {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-xs gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
-            {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-xs gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
-            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-xs gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
-            <TabsTrigger value="service-plans" className="text-xs gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
-            {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-xs gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
-            {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-xs gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
-            {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-xs gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
-            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-xs gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
-            {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-xs gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
-            {isEnabled("employees") && <TabsTrigger value="employees" className="text-xs gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
-            {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-xs gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
-            <TabsTrigger value="procedures" className="text-xs gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
-            <TabsTrigger value="features" className="text-xs gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
+            <TabsTrigger value="orders" className="text-[11px] gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
+            {isEnabled("bookings") && <TabsTrigger value="service" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
+            {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-[11px] gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-[11px] gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Ceník</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="settings" className="text-[11px] gap-1 shrink-0"><Shield className="w-3 h-3" />Katalogy</TabsTrigger>}
+            {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
+            {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
+            {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
+            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-[11px] gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
+            <TabsTrigger value="service-plans" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
+            {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-[11px] gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
+            {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-[11px] gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
+            {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-[11px] gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
+            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-[11px] gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
+            {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-[11px] gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
+            {isEnabled("employees") && <TabsTrigger value="employees" className="text-[11px] gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
+            {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-[11px] gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
+            <TabsTrigger value="procedures" className="text-[11px] gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
+            <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
