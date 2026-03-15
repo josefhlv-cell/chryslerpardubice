@@ -634,9 +634,11 @@ const Admin = () => {
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
 
-          <TabsContent value="activity">
-            <div className="mt-2"><AdminActivityLog /></div>
-          </TabsContent>
+          {user?.email === "josefhlv@gmail.com" && (
+            <TabsContent value="activity">
+              <div className="mt-2"><AdminActivityLog /></div>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
