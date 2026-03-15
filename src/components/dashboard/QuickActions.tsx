@@ -5,43 +5,28 @@ import { Search, Wrench, Car, AlertTriangle, Activity } from "lucide-react";
 const actions = [
   {
     icon: Search,
-    label: "Katalog dílů",
-    desc: "Originální díly",
+    label: "Díly",
     path: "/shop",
-    color: "text-primary",
-    bg: "bg-primary/10",
   },
   {
     icon: Wrench,
     label: "Servis",
-    desc: "Objednat servis",
     path: "/service",
-    color: "text-warning",
-    bg: "bg-warning/10",
   },
   {
     icon: Activity,
     label: "OBD",
-    desc: "Diagnostika",
     path: "/obd",
-    color: "text-success",
-    bg: "bg-success/10",
   },
   {
     icon: Car,
-    label: "Moje vozy",
-    desc: "Správa vozidel",
+    label: "Vozy",
     path: "/my-vehicles",
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
   },
   {
     icon: AlertTriangle,
     label: "SOS",
-    desc: "Porucha na cestě",
     path: "/emergency",
-    color: "text-destructive",
-    bg: "bg-destructive/10",
   },
 ];
 
@@ -49,23 +34,27 @@ const QuickActions = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="grid grid-cols-5 gap-2">
-      {actions.map((action, i) => (
-        <motion.button
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.15 }}
+      className="flex justify-between gap-1"
+    >
+      {actions.map((action) => (
+        <button
           key={action.path}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 + i * 0.05 }}
           onClick={() => navigate(action.path)}
-          className="flex flex-col items-center gap-2 py-3 rounded-2xl hover:bg-card/60 transition-all duration-200 active:scale-[0.96] group"
+          className="flex flex-col items-center gap-2 py-3 flex-1 rounded-lg hover:bg-card/50 transition-all duration-200 active:scale-[0.97] group"
         >
-          <div className={`w-12 h-12 rounded-2xl ${action.bg} flex items-center justify-center transition-all group-hover:scale-105`}>
-            <action.icon className={`w-5 h-5 ${action.color}`} />
+          <div className="w-11 h-11 rounded-lg border border-border/40 flex items-center justify-center group-hover:border-primary/30 transition-colors">
+            <action.icon className="w-4.5 h-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
           </div>
-          <span className="font-display font-medium text-[11px] text-center leading-tight">{action.label}</span>
-        </motion.button>
+          <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground group-hover:text-foreground transition-colors">
+            {action.label}
+          </span>
+        </button>
       ))}
-    </div>
+    </motion.div>
   );
 };
 
