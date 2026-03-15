@@ -22,7 +22,7 @@ const warningLights = [
   "Brzdy", "ESP/Stabilita", "TPMS (tlak pneumatik)", "EPC",
 ];
 
-const SERVICE_PHONE = "+420123456789";
+const SERVICE_PHONE = "+420603372911";
 
 const AiMechanic = () => {
   const { user } = useAuth();

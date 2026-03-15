@@ -1,15 +1,19 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Calendar, Fuel, Gauge, Heart, MessageSquare } from "lucide-react";
+import { Calendar, Fuel, Gauge, Heart, MessageSquare, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { fetchVehicleById } from "@/lib/api";
+import { fetchVehicleById, createVehicleInquiry } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 const VehicleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [inquiryLoading, setInquiryLoading] = useState(false);
 
   const { data: vehicle, isLoading, error } = useQuery({
     queryKey: ["vehicle", id],
@@ -122,8 +126,24 @@ const VehicleDetail = () => {
           <Button variant="outline" size="lg" className="shrink-0" onClick={() => toast.success("Přidáno do oblíbených")}>
             <Heart className="w-5 h-5" />
           </Button>
-          <Button variant="hero" size="lg" className="flex-1" onClick={() => toast.success("Poptávka odeslána! Budeme vás kontaktovat.")}>
-            <MessageSquare className="w-4 h-4" />
+          <Button variant="hero" size="lg" className="flex-1" disabled={inquiryLoading} onClick={async () => {
+            if (!vehicle) return;
+            setInquiryLoading(true);
+            try {
+              await createVehicleInquiry({
+                vehicle_id: vehicle.id,
+                user_id: user?.id,
+                name: user?.email?.split("@")[0] || undefined,
+                email: user?.email || undefined,
+              });
+              toast.success("Poptávka odeslána! Budeme vás kontaktovat.");
+            } catch (err: any) {
+              toast.error(err.message || "Chyba při odesílání poptávky");
+            } finally {
+              setInquiryLoading(false);
+            }
+          }}>
+            {inquiryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
             Mám zájem
           </Button>
         </div>

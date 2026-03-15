@@ -218,7 +218,7 @@ const Service = () => {
           <div className="text-center pt-2">
             <p className="text-[11px] text-muted-foreground">
               Preferujete telefonicky? Volejte{" "}
-              <a href="tel:+420466123456" className="text-primary hover:underline font-medium">+420 466 123 456</a>
+              <a href="tel:+420603372911" className="text-primary hover:underline font-medium">+420 603 372 911</a>
             </p>
           </div>
         </motion.div>
