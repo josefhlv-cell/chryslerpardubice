@@ -795,12 +795,6 @@ const Shop = () => {
               </div>
             )}
 
-            {/* Service Intervals Module */}
-            {partType === "new" && !searching && (
-              <div className="mt-6">
-                <ServiceInterval />
-              </div>
-            )}
 
             <div className="text-center pt-6 pb-4">
               <a href="/terms" className="text-[10px] text-muted-foreground underline hover:text-foreground transition-colors">Obchodní podmínky</a>
