@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminSessionTracker } from "@/hooks/useAdminSessionTracker";
 
 interface Profile {
   id: string;
@@ -132,6 +133,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isPendingBusiness = profile?.account_type === "business" && profile?.status === "pending";
   const canPlaceOrder = !!profile && profile.status === "active";
+
+  // Track admin session time
+  useAdminSessionTracker(user?.id, isAdmin);
 
   const signUp = async (email: string, password: string, meta: SignUpMeta) => {
     const { error } = await supabase.auth.signUp({
