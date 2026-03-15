@@ -148,6 +148,12 @@ const Garage = () => {
           </button>
         </motion.div>
 
+        {/* Vehicle carousel */}
+        <VehicleCarousel />
+
+        {/* Service recommendations */}
+        <ServiceRecommendations />
+
         {isAdmin && (
           <motion.button
             initial={{ opacity: 0 }}
