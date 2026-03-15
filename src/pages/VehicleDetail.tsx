@@ -3,9 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Calendar, Fuel, Gauge, Heart, MessageSquare } from "lucide-react";
+import { Calendar, Fuel, Gauge, Heart, MessageSquare, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { fetchVehicleById } from "@/lib/api";
+import { fetchVehicleById, createVehicleInquiry } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 const VehicleDetail = () => {
   const { id } = useParams();
