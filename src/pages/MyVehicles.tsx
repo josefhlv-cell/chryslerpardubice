@@ -368,6 +368,20 @@ const MyVehicles = () => {
                 </div>
                   </div>
                 </div>
+
+                {/* Auto part recommendations */}
+                {isEnabled("auto_part_recommendations") && v.current_mileage && (
+                  <div className="mt-3">
+                    <AutoPartRecommendations vehicleId={v.id} currentMileage={v.current_mileage} />
+                  </div>
+                )}
+
+                {/* Service book sharing */}
+                {isEnabled("service_book_sharing") && (
+                  <div className="mt-3">
+                    <ServiceBookShare vehicleId={v.id} vehicleInfo={`${v.brand} ${v.model} ${v.year || ""}`} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
