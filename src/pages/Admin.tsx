@@ -633,6 +633,10 @@ const Admin = () => {
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
+
+          <TabsContent value="activity">
+            <div className="mt-2"><AdminActivityLog /></div>
+          </TabsContent>
         </Tabs>
       </div>
 
