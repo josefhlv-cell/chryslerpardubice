@@ -35,20 +35,10 @@ const Auth = () => {
     if (emp) {
       switch (emp.role) {
         case "mechanic": return "/mechanic-dashboard";
-        case "parts_sales": return "/shop";
-        case "car_sales": return "/vehicles";
-        default: return "/shop";
+        default: return "/";
       }
     }
 
-    const { data: adminRole } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (adminRole) return "/admin";
     return "/";
   };
 
