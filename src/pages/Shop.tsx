@@ -54,7 +54,7 @@ const Shop = () => {
 
   // ---- State ----
   const [partType, setPartType] = useState<PartType>("new");
-  const [searchMode, setSearchMode] = useState<SearchMode>("part_number");
+  const [searchMode, setSearchMode] = useState<SearchMode>("vehicle");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
