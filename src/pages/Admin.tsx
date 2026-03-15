@@ -35,6 +35,7 @@ import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
 import AdminServiceScheduler from "@/components/admin/AdminServiceScheduler";
 import AdminEmployees from "@/components/admin/AdminEmployees";
 import AdminServiceProcedures from "@/components/admin/AdminServiceProcedures";
+import AdminNotificationToggle from "@/components/admin/AdminNotificationToggle";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -339,6 +340,7 @@ const Admin = () => {
             {isEnabled("employees") && <TabsTrigger value="employees" className="text-[11px] gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-[11px] gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
             <TabsTrigger value="procedures" className="text-[11px] gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
+            {isEnabled("push_notifications") && <TabsTrigger value="push-notif" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Push</TabsTrigger>}
             <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
@@ -619,6 +621,12 @@ const Admin = () => {
           <TabsContent value="procedures">
             <AdminServiceProcedures />
           </TabsContent>
+
+          {isEnabled("push_notifications") && (
+            <TabsContent value="push-notif">
+              <div className="mt-2"><AdminNotificationToggle /></div>
+            </TabsContent>
+          )}
 
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>

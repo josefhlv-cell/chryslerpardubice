@@ -23,7 +23,13 @@ export type FeatureKey =
   | "employees"
   | "mechanics_management"
   | "vehicle_health"
-  | "bookings";
+  | "bookings"
+  | "push_notifications"
+  | "auto_part_recommendations"
+  | "vin_camera"
+  | "price_comparison"
+  | "service_chat"
+  | "service_book_sharing";
 
 type FeatureFlag = {
   id: string;
