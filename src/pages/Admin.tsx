@@ -341,6 +341,7 @@ const Admin = () => {
             {isEnabled("employees") && <TabsTrigger value="employees" className="text-[11px] gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-[11px] gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
             <TabsTrigger value="procedures" className="text-[11px] gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
+            {isEnabled("push_notifications") && <TabsTrigger value="push-notif" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Push</TabsTrigger>}
             <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
           </TabsList>
 
