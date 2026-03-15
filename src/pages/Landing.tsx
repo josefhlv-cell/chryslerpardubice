@@ -3,15 +3,15 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Search, ShoppingCart, Wrench, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import Dashboard from "@/components/dashboard/Dashboard";
+import Shop from "@/pages/Shop";
 
 const Landing = () => {
   const navigate = useNavigate();
   const { user, isLoading } = useAuth();
 
-  // Show dashboard for logged-in users
+  // Show parts catalog directly for logged-in users
   if (!isLoading && user) {
-    return <Dashboard />;
+    return <Shop />;
   }
 
   return (

@@ -3,35 +3,36 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import TondaAvatar from "@/components/TondaAvatar";
 import {
-  Home, Wrench, Car, User, Search, ShoppingCart, AlertTriangle,
-  BookOpen, Bell, Shield, FileText, Cpu, Activity, MessageCircle,
-  ChevronLeft, ChevronRight,
+  Search, Wrench, Car, User, ShoppingCart, AlertTriangle,
+  BookOpen, Shield, FileText, Cpu, Activity, MessageCircle,
+  ChevronLeft, ChevronRight, Warehouse, ArrowDownUp,
 } from "lucide-react";
 import { useState } from "react";
 
-const mainNav = [
-  { path: "/", label: "Dashboard", icon: Home },
+const partsNav = [
   { path: "/shop", label: "Katalog dílů", icon: Search },
   { path: "/epc", label: "EPC Diagramy", icon: Cpu },
-  { path: "/my-vehicles", label: "Moje vozidla", icon: Car },
-  { path: "/ai-mechanic", label: "AI Mechanik Tonda", icon: MessageCircle, isTonda: true },
-  { path: "/obd", label: "OBD Diagnostika", icon: Activity },
+  { path: "/cart", label: "Košík", icon: ShoppingCart },
+  { path: "/orders", label: "Objednávky", icon: FileText },
 ];
 
 const serviceNav = [
-  { path: "/service", label: "Servis", icon: Wrench },
-  { path: "/my-service-orders", label: "Zakázky", icon: FileText },
+  { path: "/service", label: "Rezervace servisu", icon: Wrench },
+  { path: "/my-service-orders", label: "Moje zakázky", icon: FileText },
   { path: "/service-book", label: "Servisní knížka", icon: BookOpen },
-  { path: "/service-plan", label: "Údržba", icon: FileText },
-  { path: "/emergency", label: "SOS", icon: AlertTriangle },
+  { path: "/service-plan", label: "Plán údržby", icon: FileText },
 ];
 
-const accountNav = [
-  { path: "/cart", label: "Košík", icon: ShoppingCart },
-  { path: "/orders", label: "Objednávky", icon: FileText },
-  { path: "/notifications", label: "Notifikace", icon: Bell },
+const vehiclesNav = [
   { path: "/vehicles", label: "Vozy k prodeji", icon: Car },
-  { path: "/vehicle-offer", label: "Výkup / Dovoz", icon: Car },
+  { path: "/vehicle-offer", label: "Výkup / Dovoz", icon: ArrowDownUp },
+];
+
+const garageNav = [
+  { path: "/my-vehicles", label: "Moje vozidla", icon: Car },
+  { path: "/ai-mechanic", label: "AI Mechanik Tonda", icon: MessageCircle, isTonda: true },
+  { path: "/obd", label: "OBD Diagnostika", icon: Activity },
+  { path: "/emergency", label: "SOS Pomoc", icon: AlertTriangle },
   { path: "/account", label: "Můj účet", icon: User },
 ];
 
@@ -44,8 +45,8 @@ const DesktopSidebar = () => {
   if (employee && employee.role !== "admin") return null;
 
   const isActive = (path: string) =>
-    path === "/"
-      ? location.pathname === "/" || location.pathname === "/index"
+    path === "/shop"
+      ? location.pathname === "/" || location.pathname === "/index" || location.pathname === "/shop"
       : location.pathname.startsWith(path);
 
   const NavItem = ({ item }: { item: { path: string; label: string; icon: any; isTonda?: boolean } }) => (
@@ -93,7 +94,7 @@ const DesktopSidebar = () => {
     >
       {/* Logo */}
       <div className="p-4 flex items-center gap-3 border-b border-border/20">
-        <button onClick={() => navigate("/")} className="shrink-0">
+        <button onClick={() => navigate("/shop")} className="shrink-0">
           <img src="/images/logo-cd-pardubice.png" alt="Logo" className="h-9 object-contain" />
         </button>
         {!collapsed && (
@@ -105,9 +106,10 @@ const DesktopSidebar = () => {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-hide">
-        <NavSection title="Hlavní" items={mainNav} />
+        <NavSection title="Náhradní díly" items={partsNav} />
         <NavSection title="Servis" items={serviceNav} />
-        <NavSection title="Účet" items={accountNav} />
+        <NavSection title="Prodej vozů" items={vehiclesNav} />
+        <NavSection title="Garáž & Nástroje" items={garageNav} />
         {isAdmin && (
           <NavSection title="Admin" items={[{ path: "/admin", label: "Admin Panel", icon: Shield }]} />
         )}

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
 import TopBar from "@/components/TopBar";
 import BottomNav from "@/components/BottomNav";
@@ -34,6 +34,7 @@ import VehicleOffer from "./pages/VehicleOffer";
 import EPC from "./pages/EPC";
 import MechanicDashboard from "./pages/MechanicDashboard";
 import OBDDiagnostics from "./pages/OBDDiagnostics";
+import Garage from "./pages/Garage";
 import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -60,6 +61,7 @@ const App = () => (
                   <Route path="/vehicles" element={<Vehicles />} />
                   <Route path="/vehicles/:id" element={<VehicleDetail />} />
                   <Route path="/vehicle-offer" element={<VehicleOffer />} />
+                  <Route path="/garage" element={<Garage />} />
                   <Route path="/account" element={<Account />} />
                   <Route path="/orders" element={<MyOrders />} />
                   <Route path="/my-vehicles" element={<MyVehicles />} />
