@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useAdminSessionTracker } from "@/hooks/useAdminSessionTracker";
 
 interface Profile {
   id: string;
