@@ -11,6 +11,8 @@ import { useAuth } from "@/contexts/AuthContext";
 const VehicleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [inquiryLoading, setInquiryLoading] = useState(false);
 
   const { data: vehicle, isLoading, error } = useQuery({
     queryKey: ["vehicle", id],
