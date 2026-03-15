@@ -10,7 +10,6 @@ const TopBar = () => {
   const { totalItems } = useCart();
   const { isAdmin, user } = useAuth();
 
-  // Hide only on landing page for non-logged-in users
   if (location.pathname === "/" && !user) return null;
 
   const menuItems = [
@@ -20,20 +19,20 @@ const TopBar = () => {
   ];
 
   return (
-    <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/40 bg-background/80 backdrop-blur-2xl safe-top">
+    <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/30 bg-background/95 backdrop-blur-xl safe-top">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate("/")} className="flex items-center gap-2.5">
-          <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-11 object-contain" />
+          <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-10 object-contain" />
         </button>
         <nav className="hidden sm:flex items-center gap-1">
           {menuItems.map(item => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium tracking-wide transition-colors ${
                 location.pathname === item.path
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {item.label}
@@ -41,8 +40,8 @@ const TopBar = () => {
           ))}
         </nav>
         <DropdownMenu>
-          <DropdownMenuTrigger className="sm:hidden flex items-center gap-1 px-2 py-1 rounded-xl text-sm text-muted-foreground hover:text-foreground">
-            Menu <ChevronDown className="w-3.5 h-3.5" />
+          <DropdownMenuTrigger className="sm:hidden flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground">
+            Menu <ChevronDown className="w-3 h-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
             {menuItems.map(item => (
@@ -58,19 +57,19 @@ const TopBar = () => {
         {isAdmin && (
           <button
             onClick={() => navigate("/admin")}
-            className="p-2 rounded-xl hover:bg-secondary transition-colors"
+            className="p-2 rounded-lg hover:bg-card/50 transition-colors"
             title="Admin panel"
           >
-            <Shield className="w-5 h-5 text-primary" />
+            <Shield className="w-4.5 h-4.5 text-primary" />
           </button>
         )}
         <button
           onClick={() => navigate("/cart")}
-          className="relative p-2 rounded-xl hover:bg-secondary transition-colors"
+          className="relative p-2 rounded-lg hover:bg-card/50 transition-colors"
         >
-          <ShoppingCart className="w-5 h-5 text-foreground" />
+          <ShoppingCart className="w-4.5 h-4.5 text-foreground" />
           {totalItems > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full gradient-primary text-[10px] font-bold text-primary-foreground flex items-center justify-center">
+            <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">
               {totalItems > 9 ? "9+" : totalItems}
             </span>
           )}

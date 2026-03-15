@@ -18,24 +18,13 @@ const BottomNav = () => {
   const navigate = useNavigate();
   const { employee, user } = useAuth();
 
-  // Hide for landing, checkout, and employee roles (mechanics, parts_sales, car_sales)
   if (location.pathname === "/" && !user) return null;
   if (location.pathname.startsWith("/checkout")) return null;
   if (employee && employee.role !== "admin") return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 backdrop-blur-2xl safe-bottom overflow-hidden">
-      {/* USA flag background */}
-      <div className="absolute inset-0 opacity-[0.07] pointer-events-none">
-        <div className="absolute inset-0 flex flex-col">
-          {[...Array(13)].map((_, i) => (
-            <div key={i} className="flex-1" style={{ background: i % 2 === 0 ? '#B22234' : '#FFFFFF' }} />
-          ))}
-        </div>
-        <div className="absolute top-0 left-0 w-[40%] h-[54%] bg-[#3C3B6E]" />
-      </div>
-      <div className="absolute inset-0 bg-background/85 pointer-events-none" />
-      <div className="flex items-center justify-around h-[68px] max-w-lg mx-auto px-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/30 bg-background/95 backdrop-blur-xl safe-bottom">
+      <div className="flex items-center justify-around h-[64px] max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const isActive = item.path === "/"
             ? location.pathname === "/" || location.pathname === "/index"
@@ -47,7 +36,7 @@ const BottomNav = () => {
               key={item.path}
               onClick={() => navigate(item.path)}
               className={cn(
-                "relative flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-all duration-200",
+                "relative flex flex-col items-center gap-1 px-3 py-2 transition-all duration-200",
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
@@ -56,27 +45,24 @@ const BottomNav = () => {
               {isActive && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className="absolute -top-px left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-primary"
+                  className="absolute -top-px left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full bg-primary"
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
               {isTonda ? (
                 <div className={cn(
-                  "w-10 h-10 -mt-4 rounded-full border-2 flex items-center justify-center transition-all",
+                  "w-9 h-9 -mt-3 rounded-full border flex items-center justify-center transition-all",
                   isActive
-                    ? "border-primary bg-primary/10 glow-primary"
-                    : "border-border bg-card"
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border/50 bg-card/50"
                 )}>
                   <TondaAvatar size="nav" />
                 </div>
               ) : (
-                <item.icon className={cn(
-                  "w-5 h-5 transition-all",
-                  isActive && "drop-shadow-[0_0_8px_hsl(347,77%,50%)]"
-                )} />
+                <item.icon className="w-5 h-5 transition-all" />
               )}
               <span className={cn(
-                "text-[10px] font-medium tracking-wide",
+                "text-[9px] font-medium tracking-wider uppercase",
                 isTonda && "-mt-0.5"
               )}>{item.label}</span>
             </button>
