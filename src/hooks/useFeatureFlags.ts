@@ -29,7 +29,14 @@ export type FeatureKey =
   | "vin_camera"
   | "price_comparison"
   | "service_chat"
-  | "service_book_sharing";
+  | "service_book_sharing"
+  | "service_reviews"
+  | "dark_mode"
+  | "admin_statistics"
+  | "onboarding"
+  | "email_templates"
+  | "i18n"
+  | "pwa_offline";
 
 type FeatureFlag = {
   id: string;
