@@ -5,10 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList, HardHat } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import PushNotificationToggle from "@/components/PushNotificationToggle";
 
 const Account = () => {
   const navigate = useNavigate();
   const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading, employee } = useAuth();
+  const { isEnabled } = useFeatureFlags();
 
   if (isLoading) {
     return (
@@ -138,6 +141,13 @@ const Account = () => {
             )}
           </div>
         </motion.div>
+
+        {/* Push Notifications */}
+        {isEnabled("push_notifications") && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+            <PushNotificationToggle />
+          </motion.div>
+        )}
 
         {/* Logout */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>

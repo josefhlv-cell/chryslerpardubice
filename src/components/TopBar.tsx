@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ThemeToggle from "@/components/ThemeToggle";
+import LanguageToggle from "@/components/LanguageToggle";
 
 const TopBar = () => {
   const location = useLocation();
@@ -58,6 +59,7 @@ const TopBar = () => {
       </div>
 
       <div className="flex items-center gap-1">
+        {isEnabled("i18n") && <LanguageToggle />}
         {isEnabled("dark_mode") && <ThemeToggle />}
         {isAdmin && (
           <button
