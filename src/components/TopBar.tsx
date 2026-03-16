@@ -58,6 +58,7 @@ const TopBar = () => {
       </div>
 
       <div className="flex items-center gap-1">
+        {isEnabled("dark_mode") && <ThemeToggle />}
         {isAdmin && (
           <button
             onClick={() => navigate("/admin")}
