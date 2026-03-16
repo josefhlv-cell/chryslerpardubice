@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList, HardHat } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import PushNotificationToggle from "@/components/PushNotificationToggle";
 
 const Account = () => {
   const navigate = useNavigate();
