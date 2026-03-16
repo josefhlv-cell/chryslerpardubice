@@ -182,7 +182,7 @@ const Shop = () => {
   // Auto-search on debounced query
   const hasSearched = useRef(false);
   useEffect(() => {
-    if (partType === "new" && debouncedQuery && searchMode === "part_number") {
+    if (partType === "new" && debouncedQuery && debouncedQuery.length >= 5 && searchMode === "part_number") {
       hasSearched.current = true;
       doSearch(debouncedQuery, page);
     }
