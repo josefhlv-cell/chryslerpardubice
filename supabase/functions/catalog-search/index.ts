@@ -455,29 +455,27 @@ async function searchAutoKelly(
       body: JSON.stringify({
         url: `${AK_BASE}/Account/Login`,
         formats: ['markdown'],
-        waitFor: 3000,
+        waitFor: 2000,
+        timeout: 20000,
         actions: [
-          { type: 'wait', milliseconds: 2000 },
-          // Step 1: Login via JS
+          { type: 'wait', milliseconds: 1000 },
           {
             type: 'executeJavascript',
             script: `
-              const userInput = document.querySelector('input[name="UserName"], #UserName, input[type="email"]');
-              const passInput = document.querySelector('input[name="Password"], #Password, input[type="password"]');
-              if (userInput) userInput.value = '${akEmail}';
-              if (passInput) passInput.value = '${akPass}';
-              const form = userInput?.closest('form');
-              if (form) form.submit();
+              const u = document.querySelector('input[name="UserName"], #UserName');
+              const p = document.querySelector('input[name="Password"], #Password');
+              if (u) u.value = '${akEmail}';
+              if (p) p.value = '${akPass}';
+              const f = u?.closest('form');
+              if (f) f.submit();
             `
           },
-          { type: 'wait', milliseconds: 5000 },
-          // Step 2: Navigate to search
+          { type: 'wait', milliseconds: 3000 },
           { 
             type: 'executeJavascript', 
             script: `window.location.href = '/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';`
           },
-          { type: 'wait', milliseconds: 8000 },
-          // Step 3: Extract product data from rendered Angular page
+          { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
         ],
       }),
