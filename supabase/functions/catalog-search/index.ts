@@ -473,7 +473,7 @@ async function searchAutoKelly(
           { type: 'wait', milliseconds: 3000 },
           { 
             type: 'executeJavascript', 
-            script: `window.location.href = '/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';`
+            script: `window.location.href = 'https://www.lkq.cz/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';`
           },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
