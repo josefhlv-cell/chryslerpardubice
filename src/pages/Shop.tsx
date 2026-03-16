@@ -164,6 +164,7 @@ const Shop = () => {
       if (!signal.aborted) {
         setResults(result.results);
         setTotalCount(result.totalCount);
+        if (result.results.length > 0) setSearchCollapsed(true);
       }
     } catch (err: any) {
       if (signal.aborted) return; // Silently ignore aborted requests
