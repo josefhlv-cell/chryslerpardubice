@@ -4,7 +4,7 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const AK_BASE = 'https://www.autokelly.cz';
+const AK_BASE = 'https://www.lkq.cz';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 type Session = { loggedIn: boolean; cookies: Record<string, string> };
