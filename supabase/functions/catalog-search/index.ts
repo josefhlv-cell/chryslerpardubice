@@ -353,11 +353,115 @@ function parseSearchResult(html: string, oem: string): { found: boolean; name: s
   return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, family: '', category: '', segment: '', packaging: '' };
 }
 
-// ===== AutoKelly =====
+// ===== AutoKelly/LKQ via Firecrawl =====
 
 async function loginToAutoKelly(email: string, pass: string): Promise<Session> {
-  const cookies: Record<string, string> = {};
-  const headers = {
+  if (email && pass) return { loggedIn: true, cookies: {} };
+  return { loggedIn: false, cookies: {} };
+}
+
+async function searchAutoKelly(
+  _session: Session,
+  oemCode: string
+): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
+  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
+  if (!FIRECRAWL_API_KEY) {
+    console.log('LKQ: FIRECRAWL_API_KEY not configured');
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  }
+
+  try {
+    const searchUrl = `${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}`;
+    console.log(`LKQ Firecrawl: scraping ${searchUrl}`);
+
+    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: searchUrl,
+        formats: ['markdown'],
+        waitFor: 3000,
+        onlyMainContent: true,
+      }),
+    });
+
+    const fcData = await fcResp.json();
+    
+    if (!fcResp.ok) {
+      console.error(`LKQ Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 300));
+      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    }
+
+    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
+    console.log(`LKQ Firecrawl: ${markdown.length} chars`);
+    console.log(`LKQ snippet: "${markdown.substring(0, 500)}"`);
+
+    if (markdown.length < 50 || (markdown.includes('Přihlášení') && !markdown.includes('Kč'))) {
+      console.log('LKQ: no product data or login page');
+      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    }
+
+    return parseAutoKellyMarkdown(markdown, oemCode);
+  } catch (err) {
+    console.error('LKQ Firecrawl error:', err);
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  }
+}
+
+function parseAutoKellyMarkdown(
+  markdown: string,
+  oemCode: string
+): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
+  const prices: number[] = [];
+  const priceRegex = /(\d[\d\s]*[,.]?\d*)\s*Kč/gi;
+  let pm;
+  while ((pm = priceRegex.exec(markdown)) !== null) {
+    const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
+    if (v > 0 && v < 500000) prices.push(v);
+  }
+
+  let name = '';
+  const lines = markdown.split('\n').filter(l => l.trim().length > 3);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(oemCode) || lines[i].match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič|destičk|kotouč/i)) {
+      name = lines[i].replace(/[|*#\[\]]/g, '').trim().substring(0, 100);
+      break;
+    }
+  }
+
+  let manufacturer = '';
+  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'JURID', 'NGK', 'DENSO', 'HELLA', 'OSRAM', 'PHILIPS', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN'];
+  for (const mfr of mfrPatterns) {
+    if (markdown.toUpperCase().includes(mfr)) { manufacturer = mfr; break; }
+  }
+
+  if (prices.length > 0) {
+    let priceWithVat = 0, priceWithoutVat = 0;
+    if (prices.length >= 2) {
+      priceWithoutVat = Math.min(prices[0], prices[1]);
+      priceWithVat = Math.max(prices[0], prices[1]);
+    } else {
+      priceWithVat = prices[0];
+      priceWithoutVat = Math.round(prices[0] / 1.21 * 100) / 100;
+    }
+    
+    const isAvailable = markdown.toLowerCase().includes('skladem') || markdown.toLowerCase().includes('dostupn');
+    
+    return {
+      found: true,
+      name: name || `Díl ${oemCode}`,
+      price_without_vat: priceWithoutVat,
+      price_with_vat: priceWithVat,
+      manufacturer,
+      availability: isAvailable ? 'available' : 'on_order',
+    };
+  }
+
+  return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+}
     'User-Agent': UA,
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'cs-CZ,cs;q=0.9',
