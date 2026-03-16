@@ -35,9 +35,11 @@ const STATUS_STYLES: Record<string, string> = {
 
 const MyServiceOrders = () => {
   const { user, isLoading: authLoading } = useAuth();
+  const { isEnabled } = useFeatureFlags();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
