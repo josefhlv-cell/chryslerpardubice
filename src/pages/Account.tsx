@@ -11,6 +11,7 @@ import PushNotificationToggle from "@/components/PushNotificationToggle";
 const Account = () => {
   const navigate = useNavigate();
   const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading, employee } = useAuth();
+  const { isEnabled } = useFeatureFlags();
 
   if (isLoading) {
     return (
