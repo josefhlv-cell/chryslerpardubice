@@ -37,6 +37,8 @@ import AdminEmployees from "@/components/admin/AdminEmployees";
 import AdminServiceProcedures from "@/components/admin/AdminServiceProcedures";
 import AdminNotificationToggle from "@/components/admin/AdminNotificationToggle";
 import AdminActivityLog from "@/components/admin/AdminActivityLog";
+import AdminReviews from "@/components/admin/AdminReviews";
+import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
