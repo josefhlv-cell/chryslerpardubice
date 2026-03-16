@@ -432,119 +432,82 @@ async function loginToAutoKelly(email: string, pass: string): Promise<Session> {
 }
 
 async function searchAutoKelly(
-  session: Session,
+  _session: Session,
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
-  const baseHeaders = {
-    'User-Agent': UA,
-    'Accept-Language': 'cs-CZ,cs;q=0.9',
-    'Cookie': cookieHeader(session.cookies),
-    'Referer': `${AK_BASE}/Catalog/Car`,
-  };
+  const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
+  const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
+  const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
+  
+  if (!firecrawlKey) {
+    console.log('AutoKelly: No Firecrawl key, skipping');
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  }
 
   try {
-    // 1. Try the AngularJS API endpoint that the SPA uses internally
-    // AutoKelly's Angular app calls /Search/SearchProduct for AJAX product search
-    const apiEndpoints = [
-      `${AK_BASE}/Search/SearchProduct?searchText=${encodeURIComponent(oemCode)}&pageSize=10&page=1`,
-      `${AK_BASE}/Search/GetProducts?searchText=${encodeURIComponent(oemCode)}`,
-      `${AK_BASE}/api/Search?query=${encodeURIComponent(oemCode)}`,
-      `${AK_BASE}/Catalog/SearchProducts?searchText=${encodeURIComponent(oemCode)}`,
-    ];
-
-    for (const url of apiEndpoints) {
-      try {
-        const resp = await fetch(url, {
-          headers: {
-            ...baseHeaders,
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'X-Requested-With': 'XMLHttpRequest',
+    // Use Firecrawl with actions to: login → search → scrape rendered results
+    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: `${AK_BASE}/Account/Login`,
+        formats: ['markdown'],
+        waitFor: 3000,
+        actions: [
+          // Step 1: Fill login form
+          { type: 'wait', milliseconds: 2000 },
+          { type: 'fill', selector: 'input[name="UserName"], #UserName, input[type="email"]', value: akEmail },
+          { type: 'fill', selector: 'input[name="Password"], #Password, input[type="password"]', value: akPass },
+          { type: 'click', selector: 'button[type="submit"], input[type="submit"], .login-button, #loginButton' },
+          { type: 'wait', milliseconds: 4000 },
+          // Step 2: Navigate to search - use executeJavascript to go to search URL  
+          { 
+            type: 'executeJavascript', 
+            script: `window.location.href = '${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';` 
           },
-        });
-        const text = await resp.text();
-        console.log(`AutoKelly API ${url.split('?')[0].split('/').slice(-2).join('/')}: status=${resp.status}, len=${text.length}, snippet="${text.substring(0, 200)}"`);
-        
-        if (resp.status === 200 && text.length > 10 && text.trim().startsWith('{') || text.trim().startsWith('[')) {
-          try {
-            const json = JSON.parse(text);
-            const result = extractFromAutoKellyJSON(json, oemCode);
-            if (result.found) {
-              console.log(`AutoKelly found via API: ${result.name}, ${result.price_with_vat} Kč`);
-              return result;
-            }
-          } catch { /* not valid JSON */ }
-        }
-      } catch (err) {
-        console.log(`AutoKelly endpoint failed: ${err}`);
-      }
+          { type: 'wait', milliseconds: 5000 },
+          // Step 3: Wait for Angular to render products
+          {
+            type: 'executeJavascript',
+            script: `
+              // Wait for product rows to appear
+              let attempts = 0;
+              function waitForProducts() {
+                const products = document.querySelectorAll('[data-ng-repeat*="product"], .product-row, .search-result-item, tr[ng-repeat]');
+                if (products.length > 0 || attempts > 10) return;
+                attempts++;
+                setTimeout(waitForProducts, 500);
+              }
+              waitForProducts();
+            `
+          },
+          { type: 'wait', milliseconds: 3000 },
+          { type: 'scrape' },
+        ],
+      }),
+    });
+    
+    const fcData = await fcResp.json();
+    
+    if (!fcResp.ok) {
+      console.error('AutoKelly Firecrawl error:', JSON.stringify(fcData).substring(0, 500));
+      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
     }
 
-    // 2. Try Firecrawl to render the SPA and get actual product data
-    const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
-    if (firecrawlKey) {
-      try {
-        const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${firecrawlKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            url: `${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}`,
-            formats: ['markdown'],
-            waitFor: 5000,
-            actions: [
-              { type: 'wait', milliseconds: 2000 },
-              {
-                type: 'executeJavascript',
-                script: `
-                  // Try to trigger AngularJS search
-                  const scope = angular.element(document.querySelector('[ng-controller]')).scope();
-                  if (scope && scope.searchText !== undefined) {
-                    scope.searchText = '${oemCode}';
-                    scope.$apply();
-                  }
-                `
-              },
-              { type: 'wait', milliseconds: 5000 },
-              { type: 'scrape' },
-            ],
-          }),
-        });
-        const fcData = await fcResp.json();
-        const markdown = fcData.data?.markdown || fcData.markdown || '';
-        console.log(`AutoKelly Firecrawl search ${oemCode}: len=${markdown.length}, snippet="${markdown.substring(0, 500)}"`);
-
-        if (markdown.length > 100) {
-          // Parse product data from rendered markdown
-          const result = parseAutoKellyMarkdown(markdown, oemCode);
-          if (result.found) return result;
-        }
-      } catch (err) {
-        console.error('AutoKelly Firecrawl search error:', err);
+    const markdown = fcData.data?.markdown || fcData.markdown || '';
+    const html = fcData.data?.html || '';
+    console.log(`AutoKelly Firecrawl ${oemCode}: markdown_len=${markdown.length}`);
+    console.log(`AutoKelly Firecrawl markdown preview: "${markdown.substring(0, 1000)}"`);
+    
+    if (markdown.length > 50) {
+      const result = parseAutoKellyMarkdown(markdown, oemCode);
+      if (result.found) {
+        console.log(`AutoKelly found: ${result.name}, ${result.manufacturer}, ${result.price_with_vat} Kč`);
+        return result;
       }
-    }
-
-    // 3. Fallback: try the mobile API
-    try {
-      const mobileUrl = `https://api-mobile.autokelly.cz/Search/QuickSearch?query=${encodeURIComponent(oemCode)}`;
-      const mResp = await fetch(mobileUrl, {
-        headers: {
-          ...baseHeaders,
-          'Accept': 'application/json, */*',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-      const mText = await mResp.text();
-      console.log(`AutoKelly Mobile API ${oemCode}: status=${mResp.status}, len=${mText.length}, snippet="${mText.substring(0, 200)}"`);
-      
-      if (mText.trim().startsWith('{') || mText.trim().startsWith('[')) {
-        const json = JSON.parse(mText);
-        const result = extractFromAutoKellyJSON(json, oemCode);
-        if (result.found) return result;
-      }
-    } catch (err) {
-      console.log('AutoKelly mobile search error:', err);
     }
 
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
