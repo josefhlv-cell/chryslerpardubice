@@ -10,47 +10,54 @@ Deno.serve(async (req) => {
 
   try {
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-    
-    // Fetch the main JS bundle
     const resp = await fetch('https://www.lkq.cz/bundles/js?v=NAfm5ntEysGYeHx3xRU026isAOQGub48OFNcPpIwdbY1', {
       headers: { 'User-Agent': ua },
     });
     const js = await resp.text();
     
-    // Search for API endpoints - look for URL patterns
-    const patterns = [
-      /['"]\/(?:Product|Search|Catalog|Cart|Api|Data)[A-Za-z]*\/[A-Za-z]+['"]/g,
-      /url\s*[:=]\s*['"]([^'"]+)['"]/g,
-      /FindResult/g,
-      /loadDataSelf|loaddataself/gi,
-      /GetProducts|getProducts/g,
-      /ElasticSearch|elasticSearch/gi,
-      /ProductList/g,
-    ];
-    
-    const results: Record<string, string[]> = {};
-    
-    for (const pattern of patterns) {
-      const key = pattern.source.substring(0, 30);
-      const matches = [...js.matchAll(pattern)].map(m => {
-        // Get context around the match
-        const start = Math.max(0, m.index! - 50);
-        const end = Math.min(js.length, m.index! + m[0].length + 50);
-        return js.substring(start, end).replace(/\s+/g, ' ');
-      });
-      results[key] = matches.slice(0, 15);
+    // Find the loadDataSelf code block - the actual data loading call
+    const loadDataSelfIdx = js.indexOf('loadDataSelf');
+    const contexts: string[] = [];
+    let searchFrom = 0;
+    while (true) {
+      const idx = js.indexOf('loadDataSelf', searchFrom);
+      if (idx === -1) break;
+      contexts.push(js.substring(Math.max(0, idx - 200), Math.min(js.length, idx + 300)));
+      searchFrom = idx + 1;
     }
 
-    // Special: find all URL strings that look like API endpoints
-    const apiEndpoints = [...js.matchAll(/['"]\/[A-Z][a-z]+\/[A-Z][a-zA-Z]+(?:\/[A-Za-z]+)*['"]/g)]
-      .map(m => m[0])
-      .filter((v, i, a) => a.indexOf(v) === i)
-      .slice(0, 50);
+    // Find getProductList function
+    const gplIdx = js.indexOf('getProductList');
+    const gplContexts: string[] = [];
+    let searchFrom2 = 0;
+    while (true) {
+      const idx = js.indexOf('getProductList', searchFrom2);
+      if (idx === -1) break;
+      gplContexts.push(js.substring(Math.max(0, idx - 100), Math.min(js.length, idx + 400)));
+      searchFrom2 = idx + 1;
+      if (gplContexts.length > 10) break;
+    }
+
+    // Find the akService.productList or similar
+    const servicePatterns = ['akService.productList', 'akService.search', 'akService.find', 'ProductList/Data', 'ProductList/Get', 'Search/Data'];
+    const serviceResults: Record<string, string[]> = {};
+    for (const pat of servicePatterns) {
+      const found: string[] = [];
+      let from = 0;
+      while (true) {
+        const idx = js.indexOf(pat, from);
+        if (idx === -1) break;
+        found.push(js.substring(Math.max(0, idx - 50), Math.min(js.length, idx + 200)));
+        from = idx + 1;
+        if (found.length > 5) break;
+      }
+      if (found.length) serviceResults[pat] = found;
+    }
 
     return new Response(JSON.stringify({
-      bundleSize: js.length,
-      apiEndpoints,
-      patterns: results,
+      loadDataSelfContexts: contexts.map(c => c.replace(/\s+/g, ' ')),
+      getProductListContexts: gplContexts.map(c => c.replace(/\s+/g, ' ')).slice(0, 5),
+      serviceResults: Object.fromEntries(Object.entries(serviceResults).map(([k, v]) => [k, v.map(s => s.replace(/\s+/g, ' '))])),
     }, null, 2), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
