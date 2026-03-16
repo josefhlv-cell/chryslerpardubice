@@ -432,78 +432,101 @@ async function loginToAutoKelly(email: string, pass: string): Promise<Session> {
 }
 
 async function searchAutoKelly(
-  _session: Session,
+  session: Session,
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
-  const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
-  const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
-  const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
-  
-  if (!firecrawlKey) {
-    console.log('AutoKelly: No Firecrawl key, skipping');
+  if (!session.loggedIn) {
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   }
 
+  const headers = {
+    'User-Agent': UA,
+    'Accept-Language': 'cs-CZ,cs;q=0.9',
+    'Cookie': cookieHeader(session.cookies),
+    'Referer': `${AK_BASE}/HomePage/Car`,
+  };
+
   try {
-    // Use Firecrawl with actions: executeJavascript to login + navigate + extract
-    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: `${AK_BASE}/Account/Login`,
-        formats: ['markdown'],
-        waitFor: 2000,
-        timeout: 20000,
-        actions: [
-          { type: 'wait', milliseconds: 1000 },
-          {
-            type: 'executeJavascript',
-            script: `
-              const u = document.querySelector('input[name="UserName"], #UserName');
-              const p = document.querySelector('input[name="Password"], #Password');
-              if (u) u.value = '${akEmail}';
-              if (p) p.value = '${akPass}';
-              const f = u?.closest('form');
-              if (f) f.submit();
-            `
-          },
-          { type: 'wait', milliseconds: 3000 },
-          { 
-            type: 'executeJavascript', 
-            script: `window.location.href = 'https://www.lkq.cz/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';`
-          },
-          { type: 'wait', milliseconds: 5000 },
-          { type: 'scrape' },
-        ],
-      }),
-    });
-    
-    const fcData = await fcResp.json();
-    
-    if (!fcResp.ok) {
-      console.error('AutoKelly Firecrawl error:', JSON.stringify(fcData).substring(0, 500));
-      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    // Try multiple possible API endpoints on lkq.cz
+    const endpoints = [
+      // AngularJS internal API calls
+      { url: `${AK_BASE}/Search/SearchProduct`, method: 'POST', body: `searchText=${encodeURIComponent(oemCode)}&pageSize=10&page=1`, contentType: 'application/x-www-form-urlencoded' },
+      { url: `${AK_BASE}/Search/QuickSearch?query=${encodeURIComponent(oemCode)}`, method: 'GET', body: null, contentType: null },
+      { url: `${AK_BASE}/Search/GetSearchResult?searchText=${encodeURIComponent(oemCode)}&page=1&pageSize=10`, method: 'GET', body: null, contentType: null },
+      { url: `${AK_BASE}/api/v1/search?query=${encodeURIComponent(oemCode)}`, method: 'GET', body: null, contentType: null },
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const reqHeaders: Record<string, string> = {
+          ...headers,
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'X-Requested-With': 'XMLHttpRequest',
+        };
+        if (ep.contentType) reqHeaders['Content-Type'] = ep.contentType;
+
+        const resp = await fetch(ep.url, {
+          method: ep.method,
+          headers: reqHeaders,
+          ...(ep.body ? { body: ep.body } : {}),
+          redirect: 'follow',
+        });
+        
+        const text = await resp.text();
+        const isJson = text.trim().startsWith('{') || text.trim().startsWith('[');
+        const isHtmlFull = text.length > 5000; // Full HTML page = redirect to login
+        const shortName = ep.url.replace(AK_BASE, '').split('?')[0];
+        
+        console.log(`LKQ ${shortName}: status=${resp.status}, len=${text.length}, isJson=${isJson}, isFullPage=${isHtmlFull}`);
+        
+        if (isJson) {
+          try {
+            const json = JSON.parse(text);
+            console.log(`LKQ JSON keys: ${Object.keys(json).join(', ')}`);
+            console.log(`LKQ JSON snippet: ${JSON.stringify(json).substring(0, 500)}`);
+            const result = extractFromAutoKellyJSON(json, oemCode);
+            if (result.found) {
+              console.log(`LKQ found: ${result.name}, ${result.price_with_vat} Kč`);
+              return result;
+            }
+          } catch { /* not valid JSON */ }
+        } else if (!isHtmlFull && text.length > 0 && text.length < 5000) {
+          // Small HTML fragment - might be a partial view with product data
+          console.log(`LKQ partial HTML: "${text.substring(0, 500)}"`);
+        }
+      } catch (err) {
+        console.log(`LKQ endpoint error: ${err}`);
+      }
     }
 
-    const markdown = fcData.data?.markdown || fcData.markdown || '';
-    const html = fcData.data?.html || '';
-    console.log(`AutoKelly Firecrawl ${oemCode}: markdown_len=${markdown.length}`);
-    console.log(`AutoKelly Firecrawl markdown preview: "${markdown.substring(0, 1000)}"`);
-    
-    if (markdown.length > 50) {
-      const result = parseAutoKellyMarkdown(markdown, oemCode);
-      if (result.found) {
-        console.log(`AutoKelly found: ${result.name}, ${result.manufacturer}, ${result.price_with_vat} Kč`);
-        return result;
+    // Fallback: try full page search and parse rendered HTML
+    try {
+      const searchUrl = `${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}`;
+      const resp = await fetch(searchUrl, {
+        headers: { ...headers, 'Accept': 'text/html,*/*' },
+        redirect: 'follow',
+      });
+      const html = await resp.text();
+      const isLoginPage = html.includes('Account/Login') && !html.includes('Odhlásit');
+      console.log(`LKQ Catalog page: status=${resp.status}, len=${html.length}, isLogin=${isLoginPage}`);
+      
+      if (!isLoginPage) {
+        // Try to extract any embedded JSON data (Angular often embeds initial state)
+        const jsonDataMatch = html.match(/ng-init="[^"]*data\s*=\s*(\{[^"]*\})/i)
+          || html.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/i)
+          || html.match(/var\s+searchData\s*=\s*(\{[\s\S]*?\});/i);
+        
+        if (jsonDataMatch) {
+          console.log(`LKQ embedded data found: ${jsonDataMatch[1].substring(0, 300)}`);
+        }
       }
+    } catch (err) {
+      console.log(`LKQ catalog page error: ${err}`);
     }
 
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   } catch (err) {
-    console.error('AutoKelly search error:', err);
+    console.error('AutoKelly/LKQ search error:', err);
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   }
 }
