@@ -9,95 +9,66 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { searchCode, step } = await req.json().catch(() => ({ searchCode: '68225170AA', step: 'search' }));
-    const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY');
-    if (!firecrawlKey) throw new Error('FIRECRAWL_API_KEY not set');
+    const { searchCode } = await req.json().catch(() => ({ searchCode: '68225170AA' }));
+    const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 
-    const akUser = Deno.env.get('AUTOKELLY_USER') || '';
-    const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
-
-    if (step === 'login-and-search') {
-      // Use Firecrawl actions to login, then search
-      const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: 'https://www.lkq.cz/homepage/car',
-          formats: ['markdown'],
-          waitFor: 3000,
-          actions: [
-            { type: 'wait', milliseconds: 2000 },
-            // Click login button to open login dialog
-            { type: 'click', selector: '.desktop-link .logout' },
-            { type: 'wait', milliseconds: 1000 },
-            // Fill username
-            { type: 'write', selector: '#UserName', text: akUser },
-            // Fill password
-            { type: 'write', selector: '#Password', text: akPass },
-            // Submit
-            { type: 'click', selector: '#AKLoginDialog button[type="submit"]' },
-            { type: 'wait', milliseconds: 5000 },
-            // Now type in search
-            { type: 'write', selector: '#SearchFocus', text: searchCode },
-            { type: 'wait', milliseconds: 500 },
-            // Click search button
-            { type: 'click', selector: '.hoverBTN' },
-            { type: 'wait', milliseconds: 5000 },
-            { type: 'screenshot' },
-            { type: 'scrape' },
-          ],
-        }),
-      });
-      const data = await resp.json();
-      const md = data.data?.markdown || data.markdown || '';
-      const screenshot = data.data?.screenshot || data.screenshot || '';
-      
-      return new Response(JSON.stringify({
-        success: resp.ok,
-        step: 'login-and-search',
-        markdownLength: md.length,
-        markdownPreview: md.substring(0, 3000),
-        hasScreenshot: !!screenshot,
-        screenshotPreview: screenshot ? screenshot.substring(0, 100) + '...' : null,
-        rawKeys: Object.keys(data.data || data || {}),
-      }, null, 2), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Fetch the search results page as guest
+    const resp = await fetch(`https://www.lkq.cz/Search/ResultList?searchText=${encodeURIComponent(searchCode)}`, {
+      headers: { 'User-Agent': ua },
+      redirect: 'follow',
+    });
+    const html = await resp.text();
+    
+    // Extract ALL ng-init directives - they might contain embedded product data
+    const ngInits = [...html.matchAll(/ng-init="([^"]*)"/g)].map(m => m[1]);
+    
+    // Extract all data-* attributes from controllers
+    const dataAttrs = [...html.matchAll(/data-([a-z]+)="([^"]{20,})"/g)].map(m => ({ attr: m[1], value: m[2].substring(0, 200) }));
+    
+    // Look for JSON-like data in script tags
+    const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)]
+      .map(m => m[1].trim())
+      .filter(s => s.length > 0);
+    
+    // Extract JS bundle URLs
+    const jsUrls = [...html.matchAll(/src="([^"]*\.js[^"]*)"/g)].map(m => m[1]).filter((v, i, a) => a.indexOf(v) === i);
+    
+    // Look for API URLs in script content
+    const apiUrls: string[] = [];
+    for (const script of scripts) {
+      const matches = [...script.matchAll(/['"]\/([A-Z][a-z]+(?:\/[A-Za-z0-9]+)+)['"]/g)];
+      for (const m of matches) {
+        if (!apiUrls.includes(m[1])) apiUrls.push(m[1]);
+      }
+    }
+    
+    // Look for $http patterns
+    const httpPatterns: string[] = [];
+    for (const script of scripts) {
+      const matches = [...script.matchAll(/\$http[^;]{0,200}/g)];
+      for (const m of matches) {
+        httpPatterns.push(m[0].substring(0, 200));
+      }
     }
 
-    // Default: Just render search results page as guest
-    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: `https://www.lkq.cz/Search/ResultList?searchText=${searchCode}`,
-        formats: ['markdown'],
-        waitFor: 8000,
-        actions: [
-          { type: 'wait', milliseconds: 5000 },
-          { type: 'screenshot' },
-          { type: 'scrape' },
-        ],
-      }),
-    });
+    // Find the product list controller section 
+    const productListMatch = html.match(/data-ng-controller="akProductListController"[\s\S]{0,5000}/);
     
-    const data = await resp.json();
-    const md = data.data?.markdown || data.markdown || '';
-    const screenshot = data.data?.screenshot || data.screenshot || '';
+    // Look for data URLs like /data/ or /api/ or /Search/
+    const dataUrls = [...html.matchAll(/['"](\/(Search|Product|Catalog|Data|Api|api|Cart|Account)[A-Za-z0-9\/\?=&]*)['"]/g)]
+      .map(m => m[1])
+      .filter((v, i, a) => a.indexOf(v) === i);
 
     return new Response(JSON.stringify({
-      success: resp.ok,
-      step: 'guest-search',
-      markdownLength: md.length,
-      markdownPreview: md.substring(0, 3000),
-      hasScreenshot: !!screenshot,
-      rawKeys: Object.keys(data.data || data || {}),
+      htmlLength: html.length,
+      ngInits: ngInits.map(i => i.substring(0, 300)),
+      jsUrls,
+      apiUrls: apiUrls.slice(0, 30),
+      dataUrls: dataUrls.slice(0, 30),
+      httpPatterns: httpPatterns.slice(0, 10),
+      scriptsCount: scripts.length,
+      scriptLengths: scripts.map(s => s.length),
+      productListControllerPreview: productListMatch?.[0]?.substring(0, 500),
     }, null, 2), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
