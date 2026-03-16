@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Building2, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
