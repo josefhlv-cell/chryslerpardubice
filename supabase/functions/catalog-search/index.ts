@@ -63,27 +63,22 @@ Deno.serve(async (req) => {
 
     for (const oem of oemCodes.slice(0, 10)) {
       const cleanOem = oem.replace(/[\s-]/g, '').toUpperCase();
-      const searchCode = `K${cleanOem}`;
+      // Search variants: K-prefixed with zero-padding, then raw
+      const padded = cleanOem.length <= 9 ? `0${cleanOem}` : cleanOem;
+      const searchVariants = [...new Set([`K${padded}`, `K${cleanOem}`, padded, cleanOem])];
 
       // Check cache in DB
       const { data: cached } = await supabase
         .from('parts_new')
         .select('id, oem_number, name, price_without_vat, price_with_vat, last_price_update, price_locked, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source')
         .eq('oem_number', cleanOem)
-        .single();
+        .maybeSingle();
 
       // Check supersessions
-      const { data: supersededBy } = await supabase
-        .from('part_supersessions')
-        .select('new_oem_number')
-        .eq('old_oem_number', cleanOem)
-        .limit(1);
-
-      const { data: supersedes } = await supabase
-        .from('part_supersessions')
-        .select('old_oem_number')
-        .eq('new_oem_number', cleanOem)
-        .limit(1);
+      const [{ data: supersededBy }, { data: supersedes }] = await Promise.all([
+        supabase.from('part_supersessions').select('new_oem_number').eq('old_oem_number', cleanOem).limit(1),
+        supabase.from('part_supersessions').select('old_oem_number').eq('new_oem_number', cleanOem).limit(1),
+      ]);
 
       const supersededByOem = supersededBy?.[0]?.new_oem_number || null;
       const supersedesOem = supersedes?.[0]?.old_oem_number || null;
@@ -94,7 +89,7 @@ Deno.serve(async (req) => {
           results.push({
             oem_number: cleanOem, name: cached.name,
             price_without_vat: cached.price_without_vat, price_with_vat: cached.price_with_vat,
-            found: true, cached: true, search_code: searchCode,
+            found: true, cached: true, search_code: searchVariants[0],
             catalog_source: cached.catalog_source || 'mopar',
             category: cached.category, family: cached.family, segment: cached.segment, packaging: cached.packaging,
             description: cached.description, manufacturer: cached.manufacturer,
@@ -106,14 +101,19 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Search external Mopar catalog
+      // Search external Mopar catalog — try multiple variants
       let searchResult = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, category: '', family: '', segment: '', packaging: '' };
+      let usedSearchCode = searchVariants[0];
       if (session.loggedIn) {
-        try {
-          const searchStart = Date.now();
-          searchResult = await searchCatalog(session, searchCode, cleanOem);
-          diagnostics.mopar.responseTime = Math.max(diagnostics.mopar.responseTime, Date.now() - searchStart);
-        } catch (err) { console.error('Search failed:', err); }
+        for (const variant of searchVariants) {
+          try {
+            const searchStart = Date.now();
+            searchResult = await searchCatalog(session, variant, cleanOem);
+            diagnostics.mopar.responseTime = Math.max(diagnostics.mopar.responseTime, Date.now() - searchStart);
+            usedSearchCode = variant;
+            if (searchResult.found) break;
+          } catch (err) { console.error('Search failed:', err); }
+        }
       }
 
       if (searchResult.found) {
