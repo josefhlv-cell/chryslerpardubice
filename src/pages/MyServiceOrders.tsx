@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Wrench, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
 import ServiceProgressIndicator from "@/components/ServiceProgressIndicator";
+import ServiceReviewForm from "@/components/service/ServiceReviewForm";
 
 const STATUS_LABELS: Record<string, string> = {
   received: "Přijato do servisu",
