@@ -38,6 +38,7 @@ import Garage from "./pages/Garage";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OnboardingGuide from "@/components/OnboardingGuide";
+import { I18nProvider } from "@/contexts/I18nContext";
 
 const queryClient = new QueryClient();
 
