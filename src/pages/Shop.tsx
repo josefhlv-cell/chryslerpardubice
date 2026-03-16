@@ -179,14 +179,9 @@ const Shop = () => {
     }
   }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry]);
 
-  // Auto-search on debounced query
+  // Auto-search disabled for part_number mode to prevent request flooding
+  // User must press Enter or click search button
   const hasSearched = useRef(false);
-  useEffect(() => {
-    if (partType === "new" && debouncedQuery && debouncedQuery.length >= 5 && searchMode === "part_number") {
-      hasSearched.current = true;
-      doSearch(debouncedQuery, page);
-    }
-  }, [debouncedQuery, page, partType, doSearch, searchMode]);
 
   const handleSearch = () => { setPage(0); doSearch(query, 0); };
 
