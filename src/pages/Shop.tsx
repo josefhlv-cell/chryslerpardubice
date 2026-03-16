@@ -101,9 +101,10 @@ const Shop = () => {
   // ---- Debounce ----
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
-    debounceRef.current = setTimeout(() => setDebouncedQuery(query), 400);
+    const delay = searchMode === "part_number" ? 800 : 400;
+    debounceRef.current = setTimeout(() => setDebouncedQuery(query), delay);
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, searchMode]);
 
   // ---- AbortController for cancelling stale requests ----
   const abortRef = useRef<AbortController | null>(null);
@@ -164,6 +165,7 @@ const Shop = () => {
       if (!signal.aborted) {
         setResults(result.results);
         setTotalCount(result.totalCount);
+        if (result.results.length > 0) setSearchCollapsed(true);
       }
     } catch (err: any) {
       if (signal.aborted) return; // Silently ignore aborted requests
@@ -177,16 +179,11 @@ const Shop = () => {
     }
   }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry]);
 
-  // Auto-search on debounced query
+  // Auto-search disabled for part_number mode to prevent request flooding
+  // User must press Enter or click search button
   const hasSearched = useRef(false);
-  useEffect(() => {
-    if (partType === "new" && debouncedQuery && searchMode === "part_number") {
-      hasSearched.current = true;
-      doSearch(debouncedQuery, page);
-    }
-  }, [debouncedQuery, page, partType, doSearch, searchMode]);
 
-  const handleSearch = () => { setPage(0); setSearchCollapsed(true); doSearch(query, 0); };
+  const handleSearch = () => { setPage(0); doSearch(query, 0); };
 
   // ---- VIN decode ----
   const handleVinDecode = async () => {
