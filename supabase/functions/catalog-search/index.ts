@@ -4,7 +4,7 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const AK_BASE = 'https://www.autokelly.cz';
+const AK_BASE = 'https://www.lkq.cz';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 type Session = { loggedIn: boolean; cookies: Record<string, string> };
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     diagnostics.mopar.status = session.loggedIn ? 'ok' : 'login_failed';
     console.log('Mopar login:', session.loggedIn, 'in', diagnostics.mopar.responseTime, 'ms');
 
-    // Login to AutoKelly
+    // AutoKelly/LKQ credentials
     const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
     const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
     let akSession: Session = { loggedIn: false, cookies: {} };
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       akSession = await loginToAutoKelly(akEmail, akPass);
       diagnostics.autokelly.responseTime = Date.now() - akStart;
       diagnostics.autokelly.status = akSession.loggedIn ? 'ok' : 'login_failed';
-      console.log('AutoKelly login:', akSession.loggedIn, 'in', diagnostics.autokelly.responseTime, 'ms');
+      console.log('AutoKelly/LKQ login:', akSession.loggedIn, 'in', diagnostics.autokelly.responseTime, 'ms');
     }
 
     for (const oem of oemCodes.slice(0, 10)) {
@@ -435,128 +435,187 @@ async function searchAutoKelly(
   session: Session,
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
+  if (!session.loggedIn) {
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  }
+
   const headers = {
     'User-Agent': UA,
-    'Accept': 'application/json, text/html, */*',
     'Accept-Language': 'cs-CZ,cs;q=0.9',
     'Cookie': cookieHeader(session.cookies),
     'Referer': `${AK_BASE}/HomePage/Car`,
-    'X-Requested-With': 'XMLHttpRequest',
   };
 
   try {
-    // Try the quick search AJAX endpoint first
-    const quickSearchUrl = `${AK_BASE}/Search/QuickSearch?query=${encodeURIComponent(oemCode)}`;
-    const qsResp = await fetch(quickSearchUrl, { headers });
-    const qsText = await qsResp.text();
-    console.log(`AutoKelly QuickSearch ${oemCode}: status=${qsResp.status}, length=${qsText.length}, snippet="${qsText.substring(0, 300)}"`);
+    // Try multiple possible API endpoints on lkq.cz
+    const endpoints = [
+      // AngularJS internal API calls
+      { url: `${AK_BASE}/Search/SearchProduct`, method: 'POST', body: `searchText=${encodeURIComponent(oemCode)}&pageSize=10&page=1`, contentType: 'application/x-www-form-urlencoded' },
+      { url: `${AK_BASE}/Search/QuickSearch?query=${encodeURIComponent(oemCode)}`, method: 'GET', body: null, contentType: null },
+      { url: `${AK_BASE}/Search/GetSearchResult?searchText=${encodeURIComponent(oemCode)}&page=1&pageSize=10`, method: 'GET', body: null, contentType: null },
+      { url: `${AK_BASE}/api/v1/search?query=${encodeURIComponent(oemCode)}`, method: 'GET', body: null, contentType: null },
+    ];
 
-    // Try to parse as JSON first
+    for (const ep of endpoints) {
+      try {
+        const reqHeaders: Record<string, string> = {
+          ...headers,
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'X-Requested-With': 'XMLHttpRequest',
+        };
+        if (ep.contentType) reqHeaders['Content-Type'] = ep.contentType;
+
+        const resp = await fetch(ep.url, {
+          method: ep.method,
+          headers: reqHeaders,
+          ...(ep.body ? { body: ep.body } : {}),
+          redirect: 'follow',
+        });
+        
+        const text = await resp.text();
+        const isJson = text.trim().startsWith('{') || text.trim().startsWith('[');
+        const isHtmlFull = text.length > 5000; // Full HTML page = redirect to login
+        const shortName = ep.url.replace(AK_BASE, '').split('?')[0];
+        
+        console.log(`LKQ ${shortName}: status=${resp.status}, len=${text.length}, isJson=${isJson}, isFullPage=${isHtmlFull}`);
+        
+        if (isJson) {
+          try {
+            const json = JSON.parse(text);
+            console.log(`LKQ JSON keys: ${Object.keys(json).join(', ')}`);
+            console.log(`LKQ JSON snippet: ${JSON.stringify(json).substring(0, 500)}`);
+            const result = extractFromAutoKellyJSON(json, oemCode);
+            if (result.found) {
+              console.log(`LKQ found: ${result.name}, ${result.price_with_vat} Kč`);
+              return result;
+            }
+          } catch { /* not valid JSON */ }
+        } else if (!isHtmlFull && text.length > 0 && text.length < 5000) {
+          // Small HTML fragment - might be a partial view with product data
+          console.log(`LKQ partial HTML: "${text.substring(0, 500)}"`);
+        }
+      } catch (err) {
+        console.log(`LKQ endpoint error: ${err}`);
+      }
+    }
+
+    // Fallback: try full page search and parse rendered HTML
     try {
-      const json = JSON.parse(qsText);
-      if (json && (json.Products || json.products || json.Items || json.items || Array.isArray(json))) {
-        const items = json.Products || json.products || json.Items || json.items || json;
-        if (Array.isArray(items) && items.length > 0) {
-          const first = items[0];
-          return {
-            found: true,
-            name: first.Name || first.name || first.ProductName || `Díl ${oemCode}`,
-            price_without_vat: first.PriceWithoutVat || first.priceWithoutVat || first.Price || 0,
-            price_with_vat: first.PriceWithVat || first.priceWithVat || first.PriceVat || 0,
-            manufacturer: first.Manufacturer || first.manufacturer || first.Brand || '',
-            availability: first.Available || first.InStock ? 'available' : 'unknown',
-          };
+      const searchUrl = `${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}`;
+      const resp = await fetch(searchUrl, {
+        headers: { ...headers, 'Accept': 'text/html,*/*' },
+        redirect: 'follow',
+      });
+      const html = await resp.text();
+      const isLoginPage = html.includes('Account/Login') && !html.includes('Odhlásit');
+      console.log(`LKQ Catalog page: status=${resp.status}, len=${html.length}, isLogin=${isLoginPage}`);
+      
+      if (!isLoginPage) {
+        // Try to extract any embedded JSON data (Angular often embeds initial state)
+        const jsonDataMatch = html.match(/ng-init="[^"]*data\s*=\s*(\{[^"]*\})/i)
+          || html.match(/window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/i)
+          || html.match(/var\s+searchData\s*=\s*(\{[\s\S]*?\});/i);
+        
+        if (jsonDataMatch) {
+          console.log(`LKQ embedded data found: ${jsonDataMatch[1].substring(0, 300)}`);
         }
       }
-    } catch { /* not JSON, try HTML */ }
+    } catch (err) {
+      console.log(`LKQ catalog page error: ${err}`);
+    }
 
-    // Parse as HTML
-    const akResult = parseAutoKellyHTML(qsText, oemCode);
-    if (akResult.found) return akResult;
-
-    // Fallback: try full search result page
-    const searchUrl = `${AK_BASE}/Search/ResultList?searchText=${encodeURIComponent(oemCode)}`;
-    const sResp = await fetch(searchUrl, { headers: { ...headers, 'Accept': 'text/html,*/*' } });
-    const sHtml = await sResp.text();
-    // Log structure for debugging
-    const textContent = sHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').replace(/\s+/g, ' ').trim();
-    console.log(`AutoKelly ResultList ${oemCode}: status=${sResp.status}, length=${sHtml.length}`);
-    console.log(`AutoKelly ResultList text (500-2000): "${textContent.substring(500, 2000)}"`);
-    console.log(`AutoKelly ResultList text (2000-3500): "${textContent.substring(2000, 3500)}"`);
-
-    return parseAutoKellyHTML(sHtml, oemCode);
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   } catch (err) {
-    console.error('AutoKelly search error:', err);
+    console.error('AutoKelly/LKQ search error:', err);
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   }
 }
 
-function parseAutoKellyHTML(
-  html: string,
+function extractFromAutoKellyJSON(
+  json: any,
   oemCode: string
 ): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
-  const cleanHtml = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  // Try various JSON structures AutoKelly might use
+  const items = json.Products || json.products || json.Items || json.items || json.Data || json.data || 
+                json.SearchResults || json.searchResults || json.Result || json.result ||
+                (Array.isArray(json) ? json : null);
+  
+  if (Array.isArray(items) && items.length > 0) {
+    const first = items[0];
+    const priceWithVat = first.PriceWithVat || first.priceWithVat || first.PriceVat || first.Price || first.price || 0;
+    const priceWithoutVat = first.PriceWithoutVat || first.priceWithoutVat || first.PriceNet || 
+                            (priceWithVat > 0 ? Math.round(priceWithVat / 1.21 * 100) / 100 : 0);
+    return {
+      found: true,
+      name: first.Name || first.name || first.ProductName || first.Text || first.Description || `Díl ${oemCode}`,
+      price_without_vat: priceWithoutVat,
+      price_with_vat: priceWithVat,
+      manufacturer: first.Manufacturer || first.manufacturer || first.Brand || first.Producer || '',
+      availability: (first.Available || first.InStock || first.IsAvailable) ? 'available' : 'on_order',
+    };
+  }
 
-  // Look for product items with price
-  // AutoKelly typically shows: product name, manufacturer, price with/without DPH
+  // Single object result
+  if (json.Name || json.ProductName || json.Price || json.PriceWithVat) {
+    const priceWithVat = json.PriceWithVat || json.Price || 0;
+    return {
+      found: true,
+      name: json.Name || json.ProductName || `Díl ${oemCode}`,
+      price_without_vat: json.PriceWithoutVat || Math.round(priceWithVat / 1.21 * 100) / 100,
+      price_with_vat: priceWithVat,
+      manufacturer: json.Manufacturer || json.Brand || '',
+      availability: json.Available ? 'available' : 'on_order',
+    };
+  }
 
-  // Try to find product name
-  let name = '';
-  const nameMatch = cleanHtml.match(/class="[^"]*product[_-]?name[^"]*"[^>]*>([^<]+)/i)
-    || cleanHtml.match(/class="[^"]*item[_-]?name[^"]*"[^>]*>([^<]+)/i)
-    || cleanHtml.match(/class="[^"]*title[^"]*"[^>]*>([^<]+)/i);
-  if (nameMatch) name = nameMatch[1].trim();
+  return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+}
 
-  // Try to find manufacturer
-  let manufacturer = '';
-  const mfrMatch = cleanHtml.match(/class="[^"]*brand[^"]*"[^>]*>([^<]+)/i)
-    || cleanHtml.match(/class="[^"]*manufacturer[^"]*"[^>]*>([^<]+)/i);
-  if (mfrMatch) manufacturer = mfrMatch[1].trim();
-
-  // Find prices
-  const text = cleanHtml.replace(/<[^>]+>/g, ' ');
+function parseAutoKellyMarkdown(
+  markdown: string,
+  oemCode: string
+): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
+  // Extract prices from rendered markdown
   const prices: number[] = [];
   const priceRegex = /(\d[\d\s]*[,.]?\d*)\s*Kč/gi;
   let pm;
-  while ((pm = priceRegex.exec(text)) !== null) {
+  while ((pm = priceRegex.exec(markdown)) !== null) {
     const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
     if (v > 0 && v < 500000) prices.push(v);
   }
 
-  // Also try "bez DPH" / "s DPH" pattern
-  let priceWithoutVat = 0;
-  let priceWithVat = 0;
-  const bezDphMatch = text.match(/(\d[\d\s]*[,.]?\d*)\s*Kč\s*bez\s*DPH/i);
-  const sDphMatch = text.match(/(\d[\d\s]*[,.]?\d*)\s*Kč\s*s\s*DPH/i)
-    || text.match(/s\s*DPH\s*(\d[\d\s]*[,.]?\d*)\s*Kč/i);
+  // Extract product name - look for lines near the OEM code
+  let name = '';
+  const lines = markdown.split('\n').filter(l => l.trim().length > 3);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(oemCode) || lines[i].match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič/i)) {
+      name = lines[i].replace(/[|*#]/g, '').trim().substring(0, 100);
+      break;
+    }
+  }
 
-  if (bezDphMatch) priceWithoutVat = parseFloat(bezDphMatch[1].replace(/\s/g, '').replace(',', '.'));
-  if (sDphMatch) priceWithVat = parseFloat(sDphMatch[1].replace(/\s/g, '').replace(',', '.'));
+  // Extract manufacturer
+  let manufacturer = '';
+  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'JURID', 'NGK', 'DENSO', 'HELLA', 'OSRAM', 'PHILIPS'];
+  for (const mfr of mfrPatterns) {
+    if (markdown.toUpperCase().includes(mfr)) {
+      manufacturer = mfr;
+      break;
+    }
+  }
 
-  // Fallback to generic prices
-  if (priceWithoutVat === 0 && priceWithVat === 0 && prices.length > 0) {
+  if (prices.length > 0) {
+    let priceWithVat = 0, priceWithoutVat = 0;
     if (prices.length >= 2) {
-      // Usually smaller is bez DPH, larger is s DPH
       priceWithoutVat = Math.min(prices[0], prices[1]);
       priceWithVat = Math.max(prices[0], prices[1]);
     } else {
       priceWithVat = prices[0];
       priceWithoutVat = Math.round(prices[0] / 1.21 * 100) / 100;
     }
-  }
-
-  // Calculate missing price
-  if (priceWithoutVat > 0 && priceWithVat === 0) {
-    priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
-  }
-  if (priceWithVat > 0 && priceWithoutVat === 0) {
-    priceWithoutVat = Math.round(priceWithVat / 1.21 * 100) / 100;
-  }
-
-  // Check availability
-  const isAvailable = text.toLowerCase().includes('skladem') || text.toLowerCase().includes('k dispozici');
-
-  if (priceWithVat > 0 || name) {
+    
+    const isAvailable = markdown.toLowerCase().includes('skladem');
+    
     return {
       found: true,
       name: name || `Díl ${oemCode}`,
@@ -569,3 +628,5 @@ function parseAutoKellyHTML(
 
   return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
 }
+
+// Old parseAutoKellyHTML removed - replaced by extractFromAutoKellyJSON and parseAutoKellyMarkdown above
