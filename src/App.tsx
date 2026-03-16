@@ -49,6 +49,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <OnboardingGuide />
             <TopBar />
             <div className="flex w-full">
               <DesktopSidebar />
