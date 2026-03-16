@@ -79,7 +79,14 @@ const AICatalogImport = () => {
       const { data, error } = await supabase.functions.invoke("scrape-7zap", {
         body: { brand: b, model: m, year: y, action: "generate-catalog" },
       });
-      if (error) throw error;
+      if (error) {
+        // Try to extract meaningful error from response context
+        const msg = typeof data === 'object' && data?.error ? data.error : (error?.message || "Chyba edge funkce");
+        throw new Error(msg);
+      }
+      if (data && !data.success) {
+        return { success: false, error: data.error || "Generování selhalo" };
+      }
       return data as GenerateResult;
     } catch (err: any) {
       return { success: false, error: err?.message || "Chyba" };
@@ -310,7 +317,7 @@ const AICatalogImport = () => {
                         {item.status === "error" && (
                           <>
                             <XCircle className="w-3 h-3 text-destructive" />
-                            <span className="text-destructive truncate max-w-[120px]">{item.result?.error}</span>
+                            <span className="text-destructive truncate max-w-[200px]" title={item.result?.error}>{item.result?.error}</span>
                           </>
                         )}
                       </span>
