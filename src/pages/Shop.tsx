@@ -186,7 +186,7 @@ const Shop = () => {
     }
   }, [debouncedQuery, page, partType, doSearch, searchMode]);
 
-  const handleSearch = () => { setPage(0); setSearchCollapsed(true); doSearch(query, 0); };
+  const handleSearch = () => { setPage(0); doSearch(query, 0).then(() => { if (results && results.length > 0) setSearchCollapsed(true); }); };
 
   // ---- VIN decode ----
   const handleVinDecode = async () => {
