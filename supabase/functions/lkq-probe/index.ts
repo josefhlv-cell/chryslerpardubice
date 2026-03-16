@@ -9,50 +9,48 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { searchCode } = await req.json().catch(() => ({ searchCode: '68225170AA' }));
     const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-
-    // Fetch the search results page
-    const resp = await fetch(`https://www.lkq.cz/Search/ResultList?searchText=${encodeURIComponent(searchCode)}`, {
+    
+    // Fetch the main JS bundle
+    const resp = await fetch('https://www.lkq.cz/bundles/js?v=NAfm5ntEysGYeHx3xRU026isAOQGub48OFNcPpIwdbY1', {
       headers: { 'User-Agent': ua },
-      redirect: 'follow',
     });
-    const html = await resp.text();
+    const js = await resp.text();
     
-    // Extract the full akProductListController section with ALL data attributes
-    const plMatch = html.match(/data-ng-controller="akProductListController"[^>]*/);
+    // Search for API endpoints - look for URL patterns
+    const patterns = [
+      /['"]\/(?:Product|Search|Catalog|Cart|Api|Data)[A-Za-z]*\/[A-Za-z]+['"]/g,
+      /url\s*[:=]\s*['"]([^'"]+)['"]/g,
+      /FindResult/g,
+      /loadDataSelf|loaddataself/gi,
+      /GetProducts|getProducts/g,
+      /ElasticSearch|elasticSearch/gi,
+      /ProductList/g,
+    ];
     
-    // Also get the SearchProductController from header
-    const spMatch = html.match(/data-ng-controller="akSearch2ProductController"[^>]*/);
+    const results: Record<string, string[]> = {};
     
-    // Get all script src URLs (looking for the main AngularJS bundle)
-    const allScripts = [...html.matchAll(/src="([^"]*\.js[^"]*)"/g)].map(m => m[1]);
-    
-    // Also look for bundled scripts (often in /bundles/)
-    const bundleScripts = [...html.matchAll(/src="([^"]*(?:bundle|angular|app|main|ak\.)[^"]*)"/g)].map(m => m[1]);
-    
-    // Look at the full head section for script references
-    const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
-    const headScripts = headMatch ? [...headMatch[1].matchAll(/src="([^"]*)"/g)].map(m => m[1]) : [];
-    
-    // Check for the AngularJS module definition
-    const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)].map(m => ({ 
-      attrs: m[0].match(/<script([^>]*)>/)?.[1] || '',
-      content: m[1].trim().substring(0, 500) 
-    })).filter(s => s.content.length > 0 || s.attrs.includes('src'));
-    
-    // Try fetching the body section to find the script tags at the bottom
-    const bodyEnd = html.substring(html.length - 5000);
-    const endScripts = [...bodyEnd.matchAll(/src="([^"]*)"/g)].map(m => m[1]);
+    for (const pattern of patterns) {
+      const key = pattern.source.substring(0, 30);
+      const matches = [...js.matchAll(pattern)].map(m => {
+        // Get context around the match
+        const start = Math.max(0, m.index! - 50);
+        const end = Math.min(js.length, m.index! + m[0].length + 50);
+        return js.substring(start, end).replace(/\s+/g, ' ');
+      });
+      results[key] = matches.slice(0, 15);
+    }
+
+    // Special: find all URL strings that look like API endpoints
+    const apiEndpoints = [...js.matchAll(/['"]\/[A-Z][a-z]+\/[A-Z][a-zA-Z]+(?:\/[A-Za-z]+)*['"]/g)]
+      .map(m => m[0])
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .slice(0, 50);
 
     return new Response(JSON.stringify({
-      productListController: plMatch?.[0]?.substring(0, 1000),
-      searchProductController: spMatch?.[0]?.substring(0, 500),
-      allScriptSrcs: allScripts,
-      bundleScripts,
-      headScripts,
-      endScripts,
-      inlineScripts: scripts.filter(s => s.content.length > 0).map(s => ({ preview: s.content })),
+      bundleSize: js.length,
+      apiEndpoints,
+      patterns: results,
     }, null, 2), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
