@@ -50,12 +50,16 @@ const MyServiceOrders = () => {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
-    const [ordersRes, vehiclesRes] = await Promise.all([
+    const [ordersRes, vehiclesRes, reviewsRes] = await Promise.all([
       supabase.from("service_orders").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("user_vehicles").select("*").eq("user_id", user.id),
+      supabase.from("service_reviews" as any).select("*").eq("user_id", user.id),
     ]);
     setOrders(ordersRes.data || []);
     setVehicles(vehiclesRes.data || []);
+    const reviewMap: Record<string, any> = {};
+    ((reviewsRes.data as any[]) || []).forEach((r: any) => { reviewMap[r.service_order_id] = r; });
+    setReviews(reviewMap);
     setLoading(false);
   };
 
