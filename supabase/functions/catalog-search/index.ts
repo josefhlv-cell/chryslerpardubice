@@ -445,7 +445,7 @@ async function searchAutoKelly(
   }
 
   try {
-    // Use Firecrawl with actions to: login → search → scrape rendered results
+    // Use Firecrawl with actions: executeJavascript to login + navigate + extract
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -457,34 +457,27 @@ async function searchAutoKelly(
         formats: ['markdown'],
         waitFor: 3000,
         actions: [
-          // Step 1: Fill login form
           { type: 'wait', milliseconds: 2000 },
-          { type: 'fill', selector: 'input[name="UserName"], #UserName, input[type="email"]', value: akEmail },
-          { type: 'fill', selector: 'input[name="Password"], #Password, input[type="password"]', value: akPass },
-          { type: 'click', selector: 'button[type="submit"], input[type="submit"], .login-button, #loginButton' },
-          { type: 'wait', milliseconds: 4000 },
-          // Step 2: Navigate to search - use executeJavascript to go to search URL  
-          { 
-            type: 'executeJavascript', 
-            script: `window.location.href = '${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';` 
-          },
-          { type: 'wait', milliseconds: 5000 },
-          // Step 3: Wait for Angular to render products
+          // Step 1: Login via JS
           {
             type: 'executeJavascript',
             script: `
-              // Wait for product rows to appear
-              let attempts = 0;
-              function waitForProducts() {
-                const products = document.querySelectorAll('[data-ng-repeat*="product"], .product-row, .search-result-item, tr[ng-repeat]');
-                if (products.length > 0 || attempts > 10) return;
-                attempts++;
-                setTimeout(waitForProducts, 500);
-              }
-              waitForProducts();
+              const userInput = document.querySelector('input[name="UserName"], #UserName, input[type="email"]');
+              const passInput = document.querySelector('input[name="Password"], #Password, input[type="password"]');
+              if (userInput) userInput.value = '${akEmail}';
+              if (passInput) passInput.value = '${akPass}';
+              const form = userInput?.closest('form');
+              if (form) form.submit();
             `
           },
-          { type: 'wait', milliseconds: 3000 },
+          { type: 'wait', milliseconds: 5000 },
+          // Step 2: Navigate to search
+          { 
+            type: 'executeJavascript', 
+            script: `window.location.href = '/Catalog/Car?searchText=${encodeURIComponent(oemCode)}';`
+          },
+          { type: 'wait', milliseconds: 8000 },
+          // Step 3: Extract product data from rendered Angular page
           { type: 'scrape' },
         ],
       }),
