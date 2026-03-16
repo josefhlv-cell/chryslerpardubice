@@ -462,9 +462,6 @@ function parseAutoKellyMarkdown(
 
   return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
 }
-    'User-Agent': UA,
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'cs-CZ,cs;q=0.9',
   };
 
   try {
