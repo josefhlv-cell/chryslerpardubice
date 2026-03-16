@@ -317,7 +317,7 @@ const AICatalogImport = () => {
                         {item.status === "error" && (
                           <>
                             <XCircle className="w-3 h-3 text-destructive" />
-                            <span className="text-destructive truncate max-w-[120px]">{item.result?.error}</span>
+                            <span className="text-destructive truncate max-w-[200px]" title={item.result?.error}>{item.result?.error}</span>
                           </>
                         )}
                       </span>
