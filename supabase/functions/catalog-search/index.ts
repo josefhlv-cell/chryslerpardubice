@@ -365,14 +365,15 @@ async function searchAutoKelly(
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
   const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
-  if (!FIRECRAWL_API_KEY) {
-    console.log('LKQ: FIRECRAWL_API_KEY not configured');
+  const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
+  const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
+  if (!FIRECRAWL_API_KEY || !akEmail || !akPass) {
+    console.log('LKQ: missing FIRECRAWL_API_KEY or credentials');
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   }
 
   try {
-    const searchUrl = `${AK_BASE}/Catalog/Car?searchText=${encodeURIComponent(oemCode)}`;
-    console.log(`LKQ Firecrawl: scraping ${searchUrl}`);
+    console.log(`LKQ Firecrawl: login + search ${oemCode}`);
 
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
@@ -381,10 +382,22 @@ async function searchAutoKelly(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: searchUrl,
+        url: `${AK_BASE}/Account/Login`,
         formats: ['markdown'],
-        waitFor: 3000,
+        waitFor: 2000,
         onlyMainContent: true,
+        actions: [
+          { type: 'wait', milliseconds: 1000 },
+          { type: 'write', text: akEmail, selector: 'input[name="UserName"]' },
+          { type: 'write', text: akPass, selector: 'input[name="Password"]' },
+          { type: 'click', selector: 'button[type="submit"], input[type="submit"], .login-btn, #loginBtn' },
+          { type: 'wait', milliseconds: 3000 },
+          { type: 'click', selector: 'input[type="search"], input[type="text"], .search-input, #searchInput' },
+          { type: 'write', text: oemCode },
+          { type: 'press', key: 'ENTER' },
+          { type: 'wait', milliseconds: 3000 },
+          { type: 'scrape' },
+        ],
       }),
     });
 
@@ -397,10 +410,10 @@ async function searchAutoKelly(
 
     const markdown = fcData?.data?.markdown || fcData?.markdown || '';
     console.log(`LKQ Firecrawl: ${markdown.length} chars`);
-    console.log(`LKQ snippet: "${markdown.substring(0, 500)}"`);
+    console.log(`LKQ snippet: "${markdown.substring(0, 600)}"`);
 
     if (markdown.length < 50 || (markdown.includes('Přihlášení') && !markdown.includes('Kč'))) {
-      console.log('LKQ: no product data or login page');
+      console.log('LKQ: login failed or no product data');
       return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
     }
 
