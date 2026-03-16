@@ -11,6 +11,7 @@ const TopBar = () => {
   const navigate = useNavigate();
   const { totalItems } = useCart();
   const { isAdmin, user } = useAuth();
+  const { isEnabled } = useFeatureFlags();
 
   if (location.pathname === "/" && !user) return null;
 
