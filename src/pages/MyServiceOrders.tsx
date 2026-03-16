@@ -158,6 +158,15 @@ const MyServiceOrders = () => {
                   {new Date(o.created_at).toLocaleDateString("cs-CZ")}
                 </p>
               </button>
+              {o.status === "completed" && isEnabled("service_reviews") && (
+                <div className="mt-2">
+                  <ServiceReviewForm
+                    serviceOrderId={o.id}
+                    existingReview={reviews[o.id] || null}
+                    onReviewSubmitted={fetchData}
+                  />
+                </div>
+              )}
             </motion.div>
           ))
         )}
