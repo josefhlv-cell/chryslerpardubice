@@ -67,16 +67,16 @@ Deno.serve(async (req) => {
     diagnostics.mopar.status = session.loggedIn ? 'ok' : 'login_failed';
     console.log('Mopar login:', session.loggedIn, 'in', diagnostics.mopar.responseTime, 'ms');
 
-    // Login to AutoKelly
+    // AutoKelly credentials
     const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
     const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
+    const firecrawlKey = Deno.env.get('FIRECRAWL_API_KEY') || '';
     let akSession: Session = { loggedIn: false, cookies: {} };
-    if (akEmail && akPass) {
-      const akStart = Date.now();
-      akSession = await loginToAutoKelly(akEmail, akPass);
-      diagnostics.autokelly.responseTime = Date.now() - akStart;
-      diagnostics.autokelly.status = akSession.loggedIn ? 'ok' : 'login_failed';
-      console.log('AutoKelly login:', akSession.loggedIn, 'in', diagnostics.autokelly.responseTime, 'ms');
+    // We'll use Firecrawl for AutoKelly (AngularJS SPA), so just check credentials exist
+    if (akEmail && akPass && firecrawlKey) {
+      diagnostics.autokelly.status = 'ok';
+      akSession = { loggedIn: true, cookies: {} }; // Firecrawl handles auth
+      console.log('AutoKelly: credentials available, will use Firecrawl for search');
     }
 
     for (const oem of oemCodes.slice(0, 10)) {
