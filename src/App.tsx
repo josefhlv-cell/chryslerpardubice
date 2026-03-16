@@ -36,6 +36,7 @@ import MechanicDashboard from "./pages/MechanicDashboard";
 import OBDDiagnostics from "./pages/OBDDiagnostics";
 import Garage from "./pages/Garage";
 import { AuthProvider } from "@/contexts/AuthContext";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const App = () => (
             <div className="flex w-full">
               <DesktopSidebar />
               <div className="flex-1 min-w-0">
+                <ErrorBoundary>
                 <Routes>
                   <Route path="/" element={<Landing />} />
                   <Route path="/shop" element={<Shop />} />
