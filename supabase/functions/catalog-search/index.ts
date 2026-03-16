@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
         price_without_vat: searchResult.found ? searchResult.price_without_vat : (cached?.price_without_vat || 0),
         price_with_vat: searchResult.found ? searchResult.price_with_vat : (cached?.price_with_vat || 0),
         found: searchResult.found || !!cached,
-        cached: false, search_code: searchCode,
+        cached: false, search_code: usedSearchCode,
         catalog_source: 'mopar',
         category: searchResult.category || cached?.category || null,
         family: searchResult.family || cached?.family || null,
