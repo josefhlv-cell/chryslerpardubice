@@ -478,7 +478,11 @@ async function searchAutoKelly(
     const searchUrl = `${AK_BASE}/Search/ResultList?searchText=${encodeURIComponent(oemCode)}`;
     const sResp = await fetch(searchUrl, { headers: { ...headers, 'Accept': 'text/html,*/*' } });
     const sHtml = await sResp.text();
+    // Log structure for debugging
+    const textContent = sHtml.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '').replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, '|').replace(/\|+/g, '|').replace(/\s+/g, ' ').trim();
     console.log(`AutoKelly ResultList ${oemCode}: status=${sResp.status}, length=${sHtml.length}`);
+    console.log(`AutoKelly ResultList text (500-2000): "${textContent.substring(500, 2000)}"`);
+    console.log(`AutoKelly ResultList text (2000-3500): "${textContent.substring(2000, 3500)}"`);
 
     return parseAutoKellyHTML(sHtml, oemCode);
   } catch (err) {
