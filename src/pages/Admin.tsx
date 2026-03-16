@@ -634,6 +634,18 @@ const Admin = () => {
             </TabsContent>
           )}
 
+          {isEnabled("service_reviews") && (
+            <TabsContent value="reviews">
+              <div className="mt-2"><AdminReviews /></div>
+            </TabsContent>
+          )}
+
+          {isEnabled("admin_statistics") && (
+            <TabsContent value="dashboard-stats">
+              <div className="mt-2"><AdminDashboardStats /></div>
+            </TabsContent>
+          )}
+
           <TabsContent value="features">
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
