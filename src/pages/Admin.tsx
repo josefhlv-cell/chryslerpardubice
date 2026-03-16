@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -37,6 +37,8 @@ import AdminEmployees from "@/components/admin/AdminEmployees";
 import AdminServiceProcedures from "@/components/admin/AdminServiceProcedures";
 import AdminNotificationToggle from "@/components/admin/AdminNotificationToggle";
 import AdminActivityLog from "@/components/admin/AdminActivityLog";
+import AdminReviews from "@/components/admin/AdminReviews";
+import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -342,6 +344,8 @@ const Admin = () => {
             {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-[11px] gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
             <TabsTrigger value="procedures" className="text-[11px] gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
             {isEnabled("push_notifications") && <TabsTrigger value="push-notif" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Push</TabsTrigger>}
+            {isEnabled("service_reviews") && <TabsTrigger value="reviews" className="text-[11px] gap-1 shrink-0"><Star className="w-3 h-3" />Hodnocení</TabsTrigger>}
+            {isEnabled("admin_statistics") && <TabsTrigger value="dashboard-stats" className="text-[11px] gap-1 shrink-0"><TrendingUp className="w-3 h-3" />Přehled</TabsTrigger>}
             <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
             {user?.email === "josefhlv@gmail.com" && <TabsTrigger value="activity" className="text-[11px] gap-1 shrink-0"><Clock className="w-3 h-3" />Aktivita</TabsTrigger>}
           </TabsList>
@@ -627,6 +631,18 @@ const Admin = () => {
           {isEnabled("push_notifications") && (
             <TabsContent value="push-notif">
               <div className="mt-2"><AdminNotificationToggle /></div>
+            </TabsContent>
+          )}
+
+          {isEnabled("service_reviews") && (
+            <TabsContent value="reviews">
+              <div className="mt-2"><AdminReviews /></div>
+            </TabsContent>
+          )}
+
+          {isEnabled("admin_statistics") && (
+            <TabsContent value="dashboard-stats">
+              <div className="mt-2"><AdminDashboardStats /></div>
             </TabsContent>
           )}
 

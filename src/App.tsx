@@ -37,6 +37,7 @@ import OBDDiagnostics from "./pages/OBDDiagnostics";
 import Garage from "./pages/Garage";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import OnboardingGuide from "@/components/OnboardingGuide";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <OnboardingGuide />
             <TopBar />
             <div className="flex w-full">
               <DesktopSidebar />

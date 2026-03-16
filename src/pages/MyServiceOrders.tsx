@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Wrench, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
 import ServiceProgressIndicator from "@/components/ServiceProgressIndicator";
+import ServiceReviewForm from "@/components/service/ServiceReviewForm";
 
 const STATUS_LABELS: Record<string, string> = {
   received: "Přijato do servisu",
@@ -33,9 +35,11 @@ const STATUS_STYLES: Record<string, string> = {
 
 const MyServiceOrders = () => {
   const { user, isLoading: authLoading } = useAuth();
+  const { isEnabled } = useFeatureFlags();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
@@ -46,12 +50,16 @@ const MyServiceOrders = () => {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
-    const [ordersRes, vehiclesRes] = await Promise.all([
+    const [ordersRes, vehiclesRes, reviewsRes] = await Promise.all([
       supabase.from("service_orders").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("user_vehicles").select("*").eq("user_id", user.id),
+      supabase.from("service_reviews" as any).select("*").eq("user_id", user.id),
     ]);
     setOrders(ordersRes.data || []);
     setVehicles(vehiclesRes.data || []);
+    const reviewMap: Record<string, any> = {};
+    ((reviewsRes.data as any[]) || []).forEach((r: any) => { reviewMap[r.service_order_id] = r; });
+    setReviews(reviewMap);
     setLoading(false);
   };
 
@@ -150,6 +158,15 @@ const MyServiceOrders = () => {
                   {new Date(o.created_at).toLocaleDateString("cs-CZ")}
                 </p>
               </button>
+              {o.status === "completed" && isEnabled("service_reviews") && (
+                <div className="mt-2">
+                  <ServiceReviewForm
+                    serviceOrderId={o.id}
+                    existingReview={reviews[o.id] || null}
+                    onReviewSubmitted={fetchData}
+                  />
+                </div>
+              )}
             </motion.div>
           ))
         )}
