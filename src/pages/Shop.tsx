@@ -101,9 +101,10 @@ const Shop = () => {
   // ---- Debounce ----
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
-    debounceRef.current = setTimeout(() => setDebouncedQuery(query), 400);
+    const delay = searchMode === "part_number" ? 800 : 400;
+    debounceRef.current = setTimeout(() => setDebouncedQuery(query), delay);
     return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  }, [query, searchMode]);
 
   // ---- AbortController for cancelling stale requests ----
   const abortRef = useRef<AbortController | null>(null);
