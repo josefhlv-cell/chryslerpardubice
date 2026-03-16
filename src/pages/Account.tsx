@@ -142,6 +142,13 @@ const Account = () => {
           </div>
         </motion.div>
 
+        {/* Push Notifications */}
+        {isEnabled("push_notifications") && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
+            <PushNotificationToggle />
+          </motion.div>
+        )}
+
         {/* Logout */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <button

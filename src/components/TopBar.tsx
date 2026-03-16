@@ -59,6 +59,7 @@ const TopBar = () => {
       </div>
 
       <div className="flex items-center gap-1">
+        {isEnabled("i18n") && <LanguageToggle />}
         {isEnabled("dark_mode") && <ThemeToggle />}
         {isAdmin && (
           <button
