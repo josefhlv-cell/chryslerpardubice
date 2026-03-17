@@ -704,13 +704,15 @@ const Shop = () => {
             {partType === "new" && brand && !searching && (
               (searchMode === "epc" || (searchMode === "vehicle" && (!results || results.length === 0) && !query && !category && !subCategory))
             ) && (
-              <EPCBrowser
-                brand={brand}
-                model={model}
-                engine={motor}
-                year={year}
-                onSearchOem={handleSearchOem}
-              />
+              <ErrorBoundary>
+                <EPCBrowser
+                  brand={brand}
+                  model={model}
+                  engine={motor}
+                  year={year}
+                  onSearchOem={handleSearchOem}
+                />
+              </ErrorBoundary>
             )}
 
             {/* Loading */}
