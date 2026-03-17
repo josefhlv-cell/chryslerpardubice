@@ -377,53 +377,24 @@ async function searchSAG(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        // Start directly at search URL - SAG will redirect to login, then back after auth
-        url: searchUrl,
-        formats: ['markdown', 'html'],
+        url: 'https://connect-int.sag.services/sag-cz/login',
+        formats: ['markdown'],
         waitFor: 5000,
         onlyMainContent: false,
-        timeout: 45000,
+        timeout: 40000,
         actions: [
-          { type: 'wait', milliseconds: 3000 },
-          // Fill login form via JS (handles Angular reactive forms)
+          { type: 'wait', milliseconds: 4000 },
+          { type: 'click', selector: 'input[type="text"], input[name="username"], input[id*="user"], input[placeholder*="živ"]' },
+          { type: 'write', text: username },
+          { type: 'click', selector: 'input[type="password"], input[name="password"]' },
+          { type: 'write', text: password },
+          { type: 'press', key: 'Enter' },
+          { type: 'wait', milliseconds: 6000 },
           {
             type: 'executeJavascript',
-            script: `
-              const inputs = document.querySelectorAll('input');
-              let userInput = null, passInput = null;
-              for (const inp of inputs) {
-                const t = (inp.type || '').toLowerCase();
-                const n = (inp.name || '').toLowerCase();
-                if (t === 'password' || n === 'password') passInput = inp;
-                else if ((t === 'text' || t === 'email' || t === '') && !userInput && inp.offsetParent !== null) userInput = inp;
-              }
-              if (userInput) {
-                userInput.focus();
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                nativeInputValueSetter.call(userInput, '${username}');
-                userInput.dispatchEvent(new Event('input', {bubbles: true}));
-                userInput.dispatchEvent(new Event('change', {bubbles: true}));
-              }
-              if (passInput) {
-                passInput.focus();
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                nativeInputValueSetter.call(passInput, '${password}');
-                passInput.dispatchEvent(new Event('input', {bubbles: true}));
-                passInput.dispatchEvent(new Event('change', {bubbles: true}));
-              }
-              setTimeout(() => {
-                const btns = document.querySelectorAll('button[type="submit"], button');
-                for (const b of btns) {
-                  const txt = (b.textContent || '').toLowerCase();
-                  if (txt.includes('přihlás') || txt.includes('login') || txt.includes('anmeld') || b.type === 'submit') {
-                    b.click(); break;
-                  }
-                }
-              }, 500);
-            `
+            script: `window.location.href = '${searchUrl}';`
           },
-          // Wait for login + redirect back to search results
-          { type: 'wait', milliseconds: 15000 },
+          { type: 'wait', milliseconds: 8000 },
           { type: 'scrape' },
         ],
       }),
