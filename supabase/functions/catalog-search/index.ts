@@ -383,15 +383,42 @@ async function searchSAG(
         onlyMainContent: false,
         timeout: 60000,
         actions: [
-          { type: 'wait', milliseconds: 2000 },
-          // Fill username
-          { type: 'click', selector: 'input[name="username"], input[type="text"]' },
-          { type: 'write', text: username },
-          // Fill password
-          { type: 'click', selector: 'input[name="password"], input[type="password"]' },
-          { type: 'write', text: password },
-          // Submit login
-          { type: 'press', key: 'Enter' },
+          { type: 'wait', milliseconds: 3000 },
+          // Use pure JS to fill and submit login form (avoids selector issues)
+          {
+            type: 'executeJavascript',
+            script: `
+              const inputs = document.querySelectorAll('input');
+              let userInput = null, passInput = null;
+              for (const inp of inputs) {
+                const t = (inp.type || '').toLowerCase();
+                const n = (inp.name || '').toLowerCase();
+                if (t === 'password' || n === 'password') passInput = inp;
+                else if ((t === 'text' || t === 'email' || t === '') && !userInput && inp.offsetParent !== null) userInput = inp;
+              }
+              if (userInput) {
+                userInput.focus();
+                userInput.value = '${username}';
+                userInput.dispatchEvent(new Event('input', {bubbles: true}));
+                userInput.dispatchEvent(new Event('change', {bubbles: true}));
+              }
+              if (passInput) {
+                passInput.focus();
+                passInput.value = '${password}';
+                passInput.dispatchEvent(new Event('input', {bubbles: true}));
+                passInput.dispatchEvent(new Event('change', {bubbles: true}));
+              }
+              // Click submit button
+              const btns = document.querySelectorAll('button[type="submit"], button.login-button, input[type="submit"], button');
+              for (const b of btns) {
+                const txt = (b.textContent || '').toLowerCase();
+                if (txt.includes('přihlás') || txt.includes('login') || txt.includes('sign in') || b.type === 'submit') {
+                  b.click();
+                  break;
+                }
+              }
+            `
+          },
           { type: 'wait', milliseconds: 8000 },
           // Navigate to search results
           {
@@ -399,7 +426,6 @@ async function searchSAG(
             script: `window.location.href = '${searchUrl}';`
           },
           { type: 'wait', milliseconds: 12000 },
-          { type: 'screenshot' },
           { type: 'scrape' },
         ],
       }),
