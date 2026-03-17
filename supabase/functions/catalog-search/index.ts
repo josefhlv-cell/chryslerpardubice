@@ -142,7 +142,9 @@ Deno.serve(async (req) => {
           const sagStart = Date.now();
           sagResult = await searchSAG(sagUser, sagPass, FIRECRAWL_API_KEY, cleanOem);
           diagnostics.sag.responseTime = Math.max(diagnostics.sag.responseTime, Date.now() - sagStart);
-          console.log(`SAG search ${cleanOem}: found=${sagResult.found}, name=${sagResult.name}, price=${sagResult.price_with_vat}`);
+          if (sagResult.found) {
+            console.log(`SAG found ${cleanOem}: ${sagResult.name}, ${sagResult.price_with_vat} Kč`);
+          }
         } catch (err) { console.error('SAG search failed:', err); }
       }
 
@@ -353,7 +355,7 @@ function parseSearchResult(html: string, oem: string): { found: boolean; name: s
   return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, family: '', category: '', segment: '', packaging: '' };
 }
 
-// ===== SAG Connect via Firecrawl =====
+// ===== SAG Connect via direct API =====
 
 async function searchSAG(
   username: string,
@@ -363,9 +365,145 @@ async function searchSAG(
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
   const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   try {
-    console.log(`SAG: single-call login+search ${oemCode}`);
+    console.log(`SAG API: searching ${oemCode}`);
+    const BASE = 'https://connect-int.sag.services';
 
-    // Single Firecrawl call: login → Tab to search → type OEM → Enter → scrape
+    // Step 1: Get CSRF token / session from login page
+    const loginPageResp = await fetch(`${BASE}/sag-cz/login`, {
+      headers: { 'User-Agent': UA, 'Accept': 'text/html,*/*' },
+      redirect: 'manual',
+    });
+    const loginCookies: Record<string, string> = {};
+    collectCookies(loginPageResp, loginCookies);
+    await loginPageResp.text();
+    console.log(`SAG: login page cookies: ${Object.keys(loginCookies).join(', ')}`);
+
+    // Step 2: Try to authenticate via API (OAuth2/form based)
+    // SAG Connect typically uses OAuth2 or session-based auth
+    // Try form-based login first
+    const loginResp = await fetch(`${BASE}/sag-cz/login`, {
+      method: 'POST',
+      headers: {
+        'User-Agent': UA,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookieHeader(loginCookies),
+        'Origin': BASE,
+        'Referer': `${BASE}/sag-cz/login`,
+      },
+      body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+      redirect: 'manual',
+    });
+    collectCookies(loginResp, loginCookies);
+    const loginBody = await loginResp.text();
+    console.log(`SAG: login response status=${loginResp.status}, body length=${loginBody.length}, cookies=${Object.keys(loginCookies).join(', ')}`);
+
+    // Try JSON login endpoint
+    const jsonLoginResp = await fetch(`${BASE}/sag-cz/rest/user/login`, {
+      method: 'POST',
+      headers: {
+        'User-Agent': UA,
+        'Content-Type': 'application/json',
+        'Cookie': cookieHeader(loginCookies),
+        'Origin': BASE,
+        'Referer': `${BASE}/sag-cz/login`,
+      },
+      body: JSON.stringify({ username, password, affiliate: 'sag-cz' }),
+      redirect: 'manual',
+    });
+    collectCookies(jsonLoginResp, loginCookies);
+    const jsonLoginBody = await jsonLoginResp.text();
+    console.log(`SAG: JSON login status=${jsonLoginResp.status}, body=${jsonLoginBody.substring(0, 300)}`);
+
+    // Step 3: Try searching via API
+    const searchEndpoints = [
+      `${BASE}/sag-cz/rest/articles/search?keywords=${encodeURIComponent(oemCode)}`,
+      `${BASE}/sag-cz/rest/article/search?keywords=${encodeURIComponent(oemCode)}&maxResults=10`,
+      `${BASE}/sag-cz/api/articles/search?keywords=${encodeURIComponent(oemCode)}`,
+      `${BASE}/sag-cz/rest/search/articles?keyword=${encodeURIComponent(oemCode)}`,
+    ];
+
+    for (const endpoint of searchEndpoints) {
+      try {
+        const searchResp = await fetch(endpoint, {
+          headers: {
+            'User-Agent': UA,
+            'Accept': 'application/json',
+            'Cookie': cookieHeader(loginCookies),
+            'Referer': `${BASE}/sag-cz/home`,
+          },
+        });
+        
+        if (searchResp.status === 200) {
+          const searchBody = await searchResp.text();
+          console.log(`SAG API hit: ${endpoint}, body=${searchBody.substring(0, 500)}`);
+          
+          // Try to parse JSON response
+          try {
+            const data = JSON.parse(searchBody);
+            const result = parseSAGApiResponse(data, oemCode);
+            if (result.found) return result;
+          } catch {
+            // Not JSON, try markdown parsing
+            if (searchBody.includes('Kč') || searchBody.includes('CZK')) {
+              const parsed = parseSAGMarkdown(searchBody, oemCode);
+              if (parsed.found) return parsed;
+            }
+          }
+        } else {
+          const body = await searchResp.text();
+          console.log(`SAG API ${searchResp.status}: ${endpoint}, body=${body.substring(0, 200)}`);
+        }
+      } catch (err) {
+        console.log(`SAG API error for ${endpoint}: ${err}`);
+      }
+    }
+
+    // Step 4: Fallback to Firecrawl if API doesn't work
+    console.log('SAG: API endpoints not found, falling back to Firecrawl');
+    return await searchSAGFirecrawl(username, password, firecrawlKey, oemCode);
+  } catch (err) {
+    console.error('SAG error:', err);
+    return empty;
+  }
+}
+
+function parseSAGApiResponse(
+  data: any,
+  oemCode: string
+): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
+  // Try common SAG API response structures
+  const articles = data?.articles || data?.data?.articles || data?.results || data?.items || [];
+  if (Array.isArray(articles) && articles.length > 0) {
+    const art = articles[0];
+    const price = art.price || art.netPrice || art.grossPrice || art.salesPrice || 0;
+    const name = art.description || art.name || art.articleDescription || art.title || `Díl ${oemCode}`;
+    const mfr = art.supplier || art.manufacturer || art.brand || '';
+    const avail = art.availability || art.stock || art.deliveryInfo || '';
+    
+    if (price > 0) {
+      const priceWithoutVat = Math.round(price * (1 + SAG_MARGIN) * 100) / 100;
+      const priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
+      return {
+        found: true,
+        name,
+        price_without_vat: priceWithoutVat,
+        price_with_vat: priceWithVat,
+        manufacturer: mfr,
+        availability: typeof avail === 'string' && avail.toLowerCase().includes('sklad') ? 'available' : 'on_order',
+      };
+    }
+  }
+  return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+}
+
+async function searchSAGFirecrawl(
+  username: string,
+  password: string,
+  firecrawlKey: string,
+  oemCode: string
+): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
+  const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  try {
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -375,23 +513,15 @@ async function searchSAG(
       body: JSON.stringify({
         url: `https://connect-int.sag.services/sag-cz/login`,
         formats: ['markdown'],
-        waitFor: 2000,
+        waitFor: 3000,
         onlyMainContent: false,
-        timeout: 45000,
+        timeout: 30000,
         actions: [
-          { type: 'wait', milliseconds: 1500 },
+          { type: 'wait', milliseconds: 2000 },
           { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
-          { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 4000 },
-          // After login, Tab through navigation to reach search field
-          { type: 'press', key: 'TAB' },
-          { type: 'press', key: 'TAB' },
-          { type: 'press', key: 'TAB' },
-          { type: 'write', text: oemCode },
-          { type: 'wait', milliseconds: 300 },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
@@ -400,34 +530,16 @@ async function searchSAG(
     });
 
     const fcData = await fcResp.json();
-    if (!fcResp.ok) {
-      console.error(`SAG error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 400));
-      return empty;
-    }
+    if (!fcResp.ok) return empty;
 
-    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
-    console.log(`SAG result: ${markdown.length} chars`);
-    console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
-
+    const markdown = fcData?.data?.markdown || '';
+    console.log(`SAG Firecrawl fallback: ${markdown.length} chars`);
+    
     if (markdown.includes('Kč') || markdown.includes('CZK')) {
-      const parsed = parseSAGMarkdown(markdown, oemCode);
-      if (parsed.found) {
-        console.log(`SAG found: ${parsed.name}, price=${parsed.price_with_vat}`);
-        return parsed;
-      }
+      return parseSAGMarkdown(markdown, oemCode);
     }
-
-    // If Tab approach didn't work, the markdown might still show the home page
-    // Log what we see for debugging
-    if (markdown.includes('Přihlásit')) {
-      console.log('SAG: still on login page — credentials may have failed');
-    } else {
-      console.log('SAG: logged in but search did not return pricing data');
-    }
-
     return empty;
-  } catch (err) {
-    console.error('SAG error:', err);
+  } catch {
     return empty;
   }
 }
