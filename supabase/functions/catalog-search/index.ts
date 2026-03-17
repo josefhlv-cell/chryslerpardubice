@@ -383,26 +383,54 @@ async function searchSAG(
         onlyMainContent: false,
         timeout: 60000,
         actions: [
-          // Step 1: Wait for login form to load
-          { type: 'wait', milliseconds: 3000 },
-          // Step 2: Fill username
-          { type: 'click', selector: 'input[type="text"], input[name="username"], input[id*="user"], input[placeholder*="živ"]' },
-          { type: 'write', text: username },
-          // Step 3: Fill password
-          { type: 'click', selector: 'input[type="password"], input[name="password"]' },
-          { type: 'write', text: password },
-          // Step 4: Submit login
-          { type: 'press', key: 'Enter' },
-          // Step 5: Wait for login to complete and redirect
+          // Step 1: Wait for Angular login form to fully load
+          { type: 'wait', milliseconds: 4000 },
+          // Step 2: Fill login form via JavaScript (Angular Material inputs need special handling)
+          {
+            type: 'executeJavascript',
+            script: `
+              (function() {
+                const inputs = document.querySelectorAll('input');
+                let userInput = null, passInput = null;
+                for (const inp of inputs) {
+                  const t = inp.type.toLowerCase();
+                  const ph = (inp.placeholder || '').toLowerCase();
+                  const name = (inp.name || '').toLowerCase();
+                  if (t === 'password' || name.includes('pass')) { passInput = inp; }
+                  else if (t === 'text' || t === 'email' || name.includes('user') || name.includes('email') || ph.includes('živ') || ph.includes('user')) { userInput = inp; }
+                }
+                if (!userInput && inputs.length >= 2) { userInput = inputs[0]; passInput = inputs[1]; }
+                if (!userInput && inputs.length === 1) { userInput = inputs[0]; }
+                
+                function setVal(el, val) {
+                  if (!el) return;
+                  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                  nativeInputValueSetter.call(el, val);
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                  el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                }
+                
+                if (userInput) { userInput.focus(); setVal(userInput, '${username}'); }
+                if (passInput) { passInput.focus(); setVal(passInput, '${password}'); }
+                
+                document.title = 'FILLED:user=' + !!userInput + ',pass=' + !!passInput + ',inputs=' + inputs.length;
+              })();
+            `
+          },
+          { type: 'wait', milliseconds: 1000 },
+          // Step 3: Click login button
+          { type: 'click', selector: 'button[type="submit"], button.mat-raised-button, button.mat-button, .login-button, button' },
+          // Step 4: Wait for login to complete
           { type: 'wait', milliseconds: 8000 },
-          // Step 6: Navigate to search results page
+          // Step 5: Navigate to search results page
           {
             type: 'executeJavascript',
             script: `window.location.href = '${searchUrl}';`
           },
-          // Step 7: Wait for Angular to render search results
+          // Step 6: Wait for Angular to render search results
           { type: 'wait', milliseconds: 10000 },
-          // Step 8: Scrape the rendered page
+          // Step 7: Scrape the rendered page
           { type: 'scrape' },
         ],
       }),
