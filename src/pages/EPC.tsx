@@ -7,6 +7,7 @@
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, ArrowLeft } from "lucide-react";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import VINDecoder from "@/components/catalog/VINDecoder";
@@ -194,13 +195,15 @@ const EPC = () => {
 
             {/* Step 2: EPC Browser with categories + diagrams */}
             {hasVehicle && (
-              <EPCBrowser
-                brand={brand}
-                model={model}
-                engine={engine}
-                year={year}
-                onSearchOem={handleSearchOem}
-              />
+              <ErrorBoundary>
+                <EPCBrowser
+                  brand={brand}
+                  model={model}
+                  engine={engine}
+                  year={year}
+                  onSearchOem={handleSearchOem}
+                />
+              </ErrorBoundary>
             )}
           </div>
 
