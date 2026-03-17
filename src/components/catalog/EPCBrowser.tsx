@@ -430,6 +430,11 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                 {pricedCount}/{parts.length} s cenou
               </Badge>
             )}
+            {!pricesLoading && altCount > 0 && (
+              <Badge variant="outline" className="text-[10px] text-accent-foreground border-accent/30">
+                {altCount} alternativ
+              </Badge>
+            )}
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
               <RefreshCw className={`w-3 h-3 ${pricesLoading ? "animate-spin" : ""}`} />
             </Button>
