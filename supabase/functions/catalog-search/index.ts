@@ -362,181 +362,128 @@ async function searchSAG(
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
   const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
-  try {
-    console.log(`SAG: login + search ${oemCode}`);
+  
+  // Strategy: Login via Firecrawl, then scrape search results page directly
+  // SAG Connect is Angular SPA — we login first, then try direct URL navigation
+  
+  // Try multiple search URL patterns after login
+  const searchPaths = [
+    `home/search/${encodeURIComponent(oemCode)}`,
+    `article-search/${encodeURIComponent(oemCode)}`,
+  ];
 
-    // Step 1: Login and search using Firecrawl actions with JS execution for Angular SPA
-    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: `https://connect-int.sag.services/sag-cz/login`,
-        formats: ['markdown'],
-        waitFor: 3000,
-        onlyMainContent: false,
-        actions: [
-          { type: 'wait', milliseconds: 2000 },
-          // Fill login form
-          { type: 'click', selector: 'input[type="text"], input[name="username"], input[formcontrolname="username"], input[id*="user"], .login input:first-of-type' },
-          { type: 'write', text: username },
-          { type: 'click', selector: 'input[type="password"], input[name="password"], input[formcontrolname="password"]' },
-          { type: 'write', text: password },
-          { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 5000 },
-          // After login, use JS to find and interact with search
-          { type: 'execute', script: `
-            // Try multiple strategies to find the search input in Angular SPA
-            const selectors = [
-              'input[type="search"]',
-              'input[placeholder*="Hled"]',
-              'input[placeholder*="hled"]',
-              'input[placeholder*="íslo"]',
-              'input[placeholder*="artik"]',
-              'input[aria-label*="íslo"]',
-              'input[aria-label*="hled"]',
-              'input[aria-label*="Hled"]',
-              'input[aria-label*="search"]',
-              '.search input',
-              '.search-bar input',
-              'connect-search input',
-              'app-search input',
-              'mat-form-field input',
-              '.header input[type="text"]',
-              'header input',
-              'nav input',
-              '.toolbar input',
-            ];
-            let input = null;
-            for (const sel of selectors) {
-              input = document.querySelector(sel);
-              if (input) break;
-            }
-            // Fallback: find any visible text input that's not in login form
-            if (!input) {
-              const inputs = document.querySelectorAll('input[type="text"], input:not([type])');
-              for (const inp of inputs) {
-                const rect = inp.getBoundingClientRect();
-                if (rect.width > 100 && rect.top < 200) { input = inp; break; }
-              }
-            }
-            if (input) {
-              input.focus();
-              input.value = '${oemCode}';
-              input.dispatchEvent(new Event('input', { bubbles: true }));
-              input.dispatchEvent(new Event('change', { bubbles: true }));
-              // Angular needs NgModel update
-              const ngModelEvent = new Event('ngModelChange', { bubbles: true });
-              input.dispatchEvent(ngModelEvent);
-              document.title = 'SEARCH_FOUND:' + input.tagName + '.' + (input.className || 'no-class');
-            } else {
-              document.title = 'SEARCH_NOT_FOUND:' + document.querySelectorAll('input').length + '_inputs';
-            }
-          ` },
-          { type: 'wait', milliseconds: 500 },
-          { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 5000 },
-          { type: 'scrape' },
-        ],
-      }),
-    });
-
-    const fcData = await fcResp.json();
-    if (!fcResp.ok) {
-      console.error(`SAG Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 500));
-      return empty;
-    }
-
-    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
-    const title = fcData?.data?.metadata?.title || '';
-    console.log(`SAG page title: "${title}"`);
-    console.log(`SAG result: ${markdown.length} chars`);
-    console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
-
-    // If search found results with prices
-    if (markdown.includes('Kč') || markdown.includes('CZK') || markdown.includes('košík')) {
-      const parsed = parseSAGMarkdown(markdown, oemCode);
-      if (parsed.found) return parsed;
-    }
-
-    // Fallback: try direct URL approach with article search path
-    console.log('SAG: trying direct article-search URL...');
-    return await searchSAGDirect(firecrawlKey, username, password, oemCode);
-  } catch (err) {
-    console.error('SAG error:', err);
-    return empty;
-  }
-}
-
-async function searchSAGDirect(
-  firecrawlKey: string,
-  username: string,
-  password: string,
-  oemCode: string
-): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
-  const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
-  try {
-    // Login first, then navigate to search URL via JS
-    const searchPaths = [
-      `home/search/${encodeURIComponent(oemCode)}`,
-      `article-search/${encodeURIComponent(oemCode)}`,
-    ];
-
-    for (const path of searchPaths) {
+  for (const path of searchPaths) {
+    try {
       const targetUrl = `https://connect-int.sag.services/sag-cz/${path}`;
-      console.log(`SAG direct: ${targetUrl}`);
+      console.log(`SAG: login then navigate to ${targetUrl}`);
 
-      const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      // Login + screenshot to discover page structure, then navigate via link click
+      const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${firecrawlKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: 'https://connect-int.sag.services/sag-cz/login',
+          url: `https://connect-int.sag.services/sag-cz/login`,
+          formats: ['markdown', 'screenshot'],
+          waitFor: 3000,
+          onlyMainContent: false,
+          actions: [
+            { type: 'wait', milliseconds: 2000 },
+            { type: 'click', selector: 'input[type="text"]' },
+            { type: 'write', text: username },
+            { type: 'click', selector: 'input[type="password"]' },
+            { type: 'write', text: password },
+            { type: 'press', key: 'ENTER' },
+            { type: 'wait', milliseconds: 5000 },
+            // Take screenshot to see the page after login
+            { type: 'screenshot' },
+          ],
+        }),
+      });
+
+      const fcData = await fcResp.json();
+      if (!fcResp.ok) {
+        console.error(`SAG Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 300));
+        continue;
+      }
+
+      const markdown = fcData?.data?.markdown || fcData?.markdown || '';
+      console.log(`SAG after login: ${markdown.length} chars`);
+      
+      // Log all input-like elements found on page for debugging
+      const inputMatches = markdown.match(/input|search|hled|vyhled|článek|artik/gi);
+      console.log(`SAG page keywords: ${JSON.stringify(inputMatches?.slice(0, 10))}`);
+      console.log(`SAG snippet: "${markdown.substring(0, 600)}"`);
+
+      // Now try to search: click on search area and type
+      const searchResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: `https://connect-int.sag.services/sag-cz/login`,
           formats: ['markdown'],
           waitFor: 3000,
           onlyMainContent: false,
           actions: [
             { type: 'wait', milliseconds: 2000 },
-            { type: 'click', selector: 'input[type="text"], input[name="username"], input[formcontrolname="username"], .login input:first-of-type' },
+            // Login
+            { type: 'click', selector: 'input[type="text"]' },
             { type: 'write', text: username },
-            { type: 'click', selector: 'input[type="password"], input[name="password"], input[formcontrolname="password"]' },
+            { type: 'click', selector: 'input[type="password"]' },
             { type: 'write', text: password },
             { type: 'press', key: 'ENTER' },
-            { type: 'wait', milliseconds: 5000 },
-            // Navigate to search URL via JS
-            { type: 'execute', script: `window.location.href = '${targetUrl}';` },
+            { type: 'wait', milliseconds: 6000 },
+            // Try clicking search input - Angular usually uses mat-form-field or custom components
+            // Try Tab key to navigate to search field
+            { type: 'press', key: 'TAB' },
+            { type: 'wait', milliseconds: 300 },
+            { type: 'press', key: 'TAB' },
+            { type: 'wait', milliseconds: 300 },
+            { type: 'press', key: 'TAB' },
+            { type: 'wait', milliseconds: 300 },
+            { type: 'write', text: oemCode },
+            { type: 'wait', milliseconds: 500 },
+            { type: 'press', key: 'ENTER' },
             { type: 'wait', milliseconds: 6000 },
             { type: 'scrape' },
           ],
         }),
       });
 
-      const data = await resp.json();
-      const markdown = data?.data?.markdown || data?.markdown || '';
-      console.log(`SAG direct result (${path}): ${markdown.length} chars`);
-      console.log(`SAG direct snippet: "${markdown.substring(0, 500)}"`);
-
-      if (markdown.includes('Kč') || markdown.includes('CZK')) {
-        return parseSAGMarkdown(markdown, oemCode);
+      const searchData = await searchResp.json();
+      if (!searchResp.ok) {
+        console.error(`SAG search Firecrawl error: ${searchResp.status}`);
+        continue;
       }
-    }
 
-    return empty;
-  } catch (err) {
-    console.error('SAG direct error:', err);
-    return empty;
+      const searchMd = searchData?.data?.markdown || searchData?.markdown || '';
+      console.log(`SAG search result: ${searchMd.length} chars`);
+      console.log(`SAG search snippet: "${searchMd.substring(0, 600)}"`);
+
+      if (searchMd.includes('Kč') || searchMd.includes('CZK')) {
+        const parsed = parseSAGMarkdown(searchMd, oemCode);
+        if (parsed.found) {
+          console.log(`SAG found: ${parsed.name}, price=${parsed.price_with_vat}`);
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error(`SAG search error for path ${path}:`, err);
+    }
   }
+
+  return empty;
 }
 
 function parseSAGMarkdown(
   markdown: string,
   oemCode: string
 ): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
-  // Extract prices — look for CZK, Kč patterns
   const prices: number[] = [];
   const priceRegex = /(\d[\d\s]*[,.]?\d*)\s*(Kč|CZK|,-)/gi;
   let pm;
@@ -545,14 +492,12 @@ function parseSAGMarkdown(
     if (v > 0 && v < 500000) prices.push(v);
   }
 
-  // Also try plain number patterns near price-like context
   const priceRegex2 = /(?:cena|price|moc|nákup)\s*:?\s*(\d[\d\s]*[,.]?\d*)/gi;
   while ((pm = priceRegex2.exec(markdown)) !== null) {
     const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
     if (v > 0 && v < 500000 && !prices.includes(v)) prices.push(v);
   }
 
-  // Extract product name
   let name = '';
   const lines = markdown.split('\n').filter(l => l.trim().length > 3);
   for (const line of lines) {
@@ -563,9 +508,8 @@ function parseSAGMarkdown(
     }
   }
 
-  // Extract manufacturer
   let manufacturer = '';
-  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'JURID', 'NGK', 'DENSO', 'HELLA', 'OSRAM', 'PHILIPS', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'JAPANPARTS', 'NIPPARTS', 'ELRING', 'REINZ', 'CORTECO', 'CONTITECH', 'INA', 'RUVILLE', 'SWAG', 'TOPRAN', 'METZGER', 'MAPCO', 'FILTRON', 'PURFLUX', 'KNECHT', 'HENGST', 'WIX'];
+  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'NGK', 'DENSO', 'HELLA', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'ELRING', 'CORTECO', 'CONTITECH', 'INA', 'SWAG', 'TOPRAN', 'FILTRON', 'PURFLUX', 'KNECHT', 'HENGST', 'WIX'];
   for (const mfr of mfrPatterns) {
     if (markdown.toUpperCase().includes(mfr)) { manufacturer = mfr; break; }
   }
@@ -574,8 +518,7 @@ function parseSAGMarkdown(
     let basePrice = prices.length >= 2 ? Math.min(...prices.slice(0, 3)) : prices[0];
     const priceWithoutVat = Math.round(basePrice * (1 + SAG_MARGIN) * 100) / 100;
     const priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
-
-    const isAvailable = markdown.toLowerCase().includes('skladem') || markdown.toLowerCase().includes('dostupn') || markdown.toLowerCase().includes('ks');
+    const isAvailable = /skladem|dostupn|\d+\s*ks/i.test(markdown);
 
     return {
       found: true,
