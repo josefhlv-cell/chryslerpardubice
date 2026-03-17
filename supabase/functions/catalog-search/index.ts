@@ -373,7 +373,7 @@ async function searchSAG(
       },
       body: JSON.stringify({
         url: `${SAG_BASE}/login`,
-        formats: ['markdown', 'screenshot'],
+        formats: ['markdown'],
         waitFor: 3000,
         onlyMainContent: false,
         actions: [
@@ -382,9 +382,11 @@ async function searchSAG(
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
-          { type: 'click', selector: '.btn-primary' },
+          // Press Enter to submit instead of clicking button (more reliable)
+          { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 6000 },
-          { type: 'click', selector: 'input[type="text"]' },
+          // After login, find search input and type OEM code
+          { type: 'click', selector: 'input[type="text"], input[type="search"]' },
           { type: 'write', text: oemCode },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 6000 },
