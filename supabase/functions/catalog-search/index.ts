@@ -390,11 +390,38 @@ async function searchSAG(
           { type: 'write', text: password },
           { type: 'press', key: 'Enter' },
           { type: 'wait', milliseconds: 6000 },
+          // After login, use authenticated session to fetch search results via internal API
           {
             type: 'executeJavascript',
-            script: `window.location.href = '${searchUrl}';`
+            script: `
+              async function sagSearch() {
+                const kw = '${oemCode}';
+                // Try multiple API endpoints that SAG Angular app may use
+                const endpoints = [
+                  '/sag-cz/rest/articles/search?keywords=' + encodeURIComponent(kw) + '&maxResults=5',
+                  '/sag-cz/rest/article/search?keywords=' + encodeURIComponent(kw),
+                  '/sag-cz/articles/search?keywords=' + encodeURIComponent(kw),
+                  '/sag-cz/rest/search?keywords=' + encodeURIComponent(kw),
+                ];
+                let result = 'NO_RESULT';
+                for (const ep of endpoints) {
+                  try {
+                    const r = await fetch(ep, {credentials: 'include', headers: {'Accept': 'application/json, text/html'}});
+                    if (r.ok) {
+                      const txt = await r.text();
+                      if (txt.length > 50) { result = 'ENDPOINT:' + ep + '|DATA:' + txt.substring(0, 5000); break; }
+                    } else {
+                      result += '|' + ep + ':' + r.status;
+                    }
+                  } catch(e) { result += '|' + ep + ':ERR:' + e.message; }
+                }
+                document.title = 'SAG_SEARCH';
+                document.body.innerHTML = '<pre id="sag-data">' + result + '</pre>';
+              }
+              sagSearch();
+            `
           },
-          { type: 'wait', milliseconds: 8000 },
+          { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
         ],
       }),
