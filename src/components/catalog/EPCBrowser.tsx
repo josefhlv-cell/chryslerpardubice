@@ -658,7 +658,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                           </div>
                           <div className="w-16 flex justify-center">
                             {alt.availability === 'available' ? (
-                              <Badge variant="outline" className="text-[8px] text-green-600 border-green-300">Skladem</Badge>
+                              <Badge variant="outline" className="text-[8px] text-primary border-primary/30">Skladem</Badge>
                             ) : (
                               <Badge variant="outline" className="text-[8px]">{alt.availability}</Badge>
                             )}
