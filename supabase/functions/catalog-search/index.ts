@@ -361,10 +361,11 @@ async function searchSAG(
   firecrawlKey: string,
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
+  const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   try {
-    console.log(`SAG Firecrawl: login + search ${oemCode}`);
+    console.log(`SAG: single-call login+search ${oemCode}`);
 
-    // Single Firecrawl call: login and search in one flow
+    // Single Firecrawl call: login → Tab to search → type OEM → Enter → scrape
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -372,21 +373,25 @@ async function searchSAG(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: `${SAG_BASE}/login`,
+        url: `https://connect-int.sag.services/sag-cz/login`,
         formats: ['markdown'],
-        waitFor: 3000,
+        waitFor: 2000,
         onlyMainContent: false,
+        timeout: 45000,
         actions: [
-          { type: 'wait', milliseconds: 2000 },
+          { type: 'wait', milliseconds: 1500 },
           { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
           { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 5000 },
-          // Type OEM code in the first visible text input (search bar)
-          { type: 'click', selector: 'input' },
+          { type: 'wait', milliseconds: 4000 },
+          // After login, Tab through navigation to reach search field
+          { type: 'press', key: 'TAB' },
+          { type: 'press', key: 'TAB' },
+          { type: 'press', key: 'TAB' },
           { type: 'write', text: oemCode },
+          { type: 'wait', milliseconds: 300 },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
@@ -396,68 +401,34 @@ async function searchSAG(
 
     const fcData = await fcResp.json();
     if (!fcResp.ok) {
-      console.error(`SAG Firecrawl actions error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 500));
-      console.log('SAG: trying direct URL approach...');
-      return await searchSAGDirect(firecrawlKey, oemCode);
+      console.error(`SAG error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 400));
+      return empty;
     }
 
     const markdown = fcData?.data?.markdown || fcData?.markdown || '';
     console.log(`SAG result: ${markdown.length} chars`);
     console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
 
-    if (markdown.length < 100 || (markdown.includes('Přihlásit se') && !markdown.includes('Kč') && !markdown.includes('CZK') && !markdown.includes('košík'))) {
-      console.log('SAG: still on login page, trying direct URL...');
-      return await searchSAGDirect(firecrawlKey, oemCode);
-    }
-
-    return parseSAGMarkdown(markdown, oemCode);
-  } catch (err) {
-    console.error('SAG Firecrawl error:', err);
-    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
-  }
-}
-
-async function searchSAGDirect(
-  firecrawlKey: string,
-  oemCode: string
-): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
-  try {
-    // Try multiple URL patterns since SAG might use different routing
-    const searchUrls = [
-      `${SAG_BASE}/#/article-search/${encodeURIComponent(oemCode)}`,
-      `${SAG_BASE}/home/search/${encodeURIComponent(oemCode)}`,
-    ];
-
-    for (const searchUrl of searchUrls) {
-      console.log(`SAG direct search: ${searchUrl}`);
-
-      const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: searchUrl,
-          formats: ['markdown'],
-          waitFor: 5000,
-          onlyMainContent: false,
-        }),
-      });
-
-      const data = await resp.json();
-      const markdown = data?.data?.markdown || data?.markdown || '';
-      console.log(`SAG direct result: ${markdown.length} chars, snippet: "${markdown.substring(0, 400)}"`);
-
-      if (markdown.includes('Kč') || markdown.includes('CZK')) {
-        return parseSAGMarkdown(markdown, oemCode);
+    if (markdown.includes('Kč') || markdown.includes('CZK')) {
+      const parsed = parseSAGMarkdown(markdown, oemCode);
+      if (parsed.found) {
+        console.log(`SAG found: ${parsed.name}, price=${parsed.price_with_vat}`);
+        return parsed;
       }
     }
 
-    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    // If Tab approach didn't work, the markdown might still show the home page
+    // Log what we see for debugging
+    if (markdown.includes('Přihlásit')) {
+      console.log('SAG: still on login page — credentials may have failed');
+    } else {
+      console.log('SAG: logged in but search did not return pricing data');
+    }
+
+    return empty;
   } catch (err) {
-    console.error('SAG direct search error:', err);
-    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    console.error('SAG error:', err);
+    return empty;
   }
 }
 
@@ -465,7 +436,6 @@ function parseSAGMarkdown(
   markdown: string,
   oemCode: string
 ): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
-  // Extract prices — look for CZK, Kč patterns
   const prices: number[] = [];
   const priceRegex = /(\d[\d\s]*[,.]?\d*)\s*(Kč|CZK|,-)/gi;
   let pm;
@@ -474,45 +444,33 @@ function parseSAGMarkdown(
     if (v > 0 && v < 500000) prices.push(v);
   }
 
-  // Also try plain number patterns near price-like context
-  const priceRegex2 = /(?:cena|price|moc)\s*:?\s*(\d[\d\s]*[,.]?\d*)/gi;
+  const priceRegex2 = /(?:cena|price|moc|nákup)\s*:?\s*(\d[\d\s]*[,.]?\d*)/gi;
   while ((pm = priceRegex2.exec(markdown)) !== null) {
     const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
     if (v > 0 && v < 500000 && !prices.includes(v)) prices.push(v);
   }
 
-  // Extract product name
   let name = '';
   const lines = markdown.split('\n').filter(l => l.trim().length > 3);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].replace(/[|*#\[\]]/g, '').trim();
-    if (line.includes(oemCode) || line.match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič|destičk|kotouč|hadice|senzor|snímač|lambda|termostat|chladič|ventil|pružin|rameno|tyč|kulový|stabilizátor/i)) {
-      name = line.substring(0, 120);
+  for (const line of lines) {
+    const clean = line.replace(/[|*#\[\]]/g, '').trim();
+    if (clean.includes(oemCode) || clean.match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič|destičk|kotouč|hadice|senzor|snímač|lambda|termostat|chladič|ventil|pružin|rameno|tyč|kulový|stabilizátor|těsnění|palivov|vzduchov|kabinov/i)) {
+      name = clean.substring(0, 120);
       break;
     }
   }
 
-  // Extract manufacturer
   let manufacturer = '';
-  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'JURID', 'NGK', 'DENSO', 'HELLA', 'OSRAM', 'PHILIPS', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'JAPANPARTS', 'NIPPARTS', 'ELRING', 'REINZ', 'VICTOR', 'CORTECO', 'CONTITECH', 'INA', 'RUVILLE', 'SWAG', 'TOPRAN', 'METZGER', 'MAPCO', 'QWP'];
+  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'NGK', 'DENSO', 'HELLA', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'ELRING', 'CORTECO', 'CONTITECH', 'INA', 'SWAG', 'TOPRAN', 'FILTRON', 'PURFLUX', 'KNECHT', 'HENGST', 'WIX'];
   for (const mfr of mfrPatterns) {
     if (markdown.toUpperCase().includes(mfr)) { manufacturer = mfr; break; }
   }
 
   if (prices.length > 0) {
-    // SAG prices are typically nákupní (purchase) prices — add 15% margin
-    let basePrice = prices[0];
-    
-    // If multiple prices, take the lowest as base (nákupní)
-    if (prices.length >= 2) {
-      basePrice = Math.min(...prices.slice(0, 3));
-    }
-
-    // Apply 15% margin
+    let basePrice = prices.length >= 2 ? Math.min(...prices.slice(0, 3)) : prices[0];
     const priceWithoutVat = Math.round(basePrice * (1 + SAG_MARGIN) * 100) / 100;
     const priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
-
-    const isAvailable = markdown.toLowerCase().includes('skladem') || markdown.toLowerCase().includes('dostupn') || markdown.toLowerCase().includes('verfügbar') || markdown.toLowerCase().includes('available') || markdown.toLowerCase().includes('ks');
+    const isAvailable = /skladem|dostupn|\d+\s*ks/i.test(markdown);
 
     return {
       found: true,
