@@ -364,7 +364,8 @@ async function searchSAG(
   try {
     console.log(`SAG Firecrawl: login + search ${oemCode}`);
 
-    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    // Step 1: Login via Firecrawl with screenshot to debug
+    const loginResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${firecrawlKey}`,
@@ -373,36 +374,79 @@ async function searchSAG(
       body: JSON.stringify({
         url: `${SAG_BASE}/login`,
         formats: ['markdown'],
-        waitFor: 3000,
+        waitFor: 4000,
         onlyMainContent: false,
         actions: [
-          { type: 'wait', milliseconds: 1500 },
-          { type: 'write', text: username, selector: 'input[name="username"], input[type="text"], #username, .login-input input' },
-          { type: 'write', text: password, selector: 'input[name="password"], input[type="password"], #password' },
-          { type: 'click', selector: 'button[type="submit"], .login-button, button.btn-primary, input[type="submit"]' },
-          { type: 'wait', milliseconds: 4000 },
-          // After login, navigate to search or use the search bar
-          { type: 'write', text: oemCode, selector: 'input[type="search"], input[type="text"].search, input.article-search, input[placeholder*="číslo"], input[placeholder*="hled"], .search-input input, input#search, input[name="search"]' },
-          { type: 'press', key: 'ENTER' },
+          { type: 'wait', milliseconds: 2000 },
+          // Click first input field and type username
+          { type: 'click', selector: 'input[placeholder*="jméno"], input[placeholder*="name"], .login-form input:first-of-type, form input:first-of-type' },
+          { type: 'wait', milliseconds: 500 },
+          { type: 'write', text: username },
+          // Tab to password field
+          { type: 'press', key: 'TAB' },
+          { type: 'wait', milliseconds: 300 },
+          { type: 'write', text: password },
+          { type: 'wait', milliseconds: 500 },
+          // Click login button
+          { type: 'click', selector: 'button.btn-primary, button[type="submit"], .login-btn, button:has-text("Přihlásit")' },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
         ],
       }),
     });
 
-    const fcData = await fcResp.json();
-
-    if (!fcResp.ok) {
-      console.error(`SAG Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 500));
+    const loginData = await loginResp.json();
+    if (!loginResp.ok) {
+      console.error(`SAG login Firecrawl error: ${loginResp.status}`, JSON.stringify(loginData).substring(0, 500));
       return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
     }
 
-    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
-    console.log(`SAG Firecrawl: ${markdown.length} chars`);
-    console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
+    const loginMarkdown = loginData?.data?.markdown || loginData?.markdown || '';
+    console.log(`SAG login result: ${loginMarkdown.length} chars`);
+    console.log(`SAG login snippet: "${loginMarkdown.substring(0, 400)}"`);
+
+    // Check if login succeeded - look for post-login indicators
+    const loginFailed = loginMarkdown.length < 100 || 
+      (loginMarkdown.includes('Přihlásit se') && !loginMarkdown.includes('Košík') && !loginMarkdown.includes('Hledat') && !loginMarkdown.includes('Odhlásit'));
+
+    if (loginFailed) {
+      console.log('SAG: login appears to have failed, trying direct search URL');
+    }
+
+    // Step 2: Search - navigate directly to search URL with OEM code
+    const searchUrl = `${SAG_BASE}/article-search?searchTerm=${encodeURIComponent(oemCode)}`;
+    console.log(`SAG: searching ${searchUrl}`);
+
+    const searchResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: searchUrl,
+        formats: ['markdown'],
+        waitFor: 5000,
+        onlyMainContent: false,
+        actions: [
+          { type: 'wait', milliseconds: 5000 },
+          { type: 'scrape' },
+        ],
+      }),
+    });
+
+    const searchData = await searchResp.json();
+    if (!searchResp.ok) {
+      console.error(`SAG search Firecrawl error: ${searchResp.status}`, JSON.stringify(searchData).substring(0, 500));
+      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    }
+
+    const markdown = searchData?.data?.markdown || searchData?.markdown || '';
+    console.log(`SAG search result: ${markdown.length} chars`);
+    console.log(`SAG search snippet: "${markdown.substring(0, 800)}"`);
 
     if (markdown.length < 50 || (markdown.includes('Přihlásit') && !markdown.includes('Kč') && !markdown.includes('CZK'))) {
-      console.log('SAG: login failed or no product data');
+      console.log('SAG: no product data found');
       return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
     }
 
