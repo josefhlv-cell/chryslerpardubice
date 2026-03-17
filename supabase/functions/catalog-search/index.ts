@@ -541,6 +541,8 @@ async function searchSAGFirecrawl(
     return empty;
   }
 }
+
+function parseSAGMarkdown(
   markdown: string,
   oemCode: string
 ): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
