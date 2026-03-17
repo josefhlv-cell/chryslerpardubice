@@ -742,10 +742,27 @@ export async function getEPCDiagram(
   }
 
   // 2. Generate via AI (edge function also saves to epc_diagrams)
-  const { data, error } = await supabase.functions.invoke("epc-diagram", {
-    body: { vehicle, category, subcategory, parts },
-  });
-  if (error || !data?.success) return null;
+  try {
+    const { data, error } = await supabase.functions.invoke("epc-diagram", {
+      body: { vehicle, category, subcategory, parts },
+    });
+    if (error) {
+      // Check if error body contains credit exhaustion message
+      const errText = typeof error === 'string' ? error : (error?.message || '');
+      if (errText.includes('kredity') || errText.includes('402') || errText.includes('503')) {
+        console.warn('EPC diagram AI credits exhausted');
+      }
+      return null;
+    }
+    if (!data?.success) return null;
+
+    const svg = data.svg || null;
+    if (svg) cacheSet('diagram', cacheId, svg);
+    return svg;
+  } catch (e) {
+    console.warn('EPC diagram generation failed:', e);
+    return null;
+  }
 
   const svg = data.svg || null;
   if (svg) cacheSet('diagram', cacheId, svg);
