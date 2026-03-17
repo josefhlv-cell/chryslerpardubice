@@ -142,7 +142,9 @@ Deno.serve(async (req) => {
           const sagStart = Date.now();
           sagResult = await searchSAG(sagUser, sagPass, FIRECRAWL_API_KEY, cleanOem);
           diagnostics.sag.responseTime = Math.max(diagnostics.sag.responseTime, Date.now() - sagStart);
-          console.log(`SAG search ${cleanOem}: found=${sagResult.found}, name=${sagResult.name}, price=${sagResult.price_with_vat}`);
+          if (sagResult.found) {
+            console.log(`SAG found ${cleanOem}: ${sagResult.name}, ${sagResult.price_with_vat} Kč`);
+          }
         } catch (err) { console.error('SAG search failed:', err); }
       }
 
