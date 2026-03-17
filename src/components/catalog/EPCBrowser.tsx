@@ -146,7 +146,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   // Load parts when category/subcategory selected — lazy generate if empty
   useEffect(() => {
     if (!selectedCategory) {
-      setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
+      setParts([]); setPriceMap(() => new Map()); setAlternativesMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
       return;
     }
     setPartsLoading(true);
