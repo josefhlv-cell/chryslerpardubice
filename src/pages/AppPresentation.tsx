@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Car, Wrench, BookOpen, ShoppingCart, Shield,
@@ -6,7 +6,7 @@ import {
   CheckCircle2, ChevronLeft, ChevronRight, Calendar,
   Camera, Bell, Gauge, MessageSquare, FileText,
   Star, Truck, ScanLine, Cog, Package, Presentation,
-  MapPin, Clock, Zap, Search, Database, Lock
+  MapPin, Clock, Zap, Search, Database, Lock, Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
