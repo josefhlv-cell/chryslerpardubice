@@ -380,19 +380,23 @@ async function searchSAG(
         timeout: 45000,
         actions: [
           { type: 'wait', milliseconds: 2000 },
-          // Login form - username is first text input
+          // Login form
           { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 5000 },
-          // Now on homepage. Search input might not have type="text" explicitly
-          // Try broader selector: any input not password/hidden/checkbox
-          { type: 'click', selector: 'input:not([type="password"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"])' },
+          // On homepage now — close any open popups/overlays
+          { type: 'press', key: 'Escape' },
+          { type: 'wait', milliseconds: 500 },
+          // Click on the search text input (not the dropdown)
+          // Try input with type="text" — on home page this should be search, not login
+          { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: oemCode },
           { type: 'wait', milliseconds: 500 },
-          { type: 'press', key: 'ENTER' },
+          // Click the search button instead of Enter (more reliable)
+          { type: 'click', selector: 'button[type="submit"], .search-button, button.mat-icon-button, button[aria-label*="search"], button[aria-label*="Hledat"]' },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
         ],
