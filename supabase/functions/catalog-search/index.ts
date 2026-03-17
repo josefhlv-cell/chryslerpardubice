@@ -362,122 +362,74 @@ async function searchSAG(
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
   const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
-  
-  // Strategy: Login via Firecrawl, then scrape search results page directly
-  // SAG Connect is Angular SPA — we login first, then try direct URL navigation
-  
-  // Try multiple search URL patterns after login
-  const searchPaths = [
-    `home/search/${encodeURIComponent(oemCode)}`,
-    `article-search/${encodeURIComponent(oemCode)}`,
-  ];
+  try {
+    console.log(`SAG: single-call login+search ${oemCode}`);
 
-  for (const path of searchPaths) {
-    try {
-      const targetUrl = `https://connect-int.sag.services/sag-cz/${path}`;
-      console.log(`SAG: login then navigate to ${targetUrl}`);
+    // Single Firecrawl call: login → Tab to search → type OEM → Enter → scrape
+    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: `https://connect-int.sag.services/sag-cz/login`,
+        formats: ['markdown'],
+        waitFor: 2000,
+        onlyMainContent: false,
+        timeout: 45000,
+        actions: [
+          { type: 'wait', milliseconds: 1500 },
+          { type: 'click', selector: 'input[type="text"]' },
+          { type: 'write', text: username },
+          { type: 'click', selector: 'input[type="password"]' },
+          { type: 'write', text: password },
+          { type: 'press', key: 'ENTER' },
+          { type: 'wait', milliseconds: 4000 },
+          // After login, Tab through navigation to reach search field
+          { type: 'press', key: 'TAB' },
+          { type: 'press', key: 'TAB' },
+          { type: 'press', key: 'TAB' },
+          { type: 'write', text: oemCode },
+          { type: 'wait', milliseconds: 300 },
+          { type: 'press', key: 'ENTER' },
+          { type: 'wait', milliseconds: 5000 },
+          { type: 'scrape' },
+        ],
+      }),
+    });
 
-      // Login + screenshot to discover page structure, then navigate via link click
-      const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: `https://connect-int.sag.services/sag-cz/login`,
-          formats: ['markdown', 'screenshot'],
-          waitFor: 3000,
-          onlyMainContent: false,
-          actions: [
-            { type: 'wait', milliseconds: 2000 },
-            { type: 'click', selector: 'input[type="text"]' },
-            { type: 'write', text: username },
-            { type: 'click', selector: 'input[type="password"]' },
-            { type: 'write', text: password },
-            { type: 'press', key: 'ENTER' },
-            { type: 'wait', milliseconds: 5000 },
-            // Take screenshot to see the page after login
-            { type: 'screenshot' },
-          ],
-        }),
-      });
-
-      const fcData = await fcResp.json();
-      if (!fcResp.ok) {
-        console.error(`SAG Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 300));
-        continue;
-      }
-
-      const markdown = fcData?.data?.markdown || fcData?.markdown || '';
-      console.log(`SAG after login: ${markdown.length} chars`);
-      
-      // Log all input-like elements found on page for debugging
-      const inputMatches = markdown.match(/input|search|hled|vyhled|článek|artik/gi);
-      console.log(`SAG page keywords: ${JSON.stringify(inputMatches?.slice(0, 10))}`);
-      console.log(`SAG snippet: "${markdown.substring(0, 600)}"`);
-
-      // Now try to search: click on search area and type
-      const searchResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: `https://connect-int.sag.services/sag-cz/login`,
-          formats: ['markdown'],
-          waitFor: 3000,
-          onlyMainContent: false,
-          actions: [
-            { type: 'wait', milliseconds: 2000 },
-            // Login
-            { type: 'click', selector: 'input[type="text"]' },
-            { type: 'write', text: username },
-            { type: 'click', selector: 'input[type="password"]' },
-            { type: 'write', text: password },
-            { type: 'press', key: 'ENTER' },
-            { type: 'wait', milliseconds: 6000 },
-            // Try clicking search input - Angular usually uses mat-form-field or custom components
-            // Try Tab key to navigate to search field
-            { type: 'press', key: 'TAB' },
-            { type: 'wait', milliseconds: 300 },
-            { type: 'press', key: 'TAB' },
-            { type: 'wait', milliseconds: 300 },
-            { type: 'press', key: 'TAB' },
-            { type: 'wait', milliseconds: 300 },
-            { type: 'write', text: oemCode },
-            { type: 'wait', milliseconds: 500 },
-            { type: 'press', key: 'ENTER' },
-            { type: 'wait', milliseconds: 6000 },
-            { type: 'scrape' },
-          ],
-        }),
-      });
-
-      const searchData = await searchResp.json();
-      if (!searchResp.ok) {
-        console.error(`SAG search Firecrawl error: ${searchResp.status}`);
-        continue;
-      }
-
-      const searchMd = searchData?.data?.markdown || searchData?.markdown || '';
-      console.log(`SAG search result: ${searchMd.length} chars`);
-      console.log(`SAG search snippet: "${searchMd.substring(0, 600)}"`);
-
-      if (searchMd.includes('Kč') || searchMd.includes('CZK')) {
-        const parsed = parseSAGMarkdown(searchMd, oemCode);
-        if (parsed.found) {
-          console.log(`SAG found: ${parsed.name}, price=${parsed.price_with_vat}`);
-          return parsed;
-        }
-      }
-    } catch (err) {
-      console.error(`SAG search error for path ${path}:`, err);
+    const fcData = await fcResp.json();
+    if (!fcResp.ok) {
+      console.error(`SAG error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 400));
+      return empty;
     }
-  }
 
-  return empty;
+    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
+    console.log(`SAG result: ${markdown.length} chars`);
+    console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
+
+    if (markdown.includes('Kč') || markdown.includes('CZK')) {
+      const parsed = parseSAGMarkdown(markdown, oemCode);
+      if (parsed.found) {
+        console.log(`SAG found: ${parsed.name}, price=${parsed.price_with_vat}`);
+        return parsed;
+      }
+    }
+
+    // If Tab approach didn't work, the markdown might still show the home page
+    // Log what we see for debugging
+    if (markdown.includes('Přihlásit')) {
+      console.log('SAG: still on login page — credentials may have failed');
+    } else {
+      console.log('SAG: logged in but search did not return pricing data');
+    }
+
+    return empty;
+  } catch (err) {
+    console.error('SAG error:', err);
+    return empty;
+  }
 }
 
 function parseSAGMarkdown(
