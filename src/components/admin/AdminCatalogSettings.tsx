@@ -17,14 +17,14 @@ type CatalogConfig = {
 
 type DiagResult = {
   mopar: { status: string; responseTime: number };
-  autokelly: { status: string; responseTime: number };
+  sag: { status: string; responseTime: number };
   intercars: { status: string; responseTime: number };
 };
 
 const AdminCatalogSettings = () => {
   const [catalogs, setCatalogs] = useState<CatalogConfig[]>([
     { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Jeep, Dodge, RAM", enabled: true, ready: true },
-    { id: "autokelly", name: "AutoKelly", description: "Alternativní díly (bez Starline)", enabled: true, ready: true },
+    { id: "sag", name: "SAG Connect", description: "Alternativní díly – SAG/QWP (+ 15% marže)", enabled: true, ready: true },
     { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", enabled: false, ready: false },
   ]);
   const [hasChanges, setHasChanges] = useState(false);
