@@ -363,9 +363,12 @@ async function searchSAG(
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
   const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   try {
-    console.log(`SAG: single-call login+search ${oemCode}`);
+    console.log(`SAG: search ${oemCode}`);
 
-    // Single Firecrawl call: login → Tab to search → type OEM → Enter → scrape
+    // Navigate to search results URL — SAG will redirect to login if not authenticated
+    // After login it should redirect back to search results
+    const searchUrl = `https://connect-int.sag.services/sag-cz/article/result?keywords=${encodeURIComponent(oemCode)}`;
+    
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -373,25 +376,24 @@ async function searchSAG(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: `https://connect-int.sag.services/sag-cz/login`,
+        url: searchUrl,
         formats: ['markdown'],
-        waitFor: 2000,
+        waitFor: 3000,
         onlyMainContent: false,
         timeout: 45000,
         actions: [
-          { type: 'wait', milliseconds: 1500 },
+          { type: 'wait', milliseconds: 2000 },
+          // If redirected to login page, fill credentials
           { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
           { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 4000 },
-          // After login, Tab through navigation to reach search field
-          { type: 'press', key: 'TAB' },
-          { type: 'press', key: 'TAB' },
-          { type: 'press', key: 'TAB' },
+          { type: 'wait', milliseconds: 6000 },
+          // After login, should be redirected to search results
+          // If we land on home instead, type in search bar
+          { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: oemCode },
-          { type: 'wait', milliseconds: 300 },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
@@ -409,7 +411,7 @@ async function searchSAG(
     console.log(`SAG result: ${markdown.length} chars`);
     console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
 
-    if (markdown.includes('Kč') || markdown.includes('CZK')) {
+    if (markdown.includes('Kč') || markdown.includes('CZK') || markdown.includes('košík') || markdown.includes('položk')) {
       const parsed = parseSAGMarkdown(markdown, oemCode);
       if (parsed.found) {
         console.log(`SAG found: ${parsed.name}, price=${parsed.price_with_vat}`);
@@ -417,12 +419,10 @@ async function searchSAG(
       }
     }
 
-    // If Tab approach didn't work, the markdown might still show the home page
-    // Log what we see for debugging
     if (markdown.includes('Přihlásit')) {
-      console.log('SAG: still on login page — credentials may have failed');
+      console.log('SAG: still on login page');
     } else {
-      console.log('SAG: logged in but search did not return pricing data');
+      console.log('SAG: no pricing data found');
     }
 
     return empty;
