@@ -55,7 +55,7 @@ export const PAGE_SIZE = 20;
 
 export const sourceLabel: Record<string, string> = {
   mopar: "Zdroj 1",
-  autokelly: "Zdroj 2",
+  sag: "Zdroj 2",
   intercars: "Zdroj 3",
   csv: "Zdroj 4",
   epc: "Zdroj 5",
@@ -66,18 +66,18 @@ export const sourceLabel: Record<string, string> = {
 export const sourcePriority: Record<string, number> = {
   mopar: 1,
   csv: 2,
-  autokelly: 3,
+  sag: 3,
   intercars: 4,
 };
 
 // ---- Catalog config ----
 
 /** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "csv", "autokelly"]);
+export const enabledSources = new Set(["mopar", "csv", "sag"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
-  autokelly: new Set(["starline"]),
+  sag: new Set(["starline"]),
 };
 
 /** Check if a part should be filtered out */

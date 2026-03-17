@@ -72,7 +72,7 @@ const AdminCatalogSettings = () => {
 
       setDiagResult(data?.diagnostics || {
         mopar: { status: 'unknown', responseTime: elapsed },
-        autokelly: { status: 'disabled', responseTime: 0 },
+        sag: { status: 'disabled', responseTime: 0 },
         intercars: { status: 'disabled', responseTime: 0 },
       });
       await loadCounts();
@@ -81,7 +81,7 @@ const AdminCatalogSettings = () => {
       toast({ title: "Chyba diagnostiky", description: err.message, variant: "destructive" });
       setDiagResult({
         mopar: { status: 'error', responseTime: 0 },
-        autokelly: { status: 'disabled', responseTime: 0 },
+        sag: { status: 'disabled', responseTime: 0 },
         intercars: { status: 'disabled', responseTime: 0 },
       });
     }
