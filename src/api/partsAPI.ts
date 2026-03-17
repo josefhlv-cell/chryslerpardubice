@@ -55,6 +55,7 @@ export const PAGE_SIZE = 20;
 
 export const sourceLabel: Record<string, string> = {
   mopar: "Zdroj 1",
+  "epc-ai": "Zdroj 1",
   sag: "Zdroj 2",
   intercars: "Zdroj 3",
   csv: "Zdroj 4",
@@ -65,15 +66,16 @@ export const sourceLabel: Record<string, string> = {
 
 export const sourcePriority: Record<string, number> = {
   mopar: 1,
-  csv: 2,
-  sag: 3,
+  "epc-ai": 1,
+  sag: 2,
+  csv: 3,
   intercars: 4,
 };
 
 // ---- Catalog config ----
 
 /** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "csv", "sag"]);
+export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
@@ -93,25 +95,33 @@ export const isPartBlocked = (part: PartResult): boolean => {
 export const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase();
 
 /** Map raw DB row to PartResult */
-export const mapToPartResult = (item: any, source: string): PartResult => ({
-  id: item.id,
-  name: item.name,
-  oem_number: item.oem_code || item.oem_number,
-  internal_code: item.internal_code || null,
-  price_without_vat: item.price_without_vat ?? item.price ?? 0,
-  price_with_vat: item.price_with_vat ?? Math.round((item.price ?? 0) * 1.21 * 100) / 100,
-  category: item.category || null,
-  family: item.family || item.brand || null,
-  segment: item.segment || (item.available !== undefined ? (item.available ? "Skladem" : "Na objednávku") : null),
-  packaging: item.packaging || null,
-  description: item.description || null,
-  manufacturer: item.manufacturer || (source === "mopar" ? "Mopar" : null),
-  catalog_source: item.catalog_source || source,
-  availability: item.availability || (item.available ? "available" : "unknown"),
-  compatible_vehicles: item.compatible_vehicles || null,
-  superseded_by: item.superseded_by || null,
-  supersedes: item.supersedes || null,
-});
+export const mapToPartResult = (item: any, source: string): PartResult => {
+  const catalogSource = item.catalog_source || source;
+  const rawOem = item.oem_code || item.oem_number;
+  const normalizedDisplayOem = catalogSource === "sag" && typeof rawOem === "string"
+    ? rawOem.replace(/^SAG-/, "")
+    : rawOem;
+
+  return {
+    id: item.id,
+    name: item.name,
+    oem_number: normalizedDisplayOem,
+    internal_code: item.internal_code || null,
+    price_without_vat: item.price_without_vat ?? item.price ?? 0,
+    price_with_vat: item.price_with_vat ?? Math.round((item.price ?? 0) * 1.21 * 100) / 100,
+    category: item.category || null,
+    family: item.family || item.brand || null,
+    segment: item.segment || (item.available !== undefined ? (item.available ? "Skladem" : "Na objednávku") : null),
+    packaging: item.packaging || null,
+    description: item.description || null,
+    manufacturer: item.manufacturer || ((catalogSource === "mopar" || catalogSource === "epc-ai") ? "Mopar" : null),
+    catalog_source: catalogSource,
+    availability: item.availability || (item.available ? "available" : "unknown"),
+    compatible_vehicles: item.compatible_vehicles || null,
+    superseded_by: item.superseded_by || null,
+    supersedes: item.supersedes || null,
+  };
+};
 
 /** Sort results by catalog source priority, filtering blocked parts */
 export const sortByPriority = (parts: PartResult[]) =>
