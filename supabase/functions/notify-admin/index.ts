@@ -90,7 +90,7 @@ Telefon: ${record.phone || "—"}
 Poznámka: ${record.note || "—"}
       `.trim();
     } else if (type === "order") {
-      const sourceLabel = record.catalog_source === "autokelly" ? "AutoKelly"
+      const sourceLabel = record.catalog_source === "sag" ? "SAG Connect"
         : record.catalog_source === "mopar" ? "Mopar OE"
         : record.catalog_source === "csv" ? "CSV Import"
         : record.catalog_source || "Neznámý";
@@ -105,7 +105,7 @@ Množství: ${record.quantity || 1}
 Cena bez DPH: ${record.unit_price ? record.unit_price + " Kč" : "—"}
 
 🔧 ZDROJ DÍLU: ${sourceLabel}
-${record.catalog_source === "autokelly" ? "→ Objednat přes AutoKelly" : ""}
+${record.catalog_source === "sag" ? "→ Objednat přes SAG Connect" : ""}
 ${record.catalog_source === "mopar" ? "→ Objednat přes Mopar katalog" : ""}
 
 Poznámka zákazníka: ${record.customer_note || "—"}

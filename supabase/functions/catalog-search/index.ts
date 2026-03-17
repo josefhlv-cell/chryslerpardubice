@@ -4,8 +4,9 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const AK_BASE = 'https://www.lkq.cz';
+const SAG_BASE = 'https://connect-int.sag.services/sag-cz';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const SAG_MARGIN = 0.15; // 15% margin
 
 type Session = { loggedIn: boolean; cookies: Record<string, string> };
 
@@ -56,8 +57,7 @@ Deno.serve(async (req) => {
     const results: PartResult[] = [];
     const diagnostics = {
       mopar: { status: 'ok', responseTime: 0 },
-      autokelly: { status: 'disabled', responseTime: 0 },
-      intercars: { status: 'disabled', responseTime: 0 },
+      sag: { status: 'disabled', responseTime: 0 },
     };
 
     // Login to Mopar catalog
@@ -67,16 +67,16 @@ Deno.serve(async (req) => {
     diagnostics.mopar.status = session.loggedIn ? 'ok' : 'login_failed';
     console.log('Mopar login:', session.loggedIn, 'in', diagnostics.mopar.responseTime, 'ms');
 
-    // AutoKelly/LKQ credentials
-    const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
-    const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
-    let akSession: Session = { loggedIn: false, cookies: {} };
-    if (akEmail && akPass) {
-      const akStart = Date.now();
-      akSession = await loginToAutoKelly(akEmail, akPass);
-      diagnostics.autokelly.responseTime = Date.now() - akStart;
-      diagnostics.autokelly.status = akSession.loggedIn ? 'ok' : 'login_failed';
-      console.log('AutoKelly/LKQ login:', akSession.loggedIn, 'in', diagnostics.autokelly.responseTime, 'ms');
+    // SAG Connect credentials
+    const sagUser = Deno.env.get('SAG_USERNAME') || '';
+    const sagPass = Deno.env.get('SAG_PASSWORD') || '';
+    const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY') || '';
+    const sagEnabled = !!(sagUser && sagPass && FIRECRAWL_API_KEY);
+    if (sagEnabled) {
+      diagnostics.sag.status = 'ok';
+      console.log('SAG Connect enabled');
+    } else {
+      console.log('SAG Connect disabled (missing credentials or Firecrawl key)');
     }
 
     for (const oem of oemCodes.slice(0, 10)) {
@@ -133,17 +133,17 @@ Deno.serve(async (req) => {
         }
       }
 
-      // --- Search AutoKelly ---
-      let akResult: { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } = {
+      // --- Search SAG Connect ---
+      let sagResult: { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } = {
         found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown',
       };
-      if (akSession.loggedIn) {
+      if (sagEnabled) {
         try {
-          const akStart = Date.now();
-          akResult = await searchAutoKelly(akSession, cleanOem);
-          diagnostics.autokelly.responseTime = Math.max(diagnostics.autokelly.responseTime, Date.now() - akStart);
-          console.log(`AutoKelly search ${cleanOem}: found=${akResult.found}, name=${akResult.name}, price=${akResult.price_with_vat}`);
-        } catch (err) { console.error('AutoKelly search failed:', err); }
+          const sagStart = Date.now();
+          sagResult = await searchSAG(sagUser, sagPass, FIRECRAWL_API_KEY, cleanOem);
+          diagnostics.sag.responseTime = Math.max(diagnostics.sag.responseTime, Date.now() - sagStart);
+          console.log(`SAG search ${cleanOem}: found=${sagResult.found}, name=${sagResult.name}, price=${sagResult.price_with_vat}`);
+        } catch (err) { console.error('SAG search failed:', err); }
       }
 
       // Save Mopar result to DB
@@ -177,32 +177,32 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Save AutoKelly result as separate entry (source: autokelly)
-      if (akResult.found && akResult.manufacturer?.toLowerCase() !== 'starline') {
-        const akOemKey = `AK-${cleanOem}`;
-        const { data: akCached } = await supabase
+      // Save SAG result as separate entry (source: sag)
+      if (sagResult.found) {
+        const sagOemKey = `SAG-${cleanOem}`;
+        const { data: sagCached } = await supabase
           .from('parts_new')
           .select('id')
-          .eq('oem_number', akOemKey)
-          .eq('catalog_source', 'autokelly')
+          .eq('oem_number', sagOemKey)
+          .eq('catalog_source', 'sag')
           .maybeSingle();
 
-        const akPartData = {
-          oem_number: akOemKey,
-          name: akResult.name || `Díl ${cleanOem}`,
-          price_without_vat: akResult.price_without_vat,
-          price_with_vat: akResult.price_with_vat,
+        const sagPartData = {
+          oem_number: sagOemKey,
+          name: sagResult.name || `Díl ${cleanOem}`,
+          price_without_vat: sagResult.price_without_vat,
+          price_with_vat: sagResult.price_with_vat,
           last_price_update: new Date().toISOString(),
-          catalog_source: 'autokelly',
-          manufacturer: akResult.manufacturer || 'AutoKelly',
-          availability: akResult.availability || 'available',
-          description: `Alternativa k OEM ${cleanOem}`,
+          catalog_source: 'sag',
+          manufacturer: sagResult.manufacturer || 'SAG',
+          availability: sagResult.availability || 'available',
+          description: `Alternativa k OEM ${cleanOem} (SAG Connect)`,
         };
 
-        if (akCached) {
-          await supabase.from('parts_new').update(akPartData).eq('id', akCached.id);
+        if (sagCached) {
+          await supabase.from('parts_new').update(sagPartData).eq('id', sagCached.id);
         } else {
-          await supabase.from('parts_new').insert(akPartData);
+          await supabase.from('parts_new').insert(sagPartData);
         }
       }
 
@@ -226,20 +226,20 @@ Deno.serve(async (req) => {
         superseded_by: supersededByOem, supersedes: supersedesOem,
       });
 
-      // Add AutoKelly alternative result
-      if (akResult.found && akResult.manufacturer?.toLowerCase() !== 'starline') {
+      // Add SAG alternative result
+      if (sagResult.found) {
         results.push({
           oem_number: cleanOem,
-          name: akResult.name || `Díl ${cleanOem} (alternativa)`,
-          price_without_vat: akResult.price_without_vat,
-          price_with_vat: akResult.price_with_vat,
+          name: sagResult.name || `Díl ${cleanOem} (SAG)`,
+          price_without_vat: sagResult.price_without_vat,
+          price_with_vat: sagResult.price_with_vat,
           found: true, cached: false, search_code: cleanOem,
-          catalog_source: 'autokelly',
+          catalog_source: 'sag',
           category: moparResult.category || cached?.category || null,
           family: null, segment: null, packaging: null,
-          description: `Aftermarket alternativa k OEM ${cleanOem}`,
-          manufacturer: akResult.manufacturer || 'AutoKelly',
-          availability: akResult.availability || 'available',
+          description: `Aftermarket alternativa k OEM ${cleanOem} (SAG Connect)`,
+          manufacturer: sagResult.manufacturer || 'SAG',
+          availability: sagResult.availability || 'available',
           compatible_vehicles: cached?.compatible_vehicles || null,
           superseded_by: null, supersedes: null,
         });
@@ -353,116 +353,119 @@ function parseSearchResult(html: string, oem: string): { found: boolean; name: s
   return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, family: '', category: '', segment: '', packaging: '' };
 }
 
-// ===== AutoKelly/LKQ via Firecrawl =====
+// ===== SAG Connect via Firecrawl =====
 
-async function loginToAutoKelly(email: string, pass: string): Promise<Session> {
-  if (email && pass) return { loggedIn: true, cookies: {} };
-  return { loggedIn: false, cookies: {} };
-}
-
-async function searchAutoKelly(
-  _session: Session,
+async function searchSAG(
+  username: string,
+  password: string,
+  firecrawlKey: string,
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
-  const FIRECRAWL_API_KEY = Deno.env.get('FIRECRAWL_API_KEY');
-  const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
-  const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
-  if (!FIRECRAWL_API_KEY || !akEmail || !akPass) {
-    console.log('LKQ: missing FIRECRAWL_API_KEY or credentials');
-    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
-  }
-
   try {
-    console.log(`LKQ Firecrawl: login + search ${oemCode}`);
+    console.log(`SAG Firecrawl: login + search ${oemCode}`);
 
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Authorization': `Bearer ${firecrawlKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: `${AK_BASE}/Account/Login`,
+        url: `${SAG_BASE}/login`,
         formats: ['markdown'],
-        waitFor: 2000,
-        onlyMainContent: true,
+        waitFor: 3000,
+        onlyMainContent: false,
         actions: [
-          { type: 'wait', milliseconds: 1000 },
-          { type: 'write', text: akEmail, selector: 'input[name="UserName"]' },
-          { type: 'write', text: akPass, selector: 'input[name="Password"]' },
-          { type: 'click', selector: 'button[type="submit"], input[type="submit"], .login-btn, #loginBtn' },
-          { type: 'wait', milliseconds: 3000 },
-          { type: 'click', selector: 'input[type="search"], input[type="text"], .search-input, #searchInput' },
-          { type: 'write', text: oemCode },
+          { type: 'wait', milliseconds: 1500 },
+          { type: 'write', text: username, selector: 'input[name="username"], input[type="text"], #username, .login-input input' },
+          { type: 'write', text: password, selector: 'input[name="password"], input[type="password"], #password' },
+          { type: 'click', selector: 'button[type="submit"], .login-button, button.btn-primary, input[type="submit"]' },
+          { type: 'wait', milliseconds: 4000 },
+          // After login, navigate to search or use the search bar
+          { type: 'write', text: oemCode, selector: 'input[type="search"], input[type="text"].search, input.article-search, input[placeholder*="číslo"], input[placeholder*="hled"], .search-input input, input#search, input[name="search"]' },
           { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 3000 },
+          { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
         ],
       }),
     });
 
     const fcData = await fcResp.json();
-    
+
     if (!fcResp.ok) {
-      console.error(`LKQ Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 300));
+      console.error(`SAG Firecrawl error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 500));
       return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
     }
 
     const markdown = fcData?.data?.markdown || fcData?.markdown || '';
-    console.log(`LKQ Firecrawl: ${markdown.length} chars`);
-    console.log(`LKQ snippet: "${markdown.substring(0, 600)}"`);
+    console.log(`SAG Firecrawl: ${markdown.length} chars`);
+    console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
 
-    if (markdown.length < 50 || (markdown.includes('Přihlášení') && !markdown.includes('Kč'))) {
-      console.log('LKQ: login failed or no product data');
+    if (markdown.length < 50 || (markdown.includes('Přihlásit') && !markdown.includes('Kč') && !markdown.includes('CZK'))) {
+      console.log('SAG: login failed or no product data');
       return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
     }
 
-    return parseAutoKellyMarkdown(markdown, oemCode);
+    return parseSAGMarkdown(markdown, oemCode);
   } catch (err) {
-    console.error('LKQ Firecrawl error:', err);
+    console.error('SAG Firecrawl error:', err);
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   }
 }
 
-function parseAutoKellyMarkdown(
+function parseSAGMarkdown(
   markdown: string,
   oemCode: string
 ): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
+  // Extract prices — look for CZK, Kč patterns
   const prices: number[] = [];
-  const priceRegex = /(\d[\d\s]*[,.]?\d*)\s*Kč/gi;
+  const priceRegex = /(\d[\d\s]*[,.]?\d*)\s*(Kč|CZK|,-)/gi;
   let pm;
   while ((pm = priceRegex.exec(markdown)) !== null) {
     const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
     if (v > 0 && v < 500000) prices.push(v);
   }
 
+  // Also try plain number patterns near price-like context
+  const priceRegex2 = /(?:cena|price|moc)\s*:?\s*(\d[\d\s]*[,.]?\d*)/gi;
+  while ((pm = priceRegex2.exec(markdown)) !== null) {
+    const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
+    if (v > 0 && v < 500000 && !prices.includes(v)) prices.push(v);
+  }
+
+  // Extract product name
   let name = '';
   const lines = markdown.split('\n').filter(l => l.trim().length > 3);
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes(oemCode) || lines[i].match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič|destičk|kotouč/i)) {
-      name = lines[i].replace(/[|*#\[\]]/g, '').trim().substring(0, 100);
+    const line = lines[i].replace(/[|*#\[\]]/g, '').trim();
+    if (line.includes(oemCode) || line.match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič|destičk|kotouč|hadice|senzor|snímač|lambda|termostat|chladič|ventil|pružin|rameno|tyč|kulový|stabilizátor/i)) {
+      name = line.substring(0, 120);
       break;
     }
   }
 
+  // Extract manufacturer
   let manufacturer = '';
-  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'JURID', 'NGK', 'DENSO', 'HELLA', 'OSRAM', 'PHILIPS', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN'];
+  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'JURID', 'NGK', 'DENSO', 'HELLA', 'OSRAM', 'PHILIPS', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'JAPANPARTS', 'NIPPARTS', 'ELRING', 'REINZ', 'VICTOR', 'CORTECO', 'CONTITECH', 'INA', 'RUVILLE', 'SWAG', 'TOPRAN', 'METZGER', 'MAPCO', 'QWP'];
   for (const mfr of mfrPatterns) {
     if (markdown.toUpperCase().includes(mfr)) { manufacturer = mfr; break; }
   }
 
   if (prices.length > 0) {
-    let priceWithVat = 0, priceWithoutVat = 0;
+    // SAG prices are typically nákupní (purchase) prices — add 15% margin
+    let basePrice = prices[0];
+    
+    // If multiple prices, take the lowest as base (nákupní)
     if (prices.length >= 2) {
-      priceWithoutVat = Math.min(prices[0], prices[1]);
-      priceWithVat = Math.max(prices[0], prices[1]);
-    } else {
-      priceWithVat = prices[0];
-      priceWithoutVat = Math.round(prices[0] / 1.21 * 100) / 100;
+      basePrice = Math.min(...prices.slice(0, 3));
     }
-    
-    const isAvailable = markdown.toLowerCase().includes('skladem') || markdown.toLowerCase().includes('dostupn');
-    
+
+    // Apply 15% margin
+    const priceWithoutVat = Math.round(basePrice * (1 + SAG_MARGIN) * 100) / 100;
+    const priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
+
+    const isAvailable = markdown.toLowerCase().includes('skladem') || markdown.toLowerCase().includes('dostupn') || markdown.toLowerCase().includes('verfügbar') || markdown.toLowerCase().includes('available') || markdown.toLowerCase().includes('ks');
+
     return {
       found: true,
       name: name || `Díl ${oemCode}`,

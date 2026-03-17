@@ -42,7 +42,7 @@ const AvailabilityDot = ({ availability }: { availability: string }) => {
 const SourceBadge = ({ source }: { source: string }) => {
   const styles: Record<string, string> = {
     mopar: "bg-primary/15 text-primary border-primary/25",
-    autokelly: "bg-accent/15 text-accent border-accent/25",
+    sag: "bg-accent/15 text-accent border-accent/25",
     intercars: "bg-blue-500/15 text-blue-400 border-blue-500/25",
     csv: "bg-muted text-muted-foreground border-border",
   };
