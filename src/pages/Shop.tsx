@@ -37,6 +37,7 @@ import HistoryList, { useSearchHistory } from "@/components/catalog/History";
 import PhotoDialog from "@/components/catalog/PhotoDialog";
 
 import EPCBrowser from "@/components/catalog/EPCBrowser";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // ---- API layer ----
 import {
