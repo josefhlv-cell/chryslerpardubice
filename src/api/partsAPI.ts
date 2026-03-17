@@ -763,10 +763,6 @@ export async function getEPCDiagram(
     console.warn('EPC diagram generation failed:', e);
     return null;
   }
-
-  const svg = data.svg || null;
-  if (svg) cacheSet('diagram', cacheId, svg);
-  return svg;
 }
 
 // ---- 7zap Scraping ----
