@@ -655,7 +655,6 @@ export async function enrichEPCPrices(
 
   return { priceMap, alternativesMap };
 }
-}
 
 /**
  * Download CSV file in the browser
