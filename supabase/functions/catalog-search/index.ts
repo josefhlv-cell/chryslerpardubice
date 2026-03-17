@@ -365,10 +365,7 @@ async function searchSAG(
   try {
     console.log(`SAG: search ${oemCode}`);
 
-    // Navigate to search results URL — SAG will redirect to login if not authenticated
-    // After login it should redirect back to search results
-    const searchUrl = `https://connect-int.sag.services/sag-cz/article/result?keywords=${encodeURIComponent(oemCode)}`;
-    
+    // Start at login page, login, then search from homepage
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -376,24 +373,25 @@ async function searchSAG(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: searchUrl,
+        url: `https://connect-int.sag.services/sag-cz/login`,
         formats: ['markdown'],
         waitFor: 3000,
         onlyMainContent: false,
         timeout: 45000,
         actions: [
           { type: 'wait', milliseconds: 2000 },
-          // If redirected to login page, fill credentials
+          // Login form - username is first text input
           { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
           { type: 'press', key: 'ENTER' },
-          { type: 'wait', milliseconds: 6000 },
-          // After login, should be redirected to search results
-          // If we land on home instead, type in search bar
-          { type: 'click', selector: 'input[type="text"]' },
+          { type: 'wait', milliseconds: 5000 },
+          // Now on homepage. Search input might not have type="text" explicitly
+          // Try broader selector: any input not password/hidden/checkbox
+          { type: 'click', selector: 'input:not([type="password"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"])' },
           { type: 'write', text: oemCode },
+          { type: 'wait', milliseconds: 500 },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 5000 },
           { type: 'scrape' },
