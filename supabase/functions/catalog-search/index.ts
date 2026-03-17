@@ -364,8 +364,8 @@ async function searchSAG(
   try {
     console.log(`SAG Firecrawl: login + search ${oemCode}`);
 
-    // Step 1: Login via Firecrawl with screenshot to debug
-    const loginResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    // Single Firecrawl call: login and search in one flow
+    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${firecrawlKey}`,
@@ -373,51 +373,58 @@ async function searchSAG(
       },
       body: JSON.stringify({
         url: `${SAG_BASE}/login`,
-        formats: ['markdown'],
-        waitFor: 4000,
+        formats: ['markdown', 'screenshot'],
+        waitFor: 3000,
         onlyMainContent: false,
         actions: [
           { type: 'wait', milliseconds: 2000 },
-          // Click first input field and type username
-          { type: 'click', selector: 'input[placeholder*="jméno"], input[placeholder*="name"], .login-form input:first-of-type, form input:first-of-type' },
-          { type: 'wait', milliseconds: 500 },
+          { type: 'click', selector: 'input[type="text"]' },
           { type: 'write', text: username },
-          // Tab to password field
-          { type: 'press', key: 'TAB' },
-          { type: 'wait', milliseconds: 300 },
+          { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
-          { type: 'wait', milliseconds: 500 },
-          // Click login button
-          { type: 'click', selector: 'button.btn-primary, button[type="submit"], .login-btn, button:has-text("Přihlásit")' },
-          { type: 'wait', milliseconds: 5000 },
+          { type: 'click', selector: '.btn-primary' },
+          { type: 'wait', milliseconds: 6000 },
+          { type: 'click', selector: 'input[type="text"]' },
+          { type: 'write', text: oemCode },
+          { type: 'press', key: 'ENTER' },
+          { type: 'wait', milliseconds: 6000 },
           { type: 'scrape' },
         ],
       }),
     });
 
-    const loginData = await loginResp.json();
-    if (!loginResp.ok) {
-      console.error(`SAG login Firecrawl error: ${loginResp.status}`, JSON.stringify(loginData).substring(0, 500));
-      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    const fcData = await fcResp.json();
+    if (!fcResp.ok) {
+      console.error(`SAG Firecrawl actions error: ${fcResp.status}`, JSON.stringify(fcData).substring(0, 500));
+      console.log('SAG: trying direct URL approach...');
+      return await searchSAGDirect(firecrawlKey, oemCode);
     }
 
-    const loginMarkdown = loginData?.data?.markdown || loginData?.markdown || '';
-    console.log(`SAG login result: ${loginMarkdown.length} chars`);
-    console.log(`SAG login snippet: "${loginMarkdown.substring(0, 400)}"`);
+    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
+    console.log(`SAG result: ${markdown.length} chars`);
+    console.log(`SAG snippet: "${markdown.substring(0, 800)}"`);
 
-    // Check if login succeeded - look for post-login indicators
-    const loginFailed = loginMarkdown.length < 100 || 
-      (loginMarkdown.includes('Přihlásit se') && !loginMarkdown.includes('Košík') && !loginMarkdown.includes('Hledat') && !loginMarkdown.includes('Odhlásit'));
-
-    if (loginFailed) {
-      console.log('SAG: login appears to have failed, trying direct search URL');
+    if (markdown.length < 100 || (markdown.includes('Přihlásit se') && !markdown.includes('Kč') && !markdown.includes('CZK') && !markdown.includes('košík'))) {
+      console.log('SAG: still on login page, trying direct URL...');
+      return await searchSAGDirect(firecrawlKey, oemCode);
     }
 
-    // Step 2: Search - navigate directly to search URL with OEM code
+    return parseSAGMarkdown(markdown, oemCode);
+  } catch (err) {
+    console.error('SAG Firecrawl error:', err);
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  }
+}
+
+async function searchSAGDirect(
+  firecrawlKey: string,
+  oemCode: string
+): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
+  try {
     const searchUrl = `${SAG_BASE}/article-search?searchTerm=${encodeURIComponent(oemCode)}`;
-    console.log(`SAG: searching ${searchUrl}`);
+    console.log(`SAG direct search: ${searchUrl}`);
 
-    const searchResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${firecrawlKey}`,
@@ -428,31 +435,20 @@ async function searchSAG(
         formats: ['markdown'],
         waitFor: 5000,
         onlyMainContent: false,
-        actions: [
-          { type: 'wait', milliseconds: 5000 },
-          { type: 'scrape' },
-        ],
       }),
     });
 
-    const searchData = await searchResp.json();
-    if (!searchResp.ok) {
-      console.error(`SAG search Firecrawl error: ${searchResp.status}`, JSON.stringify(searchData).substring(0, 500));
-      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+    const data = await resp.json();
+    const markdown = data?.data?.markdown || data?.markdown || '';
+    console.log(`SAG direct result: ${markdown.length} chars, snippet: "${markdown.substring(0, 400)}"`);
+
+    if (markdown.includes('Kč') || markdown.includes('CZK')) {
+      return parseSAGMarkdown(markdown, oemCode);
     }
 
-    const markdown = searchData?.data?.markdown || searchData?.markdown || '';
-    console.log(`SAG search result: ${markdown.length} chars`);
-    console.log(`SAG search snippet: "${markdown.substring(0, 800)}"`);
-
-    if (markdown.length < 50 || (markdown.includes('Přihlásit') && !markdown.includes('Kč') && !markdown.includes('CZK'))) {
-      console.log('SAG: no product data found');
-      return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
-    }
-
-    return parseSAGMarkdown(markdown, oemCode);
+    return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   } catch (err) {
-    console.error('SAG Firecrawl error:', err);
+    console.error('SAG direct search error:', err);
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
   }
 }
