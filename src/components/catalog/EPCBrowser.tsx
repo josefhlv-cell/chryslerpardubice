@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   getEPCCategories, getUniqueCategoryNames, getEPCParts, enrichEPCPrices, getEPCDiagram,
   scrape7zap, generateEPCCatalog, generatePartsBatch, searchParts, autoExpandCatalog,
-  type EPCCategory, type EPCPart,
+  type EPCCategory, type EPCPart, type AlternativePart,
 } from "@/api/partsAPI";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
@@ -72,6 +72,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [partsLoading, setPartsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [priceMap, setPriceMap] = useState<Map<string, PriceData>>(() => new Map());
+  const [alternativesMap, setAlternativesMap] = useState<Map<string, AlternativePart[]>>(() => new Map());
   const [pricesLoading, setPricesLoading] = useState(false);
   const [diagramSvg, setDiagramSvg] = useState<string | null>(null);
   const [diagramLoading, setDiagramLoading] = useState(false);
@@ -99,6 +100,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     setExpandedCategory(null);
     setParts([]);
     setPriceMap(() => new Map());
+    setAlternativesMap(() => new Map());
 
     getEPCCategories(brand, model || undefined, engine || undefined, year ? parseInt(year) : undefined)
       .then(async (cats) => {
@@ -144,7 +146,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   // Load parts when category/subcategory selected — lazy generate if empty
   useEffect(() => {
     if (!selectedCategory) {
-      setParts([]); setPriceMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
+      setParts([]); setPriceMap(() => new Map()); setAlternativesMap(() => new Map()); setDiagramSvg(null); setPartsPage(0);
       return;
     }
     setPartsLoading(true);
@@ -188,7 +190,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         if (oems.length > 0) {
           setPricesLoading(true);
           enrichEPCPrices(oems)
-            .then(setPriceMap)
+            .then(({ priceMap: pm, alternativesMap: am }) => { setPriceMap(pm); setAlternativesMap(am); })
             .finally(() => setPricesLoading(false));
         }
         // Auto-load diagram
@@ -225,7 +227,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     if (oems.length === 0) return;
     setPricesLoading(true);
     enrichEPCPrices(oems)
-      .then(setPriceMap)
+      .then(({ priceMap: pm, alternativesMap: am }) => { setPriceMap(pm); setAlternativesMap(am); })
       .finally(() => setPricesLoading(false));
   };
 
@@ -389,6 +391,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   }
 
   const pricedCount = parts.filter(p => p.oem_number && priceMap.has(p.oem_number)).length;
+  const altCount = [...alternativesMap.values()].reduce((sum, alts) => sum + alts.length, 0);
   const breadcrumb = [selectedCategory, selectedSubcategory].filter(Boolean).join(" › ");
 
   return (
@@ -425,6 +428,11 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             {!pricesLoading && pricedCount > 0 && (
               <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
                 {pricedCount}/{parts.length} s cenou
+              </Badge>
+            )}
+            {!pricesLoading && altCount > 0 && (
+              <Badge variant="outline" className="text-[10px] text-accent-foreground border-accent/30">
+                {altCount} alternativ
               </Badge>
             )}
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
@@ -575,59 +583,88 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                 </div>
                 {paginatedParts.map((part) => {
                   const price = part.oem_number ? priceMap.get(part.oem_number) : undefined;
+                  const alternatives = part.oem_number ? alternativesMap.get(part.oem_number) : undefined;
                   const isScraping = scrapingOem === part.oem_number;
                   return (
-                    <div key={part.id}
-                      className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50">
-                      <div>
-                        {part.oem_number ? (
-                          <button
-                            onClick={() => onSearchOem(part.oem_number!)}
-                            className="text-xs font-mono font-medium text-primary hover:underline"
-                          >
-                            {part.oem_number}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
+                    <div key={part.id}>
+                      {/* Original part row */}
+                      <div className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50">
+                        <div>
+                          {part.oem_number ? (
+                            <button
+                              onClick={() => onSearchOem(part.oem_number!)}
+                              className="text-xs font-mono font-medium text-primary hover:underline"
+                            >
+                              {part.oem_number}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                          {price && <Badge variant="outline" className="text-[8px] mt-0.5 border-primary/30 text-primary">OEM</Badge>}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium">{price?.name || part.part_name || "—"}</p>
+                          {part.note && <p className="text-[10px] text-muted-foreground mt-0.5">{part.note}</p>}
+                          {part.manufacturer && (
+                            <p className="text-[10px] text-muted-foreground">{part.manufacturer}</p>
+                          )}
+                        </div>
+                        <div className="w-24 text-right">
+                          {price ? (
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">{formatPrice(price.price_with_vat)}</p>
+                              <p className="text-[10px] text-muted-foreground">{formatPrice(price.price_without_vat)} bez DPH</p>
+                            </div>
+                          ) : pricesLoading && part.oem_number ? (
+                            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </div>
+                        <div className="w-16 flex justify-center">
+                          {part.oem_number && !price && !pricesLoading ? (
+                            <Button
+                              variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
+                              disabled={isScraping}
+                              onClick={() => handleScrapeMissing(part.oem_number!)}
+                            >
+                              {isScraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
+                              {isScraping ? "" : "Najít"}
+                            </Button>
+                          ) : part.oem_number ? (
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
+                              onClick={() => onSearchOem(part.oem_number!)}>
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              Detail
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-medium">{price?.name || part.part_name || "—"}</p>
-                        {part.note && <p className="text-[10px] text-muted-foreground mt-0.5">{part.note}</p>}
-                        {part.manufacturer && (
-                          <p className="text-[10px] text-muted-foreground">{part.manufacturer}</p>
-                        )}
-                      </div>
-                      <div className="w-24 text-right">
-                        {price ? (
+
+                      {/* SAG alternative rows */}
+                      {alternatives && alternatives.length > 0 && alternatives.map((alt, idx) => (
+                        <div key={`${part.id}-alt-${idx}`}
+                          className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2 ml-4 rounded-lg bg-accent/5 border-l-2 border-accent/40 items-center">
                           <div>
-                            <p className="text-xs font-semibold text-foreground">{formatPrice(price.price_with_vat)}</p>
-                            <p className="text-[10px] text-muted-foreground">{formatPrice(price.price_without_vat)} bez DPH</p>
+                            <Badge variant="secondary" className="text-[8px]">Alternativa</Badge>
                           </div>
-                        ) : pricesLoading && part.oem_number ? (
-                          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground">—</span>
-                        )}
-                      </div>
-                      <div className="w-16 flex justify-center">
-                        {part.oem_number && !price && !pricesLoading ? (
-                          <Button
-                            variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
-                            disabled={isScraping}
-                            onClick={() => handleScrapeMissing(part.oem_number!)}
-                          >
-                            {isScraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
-                            {isScraping ? "" : "Najít"}
-                          </Button>
-                        ) : part.oem_number ? (
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
-                            onClick={() => onSearchOem(part.oem_number!)}>
-                            <ExternalLink className="w-3 h-3 mr-1" />
-                            Detail
-                          </Button>
-                        ) : null}
-                      </div>
+                          <div>
+                            <p className="text-xs font-medium text-accent-foreground">{alt.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{alt.manufacturer} · SAG Connect</p>
+                          </div>
+                          <div className="w-24 text-right">
+                            <p className="text-xs font-semibold text-accent-foreground">{formatPrice(alt.price_with_vat)}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatPrice(alt.price_without_vat)} bez DPH</p>
+                          </div>
+                          <div className="w-16 flex justify-center">
+                            {alt.availability === 'available' ? (
+                              <Badge variant="outline" className="text-[8px] text-primary border-primary/30">Skladem</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[8px]">{alt.availability}</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   );
                 })}

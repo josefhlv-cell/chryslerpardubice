@@ -536,21 +536,59 @@ export function exportToCSV(parts: PartResult[]): string {
 /**
  * Enriches EPC parts with prices from parts_new DB and triggers
  * catalog-search for OEM numbers without cached prices.
- * Returns a map of oem_number -> { price_without_vat, price_with_vat, availability }
+ * Returns priceMap + alternativesMap (SAG alternatives per OEM).
  */
+export interface AlternativePart {
+  name: string;
+  price_without_vat: number;
+  price_with_vat: number;
+  availability: string;
+  manufacturer: string;
+  catalog_source: string;
+}
+
+export interface EnrichedPriceResult {
+  priceMap: Map<string, { price_without_vat: number; price_with_vat: number; availability: string; name?: string }>;
+  alternativesMap: Map<string, AlternativePart[]>;
+}
+
 export async function enrichEPCPrices(
   oemNumbers: string[]
-): Promise<Map<string, { price_without_vat: number; price_with_vat: number; availability: string; name?: string }>> {
+): Promise<EnrichedPriceResult> {
   const priceMap = new Map<string, { price_without_vat: number; price_with_vat: number; availability: string; name?: string }>();
-  if (oemNumbers.length === 0) return priceMap;
+  const alternativesMap = new Map<string, AlternativePart[]>();
+  if (oemNumbers.length === 0) return { priceMap, alternativesMap };
 
   const unique = [...new Set(oemNumbers.map(normalizeOem))].filter(Boolean);
 
-  // 1. Check DB cache first
+  // 1. Check DB cache first (Mopar originals)
   const { data: cached } = await supabase
     .from("parts_new")
-    .select("oem_number, name, price_without_vat, price_with_vat, availability, last_price_update")
+    .select("oem_number, name, price_without_vat, price_with_vat, availability, last_price_update, catalog_source")
     .in("oem_number", unique);
+
+  // Also check for SAG alternatives already in DB
+  const sagKeys = unique.map(oem => `SAG-${oem}`);
+  const { data: sagCached } = await supabase
+    .from("parts_new")
+    .select("oem_number, name, price_without_vat, price_with_vat, availability, manufacturer, catalog_source")
+    .in("oem_number", sagKeys);
+
+  // Populate from SAG cache
+  if (sagCached) {
+    for (const s of sagCached) {
+      const originalOem = s.oem_number.replace(/^SAG-/, '');
+      if (!alternativesMap.has(originalOem)) alternativesMap.set(originalOem, []);
+      alternativesMap.get(originalOem)!.push({
+        name: s.name,
+        price_without_vat: s.price_without_vat,
+        price_with_vat: s.price_with_vat,
+        availability: s.availability || 'unknown',
+        manufacturer: s.manufacturer || 'SAG',
+        catalog_source: 'sag',
+      });
+    }
+  }
 
   const needsFetch: string[] = [];
   for (const oem of unique) {
@@ -581,7 +619,25 @@ export async function enrichEPCPrices(
         });
         if (data?.results) {
           for (const r of data.results) {
-            if (r.found && r.price_with_vat > 0) {
+            if (!r.found || r.price_with_vat <= 0) continue;
+
+            if (r.catalog_source === 'sag') {
+              // SAG alternative
+              if (!alternativesMap.has(r.oem_number)) alternativesMap.set(r.oem_number, []);
+              // Avoid duplicates
+              const existing = alternativesMap.get(r.oem_number)!;
+              if (!existing.some(e => e.catalog_source === 'sag' && e.name === r.name)) {
+                existing.push({
+                  name: r.name,
+                  price_without_vat: r.price_without_vat,
+                  price_with_vat: r.price_with_vat,
+                  availability: r.availability || 'available',
+                  manufacturer: r.manufacturer || 'SAG',
+                  catalog_source: 'sag',
+                });
+              }
+            } else {
+              // Original (Mopar)
               priceMap.set(r.oem_number, {
                 price_without_vat: r.price_without_vat,
                 price_with_vat: r.price_with_vat,
@@ -597,7 +653,7 @@ export async function enrichEPCPrices(
     }
   }
 
-  return priceMap;
+  return { priceMap, alternativesMap };
 }
 
 /**
