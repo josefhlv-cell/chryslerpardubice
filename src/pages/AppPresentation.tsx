@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot, Car, Wrench, BookOpen, ShoppingCart, Shield,
@@ -56,7 +56,6 @@ type Slide = {
 };
 
 const slides: Slide[] = [
-  // 0 — Title
   {
     id: "intro",
     category: "Představení",
@@ -81,7 +80,6 @@ const slides: Slide[] = [
       { label: "Admin modulů", value: "18+" },
     ],
   },
-  // 1 — Landing
   {
     id: "landing",
     category: "Úvodní obrazovka",
@@ -100,7 +98,6 @@ const slides: Slide[] = [
       "Responsivní layout optimalizovaný pro 390px",
     ],
   },
-  // 2 — Dashboard
   {
     id: "dashboard",
     category: "Dashboard",
@@ -119,7 +116,6 @@ const slides: Slide[] = [
       "Přizpůsobení podle uživatelské role",
     ],
   },
-  // 3 — Vehicles
   {
     id: "vehicles",
     category: "Správa vozidel",
@@ -138,7 +134,6 @@ const slides: Slide[] = [
       "CRUD operace: přidat, upravit, smazat",
     ],
   },
-  // 4 — Vehicle Detail + VIN
   {
     id: "vehicle-detail",
     category: "Detail vozidla",
@@ -162,7 +157,6 @@ const slides: Slide[] = [
       { label: "AI modely", value: "2" },
     ],
   },
-  // 5 — VIN Scanner
   {
     id: "vin-scanner",
     category: "VIN Scanner",
@@ -180,7 +174,6 @@ const slides: Slide[] = [
       "Podpora fotoaparátu i nahrání z galerie",
     ],
   },
-  // 6 — Parts Catalog
   {
     id: "parts-catalog",
     category: "Katalog dílů",
@@ -206,7 +199,6 @@ const slides: Slide[] = [
       { label: "Variant OEM kódů", value: "4" },
     ],
   },
-  // 7 — EPC Diagrams
   {
     id: "epc",
     category: "EPC Katalog",
@@ -225,7 +217,6 @@ const slides: Slide[] = [
       "Dávkový import a scraping EPC dat",
     ],
   },
-  // 8 — Cart & Orders
   {
     id: "cart",
     category: "Nákup",
@@ -244,7 +235,6 @@ const slides: Slide[] = [
       "Admin správa a nacenění",
     ],
   },
-  // 9 — My Orders
   {
     id: "orders",
     category: "Objednávky",
@@ -262,7 +252,6 @@ const slides: Slide[] = [
       "Historie cenových nabídek",
     ],
   },
-  // 10 — Service Booking
   {
     id: "service-booking",
     category: "Servis",
@@ -286,7 +275,6 @@ const slides: Slide[] = [
       { label: "Stavů rezervace", value: "5" },
     ],
   },
-  // 11 — Service Tracking
   {
     id: "service-tracking",
     category: "Servisní zakázky",
@@ -311,7 +299,6 @@ const slides: Slide[] = [
       { label: "Fází fotodokumentace", value: "3" },
     ],
   },
-  // 12 — Service Book
   {
     id: "service-book",
     category: "Servisní knížka",
@@ -332,7 +319,6 @@ const slides: Slide[] = [
       "Sdílení servisní knížky při prodeji vozu",
     ],
   },
-  // 13 — AI Mechanic
   {
     id: "ai-mechanic",
     category: "AI Diagnostika",
@@ -357,7 +343,6 @@ const slides: Slide[] = [
       { label: "Typy vstupů", value: "3" },
     ],
   },
-  // 14 — Emergency
   {
     id: "emergency",
     category: "Nouzová pomoc",
@@ -377,7 +362,6 @@ const slides: Slide[] = [
       "Návod: Nízký tlak oleje",
     ],
   },
-  // 15 — Mechanic Dashboard
   {
     id: "mechanic-dashboard",
     category: "Pro mechaniky",
@@ -396,7 +380,6 @@ const slides: Slide[] = [
       "Pracovní výkazy s časem a popisem",
     ],
   },
-  // 16 — Admin Panel
   {
     id: "admin",
     category: "Administrace",
@@ -425,7 +408,6 @@ const slides: Slide[] = [
       { label: "Feature flags", value: "35+" },
     ],
   },
-  // 17 — Notifications
   {
     id: "notifications",
     category: "Notifikace",
@@ -444,7 +426,6 @@ const slides: Slide[] = [
       "Edge function: notify-admin, service-status-notify",
     ],
   },
-  // 18 — Account
   {
     id: "account",
     category: "Účet",
@@ -465,7 +446,6 @@ const slides: Slide[] = [
       "Věrnostní program (loyalty_active)",
     ],
   },
-  // 19 — Tech & Security
   {
     id: "tech",
     category: "Technologie",
@@ -505,7 +485,6 @@ const slideVariants = {
 const AppPresentation = () => {
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState(0);
-  const [printing, setPrinting] = useState(false);
 
   const goTo = (idx: number) => {
     setDirection(idx > current ? 1 : -1);
@@ -515,67 +494,61 @@ const AppPresentation = () => {
   const next = () => { if (current < slides.length - 1) goTo(current + 1); };
 
   const handleDownload = () => {
-    setPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setPrinting(false);
-    }, 300);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const slidesHTML = slides.map((s, i) => `
+      <div class="slide">
+        <div class="slide-header">
+          <div class="slide-number">${i + 1} / ${slides.length}</div>
+          <div class="slide-category">${s.category}</div>
+          <h1 class="slide-title">${s.title}</h1>
+          <p class="slide-subtitle">${s.subtitle}</p>
+        </div>
+        <img src="${s.image}" class="slide-img" alt="${s.title}" />
+        ${s.stats ? `<div class="stats-row">${s.stats.map(st => `<div class="stat"><strong>${st.value}</strong><small>${st.label}</small></div>`).join('')}</div>` : ''}
+        <p class="slide-desc">${s.description}</p>
+        <ul class="features">${s.features.map(f => `<li>✓ ${f}</li>`).join('')}</ul>
+      </div>
+    `).join('');
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html><head><title>Chrysler and Dodge Pardubice - Prezentace</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #222; background: #fff; }
+  .slide { page-break-after: always; padding: 24px 32px; min-height: 100vh; display: flex; flex-direction: column; }
+  .slide:last-child { page-break-after: auto; }
+  .slide-header { margin-bottom: 12px; }
+  .slide-number { font-size: 11px; color: #999; margin-bottom: 4px; }
+  .slide-category { font-size: 11px; font-weight: 600; color: #c77d1a; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .slide-title { font-size: 22px; font-weight: 700; margin-bottom: 2px; }
+  .slide-subtitle { font-size: 13px; color: #c77d1a; font-weight: 500; margin-bottom: 8px; }
+  .slide-img { width: 100%; max-height: 280px; object-fit: cover; border-radius: 10px; margin-bottom: 12px; }
+  .stats-row { display: flex; gap: 12px; margin-bottom: 12px; }
+  .stat { flex: 1; text-align: center; border: 1px solid #ddd; border-radius: 8px; padding: 6px 4px; }
+  .stat strong { display: block; font-size: 16px; color: #c77d1a; }
+  .stat small { font-size: 9px; color: #888; }
+  .slide-desc { font-size: 11px; color: #555; line-height: 1.5; margin-bottom: 12px; }
+  .features { list-style: none; padding: 0; }
+  .features li { font-size: 11px; padding: 3px 0; border-bottom: 1px solid #f0f0f0; }
+  .features li:last-child { border-bottom: none; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @page { size: A4 portrait; margin: 10mm; }
+</style></head><body>${slidesHTML}</body></html>`);
+
+    printWindow.document.close();
+    setTimeout(() => { printWindow.print(); }, 500);
   };
 
   const slide = slides[current];
   const Icon = slide.icon;
   const progress = ((current + 1) / slides.length) * 100;
 
-  // Print view — all slides on separate pages
-  if (printing) {
-    return (
-      <div className="print-presentation bg-background">
-        {slides.map((s, i) => {
-          const SIcon = s.icon;
-          return (
-            <div key={s.id} className="print-slide p-8 break-after-page">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <SIcon className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-primary">{s.category}</span>
-                  <h1 className="text-2xl font-bold leading-tight">{s.title}</h1>
-                </div>
-                <span className="ml-auto text-sm text-muted-foreground">{i + 1}/{slides.length}</span>
-              </div>
-              <p className="text-sm font-medium text-primary mb-3">{s.subtitle}</p>
-              <img src={s.image} alt={s.title} className="w-full max-h-[40vh] object-cover rounded-xl mb-4" />
-              {s.stats && (
-                <div className="grid grid-cols-4 gap-3 mb-4">
-                  {s.stats.map((st, j) => (
-                    <div key={j} className="text-center border border-border rounded-lg py-2">
-                      <p className="text-lg font-bold text-primary">{st.value}</p>
-                      <p className="text-[10px] text-muted-foreground">{st.label}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
-              <ul className="space-y-1.5">
-                {s.features.map((f, j) => (
-                  <li key={j} className="flex items-start gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex flex-col pb-20">
       {/* Top Bar */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border/30 safe-top no-print">
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border/30 safe-top">
         <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-2">
             <Presentation className="w-4 h-4 text-primary" />
