@@ -391,6 +391,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   }
 
   const pricedCount = parts.filter(p => p.oem_number && priceMap.has(p.oem_number)).length;
+  const altCount = [...alternativesMap.values()].reduce((sum, alts) => sum + alts.length, 0);
   const breadcrumb = [selectedCategory, selectedSubcategory].filter(Boolean).join(" › ");
 
   return (
