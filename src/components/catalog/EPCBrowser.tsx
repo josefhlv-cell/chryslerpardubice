@@ -455,12 +455,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             )}
             {!pricesLoading && pricedCount > 0 && (
               <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
-                {pricedCount}/{parts.length} s cenou
-              </Badge>
-            )}
-            {!pricesLoading && altCount > 0 && (
-              <Badge variant="outline" className="text-[10px] text-accent-foreground border-accent/30">
-                {altCount} alternativ
+                {pricedCount} OEM · {altCount} SAG
               </Badge>
             )}
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
@@ -471,7 +466,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
               <span className="text-[10px] ml-1">Nákres</span>
             </Button>
             <Badge variant="secondary" className="text-[10px]">
-              {parts.length} dílů
+              {flatParts.length} dílů
             </Badge>
           </div>
         )}
