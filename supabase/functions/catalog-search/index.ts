@@ -377,14 +377,15 @@ async function searchSAG(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: 'https://connect-int.sag.services/sag-cz/login',
+        // Start directly at search URL - SAG will redirect to login, then back after auth
+        url: searchUrl,
         formats: ['markdown', 'html'],
-        waitFor: 3000,
+        waitFor: 5000,
         onlyMainContent: false,
-        timeout: 60000,
+        timeout: 45000,
         actions: [
           { type: 'wait', milliseconds: 3000 },
-          // Use pure JS to fill and submit login form (avoids selector issues)
+          // Fill login form via JS (handles Angular reactive forms)
           {
             type: 'executeJavascript',
             script: `
@@ -398,34 +399,31 @@ async function searchSAG(
               }
               if (userInput) {
                 userInput.focus();
-                userInput.value = '${username}';
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                nativeInputValueSetter.call(userInput, '${username}');
                 userInput.dispatchEvent(new Event('input', {bubbles: true}));
                 userInput.dispatchEvent(new Event('change', {bubbles: true}));
               }
               if (passInput) {
                 passInput.focus();
-                passInput.value = '${password}';
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                nativeInputValueSetter.call(passInput, '${password}');
                 passInput.dispatchEvent(new Event('input', {bubbles: true}));
                 passInput.dispatchEvent(new Event('change', {bubbles: true}));
               }
-              // Click submit button
-              const btns = document.querySelectorAll('button[type="submit"], button.login-button, input[type="submit"], button');
-              for (const b of btns) {
-                const txt = (b.textContent || '').toLowerCase();
-                if (txt.includes('přihlás') || txt.includes('login') || txt.includes('sign in') || b.type === 'submit') {
-                  b.click();
-                  break;
+              setTimeout(() => {
+                const btns = document.querySelectorAll('button[type="submit"], button');
+                for (const b of btns) {
+                  const txt = (b.textContent || '').toLowerCase();
+                  if (txt.includes('přihlás') || txt.includes('login') || txt.includes('anmeld') || b.type === 'submit') {
+                    b.click(); break;
+                  }
                 }
-              }
+              }, 500);
             `
           },
-          { type: 'wait', milliseconds: 8000 },
-          // Navigate to search results
-          {
-            type: 'executeJavascript',
-            script: `window.location.href = '${searchUrl}';`
-          },
-          { type: 'wait', milliseconds: 12000 },
+          // Wait for login + redirect back to search results
+          { type: 'wait', milliseconds: 15000 },
           { type: 'scrape' },
         ],
       }),
