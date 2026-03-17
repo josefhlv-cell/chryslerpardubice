@@ -83,12 +83,40 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [batchGenerating, setBatchGenerating] = useState(false);
   const diagramRef = useRef<HTMLDivElement>(null);
 
+  // Build flat list: OEM parts + SAG alternatives as equal rows
+  type DisplayPart = EPCPart & { isAlternative?: boolean; altData?: AlternativePart };
+
+  const flatParts = useMemo(() => {
+    const list: DisplayPart[] = [];
+    for (const part of parts) {
+      list.push(part);
+      // Add SAG alternatives as regular rows right after the OEM part
+      const alts = part.oem_number ? alternativesMap.get(part.oem_number) : undefined;
+      if (alts) {
+        for (const alt of alts) {
+          list.push({
+            id: `${part.id}-sag-${alt.manufacturer}-${alt.name}`,
+            oem_number: part.oem_number,
+            part_name: alt.name,
+            manufacturer: alt.manufacturer,
+            note: null,
+            epc_category_id: part.epc_category_id,
+            part_id: null,
+            isAlternative: true,
+            altData: alt,
+          });
+        }
+      }
+    }
+    return list;
+  }, [parts, alternativesMap]);
+
   // Paginated parts
   const paginatedParts = useMemo(() => {
     const start = partsPage * PARTS_PER_PAGE;
-    return parts.slice(start, start + PARTS_PER_PAGE);
-  }, [parts, partsPage]);
-  const totalPartsPages = Math.ceil(parts.length / PARTS_PER_PAGE);
+    return flatParts.slice(start, start + PARTS_PER_PAGE);
+  }, [flatParts, partsPage]);
+  const totalPartsPages = Math.ceil(flatParts.length / PARTS_PER_PAGE);
 
   // Load categories when vehicle params change — auto-expand if empty
   useEffect(() => {
