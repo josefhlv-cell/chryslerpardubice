@@ -190,7 +190,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
         if (oems.length > 0) {
           setPricesLoading(true);
           enrichEPCPrices(oems)
-            .then(setPriceMap)
+            .then(({ priceMap: pm, alternativesMap: am }) => { setPriceMap(pm); setAlternativesMap(am); })
             .finally(() => setPricesLoading(false));
         }
         // Auto-load diagram
