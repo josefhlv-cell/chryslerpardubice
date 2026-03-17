@@ -404,38 +404,6 @@ async function searchSAG(
         ],
       }),
     });
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: 'https://connect-int.sag.services/sag-cz/login',
-        formats: ['markdown', 'html'],
-        waitFor: 3000,
-        onlyMainContent: false,
-        timeout: 45000,
-        actions: [
-          { type: 'wait', milliseconds: 2000 },
-          // Fill username
-          { type: 'click', selector: 'input[name="username"], input[type="text"]' },
-          { type: 'write', text: username },
-          // Fill password
-          { type: 'click', selector: 'input[name="password"], input[type="password"]' },
-          { type: 'write', text: password },
-          // Submit login
-          { type: 'press', key: 'Enter' },
-          { type: 'wait', milliseconds: 6000 },
-          // Navigate to search results page
-          {
-            type: 'executeJavascript',
-            script: `window.location.href = '${searchUrl}';`
-          },
-          { type: 'wait', milliseconds: 8000 },
-          { type: 'scrape' },
-        ],
-      }),
-    });
 
     const fcData = await fcResp.json();
     if (!fcResp.ok) {
