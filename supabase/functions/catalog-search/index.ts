@@ -423,29 +423,36 @@ async function searchSAGDirect(
   oemCode: string
 ): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
   try {
-    const searchUrl = `${SAG_BASE}/article-search?searchTerm=${encodeURIComponent(oemCode)}`;
-    console.log(`SAG direct search: ${searchUrl}`);
+    // Try multiple URL patterns since SAG might use different routing
+    const searchUrls = [
+      `${SAG_BASE}/#/article-search/${encodeURIComponent(oemCode)}`,
+      `${SAG_BASE}/home/search/${encodeURIComponent(oemCode)}`,
+    ];
 
-    const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: searchUrl,
-        formats: ['markdown'],
-        waitFor: 5000,
-        onlyMainContent: false,
-      }),
-    });
+    for (const searchUrl of searchUrls) {
+      console.log(`SAG direct search: ${searchUrl}`);
 
-    const data = await resp.json();
-    const markdown = data?.data?.markdown || data?.markdown || '';
-    console.log(`SAG direct result: ${markdown.length} chars, snippet: "${markdown.substring(0, 400)}"`);
+      const resp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: searchUrl,
+          formats: ['markdown'],
+          waitFor: 5000,
+          onlyMainContent: false,
+        }),
+      });
 
-    if (markdown.includes('Kč') || markdown.includes('CZK')) {
-      return parseSAGMarkdown(markdown, oemCode);
+      const data = await resp.json();
+      const markdown = data?.data?.markdown || data?.markdown || '';
+      console.log(`SAG direct result: ${markdown.length} chars, snippet: "${markdown.substring(0, 400)}"`);
+
+      if (markdown.includes('Kč') || markdown.includes('CZK')) {
+        return parseSAGMarkdown(markdown, oemCode);
+      }
     }
 
     return { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
