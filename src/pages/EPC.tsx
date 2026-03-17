@@ -194,13 +194,15 @@ const EPC = () => {
 
             {/* Step 2: EPC Browser with categories + diagrams */}
             {hasVehicle && (
-              <EPCBrowser
-                brand={brand}
-                model={model}
-                engine={engine}
-                year={year}
-                onSearchOem={handleSearchOem}
-              />
+              <ErrorBoundary>
+                <EPCBrowser
+                  brand={brand}
+                  model={model}
+                  engine={engine}
+                  year={year}
+                  onSearchOem={handleSearchOem}
+                />
+              </ErrorBoundary>
             )}
           </div>
 
