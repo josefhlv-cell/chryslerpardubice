@@ -83,12 +83,40 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
   const [batchGenerating, setBatchGenerating] = useState(false);
   const diagramRef = useRef<HTMLDivElement>(null);
 
+  // Build flat list: OEM parts + SAG alternatives as equal rows
+  type DisplayPart = EPCPart & { isAlternative?: boolean; altData?: AlternativePart };
+
+  const flatParts = useMemo(() => {
+    const list: DisplayPart[] = [];
+    for (const part of parts) {
+      list.push(part);
+      // Add SAG alternatives as regular rows right after the OEM part
+      const alts = part.oem_number ? alternativesMap.get(part.oem_number) : undefined;
+      if (alts) {
+        for (const alt of alts) {
+          list.push({
+            id: `${part.id}-sag-${alt.manufacturer}-${alt.name}`,
+            oem_number: part.oem_number,
+            part_name: alt.name,
+            manufacturer: alt.manufacturer,
+            note: null,
+            epc_category_id: part.epc_category_id,
+            part_id: null,
+            isAlternative: true,
+            altData: alt,
+          });
+        }
+      }
+    }
+    return list;
+  }, [parts, alternativesMap]);
+
   // Paginated parts
   const paginatedParts = useMemo(() => {
     const start = partsPage * PARTS_PER_PAGE;
-    return parts.slice(start, start + PARTS_PER_PAGE);
-  }, [parts, partsPage]);
-  const totalPartsPages = Math.ceil(parts.length / PARTS_PER_PAGE);
+    return flatParts.slice(start, start + PARTS_PER_PAGE);
+  }, [flatParts, partsPage]);
+  const totalPartsPages = Math.ceil(flatParts.length / PARTS_PER_PAGE);
 
   // Load categories when vehicle params change — auto-expand if empty
   useEffect(() => {
@@ -427,12 +455,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             )}
             {!pricesLoading && pricedCount > 0 && (
               <Badge variant="outline" className="text-[10px] text-primary border-primary/30">
-                {pricedCount}/{parts.length} s cenou
-              </Badge>
-            )}
-            {!pricesLoading && altCount > 0 && (
-              <Badge variant="outline" className="text-[10px] text-accent-foreground border-accent/30">
-                {altCount} alternativ
+                {pricedCount} OEM · {altCount} SAG
               </Badge>
             )}
             <Button variant="ghost" size="sm" className="h-7 px-2" onClick={handleRefreshPrices} disabled={pricesLoading}>
@@ -443,7 +466,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
               <span className="text-[10px] ml-1">Nákres</span>
             </Button>
             <Badge variant="secondary" className="text-[10px]">
-              {parts.length} dílů
+              {flatParts.length} dílů
             </Badge>
           </div>
         )}
@@ -575,96 +598,105 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
             ) : (
               <div className="space-y-1">
                 {/* Table header */}
-                <div className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b">
+                <div className="grid grid-cols-[auto_1fr_2fr_auto_auto] gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b">
+                  <span className="w-14">Zdroj</span>
                   <span>OEM číslo</span>
                   <span>Název dílu</span>
                   <span className="w-24 text-right">Cena s DPH</span>
                   <span className="w-16 text-center">Akce</span>
                 </div>
                 {paginatedParts.map((part) => {
-                  const price = part.oem_number ? priceMap.get(part.oem_number) : undefined;
-                  const alternatives = part.oem_number ? alternativesMap.get(part.oem_number) : undefined;
+                  const isAlt = !!(part as DisplayPart).isAlternative;
+                  const altData = (part as DisplayPart).altData;
+                  const price = !isAlt && part.oem_number ? priceMap.get(part.oem_number) : undefined;
                   const isScraping = scrapingOem === part.oem_number;
+
                   return (
-                    <div key={part.id}>
-                      {/* Original part row */}
-                      <div className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50">
-                        <div>
-                          {part.oem_number ? (
-                            <button
-                              onClick={() => onSearchOem(part.oem_number!)}
-                              className="text-xs font-mono font-medium text-primary hover:underline"
-                            >
-                              {part.oem_number}
-                            </button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                          {price && <Badge variant="outline" className="text-[8px] mt-0.5 border-primary/30 text-primary">OEM</Badge>}
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium">{price?.name || part.part_name || "—"}</p>
-                          {part.note && <p className="text-[10px] text-muted-foreground mt-0.5">{part.note}</p>}
-                          {part.manufacturer && (
-                            <p className="text-[10px] text-muted-foreground">{part.manufacturer}</p>
-                          )}
-                        </div>
-                        <div className="w-24 text-right">
-                          {price ? (
-                            <div>
-                              <p className="text-xs font-semibold text-foreground">{formatPrice(price.price_with_vat)}</p>
-                              <p className="text-[10px] text-muted-foreground">{formatPrice(price.price_without_vat)} bez DPH</p>
-                            </div>
-                          ) : pricesLoading && part.oem_number ? (
-                            <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground">—</span>
-                          )}
-                        </div>
-                        <div className="w-16 flex justify-center">
-                          {part.oem_number && !price && !pricesLoading ? (
-                            <Button
-                              variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
-                              disabled={isScraping}
-                              onClick={() => handleScrapeMissing(part.oem_number!)}
-                            >
-                              {isScraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
-                              {isScraping ? "" : "Najít"}
-                            </Button>
-                          ) : part.oem_number ? (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
-                              onClick={() => onSearchOem(part.oem_number!)}>
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              Detail
-                            </Button>
-                          ) : null}
-                        </div>
+                    <div key={part.id}
+                      className={`grid grid-cols-[auto_1fr_2fr_auto_auto] gap-2 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors items-center border-b border-border/50 ${
+                        isAlt ? 'bg-accent/5' : ''
+                      }`}
+                    >
+                      {/* Source badge */}
+                      <div className="w-14">
+                        {isAlt ? (
+                          <Badge variant="secondary" className="text-[8px]">SAG</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[8px] border-primary/30 text-primary">OEM</Badge>
+                        )}
                       </div>
 
-                      {/* SAG alternative rows */}
-                      {alternatives && alternatives.length > 0 && alternatives.map((alt, idx) => (
-                        <div key={`${part.id}-alt-${idx}`}
-                          className="grid grid-cols-[1fr_2fr_auto_auto] gap-2 px-3 py-2 ml-4 rounded-lg bg-accent/5 border-l-2 border-accent/40 items-center">
+                      {/* OEM number */}
+                      <div>
+                        {part.oem_number ? (
+                          <button
+                            onClick={() => onSearchOem(part.oem_number!)}
+                            className="text-xs font-mono font-medium text-primary hover:underline"
+                          >
+                            {part.oem_number}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
+
+                      {/* Name + manufacturer */}
+                      <div>
+                        <p className="text-xs font-medium">
+                          {isAlt ? altData?.name : (price?.name || part.part_name || "—")}
+                        </p>
+                        {(isAlt ? altData?.manufacturer : part.manufacturer) && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {isAlt ? `${altData?.manufacturer} · SAG Connect` : part.manufacturer}
+                          </p>
+                        )}
+                        {!isAlt && part.note && <p className="text-[10px] text-muted-foreground mt-0.5">{part.note}</p>}
+                      </div>
+
+                      {/* Price */}
+                      <div className="w-24 text-right">
+                        {isAlt && altData ? (
                           <div>
-                            <Badge variant="secondary" className="text-[8px]">Alternativa</Badge>
+                            <p className="text-xs font-semibold text-foreground">{formatPrice(altData.price_with_vat)}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatPrice(altData.price_without_vat)} bez DPH</p>
                           </div>
+                        ) : price ? (
                           <div>
-                            <p className="text-xs font-medium text-accent-foreground">{alt.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{alt.manufacturer} · SAG Connect</p>
+                            <p className="text-xs font-semibold text-foreground">{formatPrice(price.price_with_vat)}</p>
+                            <p className="text-[10px] text-muted-foreground">{formatPrice(price.price_without_vat)} bez DPH</p>
                           </div>
-                          <div className="w-24 text-right">
-                            <p className="text-xs font-semibold text-accent-foreground">{formatPrice(alt.price_with_vat)}</p>
-                            <p className="text-[10px] text-muted-foreground">{formatPrice(alt.price_without_vat)} bez DPH</p>
-                          </div>
-                          <div className="w-16 flex justify-center">
-                            {alt.availability === 'available' ? (
-                              <Badge variant="outline" className="text-[8px] text-primary border-primary/30">Skladem</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[8px]">{alt.availability}</Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        ) : pricesLoading && part.oem_number ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-muted-foreground ml-auto" />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="w-16 flex justify-center">
+                        {isAlt && altData ? (
+                          altData.availability === 'available' ? (
+                            <Badge variant="outline" className="text-[8px] text-primary border-primary/30">Skladem</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[8px]">{altData.availability}</Badge>
+                          )
+                        ) : part.oem_number && !price && !pricesLoading ? (
+                          <Button
+                            variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
+                            disabled={isScraping}
+                            onClick={() => handleScrapeMissing(part.oem_number!)}
+                          >
+                            {isScraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3 mr-1" />}
+                            {isScraping ? "" : "Najít"}
+                          </Button>
+                        ) : part.oem_number ? (
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px]"
+                            onClick={() => onSearchOem(part.oem_number!)}>
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            Detail
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })}
