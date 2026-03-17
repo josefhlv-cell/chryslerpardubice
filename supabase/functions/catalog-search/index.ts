@@ -382,11 +382,13 @@ async function searchSAG(
           { type: 'write', text: username },
           { type: 'click', selector: 'input[type="password"]' },
           { type: 'write', text: password },
-          // Press Enter to submit instead of clicking button (more reliable)
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 6000 },
-          // After login, find search input and type OEM code
-          { type: 'click', selector: 'input[type="text"], input[type="search"]' },
+          // After login, navigate to article search URL with OEM code
+          { type: 'navigate', url: `${SAG_BASE}/home?searchTerm=${encodeURIComponent(oemCode)}` },
+          { type: 'wait', milliseconds: 5000 },
+          // If that doesn't work, try typing in the search bar
+          { type: 'click', selector: 'input[type="search"], input.search-input, input[placeholder*="hled"], input[placeholder*="Hled"], input[placeholder*="číslo"], input[placeholder*="search"]' },
           { type: 'write', text: oemCode },
           { type: 'press', key: 'ENTER' },
           { type: 'wait', milliseconds: 6000 },
