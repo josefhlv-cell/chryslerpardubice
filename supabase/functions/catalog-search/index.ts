@@ -461,8 +461,14 @@ async function searchSAG(
     console.log(`SAG markdown (first 1500): ${markdown.substring(0, 1500)}`);
 
     // Check if we're still on login page
-    if (markdown.includes('Přihlásit se') && markdown.length < 500) {
+    if (markdown.includes('Přihlásit se') && !markdown.includes('Ahoj,')) {
       console.log('SAG: Still on login page, authentication failed');
+      return empty;
+    }
+
+    // Check for zero results
+    if (markdown.includes('Výsledků: 0') || markdown.includes('Žádné odpovídající položky')) {
+      console.log(`SAG: No results for ${oemCode} in SAG catalog`);
       return empty;
     }
 
