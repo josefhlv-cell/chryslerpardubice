@@ -505,6 +505,7 @@ const slideVariants = {
 const AppPresentation = () => {
   const [current, setCurrent] = useState(0);
   const [direction, setDirection] = useState(0);
+  const [printing, setPrinting] = useState(false);
 
   const goTo = (idx: number) => {
     setDirection(idx > current ? 1 : -1);
@@ -513,22 +514,82 @@ const AppPresentation = () => {
   const prev = () => { if (current > 0) goTo(current - 1); };
   const next = () => { if (current < slides.length - 1) goTo(current + 1); };
 
+  const handleDownload = () => {
+    setPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setPrinting(false);
+    }, 300);
+  };
+
   const slide = slides[current];
   const Icon = slide.icon;
   const progress = ((current + 1) / slides.length) * 100;
 
+  // Print view — all slides on separate pages
+  if (printing) {
+    return (
+      <div className="print-presentation bg-background">
+        {slides.map((s, i) => {
+          const SIcon = s.icon;
+          return (
+            <div key={s.id} className="print-slide p-8 break-after-page">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <SIcon className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <span className="text-xs font-medium text-primary">{s.category}</span>
+                  <h1 className="text-2xl font-bold leading-tight">{s.title}</h1>
+                </div>
+                <span className="ml-auto text-sm text-muted-foreground">{i + 1}/{slides.length}</span>
+              </div>
+              <p className="text-sm font-medium text-primary mb-3">{s.subtitle}</p>
+              <img src={s.image} alt={s.title} className="w-full max-h-[40vh] object-cover rounded-xl mb-4" />
+              {s.stats && (
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                  {s.stats.map((st, j) => (
+                    <div key={j} className="text-center border border-border rounded-lg py-2">
+                      <p className="text-lg font-bold text-primary">{st.value}</p>
+                      <p className="text-[10px] text-muted-foreground">{st.label}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground mb-4">{s.description}</p>
+              <ul className="space-y-1.5">
+                {s.features.map((f, j) => (
+                  <li key={j} className="flex items-start gap-2 text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col pb-20">
       {/* Top Bar */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border/30 safe-top">
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-xl border-b border-border/30 safe-top no-print">
         <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-2">
             <Presentation className="w-4 h-4 text-primary" />
             <span className="text-xs font-display font-semibold text-foreground">Prezentace</span>
           </div>
-          <span className="text-xs text-muted-foreground font-medium">
-            {current + 1} / {slides.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={handleDownload} className="h-8 px-2 text-xs gap-1">
+              <Download className="w-3.5 h-3.5" />
+              PDF
+            </Button>
+            <span className="text-xs text-muted-foreground font-medium">
+              {current + 1} / {slides.length}
+            </span>
+          </div>
         </div>
         <Progress value={progress} className="h-0.5 rounded-none" />
       </div>
