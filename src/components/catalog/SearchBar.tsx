@@ -7,7 +7,7 @@ import { Search, Loader2, Hash, Car, Tag, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export type SearchMode = "part_number" | "vehicle" | "vin" | "epc";
+export type SearchMode = "part_number" | "vehicle_oem" | "vehicle_alt" | "vin" | "epc";
 
 interface SearchBarProps {
   query: string;
@@ -21,7 +21,8 @@ interface SearchBarProps {
 
 const modeConfig: { mode: SearchMode; label: string; Icon: any }[] = [
   { mode: "part_number", label: "Číslo dílu", Icon: Hash },
-  { mode: "vehicle", label: "Vozidlo", Icon: Car },
+  { mode: "vehicle_oem", label: "OEM", Icon: Car },
+  { mode: "vehicle_alt", label: "Náhrady", Icon: Layers },
   { mode: "vin", label: "VIN", Icon: Tag },
   { mode: "epc", label: "EPC", Icon: Layers },
 ];

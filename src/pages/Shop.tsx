@@ -55,7 +55,7 @@ const Shop = () => {
 
   // ---- State ----
   const [partType, setPartType] = useState<PartType>("new");
-  const [searchMode, setSearchMode] = useState<SearchMode>("vehicle");
+  const [searchMode, setSearchMode] = useState<SearchMode>("vehicle_oem");
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
@@ -146,12 +146,19 @@ const Shop = () => {
         if (result.results.length === 0 && (subCategory || category)) {
           toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly.`);
         }
-      } else if (searchMode === "vehicle") {
+      } else if (searchMode === "vehicle_oem") {
         const searchTerm = subCategory || category || searchQuery || "";
-        result = await searchByCategory(searchTerm, pageNum, mergedFilters);
+        result = await searchByCategory(searchTerm, pageNum, mergedFilters, "oem");
         if (result.results.length === 0) {
           const desc = [brand, model, category].filter(Boolean).join(" / ");
           toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné díly.` : "Vyberte značku a kategorii pro vyhledání.");
+        }
+      } else if (searchMode === "vehicle_alt") {
+        const searchTerm = subCategory || category || searchQuery || "";
+        result = await searchByCategory(searchTerm, pageNum, mergedFilters, "alternatives");
+        if (result.results.length === 0) {
+          const desc = [brand, model, category].filter(Boolean).join(" / ");
+          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné náhrady.` : "Vyberte značku a kategorii pro vyhledání.");
         }
       } else if (searchQuery) {
         result = await searchParts(searchQuery, pageNum, mergedFilters);
@@ -400,7 +407,7 @@ const Shop = () => {
                       setSearching(false);
                       setPriceFetching(false);
                       setSearchCollapsed(false);
-                      if (mode === "epc" || mode === "vehicle") {
+                      if (mode === "epc" || mode === "vehicle_oem" || mode === "vehicle_alt") {
                         setQuery("");
                       }
                     }}
@@ -436,7 +443,7 @@ const Shop = () => {
               </div>
 
               {/* Inline vehicle selectors — always visible in vehicle/epc/vin mode */}
-              {(searchMode === "vehicle" || searchMode === "epc") && (
+              {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
                 <div className="md:hidden space-y-2">
                   <div className="grid grid-cols-3 gap-2">
                     <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
@@ -702,7 +709,7 @@ const Shop = () => {
 
             {/* EPC Browser — vehicle-based catalog (EPC mode or Vehicle mode fallback) */}
             {partType === "new" && brand && !searching && (
-              (searchMode === "epc" || (searchMode === "vehicle" && (!results || results.length === 0) && !query && !category && !subCategory))
+              (searchMode === "epc" || ((searchMode === "vehicle_oem" || searchMode === "vehicle_alt") && (!results || results.length === 0) && !query && !category && !subCategory))
             ) && (
               <ErrorBoundary>
                 <EPCBrowser
