@@ -100,8 +100,8 @@ export const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase()
 export const mapToPartResult = (item: any, source: string): PartResult => {
   const catalogSource = item.catalog_source || source;
   const rawOem = item.oem_code || item.oem_number;
-  const normalizedDisplayOem = catalogSource === "sag" && typeof rawOem === "string"
-    ? rawOem.replace(/^SAG-/, "")
+  const normalizedDisplayOem = typeof rawOem === "string"
+    ? rawOem.replace(/^(SAG|AK)-/, "")
     : rawOem;
 
   return {
