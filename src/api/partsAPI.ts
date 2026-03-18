@@ -400,8 +400,17 @@ export async function searchByCategory(
   }
 
   await enrichWithSupersessions(allResults);
-  const filtered = applyFilters(allResults, filters);
-  return { results: sortByPriority(filtered), totalCount: allResults.length };
+  
+  // Apply source filter: "oem" = only original sources, "alternatives" = only SAG/AutoKelly
+  let sourceFiltered = allResults;
+  if (sourceFilter === "oem") {
+    sourceFiltered = allResults.filter(p => !["sag", "autokelly"].includes(p.catalog_source));
+  } else if (sourceFilter === "alternatives") {
+    sourceFiltered = allResults.filter(p => ["sag", "autokelly"].includes(p.catalog_source));
+  }
+  
+  const filtered = applyFilters(sourceFiltered, filters);
+  return { results: sortByPriority(filtered), totalCount: sourceFiltered.length };
 }
 
 // ---- EPC types ----
