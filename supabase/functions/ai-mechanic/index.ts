@@ -55,7 +55,7 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'google/gemini-2.5-flash-lite',
           temperature: 0.3,
           max_tokens: 300,
           messages: [
