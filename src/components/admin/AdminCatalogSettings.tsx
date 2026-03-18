@@ -18,6 +18,7 @@ type CatalogConfig = {
 type DiagResult = {
   mopar: { status: string; responseTime: number };
   sag: { status: string; responseTime: number };
+  autokelly: { status: string; responseTime: number };
   intercars: { status: string; responseTime: number };
 };
 
