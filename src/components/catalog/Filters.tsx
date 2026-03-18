@@ -146,7 +146,7 @@ const Filters = ({
   return (
     <div className="space-y-5">
       {/* Vehicle selectors (vehicle / epc mode) */}
-      {(searchMode === "vehicle" || searchMode === "epc") && (
+      {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Vozidlo</p>
           <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
