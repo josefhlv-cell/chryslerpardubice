@@ -443,7 +443,7 @@ const Shop = () => {
               </div>
 
               {/* Inline vehicle selectors — always visible in vehicle/epc/vin mode */}
-              {(searchMode === "vehicle" || searchMode === "epc") && (
+              {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
                 <div className="md:hidden space-y-2">
                   <div className="grid grid-cols-3 gap-2">
                     <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
