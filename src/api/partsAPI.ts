@@ -57,25 +57,27 @@ export const sourceLabel: Record<string, string> = {
   mopar: "Zdroj 1",
   "epc-ai": "Zdroj 1",
   sag: "Zdroj 2",
-  intercars: "Zdroj 3",
-  csv: "Zdroj 4",
-  epc: "Zdroj 5",
-  "7zap": "Zdroj 6",
-  ai: "Zdroj 7",
+  autokelly: "Zdroj 3",
+  intercars: "Zdroj 4",
+  csv: "Zdroj 5",
+  epc: "Zdroj 6",
+  "7zap": "Zdroj 7",
+  ai: "Zdroj 8",
 };
 
 export const sourcePriority: Record<string, number> = {
   mopar: 1,
   "epc-ai": 1,
   sag: 2,
-  csv: 3,
-  intercars: 4,
+  autokelly: 3,
+  csv: 4,
+  intercars: 5,
 };
 
 // ---- Catalog config ----
 
 /** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag"]);
+export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
