@@ -146,12 +146,19 @@ const Shop = () => {
         if (result.results.length === 0 && (subCategory || category)) {
           toast.info(`Pro kategorii "${subCategory || category}" zatím nejsou díly.`);
         }
-      } else if (searchMode === "vehicle") {
+      } else if (searchMode === "vehicle_oem") {
         const searchTerm = subCategory || category || searchQuery || "";
-        result = await searchByCategory(searchTerm, pageNum, mergedFilters);
+        result = await searchByCategory(searchTerm, pageNum, mergedFilters, "oem");
         if (result.results.length === 0) {
           const desc = [brand, model, category].filter(Boolean).join(" / ");
           toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné díly.` : "Vyberte značku a kategorii pro vyhledání.");
+        }
+      } else if (searchMode === "vehicle_alt") {
+        const searchTerm = subCategory || category || searchQuery || "";
+        result = await searchByCategory(searchTerm, pageNum, mergedFilters, "alternatives");
+        if (result.results.length === 0) {
+          const desc = [brand, model, category].filter(Boolean).join(" / ");
+          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné náhrady.` : "Vyberte značku a kategorii pro vyhledání.");
         }
       } else if (searchQuery) {
         result = await searchParts(searchQuery, pageNum, mergedFilters);
