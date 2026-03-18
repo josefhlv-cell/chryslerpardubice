@@ -267,7 +267,7 @@ export async function searchParts(
     if (freshData && freshData.length > 0) {
       // Filter out invalid SAG entries (zero price, garbage names)
       const validFresh = freshData.filter(p => {
-        if (p.catalog_source === 'sag' && p.price_with_vat <= 0) return false;
+        if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat <= 0) return false;
         return true;
       });
       dbResults.push(...validFresh.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
