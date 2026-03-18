@@ -18,6 +18,7 @@ type CatalogConfig = {
 type DiagResult = {
   mopar: { status: string; responseTime: number };
   sag: { status: string; responseTime: number };
+  autokelly: { status: string; responseTime: number };
   intercars: { status: string; responseTime: number };
 };
 
@@ -25,6 +26,7 @@ const AdminCatalogSettings = () => {
   const [catalogs, setCatalogs] = useState<CatalogConfig[]>([
     { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Jeep, Dodge, RAM", enabled: true, ready: true },
     { id: "sag", name: "SAG Connect", description: "Alternativní díly – SAG/QWP (+ 15% marže)", enabled: true, ready: true },
+    { id: "autokelly", name: "AutoKelly", description: "Alternativní díly – AutoKelly (+ 15% marže)", enabled: true, ready: true },
     { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", enabled: false, ready: false },
   ]);
   const [hasChanges, setHasChanges] = useState(false);
@@ -73,6 +75,7 @@ const AdminCatalogSettings = () => {
       setDiagResult(data?.diagnostics || {
         mopar: { status: 'unknown', responseTime: elapsed },
         sag: { status: 'disabled', responseTime: 0 },
+        autokelly: { status: 'disabled', responseTime: 0 },
         intercars: { status: 'disabled', responseTime: 0 },
       });
       await loadCounts();
@@ -82,6 +85,7 @@ const AdminCatalogSettings = () => {
       setDiagResult({
         mopar: { status: 'error', responseTime: 0 },
         sag: { status: 'disabled', responseTime: 0 },
+        autokelly: { status: 'disabled', responseTime: 0 },
         intercars: { status: 'disabled', responseTime: 0 },
       });
     }
@@ -178,8 +182,12 @@ const AdminCatalogSettings = () => {
                   {statusBadge(diagResult.sag.status)}
                 </div>
                 <div className="flex items-center justify-between text-xs">
+                  <span>AutoKelly</span>
+                  {statusBadge(diagResult.autokelly?.status || 'disabled')}
+                </div>
+                <div className="flex items-center justify-between text-xs">
                   <span>InterCars</span>
-                  {statusBadge(diagResult.intercars.status)}
+                  {statusBadge(diagResult.intercars?.status || 'disabled')}
                 </div>
               </div>
             )}

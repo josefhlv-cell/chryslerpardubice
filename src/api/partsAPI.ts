@@ -57,29 +57,32 @@ export const sourceLabel: Record<string, string> = {
   mopar: "Zdroj 1",
   "epc-ai": "Zdroj 1",
   sag: "Zdroj 2",
-  intercars: "Zdroj 3",
-  csv: "Zdroj 4",
-  epc: "Zdroj 5",
-  "7zap": "Zdroj 6",
-  ai: "Zdroj 7",
+  autokelly: "Zdroj 3",
+  intercars: "Zdroj 4",
+  csv: "Zdroj 5",
+  epc: "Zdroj 6",
+  "7zap": "Zdroj 7",
+  ai: "Zdroj 8",
 };
 
 export const sourcePriority: Record<string, number> = {
   mopar: 1,
   "epc-ai": 1,
   sag: 2,
-  csv: 3,
-  intercars: 4,
+  autokelly: 3,
+  csv: 4,
+  intercars: 5,
 };
 
 // ---- Catalog config ----
 
 /** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag"]);
+export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
   sag: new Set(["starline"]),
+  autokelly: new Set(["starline"]),
 };
 
 /** Check if a part should be filtered out */
@@ -98,8 +101,8 @@ export const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase()
 export const mapToPartResult = (item: any, source: string): PartResult => {
   const catalogSource = item.catalog_source || source;
   const rawOem = item.oem_code || item.oem_number;
-  const normalizedDisplayOem = catalogSource === "sag" && typeof rawOem === "string"
-    ? rawOem.replace(/^SAG-/, "")
+  const normalizedDisplayOem = typeof rawOem === "string"
+    ? rawOem.replace(/^(SAG|AK)-/, "")
     : rawOem;
 
   return {
@@ -250,7 +253,8 @@ export async function searchParts(
   if (partResults.length > 0) {
     const cleanOems = [...new Set(partResults.map((p) => p.oem_number))];
     const sagOems = cleanOems.map(o => `SAG-${o}`);
-    const allOemsToQuery = [...cleanOems, ...sagOems];
+    const akOems = cleanOems.map(o => `AK-${o}`);
+    const allOemsToQuery = [...cleanOems, ...sagOems, ...akOems];
 
     const { data: freshData } = await supabase
       .from("parts_new")
@@ -263,19 +267,19 @@ export async function searchParts(
     if (freshData && freshData.length > 0) {
       // Filter out invalid SAG entries (zero price, garbage names)
       const validFresh = freshData.filter(p => {
-        if (p.catalog_source === 'sag' && p.price_with_vat <= 0) return false;
+        if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat <= 0) return false;
         return true;
       });
       dbResults.push(...validFresh.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
     }
 
-    // Also merge SAG results from edge function that may not be in DB yet
-    const sagFromEdge = partResults.filter(p => p.catalog_source === 'sag' && p.price_with_vat > 0);
-    for (const sag of sagFromEdge) {
+    // Also merge alternative results from edge function that may not be in DB yet
+    const altFromEdge = partResults.filter(p => (p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0);
+    for (const alt of altFromEdge) {
       const alreadyInDb = dbResults.some(d =>
-        d.catalog_source === 'sag' && normalizeOem(d.oem_number) === normalizeOem(sag.oem_number) && d.name === sag.name
+        d.catalog_source === alt.catalog_source && normalizeOem(d.oem_number) === normalizeOem(alt.oem_number) && d.name === alt.name
       );
-      if (!alreadyInDb) dbResults.push(sag);
+      if (!alreadyInDb) dbResults.push(alt);
     }
 
     if (dbResults.length > 0) {
