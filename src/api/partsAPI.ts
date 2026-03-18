@@ -252,7 +252,8 @@ export async function searchParts(
   if (partResults.length > 0) {
     const cleanOems = [...new Set(partResults.map((p) => p.oem_number))];
     const sagOems = cleanOems.map(o => `SAG-${o}`);
-    const allOemsToQuery = [...cleanOems, ...sagOems];
+    const akOems = cleanOems.map(o => `AK-${o}`);
+    const allOemsToQuery = [...cleanOems, ...sagOems, ...akOems];
 
     const { data: freshData } = await supabase
       .from("parts_new")

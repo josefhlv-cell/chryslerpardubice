@@ -7,6 +7,7 @@ const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
 const SAG_BASE = 'https://connect-int.sag.services/sag-cz';
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const SAG_MARGIN = 0.15; // 15% margin
+const AK_MARGIN = 0.15; // 15% margin for AutoKelly
 
 type Session = { loggedIn: boolean; cookies: Record<string, string> };
 
@@ -55,9 +56,10 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const results: PartResult[] = [];
-    const diagnostics = {
+    const diagnostics: any = {
       mopar: { status: 'ok', responseTime: 0 },
       sag: { status: 'disabled', responseTime: 0 },
+      autokelly: { status: 'disabled', responseTime: 0 },
     };
 
     // Login to Mopar catalog
@@ -77,6 +79,17 @@ Deno.serve(async (req) => {
       console.log('SAG Connect enabled');
     } else {
       console.log('SAG Connect disabled (missing credentials or Firecrawl key)');
+    }
+
+    // AutoKelly credentials
+    const akEmail = Deno.env.get('AUTOKELLY_EMAIL') || '';
+    const akPass = Deno.env.get('AUTOKELLY_PASS') || '';
+    const akEnabled = !!(akEmail && akPass && FIRECRAWL_API_KEY);
+    if (akEnabled) {
+      diagnostics.autokelly.status = 'ok';
+      console.log('AutoKelly enabled');
+    } else {
+      console.log('AutoKelly disabled (missing credentials or Firecrawl key)');
     }
 
     for (const oem of oemCodes.slice(0, 10)) {
@@ -114,6 +127,33 @@ Deno.serve(async (req) => {
             compatible_vehicles: cached.compatible_vehicles,
             superseded_by: supersededByOem, supersedes: supersedesOem,
           });
+
+          // Still check for cached SAG and AutoKelly alternatives
+          const { data: altCached } = await supabase
+            .from('parts_new')
+            .select('id, oem_number, name, price_without_vat, price_with_vat, catalog_source, manufacturer, availability, description')
+            .in('oem_number', [`SAG-${cleanOem}`, `AK-${cleanOem}`])
+            .gt('price_with_vat', 0);
+
+          if (altCached) {
+            for (const alt of altCached) {
+              results.push({
+                oem_number: cleanOem,
+                name: alt.name,
+                price_without_vat: alt.price_without_vat,
+                price_with_vat: alt.price_with_vat,
+                found: true, cached: true, search_code: cleanOem,
+                catalog_source: alt.catalog_source || 'sag',
+                category: cached.category, family: null, segment: null, packaging: null,
+                description: alt.description,
+                manufacturer: alt.manufacturer || (alt.catalog_source === 'autokelly' ? 'AutoKelly' : 'SAG'),
+                availability: alt.availability || 'available',
+                compatible_vehicles: cached.compatible_vehicles,
+                superseded_by: null, supersedes: null,
+              });
+            }
+          }
+
           continue;
         }
       }
@@ -146,6 +186,21 @@ Deno.serve(async (req) => {
             console.log(`SAG found ${cleanOem}: ${sagResult.name}, ${sagResult.price_with_vat} Kč`);
           }
         } catch (err) { console.error('SAG search failed:', err); }
+      }
+
+      // --- Search AutoKelly ---
+      let akResult: { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } = {
+        found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown',
+      };
+      if (akEnabled) {
+        try {
+          const akStart = Date.now();
+          akResult = await searchAutoKelly(akEmail, akPass, FIRECRAWL_API_KEY, cleanOem);
+          diagnostics.autokelly.responseTime = Math.max(diagnostics.autokelly.responseTime, Date.now() - akStart);
+          if (akResult.found) {
+            console.log(`AutoKelly found ${cleanOem}: ${akResult.name}, ${akResult.price_with_vat} Kč`);
+          }
+        } catch (err) { console.error('AutoKelly search failed:', err); }
       }
 
       // Save Mopar result to DB
@@ -208,6 +263,35 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Save AutoKelly result as separate entry (source: autokelly) — only if price is valid
+      if (akResult.found && akResult.price_with_vat > 0) {
+        const akOemKey = `AK-${cleanOem}`;
+        const { data: akCached } = await supabase
+          .from('parts_new')
+          .select('id')
+          .eq('oem_number', akOemKey)
+          .eq('catalog_source', 'autokelly')
+          .maybeSingle();
+
+        const akPartData = {
+          oem_number: akOemKey,
+          name: akResult.name || `Díl ${cleanOem}`,
+          price_without_vat: akResult.price_without_vat,
+          price_with_vat: akResult.price_with_vat,
+          last_price_update: new Date().toISOString(),
+          catalog_source: 'autokelly',
+          manufacturer: akResult.manufacturer || 'AutoKelly',
+          availability: akResult.availability || 'available',
+          description: `Alternativa k OEM ${cleanOem} (AutoKelly)`,
+        };
+
+        if (akCached) {
+          await supabase.from('parts_new').update(akPartData).eq('id', akCached.id);
+        } else {
+          await supabase.from('parts_new').insert(akPartData);
+        }
+      }
+
       // Build primary result (Mopar)
       results.push({
         oem_number: cleanOem,
@@ -242,6 +326,25 @@ Deno.serve(async (req) => {
           description: `Aftermarket alternativa k OEM ${cleanOem} (SAG Connect)`,
           manufacturer: sagResult.manufacturer || 'SAG',
           availability: sagResult.availability || 'available',
+          compatible_vehicles: cached?.compatible_vehicles || null,
+          superseded_by: null, supersedes: null,
+        });
+      }
+
+      // Add AutoKelly alternative result — only with valid price
+      if (akResult.found && akResult.price_with_vat > 0) {
+        results.push({
+          oem_number: cleanOem,
+          name: akResult.name || `Díl ${cleanOem} (AutoKelly)`,
+          price_without_vat: akResult.price_without_vat,
+          price_with_vat: akResult.price_with_vat,
+          found: true, cached: false, search_code: cleanOem,
+          catalog_source: 'autokelly',
+          category: moparResult.category || cached?.category || null,
+          family: null, segment: null, packaging: null,
+          description: `Aftermarket alternativa k OEM ${cleanOem} (AutoKelly)`,
+          manufacturer: akResult.manufacturer || 'AutoKelly',
+          availability: akResult.availability || 'available',
           compatible_vehicles: cached?.compatible_vehicles || null,
           superseded_by: null, supersedes: null,
         });
@@ -367,7 +470,6 @@ async function searchSAG(
   try {
     console.log(`SAG: searching ${oemCode} via Firecrawl (navigate strategy)`);
 
-    // Strategy: Login, then navigate to search results URL and let Angular render
     const searchUrl = `https://connect-int.sag.services/sag-cz/article/result?type=ARTICLES&keywords=${encodeURIComponent(oemCode)}`;
 
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -383,9 +485,7 @@ async function searchSAG(
         onlyMainContent: false,
         timeout: 60000,
         actions: [
-          // Step 1: Wait for Angular login form to fully load
           { type: 'wait', milliseconds: 4000 },
-          // Step 2: Fill and submit login form via JavaScript
           {
             type: 'executeJavascript',
             script: `
@@ -411,7 +511,6 @@ async function searchSAG(
                 if (userInput) setVal(userInput, '${username}');
                 if (passInput) setVal(passInput, '${password}');
                 
-                // Click any submit button after a short delay
                 setTimeout(() => {
                   const btns = document.querySelectorAll('button');
                   for (const btn of btns) {
@@ -421,7 +520,6 @@ async function searchSAG(
                       break;
                     }
                   }
-                  // Fallback: submit form directly
                   const form = document.querySelector('form');
                   if (form) form.dispatchEvent(new Event('submit', { bubbles: true }));
                 }, 500);
@@ -430,9 +528,7 @@ async function searchSAG(
               })();
             `
           },
-          // Step 3: Wait for login to complete
           { type: 'wait', milliseconds: 10000 },
-          // Step 4: Navigate to search results page
           {
             type: 'executeJavascript',
             script: `
@@ -440,9 +536,7 @@ async function searchSAG(
               window.location.href = '${searchUrl}';
             `
           },
-          // Step 5: Wait for Angular to render search results
           { type: 'wait', milliseconds: 12000 },
-          // Step 6: Scrape the rendered page
           { type: 'scrape' },
         ],
       }),
@@ -460,20 +554,17 @@ async function searchSAG(
     console.log(`SAG Firecrawl result: markdown=${markdown.length} chars, html=${html.length} chars, screenshot=${screenshot ? 'yes' : 'no'}`);
     console.log(`SAG markdown (first 1500): ${markdown.substring(0, 1500)}`);
 
-    // Check if we're still on login page (the main login form, not just a footer link)
     const hasLoginForm = (markdown.includes('Přihlásit se') || markdown.includes('Přihlášení')) && !markdown.includes('Ahoj,') && !markdown.includes('Výsledky vyhledávání') && !markdown.includes('Výsledků:');
     if (hasLoginForm) {
       console.log('SAG: Still on login page, authentication failed');
       return empty;
     }
 
-    // Check for zero results
     if (markdown.includes('Výsledků: 0') || markdown.includes('Žádné odpovídající položky')) {
       console.log(`SAG: No results for ${oemCode} in SAG catalog`);
       return empty;
     }
 
-    // Parse results from markdown/html
     return parseSAGResults(markdown, html, oemCode);
   } catch (err) {
     console.error('SAG search error:', err);
@@ -488,9 +579,6 @@ function parseSAGResults(
 ): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
   const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
 
-  // --- Strategy 1: Parse from HTML ---
-  // SAG article cards typically contain: manufacturer, name, article number, price, availability
-  // Look for price patterns in HTML
   const pricesFromHtml: number[] = [];
   const htmlPriceRegex = /(\d[\d\s]*[,.]?\d{0,2})\s*(?:Kč|CZK|,-)/gi;
   let hm;
@@ -499,7 +587,6 @@ function parseSAGResults(
     if (v > 1 && v < 500000) pricesFromHtml.push(v);
   }
 
-  // --- Strategy 2: Parse from Markdown ---
   const pricesFromMd: number[] = [];
   const mdPriceRegex = /(\d[\d\s]*[,.]?\d{0,2})\s*(?:Kč|CZK|,-)/gi;
   while ((hm = mdPriceRegex.exec(markdown)) !== null) {
@@ -507,7 +594,6 @@ function parseSAGResults(
     if (v > 1 && v < 500000) pricesFromMd.push(v);
   }
 
-  // Also try "142 - H" pattern (price range shown in SAG)
   const rangeRegex = /(\d{2,6})\s*-\s*[A-Z]/g;
   while ((hm = rangeRegex.exec(markdown)) !== null) {
     const v = parseFloat(hm[1]);
@@ -517,11 +603,9 @@ function parseSAGResults(
   const allPrices = [...new Set([...pricesFromHtml, ...pricesFromMd])].sort((a, b) => a - b);
   console.log(`SAG prices found: ${JSON.stringify(allPrices)}`);
 
-  // Extract article name
   let name = '';
-  // Known SAG part name patterns from screenshots
   const namePatterns = [
-    /(?:^|\n)\*\*([^*]+)\*\*/m,  // Bold text in markdown
+    /(?:^|\n)\*\*([^*]+)\*\*/m,
     /Číslo položky:\s*(\S+)/i,
     /class="[^"]*article[^"]*name[^"]*"[^>]*>([^<]+)/i,
   ];
@@ -533,7 +617,6 @@ function parseSAGResults(
     }
   }
 
-  // Fallback: find descriptive text near OEM code or part keywords
   if (!name) {
     const lines = markdown.split('\n').filter(l => l.trim().length > 3);
     for (const line of lines) {
@@ -545,7 +628,6 @@ function parseSAGResults(
     }
   }
 
-  // Extract manufacturer
   let manufacturer = '';
   const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'NGK', 'DENSO', 'HELLA', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'ELRING', 'CORTECO', 'CONTITECH', 'INA', 'SWAG', 'TOPRAN', 'FILTRON', 'PURFLUX', 'KNECHT', 'HENGST', 'WIX', 'VAG', 'VOLKSWAGEN', 'MOPAR', 'QUALITY', 'PRIME LINE'];
   const upperContent = (markdown + ' ' + html).toUpperCase();
@@ -553,13 +635,10 @@ function parseSAGResults(
     if (upperContent.includes(mfr)) { manufacturer = mfr; break; }
   }
 
-  // Check availability
   const content = markdown + ' ' + html;
   const isAvailable = /skladem|dostupn|zítra|ihned|\d+\s*ks/i.test(content);
-  const isNotReturnable = /nelze vrátit/i.test(content);
 
   if (allPrices.length > 0) {
-    // Use lowest price as base (nákupní cena), apply 15% margin
     const basePrice = allPrices[0];
     const priceWithoutVat = Math.round(basePrice * (1 + SAG_MARGIN) * 100) / 100;
     const priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
@@ -574,11 +653,281 @@ function parseSAGResults(
     };
   }
 
-  // Without price, do NOT return as found — prevents storing garbage data
   if (name && (manufacturer || content.includes('Číslo položky'))) {
     console.log('SAG: Found article but no price extracted — skipping (would create invalid cache entry)');
   }
 
   console.log('SAG: No results parsed from scraped content');
+  return empty;
+}
+
+// ===== AutoKelly via Firecrawl =====
+
+async function searchAutoKelly(
+  email: string,
+  password: string,
+  firecrawlKey: string,
+  oemCode: string
+): Promise<{ found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string }> {
+  const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+  try {
+    console.log(`AutoKelly: searching ${oemCode} via Firecrawl`);
+
+    // AutoKelly search URL pattern: login first, then search
+    const searchResultUrl = `https://www.autokelly.cz/Search/ResultList?searchTerm=${encodeURIComponent(oemCode)}`;
+
+    const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${firecrawlKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://www.autokelly.cz',
+        formats: ['markdown', 'html'],
+        waitFor: 5000,
+        onlyMainContent: false,
+        timeout: 60000,
+        actions: [
+          // Step 1: Wait for page to load
+          { type: 'wait', milliseconds: 3000 },
+          // Step 2: Click login button to open modal
+          {
+            type: 'executeJavascript',
+            script: `
+              (function() {
+                // Click the "Přihlášení" link to open login modal
+                const loginLinks = document.querySelectorAll('a');
+                for (const a of loginLinks) {
+                  if ((a.textContent || '').trim().includes('Přihlášení')) {
+                    a.click();
+                    break;
+                  }
+                }
+              })();
+            `
+          },
+          { type: 'wait', milliseconds: 2000 },
+          // Step 3: Fill login form
+          {
+            type: 'executeJavascript',
+            script: `
+              (function() {
+                // Find the login modal inputs
+                const modal = document.querySelector('#modal-simple') || document;
+                const inputs = modal.querySelectorAll('input');
+                let emailInput = null, passInput = null;
+                
+                for (const inp of inputs) {
+                  const t = (inp.type || '').toLowerCase();
+                  const name = (inp.name || '').toLowerCase();
+                  const placeholder = (inp.placeholder || '').toLowerCase();
+                  
+                  if (t === 'password') {
+                    passInput = inp;
+                  } else if (t === 'text' || t === 'email' || name.includes('user') || name.includes('email') || placeholder.includes('email') || placeholder.includes('uživatel')) {
+                    if (!emailInput) emailInput = inp;
+                  }
+                }
+                
+                // Fallback: first two visible inputs
+                if (!emailInput || !passInput) {
+                  const visibleInputs = Array.from(inputs).filter(i => i.offsetParent !== null && i.type !== 'hidden');
+                  if (visibleInputs.length >= 2) {
+                    emailInput = emailInput || visibleInputs[0];
+                    passInput = passInput || visibleInputs[1];
+                  }
+                }
+                
+                function setVal(el, val) {
+                  if (!el) return;
+                  el.focus();
+                  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                  if (nativeSetter) nativeSetter.call(el, val);
+                  else el.value = val;
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                  el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                
+                if (emailInput) setVal(emailInput, '${email}');
+                if (passInput) setVal(passInput, '${password}');
+                
+                // Click submit button
+                setTimeout(() => {
+                  const btns = modal.querySelectorAll('button, input[type="submit"]');
+                  for (const btn of btns) {
+                    const txt = ((btn.textContent || '') + (btn.value || '')).toLowerCase();
+                    if (txt.includes('přihlásit') || btn.type === 'submit') {
+                      btn.click();
+                      break;
+                    }
+                  }
+                }, 500);
+                
+                document.title = 'AK_FILLED:email=' + !!emailInput + ',pass=' + !!passInput;
+              })();
+            `
+          },
+          // Step 4: Wait for login to complete
+          { type: 'wait', milliseconds: 8000 },
+          // Step 5: Navigate to search results
+          {
+            type: 'executeJavascript',
+            script: `
+              document.title = 'AK_PRE_SEARCH:' + window.location.href;
+              window.location.href = '${searchResultUrl}';
+            `
+          },
+          // Step 6: Wait for search results to render
+          { type: 'wait', milliseconds: 8000 },
+          // Step 7: Scrape
+          { type: 'scrape' },
+        ],
+      }),
+    });
+
+    const fcData = await fcResp.json();
+    if (!fcResp.ok) {
+      console.error('AutoKelly Firecrawl error:', JSON.stringify(fcData).substring(0, 500));
+      return empty;
+    }
+
+    const markdown = fcData?.data?.markdown || fcData?.markdown || '';
+    const html = fcData?.data?.html || fcData?.html || '';
+    console.log(`AutoKelly Firecrawl result: markdown=${markdown.length} chars, html=${html.length} chars`);
+    console.log(`AutoKelly markdown (first 1500): ${markdown.substring(0, 1500)}`);
+
+    // Check if we're still on login page
+    const stillOnLogin = markdown.includes('Uživatelské jméno / Email') && markdown.includes('Heslo') && !markdown.includes('Odhlásit') && !markdown.includes('Košík');
+    if (stillOnLogin) {
+      console.log('AutoKelly: Still on login page, authentication failed');
+      return empty;
+    }
+
+    // Check for 404 or no results
+    if (markdown.includes('Stránka nebyla nalezena') || markdown.includes('Ups!')) {
+      console.log(`AutoKelly: 404 page for search ${oemCode}`);
+      return empty;
+    }
+
+    // Check for zero results
+    if (markdown.includes('Dle zadaných parametrů nic nenalezeno') || markdown.includes('Nebyly nalezeny žádné produkty')) {
+      console.log(`AutoKelly: No results for ${oemCode}`);
+      return empty;
+    }
+
+    return parseAutoKellyResults(markdown, html, oemCode);
+  } catch (err) {
+    console.error('AutoKelly search error:', err);
+    return empty;
+  }
+}
+
+function parseAutoKellyResults(
+  markdown: string,
+  html: string,
+  oemCode: string
+): { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } {
+  const empty = { found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown' };
+
+  // Extract prices from content
+  const allPrices: number[] = [];
+  const content = markdown + ' ' + html;
+
+  // AutoKelly prices are shown as "XXX Kč" with "s DPH" or "bez DPH"
+  const priceRegex = /(\d[\d\s]*[,.]?\d{0,2})\s*(?:Kč|CZK)/gi;
+  let pm;
+  while ((pm = priceRegex.exec(content)) !== null) {
+    const v = parseFloat(pm[1].replace(/\s/g, '').replace(',', '.'));
+    if (v > 1 && v < 500000) allPrices.push(v);
+  }
+
+  // Deduplicate and sort
+  const uniquePrices = [...new Set(allPrices)].sort((a, b) => a - b);
+  console.log(`AutoKelly prices found: ${JSON.stringify(uniquePrices)}`);
+
+  // Extract product name
+  let name = '';
+
+  // Try to find product name from markdown structure
+  // AutoKelly typically shows product names in bold or as headings
+  const namePatterns = [
+    /(?:^|\n)#+\s*([^\n]+)/m,  // Heading
+    /(?:^|\n)\*\*([^*]{5,100})\*\*/m,  // Bold text
+    /class="[^"]*product[^"]*name[^"]*"[^>]*>([^<]{5,100})/i,  // Product name class in HTML
+    /class="[^"]*title[^"]*"[^>]*>([^<]{5,100})/i,  // Title class in HTML
+  ];
+  for (const pattern of namePatterns) {
+    const m = markdown.match(pattern) || html.match(pattern);
+    if (m && m[1] && m[1].length > 4 && m[1].length < 150) {
+      // Skip navigation/header text
+      const cleaned = m[1].trim();
+      if (!cleaned.match(/^(KATALOG|PRO DÍLNU|MOJE GARÁŽ|Přihlášení|Registrace|Auto Kelly|Hledat)/i)) {
+        name = cleaned;
+        break;
+      }
+    }
+  }
+
+  // Fallback: find descriptive text with automotive keywords
+  if (!name) {
+    const lines = markdown.split('\n').filter(l => l.trim().length > 5);
+    for (const line of lines) {
+      const clean = line.replace(/[|*#\[\]]/g, '').trim();
+      if (clean.match(/brzdov|filtr|olej|svíčk|řemen|ložisk|čerpadl|tlumič|destičk|kotouč|hadice|senzor|snímač|lambda|termostat|chladič|ventil|pružin|rameno|tyč|kulový|stabilizátor|těsnění|palivov|vzduchov|kabinov|baterie|alternátor|startér|spojk|rozvodov|těhlice|náboj|hřídel|manžet/i)) {
+        name = clean.substring(0, 120);
+        break;
+      }
+    }
+  }
+
+  // Extract manufacturer (same list as SAG + AutoKelly specific brands)
+  let manufacturer = '';
+  const mfrPatterns = ['TRW', 'BREMBO', 'BOSCH', 'MANN', 'MAHLE', 'FEBI', 'SACHS', 'LEMFÖRDER', 'MEYLE', 'GATES', 'DAYCO', 'SKF', 'FAG', 'SNR', 'LUK', 'VALEO', 'DELPHI', 'ATE', 'TEXTAR', 'FERODO', 'NGK', 'DENSO', 'HELLA', 'RIDEX', 'OPTIMAL', 'ZIMMERMANN', 'BLUE PRINT', 'ELRING', 'CORTECO', 'CONTITECH', 'INA', 'SWAG', 'TOPRAN', 'FILTRON', 'PURFLUX', 'KNECHT', 'HENGST', 'WIX', 'MONROE', 'BILSTEIN', 'KYB', 'SACHS', 'BERU', 'CHAMPION', 'MOOG', 'NIPPARTS', 'JAPANPARTS', 'KRAFT', 'MAXGEAR', 'QUALITY', 'PRIME LINE'];
+  const upperContent = content.toUpperCase();
+  for (const mfr of mfrPatterns) {
+    if (upperContent.includes(mfr)) { manufacturer = mfr; break; }
+  }
+
+  // Check availability
+  const isAvailable = /skladem|dostupn|ihned|\d+\s*ks|zítra/i.test(content);
+
+  if (uniquePrices.length > 0) {
+    // Use lowest price as base, apply margin
+    const basePrice = uniquePrices[0];
+    const priceWithoutVat = Math.round(basePrice * (1 + AK_MARGIN) * 100) / 100;
+    const priceWithVat = Math.round(priceWithoutVat * 1.21 * 100) / 100;
+
+    // Check if the price already includes VAT ("s DPH")
+    const hasDphIndicator = /s\s*DPH/i.test(content);
+    if (hasDphIndicator && uniquePrices.length >= 2) {
+      // First price might be without VAT, second with VAT
+      const pWithout = Math.round(uniquePrices[0] * (1 + AK_MARGIN) * 100) / 100;
+      const pWith = Math.round(uniquePrices[1] * (1 + AK_MARGIN) * 100) / 100;
+      return {
+        found: true,
+        name: name || `Díl ${oemCode} (AutoKelly)`,
+        price_without_vat: pWithout,
+        price_with_vat: pWith > pWithout ? pWith : Math.round(pWithout * 1.21 * 100) / 100,
+        manufacturer,
+        availability: isAvailable ? 'available' : 'on_order',
+      };
+    }
+
+    return {
+      found: true,
+      name: name || `Díl ${oemCode} (AutoKelly)`,
+      price_without_vat: priceWithoutVat,
+      price_with_vat: priceWithVat,
+      manufacturer,
+      availability: isAvailable ? 'available' : 'on_order',
+    };
+  }
+
+  if (name) {
+    console.log('AutoKelly: Found article but no price extracted — skipping');
+  }
+
+  console.log('AutoKelly: No results parsed from scraped content');
   return empty;
 }
