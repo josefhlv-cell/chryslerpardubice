@@ -407,7 +407,7 @@ const Shop = () => {
                       setSearching(false);
                       setPriceFetching(false);
                       setSearchCollapsed(false);
-                      if (mode === "epc" || mode === "vehicle") {
+                      if (mode === "epc" || mode === "vehicle_oem" || mode === "vehicle_alt") {
                         setQuery("");
                       }
                     }}
