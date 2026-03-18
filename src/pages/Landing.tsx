@@ -1,9 +1,11 @@
+import { lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
-import { Search, ShoppingCart, Wrench, ChevronRight } from "lucide-react";
+import { Search, ShoppingCart, Wrench, ChevronRight, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import Shop from "@/pages/Shop";
+
+const Shop = lazy(() => import("@/pages/Shop"));
 
 const Landing = () => {
   const navigate = useNavigate();
@@ -11,7 +13,11 @@ const Landing = () => {
 
   // Show parts catalog directly for logged-in users
   if (!isLoading && user) {
-    return <Shop />;
+    return (
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>}>
+        <Shop />
+      </Suspense>
+    );
   }
 
   return (
