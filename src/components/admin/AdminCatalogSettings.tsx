@@ -75,6 +75,7 @@ const AdminCatalogSettings = () => {
       setDiagResult(data?.diagnostics || {
         mopar: { status: 'unknown', responseTime: elapsed },
         sag: { status: 'disabled', responseTime: 0 },
+        autokelly: { status: 'disabled', responseTime: 0 },
         intercars: { status: 'disabled', responseTime: 0 },
       });
       await loadCounts();
