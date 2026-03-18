@@ -299,7 +299,8 @@ export async function searchParts(
 export async function searchByCategory(
   searchTerm: string,
   page: number,
-  filters: SearchFilters = {}
+  filters: SearchFilters = {},
+  sourceFilter: "all" | "oem" | "alternatives" = "all"
 ): Promise<SearchResult> {
   const allResults: PartResult[] = [];
 
