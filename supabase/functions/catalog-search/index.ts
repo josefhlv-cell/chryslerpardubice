@@ -460,8 +460,9 @@ async function searchSAG(
     console.log(`SAG Firecrawl result: markdown=${markdown.length} chars, html=${html.length} chars, screenshot=${screenshot ? 'yes' : 'no'}`);
     console.log(`SAG markdown (first 1500): ${markdown.substring(0, 1500)}`);
 
-    // Check if we're still on login page
-    if (markdown.includes('Přihlásit se') && !markdown.includes('Ahoj,')) {
+    // Check if we're still on login page (the main login form, not just a footer link)
+    const hasLoginForm = (markdown.includes('Přihlásit se') || markdown.includes('Přihlášení')) && !markdown.includes('Ahoj,') && !markdown.includes('Výsledky vyhledávání') && !markdown.includes('Výsledků:');
+    if (hasLoginForm) {
       console.log('SAG: Still on login page, authentication failed');
       return empty;
     }
