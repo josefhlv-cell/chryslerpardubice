@@ -179,8 +179,12 @@ const AdminCatalogSettings = () => {
                   {statusBadge(diagResult.sag.status)}
                 </div>
                 <div className="flex items-center justify-between text-xs">
+                  <span>AutoKelly</span>
+                  {statusBadge(diagResult.autokelly?.status || 'disabled')}
+                </div>
+                <div className="flex items-center justify-between text-xs">
                   <span>InterCars</span>
-                  {statusBadge(diagResult.intercars.status)}
+                  {statusBadge(diagResult.intercars?.status || 'disabled')}
                 </div>
               </div>
             )}
