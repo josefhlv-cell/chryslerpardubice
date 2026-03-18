@@ -169,7 +169,7 @@ const Filters = ({
       )}
 
       {/* Category filter (vehicle / epc) */}
-      {(searchMode === "vehicle" || searchMode === "epc") && (
+      {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
         <>
           <Separator />
           <div className="space-y-2">
