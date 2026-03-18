@@ -573,17 +573,9 @@ function parseSAGResults(
     };
   }
 
-  // Even without price, if we found article content, return as found
+  // Without price, do NOT return as found — prevents storing garbage data
   if (name && (manufacturer || content.includes('Číslo položky'))) {
-    console.log('SAG: Found article but no price extracted');
-    return {
-      found: true,
-      name: name || `Díl ${oemCode} (SAG)`,
-      price_without_vat: 0,
-      price_with_vat: 0,
-      manufacturer,
-      availability: isAvailable ? 'available' : 'on_order',
-    };
+    console.log('SAG: Found article but no price extracted — skipping (would create invalid cache entry)');
   }
 
   console.log('SAG: No results parsed from scraped content');
