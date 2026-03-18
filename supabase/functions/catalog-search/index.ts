@@ -179,8 +179,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Save SAG result as separate entry (source: sag)
-      if (sagResult.found) {
+      // Save SAG result as separate entry (source: sag) — only if price is valid
+      if (sagResult.found && sagResult.price_with_vat > 0) {
         const sagOemKey = `SAG-${cleanOem}`;
         const { data: sagCached } = await supabase
           .from('parts_new')
@@ -228,8 +228,8 @@ Deno.serve(async (req) => {
         superseded_by: supersededByOem, supersedes: supersedesOem,
       });
 
-      // Add SAG alternative result
-      if (sagResult.found) {
+      // Add SAG alternative result — only with valid price
+      if (sagResult.found && sagResult.price_with_vat > 0) {
         results.push({
           oem_number: cleanOem,
           name: sagResult.name || `Díl ${cleanOem} (SAG)`,
@@ -460,8 +460,9 @@ async function searchSAG(
     console.log(`SAG Firecrawl result: markdown=${markdown.length} chars, html=${html.length} chars, screenshot=${screenshot ? 'yes' : 'no'}`);
     console.log(`SAG markdown (first 1500): ${markdown.substring(0, 1500)}`);
 
-    // Check if we're still on login page
-    if (markdown.includes('Přihlásit se') && !markdown.includes('Ahoj,')) {
+    // Check if we're still on login page (the main login form, not just a footer link)
+    const hasLoginForm = (markdown.includes('Přihlásit se') || markdown.includes('Přihlášení')) && !markdown.includes('Ahoj,') && !markdown.includes('Výsledky vyhledávání') && !markdown.includes('Výsledků:');
+    if (hasLoginForm) {
       console.log('SAG: Still on login page, authentication failed');
       return empty;
     }
@@ -573,17 +574,9 @@ function parseSAGResults(
     };
   }
 
-  // Even without price, if we found article content, return as found
+  // Without price, do NOT return as found — prevents storing garbage data
   if (name && (manufacturer || content.includes('Číslo položky'))) {
-    console.log('SAG: Found article but no price extracted');
-    return {
-      found: true,
-      name: name || `Díl ${oemCode} (SAG)`,
-      price_without_vat: 0,
-      price_with_vat: 0,
-      manufacturer,
-      availability: isAvailable ? 'available' : 'on_order',
-    };
+    console.log('SAG: Found article but no price extracted — skipping (would create invalid cache entry)');
   }
 
   console.log('SAG: No results parsed from scraped content');

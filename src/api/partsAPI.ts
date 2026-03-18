@@ -246,19 +246,42 @@ export async function searchParts(
       supersedes: r.supersedes || null,
     }));
 
-  // 3. Refresh from DB if catalog saved them
+  // 3. Refresh from DB — fetch both clean OEM and SAG-prefixed entries
   if (partResults.length > 0) {
+    const cleanOems = [...new Set(partResults.map((p) => p.oem_number))];
+    const sagOems = cleanOems.map(o => `SAG-${o}`);
+    const allOemsToQuery = [...cleanOems, ...sagOems];
+
     const { data: freshData } = await supabase
       .from("parts_new")
       .select(
         "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source"
       )
-      .in("oem_number", partResults.map((p) => p.oem_number));
+      .in("oem_number", allOemsToQuery);
+
+    const dbResults: PartResult[] = [];
     if (freshData && freshData.length > 0) {
-      const mapped = freshData.map((p) => mapToPartResult(p, "mopar"));
-      await enrichWithSupersessions(mapped);
-      const filtered = applyFilters(mapped, filters);
-      return { results: sortByPriority(filtered), totalCount: mapped.length };
+      // Filter out invalid SAG entries (zero price, garbage names)
+      const validFresh = freshData.filter(p => {
+        if (p.catalog_source === 'sag' && p.price_with_vat <= 0) return false;
+        return true;
+      });
+      dbResults.push(...validFresh.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
+    }
+
+    // Also merge SAG results from edge function that may not be in DB yet
+    const sagFromEdge = partResults.filter(p => p.catalog_source === 'sag' && p.price_with_vat > 0);
+    for (const sag of sagFromEdge) {
+      const alreadyInDb = dbResults.some(d =>
+        d.catalog_source === 'sag' && normalizeOem(d.oem_number) === normalizeOem(sag.oem_number) && d.name === sag.name
+      );
+      if (!alreadyInDb) dbResults.push(sag);
+    }
+
+    if (dbResults.length > 0) {
+      await enrichWithSupersessions(dbResults);
+      const filtered = applyFilters(dbResults, filters);
+      return { results: sortByPriority(filtered), totalCount: dbResults.length };
     }
   }
 
@@ -584,9 +607,10 @@ export async function enrichEPCPrices(
     .select("oem_number, name, price_without_vat, price_with_vat, availability, manufacturer, catalog_source")
     .in("oem_number", sagKeys);
 
-  // Populate from SAG cache
+  // Populate from SAG cache — filter out invalid entries
   if (sagCached) {
     for (const s of sagCached) {
+      if (s.price_with_vat <= 0) continue; // Skip garbage entries
       const originalOem = s.oem_number.replace(/^SAG-/, '');
       if (!alternativesMap.has(originalOem)) alternativesMap.set(originalOem, []);
       alternativesMap.get(originalOem)!.push({
