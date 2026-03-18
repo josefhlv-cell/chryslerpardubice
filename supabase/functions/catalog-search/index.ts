@@ -179,8 +179,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Save SAG result as separate entry (source: sag)
-      if (sagResult.found) {
+      // Save SAG result as separate entry (source: sag) — only if price is valid
+      if (sagResult.found && sagResult.price_with_vat > 0) {
         const sagOemKey = `SAG-${cleanOem}`;
         const { data: sagCached } = await supabase
           .from('parts_new')
