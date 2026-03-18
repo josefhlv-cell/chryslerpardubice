@@ -607,9 +607,10 @@ export async function enrichEPCPrices(
     .select("oem_number, name, price_without_vat, price_with_vat, availability, manufacturer, catalog_source")
     .in("oem_number", sagKeys);
 
-  // Populate from SAG cache
+  // Populate from SAG cache — filter out invalid entries
   if (sagCached) {
     for (const s of sagCached) {
+      if (s.price_with_vat <= 0) continue; // Skip garbage entries
       const originalOem = s.oem_number.replace(/^SAG-/, '');
       if (!alternativesMap.has(originalOem)) alternativesMap.set(originalOem, []);
       alternativesMap.get(originalOem)!.push({

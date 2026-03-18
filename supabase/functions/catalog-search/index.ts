@@ -228,8 +228,8 @@ Deno.serve(async (req) => {
         superseded_by: supersededByOem, supersedes: supersedesOem,
       });
 
-      // Add SAG alternative result
-      if (sagResult.found) {
+      // Add SAG alternative result — only with valid price
+      if (sagResult.found && sagResult.price_with_vat > 0) {
         results.push({
           oem_number: cleanOem,
           name: sagResult.name || `Díl ${cleanOem} (SAG)`,
