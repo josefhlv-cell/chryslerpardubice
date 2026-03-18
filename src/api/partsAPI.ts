@@ -82,6 +82,7 @@ export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokel
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
   sag: new Set(["starline"]),
+  autokelly: new Set(["starline"]),
 };
 
 /** Check if a part should be filtered out */
