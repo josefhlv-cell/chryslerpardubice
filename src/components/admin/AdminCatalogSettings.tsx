@@ -85,6 +85,7 @@ const AdminCatalogSettings = () => {
       setDiagResult({
         mopar: { status: 'error', responseTime: 0 },
         sag: { status: 'disabled', responseTime: 0 },
+        autokelly: { status: 'disabled', responseTime: 0 },
         intercars: { status: 'disabled', responseTime: 0 },
       });
     }
