@@ -273,13 +273,13 @@ export async function searchParts(
       dbResults.push(...validFresh.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
     }
 
-    // Also merge SAG results from edge function that may not be in DB yet
-    const sagFromEdge = partResults.filter(p => p.catalog_source === 'sag' && p.price_with_vat > 0);
-    for (const sag of sagFromEdge) {
+    // Also merge alternative results from edge function that may not be in DB yet
+    const altFromEdge = partResults.filter(p => (p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0);
+    for (const alt of altFromEdge) {
       const alreadyInDb = dbResults.some(d =>
-        d.catalog_source === 'sag' && normalizeOem(d.oem_number) === normalizeOem(sag.oem_number) && d.name === sag.name
+        d.catalog_source === alt.catalog_source && normalizeOem(d.oem_number) === normalizeOem(alt.oem_number) && d.name === alt.name
       );
-      if (!alreadyInDb) dbResults.push(sag);
+      if (!alreadyInDb) dbResults.push(alt);
     }
 
     if (dbResults.length > 0) {
