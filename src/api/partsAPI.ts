@@ -344,9 +344,63 @@ export async function searchByCategory(
     }
   }
 
+  // Enrich with alternatives from external sources (SAG, AutoKelly)
+  // Collect unique OEM numbers from local results and query catalog-search
+  const localOems = [...new Set(allResults.map(r => normalizeOem(r.oem_number)).filter(Boolean))];
+  if (localOems.length > 0) {
+    try {
+      // Query up to 10 OEMs at a time to avoid overloading
+      const batch = localOems.slice(0, 10);
+
+      // Also check DB for already-cached SAG/AK entries
+      const sagOems = batch.map(o => `SAG-${o}`);
+      const akOems = batch.map(o => `AK-${o}`);
+      const { data: cachedAlts } = await supabase
+        .from("parts_new")
+        .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+        .in("oem_number", [...sagOems, ...akOems]);
+
+      if (cachedAlts) {
+        const validAlts = cachedAlts.filter(p =>
+          (p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0
+        );
+        for (const alt of validAlts) {
+          const mapped = mapToPartResult(alt, alt.catalog_source || "sag");
+          const exists = allResults.some(r =>
+            r.catalog_source === mapped.catalog_source &&
+            normalizeOem(r.oem_number) === normalizeOem(mapped.oem_number) &&
+            r.manufacturer === mapped.manufacturer
+          );
+          if (!exists) allResults.push(mapped);
+        }
+      }
+
+      // Fire external search in background for OEMs not yet cached
+      const uncachedOems = batch.filter(oem => {
+        const hasSag = cachedAlts?.some(a => a.oem_number === `SAG-${oem}` && a.price_with_vat > 0);
+        const hasAk = cachedAlts?.some(a => a.oem_number === `AK-${oem}` && a.price_with_vat > 0);
+        return !hasSag || !hasAk;
+      });
+
+      if (uncachedOems.length > 0) {
+        // Non-blocking: trigger catalog-search to cache results for next time
+        supabase.functions.invoke("catalog-search", {
+          body: { oemCodes: uncachedOems },
+        }).then(({ data: extData }) => {
+          // Results are cached in DB by the edge function automatically
+          console.log(`[searchByCategory] Triggered catalog-search for ${uncachedOems.length} OEMs`);
+        }).catch(() => {
+          // Silently ignore background fetch errors
+        });
+      }
+    } catch (err) {
+      console.warn("[searchByCategory] Alt enrichment failed:", err);
+    }
+  }
+
   await enrichWithSupersessions(allResults);
   const filtered = applyFilters(allResults, filters);
-  return { results: sortByPriority(filtered), totalCount: (pnRes.count ?? 0) + (pcRes.count ?? 0) };
+  return { results: sortByPriority(filtered), totalCount: allResults.length };
 }
 
 // ---- EPC types ----
