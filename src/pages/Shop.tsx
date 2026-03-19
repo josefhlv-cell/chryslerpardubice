@@ -98,6 +98,19 @@ const Shop = () => {
   const isBusinessActive = profile?.account_type === "business" && profile?.status === "active";
   const discountPercent = isBusinessActive ? (profile?.discount_percent ?? 0) : 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const alternativeSubcategories = category ? (subCategoriesMap[category] || []) : [];
+  const alternativeRequiresSubcategory = searchMode === "vehicle_alt" && alternativeSubcategories.length > 0;
+  const isAlternativePathReady =
+    searchMode !== "vehicle_alt" ||
+    Boolean(brand && model && motor && category && (!alternativeRequiresSubcategory || subCategory));
+  const nextAlternativeStep =
+    !brand ? "značku" :
+    !model ? "model" :
+    !motor ? "motorizaci" :
+    !category ? "hlavní skupinu dílů" :
+    alternativeRequiresSubcategory && !subCategory ? "podskupinu dílů" :
+    null;
+  const alternativePathSummary = [brand, model, motor, category, subCategory].filter(Boolean).join(" › ");
 
   // ---- Debounce ----
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -119,10 +132,12 @@ const Shop = () => {
 
   // ---- Search logic ----
   const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
-    // In vehicle mode, allow search with brand only (no query/category required)
+    const isAlternativeSearch = searchMode === "vehicle_alt";
     const hasVehicleParams = brand || model || motor;
+
+    if (isAlternativeSearch && !isAlternativePathReady) return;
     if (!searchQuery && !category && !subCategory && !hasVehicleParams) return;
-    
+
     const signal = cancelPrevious();
     setSearching(true);
     setPriceFetching(true);
@@ -157,8 +172,8 @@ const Shop = () => {
         const searchTerm = subCategory || category || searchQuery || "";
         result = await searchByCategory(searchTerm, pageNum, mergedFilters, "alternatives");
         if (result.results.length === 0) {
-          const desc = [brand, model, category].filter(Boolean).join(" / ");
-          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné náhrady.` : "Vyberte značku a kategorii pro vyhledání.");
+          const desc = [brand, model, motor, category, subCategory].filter(Boolean).join(" / ");
+          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné náhrady.` : "Dokončete celou cestu katalogem.");
         }
       } else if (searchQuery) {
         result = await searchParts(searchQuery, pageNum, mergedFilters);
@@ -176,7 +191,7 @@ const Shop = () => {
         if (result.results.length > 0) setSearchCollapsed(true);
       }
     } catch (err: any) {
-      if (signal.aborted) return; // Silently ignore aborted requests
+      if (signal.aborted) return;
       toast.error("Chyba: " + err.message);
       setResults([]);
     } finally {
@@ -185,7 +200,7 @@ const Shop = () => {
         setPriceFetching(false);
       }
     }
-  }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry]);
+  }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry, isAlternativePathReady]);
 
   // Auto-search disabled for part_number mode to prevent request flooding
   // User must press Enter or click search button
@@ -193,20 +208,31 @@ const Shop = () => {
 
   const handleSearch = () => { setPage(0); doSearch(query, 0); };
 
-  // Auto-search when category/subcategory changes in vehicle_alt mode
-  const prevAltCategory = useRef({ category: "", subCategory: "" });
+  // Auto-search only after the full AutoKelly-style path is selected
+  const prevAltPath = useRef("");
   useEffect(() => {
     if (searchMode !== "vehicle_alt") return;
-    if (!brand) return;
-    // Only trigger when category or subcategory actually changed
-    const changed = prevAltCategory.current.category !== category || prevAltCategory.current.subCategory !== subCategory;
-    prevAltCategory.current = { category, subCategory };
-    if (changed && (category || subCategory)) {
-      setPage(0);
-      doSearch("", 0);
-    }
-  }, [searchMode, brand, model, motor, category, subCategory, doSearch]);
 
+    const pathKey = [brand, model, motor, category, subCategory].join("|");
+    const changed = prevAltPath.current !== pathKey;
+    prevAltPath.current = pathKey;
+
+    if (!changed) return;
+
+    abortRef.current?.abort();
+    setSearchCollapsed(false);
+
+    if (!isAlternativePathReady) {
+      setResults(null);
+      setTotalCount(0);
+      setSearching(false);
+      setPriceFetching(false);
+      return;
+    }
+
+    setPage(0);
+    doSearch("", 0);
+  }, [searchMode, brand, model, motor, category, subCategory, isAlternativePathReady, doSearch]);
   // ---- VIN decode ----
   const handleVinDecode = async () => {
     if (!vinQuery || vinQuery.length < 11) { toast.error("Zadejte platný VIN"); return; }
