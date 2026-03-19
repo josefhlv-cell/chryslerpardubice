@@ -456,9 +456,9 @@ const Shop = () => {
                 </Sheet>
               </div>
 
-              {/* Inline vehicle selectors — always visible in vehicle/epc/vin mode */}
+              {/* Inline vehicle selectors — vehicle_alt: always visible (all screens); others: mobile only */}
               {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
-                <div className="md:hidden space-y-2">
+                <div className={searchMode === "vehicle_alt" ? "space-y-2" : "md:hidden space-y-2"}>
                   <div className="grid grid-cols-3 gap-2">
                     <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
@@ -482,16 +482,23 @@ const Shop = () => {
                     )}
                   </div>
                   {/* Inline category */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={searchMode === "vehicle_alt" ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2"}>
                     <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
                       <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                     </Select>
-                    {(category || brand) && (
+                    {/* In vehicle_alt mode, no search button — auto-searches. Others keep the button. */}
+                    {searchMode !== "vehicle_alt" && (category || brand) && (
                       <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
                         {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
                         Hledat
                       </Button>
+                    )}
+                    {searchMode === "vehicle_alt" && searching && (
+                      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Hledám náhrady...</span>
+                      </div>
                     )}
                   </div>
                   {subCategoriesMap[category] && (
@@ -502,6 +509,16 @@ const Shop = () => {
                           {sub}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {/* Breadcrumb-like summary for vehicle_alt */}
+                  {searchMode === "vehicle_alt" && brand && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
+                      <span className="font-medium text-foreground">{brand}</span>
+                      {model && <><span>›</span><span className="font-medium text-foreground">{model}</span></>}
+                      {motor && <><span>›</span><span className="font-medium text-foreground">{motor}</span></>}
+                      {category && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{category}</span></>}
+                      {subCategory && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{subCategory}</span></>}
                     </div>
                   )}
                 </div>
