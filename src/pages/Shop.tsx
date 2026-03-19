@@ -193,6 +193,20 @@ const Shop = () => {
 
   const handleSearch = () => { setPage(0); doSearch(query, 0); };
 
+  // Auto-search when category/subcategory changes in vehicle_alt mode
+  const prevAltCategory = useRef({ category: "", subCategory: "" });
+  useEffect(() => {
+    if (searchMode !== "vehicle_alt") return;
+    if (!brand) return;
+    // Only trigger when category or subcategory actually changed
+    const changed = prevAltCategory.current.category !== category || prevAltCategory.current.subCategory !== subCategory;
+    prevAltCategory.current = { category, subCategory };
+    if (changed && (category || subCategory)) {
+      setPage(0);
+      doSearch("", 0);
+    }
+  }, [searchMode, brand, model, motor, category, subCategory, doSearch]);
+
   // ---- VIN decode ----
   const handleVinDecode = async () => {
     if (!vinQuery || vinQuery.length < 11) { toast.error("Zadejte platný VIN"); return; }
