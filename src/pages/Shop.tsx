@@ -193,6 +193,20 @@ const Shop = () => {
 
   const handleSearch = () => { setPage(0); doSearch(query, 0); };
 
+  // Auto-search when category/subcategory changes in vehicle_alt mode
+  const prevAltCategory = useRef({ category: "", subCategory: "" });
+  useEffect(() => {
+    if (searchMode !== "vehicle_alt") return;
+    if (!brand) return;
+    // Only trigger when category or subcategory actually changed
+    const changed = prevAltCategory.current.category !== category || prevAltCategory.current.subCategory !== subCategory;
+    prevAltCategory.current = { category, subCategory };
+    if (changed && (category || subCategory)) {
+      setPage(0);
+      doSearch("", 0);
+    }
+  }, [searchMode, brand, model, motor, category, subCategory, doSearch]);
+
   // ---- VIN decode ----
   const handleVinDecode = async () => {
     if (!vinQuery || vinQuery.length < 11) { toast.error("Zadejte platný VIN"); return; }
@@ -442,9 +456,9 @@ const Shop = () => {
                 </Sheet>
               </div>
 
-              {/* Inline vehicle selectors — always visible in vehicle/epc/vin mode */}
+              {/* Inline vehicle selectors — vehicle_alt: always visible (all screens); others: mobile only */}
               {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
-                <div className="md:hidden space-y-2">
+                <div className={searchMode === "vehicle_alt" ? "space-y-2" : "md:hidden space-y-2"}>
                   <div className="grid grid-cols-3 gap-2">
                     <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
@@ -468,16 +482,23 @@ const Shop = () => {
                     )}
                   </div>
                   {/* Inline category */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={searchMode === "vehicle_alt" ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2"}>
                     <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
                       <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
                       <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                     </Select>
-                    {(category || brand) && (
+                    {/* In vehicle_alt mode, no search button — auto-searches. Others keep the button. */}
+                    {searchMode !== "vehicle_alt" && (category || brand) && (
                       <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
                         {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
                         Hledat
                       </Button>
+                    )}
+                    {searchMode === "vehicle_alt" && searching && (
+                      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Hledám náhrady...</span>
+                      </div>
                     )}
                   </div>
                   {subCategoriesMap[category] && (
@@ -488,6 +509,16 @@ const Shop = () => {
                           {sub}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {/* Breadcrumb-like summary for vehicle_alt */}
+                  {searchMode === "vehicle_alt" && brand && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
+                      <span className="font-medium text-foreground">{brand}</span>
+                      {model && <><span>›</span><span className="font-medium text-foreground">{model}</span></>}
+                      {motor && <><span>›</span><span className="font-medium text-foreground">{motor}</span></>}
+                      {category && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{category}</span></>}
+                      {subCategory && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{subCategory}</span></>}
                     </div>
                   )}
                 </div>
@@ -707,9 +738,9 @@ const Shop = () => {
               </AnimatePresence>
             )}
 
-            {/* EPC Browser — vehicle-based catalog (EPC mode or Vehicle mode fallback) */}
+            {/* EPC Browser — vehicle-based catalog (EPC mode or OEM vehicle mode fallback, NOT alt mode) */}
             {partType === "new" && brand && !searching && (
-              (searchMode === "epc" || ((searchMode === "vehicle_oem" || searchMode === "vehicle_alt") && (!results || results.length === 0) && !query && !category && !subCategory))
+              (searchMode === "epc" || (searchMode === "vehicle_oem" && (!results || results.length === 0) && !query && !category && !subCategory))
             ) && (
               <ErrorBoundary>
                 <EPCBrowser
@@ -728,6 +759,20 @@ const Shop = () => {
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-sm text-muted-foreground">Vyhledávám v katalozích...</p>
               </div>
+            )}
+
+            {/* Vehicle_alt mode — prompt to select category when no results yet */}
+            {partType === "new" && searchMode === "vehicle_alt" && !searching && (!results || results.length === 0) && brand && !category && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
+                  <RefreshCw className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <p className="text-sm font-medium">Vyberte kategorii dílů</p>
+                <p className="text-xs text-muted-foreground text-center max-w-xs">
+                  Pro zobrazení alternativních dílů od dodavatelů vyberte kategorii (např. Brzdy, Motor, Filtry...)
+                </p>
+              </motion.div>
             )}
 
             {/* No results */}
