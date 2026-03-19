@@ -215,9 +215,10 @@ export async function searchParts(
   const normalized = normalizeOem(query);
   const allResults: PartResult[] = [];
 
-  // 1. Search local DB (parallel)
+  // 1. Search local DB (parallel) — includes SAG/AK prefix lookup
   const pnFilter = `oem_number.ilike.%${query}%,oem_number.ilike.%${normalized}%,name.ilike.%${query}%,internal_code.ilike.%${query}%`;
-  const [pnRes, pcRes] = await Promise.all([
+  const sagAkOems = [`SAG-${normalized}`, `AK-${normalized}`];
+  const [pnRes, pcRes, altRes] = await Promise.all([
     supabase
       .from("parts_new")
       .select(
@@ -233,13 +234,32 @@ export async function searchParts(
       .or(`oem_code.ilike.%${query}%,oem_code.ilike.%${normalized}%,name.ilike.%${query}%`)
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       .order("name"),
+    // Explicit SAG/AK lookup by prefixed OEM
+    supabase
+      .from("parts_new")
+      .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+      .in("oem_number", sagAkOems)
+      .gt("price_with_vat", 0),
   ]);
 
-  if (pnRes.data) allResults.push(...pnRes.data.map((p) => mapToPartResult(p, "mopar")));
+  if (pnRes.data) allResults.push(...pnRes.data.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
+  
+  // Merge SAG/AK alternatives found by prefix
+  const existingIds = new Set(allResults.map(r => r.id));
+  if (altRes.data) {
+    for (const p of altRes.data) {
+      const mapped = mapToPartResult(p, p.catalog_source || "sag");
+      if (!existingIds.has(mapped.id) && !isPartBlocked(mapped)) {
+        allResults.push(mapped);
+        existingIds.add(mapped.id);
+      }
+    }
+  }
+  
   if (pcRes.data) {
-    const existingOems = new Set(allResults.map((r) => normalizeOem(r.oem_number)));
+    const existingOems = new Set(allResults.map((r) => `${r.catalog_source}:${normalizeOem(r.oem_number)}`));
     for (const item of pcRes.data) {
-      if (!existingOems.has(normalizeOem(item.oem_code))) {
+      if (!existingOems.has(`csv:${normalizeOem(item.oem_code)}`)) {
         allResults.push(mapToPartResult(item, "csv"));
       }
     }
@@ -248,7 +268,7 @@ export async function searchParts(
   if (allResults.length > 0) {
     await enrichWithSupersessions(allResults);
     const filtered = applyFilters(allResults, filters);
-    return { results: sortByPriority(filtered), totalCount: (pnRes.count ?? 0) + (pcRes.count ?? 0) };
+    return { results: sortByPriority(filtered), totalCount: (pnRes.count ?? 0) + (pcRes.count ?? 0) + (altRes.data?.length ?? 0) };
   }
 
   // 2. External catalog search
