@@ -50,6 +50,9 @@ const SearchBar = ({
 
   const isVehicleMode = searchMode === "vehicle_oem" || searchMode === "vehicle_alt";
 
+  // In vehicle_alt mode, hide the search input — drill-down only
+  const hideSearchInput = searchMode === "vehicle_alt";
+
   return (
     <div className="space-y-3">
       {/* Mode tabs */}
@@ -90,33 +93,35 @@ const SearchBar = ({
           ) : (
             <>
               <RefreshCw className="w-4 h-4 shrink-0" />
-              <span><strong>Značkové náhrady</strong> — alternativní díly od dodavatelů (Zdroj 2 a Zdroj 3) za výhodné ceny.</span>
+              <span><strong>Značkové náhrady</strong> — vyberte vozidlo a kategorii pro zobrazení alternativ od dodavatelů.</span>
             </>
           )}
         </div>
       )}
 
-      {/* Search input */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder={placeholder || defaultPlaceholder}
-            className="pl-10 h-11 text-sm rounded-lg"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSearch()}
-          />
+      {/* Search input — hidden in vehicle_alt mode (drill-down only) */}
+      {!hideSearchInput && (
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder={placeholder || defaultPlaceholder}
+              className="pl-10 h-11 text-sm rounded-lg"
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onSearch()}
+            />
+          </div>
+          <Button onClick={onSearch} disabled={searching} className="h-11 px-5">
+            {searching ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Search className="w-4 h-4" />
+            )}
+            <span className="hidden md:inline ml-1.5">Hledat</span>
+          </Button>
         </div>
-        <Button onClick={onSearch} disabled={searching} className="h-11 px-5">
-          {searching ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Search className="w-4 h-4" />
-          )}
-          <span className="hidden md:inline ml-1.5">Hledat</span>
-        </Button>
-      </div>
+      )}
     </div>
   );
 };
