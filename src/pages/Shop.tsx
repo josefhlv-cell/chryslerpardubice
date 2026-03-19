@@ -482,72 +482,131 @@ const Shop = () => {
                 </Sheet>
               </div>
 
-              {/* Inline vehicle selectors — vehicle_alt: always visible (all screens); others: mobile only */}
+              {/* Inline vehicle selectors */}
               {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
-                <div className={searchMode === "vehicle_alt" ? "space-y-2" : "md:hidden space-y-2"}>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
-                      <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-                    </Select>
-                    {(brand && catalogTree[brand]) ? (
-                      <Select value={model} onValueChange={(v) => { setModel(v); setMotor(""); }}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger>
-                        <SelectContent>{Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                      </Select>
-                    ) : (
-                      <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger><SelectContent /></Select>
-                    )}
-                    {(brand && model && catalogTree[brand]?.[model]) ? (
-                      <Select value={motor} onValueChange={setMotor}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
-                        <SelectContent>{catalogTree[brand][model].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                      </Select>
-                    ) : (
-                      <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger><SelectContent /></Select>
-                    )}
+                searchMode === "vehicle_alt" ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-border/40 bg-card/70 p-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Katalogová cesta</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["Síť", "Osobní automobil", "Náhradní díly"].map((step) => (
+                            <span key={step} className="rounded-full bg-secondary px-2 py-1 text-[10px] font-medium text-foreground">
+                              {step}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3">
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">1. Značka</p>
+                          <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte značku" /></SelectTrigger>
+                            <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">2. Model</p>
+                          <Select value={model} disabled={!brand || !catalogTree[brand]} onValueChange={(v) => { setModel(v); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte model" /></SelectTrigger>
+                            <SelectContent>{brand && catalogTree[brand] ? Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>) : null}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">3. Motorizace</p>
+                          <Select value={motor} disabled={!brand || !model || !catalogTree[brand]?.[model]} onValueChange={(v) => { setMotor(v); setCategory(""); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte motorizaci" /></SelectTrigger>
+                            <SelectContent>{brand && model && catalogTree[brand]?.[model] ? catalogTree[brand][model].map((engineOption) => <SelectItem key={engineOption} value={engineOption}>{engineOption}</SelectItem>) : null}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">4. Hlavní skupina</p>
+                          <Select value={category} disabled={!motor} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte hlavní skupinu" /></SelectTrigger>
+                            <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+
+                        {alternativeSubcategories.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">5. Podskupina</p>
+                            <Select value={subCategory} disabled={!category} onValueChange={setSubCategory}>
+                              <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte podskupinu" /></SelectTrigger>
+                              <SelectContent>{alternativeSubcategories.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-xs">
+                          {isAlternativePathReady ? (
+                            <div className="flex items-center gap-2 text-primary">
+                              {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <CheckCircle className="w-3.5 h-3.5 shrink-0" />}
+                              <span className="font-medium">
+                                {searching ? "Načítám náhrady podle vybrané cesty..." : `Vybraná cesta: ${alternativePathSummary}`}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                              <span>Pokračujte výběrem: <span className="font-medium text-foreground">{nextAlternativeStep}</span></span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  {/* Inline category */}
-                  <div className={searchMode === "vehicle_alt" ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2"}>
-                    <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
-                      <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                    </Select>
-                    {/* In vehicle_alt mode, no search button — auto-searches. Others keep the button. */}
-                    {searchMode !== "vehicle_alt" && (category || brand) && (
-                      <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
-                        {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
-                        Hledat
-                      </Button>
-                    )}
-                    {searchMode === "vehicle_alt" && searching && (
-                      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Hledám náhrady...</span>
+                ) : (
+                  <div className="md:hidden space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
+                        <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {(brand && catalogTree[brand]) ? (
+                        <Select value={model} onValueChange={(v) => { setModel(v); setMotor(""); }}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger>
+                          <SelectContent>{Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger><SelectContent /></Select>
+                      )}
+                      {(brand && model && catalogTree[brand]?.[model]) ? (
+                        <Select value={motor} onValueChange={setMotor}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
+                          <SelectContent>{catalogTree[brand][model].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger><SelectContent /></Select>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
+                        <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {(category || brand) && (
+                        <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
+                          {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
+                          Hledat
+                        </Button>
+                      )}
+                    </div>
+                    {subCategoriesMap[category] && (
+                      <div className="flex flex-wrap gap-1">
+                        {subCategoriesMap[category].map((sub) => (
+                          <button key={sub} onClick={() => setSubCategory(subCategory === sub ? "" : sub)}
+                            className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${subCategory === sub ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                            {sub}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
-                  {subCategoriesMap[category] && (
-                    <div className="flex flex-wrap gap-1">
-                      {subCategoriesMap[category].map((sub) => (
-                        <button key={sub} onClick={() => setSubCategory(subCategory === sub ? "" : sub)}
-                          className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${subCategory === sub ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
-                          {sub}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* Breadcrumb-like summary for vehicle_alt */}
-                  {searchMode === "vehicle_alt" && brand && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
-                      <span className="font-medium text-foreground">{brand}</span>
-                      {model && <><span>›</span><span className="font-medium text-foreground">{model}</span></>}
-                      {motor && <><span>›</span><span className="font-medium text-foreground">{motor}</span></>}
-                      {category && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{category}</span></>}
-                      {subCategory && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{subCategory}</span></>}
-                    </div>
-                  )}
-                </div>
+                )
               )}
 
               {/* Inline VIN input — always visible in vin mode on mobile */}
