@@ -187,7 +187,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
     getEPCParts(catIds)
       .then(async (loadedParts) => {
         // Lazy generation: if no parts exist, generate them on-demand
-        if (loadedParts.length === 0 && !batchGenerating) {
+        if (loadedParts.length === 0 && !batchGenerating && brand && model && selectedCategory) {
           setBatchGenerating(true);
           toast.info(`Generuji díly pro ${selectedSubcategory || selectedCategory}...`);
           try {
