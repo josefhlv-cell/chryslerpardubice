@@ -44,6 +44,7 @@ const SourceBadge = ({ source }: { source: string }) => {
     mopar: "bg-primary/15 text-primary border-primary/25",
     "epc-ai": "bg-primary/15 text-primary border-primary/25",
     sag: "bg-accent/15 text-accent border-accent/25",
+    autokelly: "bg-amber-500/15 text-amber-500 border-amber-500/25",
     intercars: "bg-blue-500/15 text-blue-400 border-blue-500/25",
     csv: "bg-muted text-muted-foreground border-border",
   };
