@@ -846,17 +846,24 @@ const Shop = () => {
               </div>
             )}
 
-            {/* Vehicle_alt mode — prompt to select category when no results yet */}
-            {partType === "new" && searchMode === "vehicle_alt" && !searching && (!results || results.length === 0) && brand && !category && (
+            {/* Vehicle_alt mode — prompt to continue the AutoKelly-style path */}
+            {partType === "new" && searchMode === "vehicle_alt" && !searching && !results && !isAlternativePathReady && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
-                  <RefreshCw className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center">
+                  <RefreshCw className="w-6 h-6 text-primary" />
                 </div>
-                <p className="text-sm font-medium">Vyberte kategorii dílů</p>
+                <p className="text-sm font-medium">Postupujte krok za krokem</p>
                 <p className="text-xs text-muted-foreground text-center max-w-xs">
-                  Pro zobrazení alternativních dílů od dodavatelů vyberte kategorii (např. Brzdy, Motor, Filtry...)
+                  {nextAlternativeStep
+                    ? `Další krok: vyberte ${nextAlternativeStep}. Jakmile dokončíte celou cestu, náhrady se načtou automaticky.`
+                    : "Dokončete celou cestu katalogem."}
                 </p>
+                {alternativePathSummary && (
+                  <p className="text-[11px] text-muted-foreground text-center max-w-xs">
+                    Aktuálně: <span className="font-medium text-foreground">{alternativePathSummary}</span>
+                  </p>
+                )}
               </motion.div>
             )}
 
