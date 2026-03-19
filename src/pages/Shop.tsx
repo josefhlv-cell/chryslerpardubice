@@ -738,9 +738,9 @@ const Shop = () => {
               </AnimatePresence>
             )}
 
-            {/* EPC Browser — vehicle-based catalog (EPC mode or Vehicle mode fallback) */}
+            {/* EPC Browser — vehicle-based catalog (EPC mode or OEM vehicle mode fallback, NOT alt mode) */}
             {partType === "new" && brand && !searching && (
-              (searchMode === "epc" || ((searchMode === "vehicle_oem" || searchMode === "vehicle_alt") && (!results || results.length === 0) && !query && !category && !subCategory))
+              (searchMode === "epc" || (searchMode === "vehicle_oem" && (!results || results.length === 0) && !query && !category && !subCategory))
             ) && (
               <ErrorBoundary>
                 <EPCBrowser
