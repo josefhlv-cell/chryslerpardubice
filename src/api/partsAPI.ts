@@ -130,9 +130,9 @@ export const mapToPartResult = (item: any, source: string): PartResult => {
 export const sortByPriority = (parts: PartResult[]) =>
   [...parts].filter(p => !isPartBlocked(p)).sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
 
-/** Enrich parts with supersession data from DB */
+/** Enrich parts with supersession data from DB + fetch alternatives for superseded OEMs */
 export const enrichWithSupersessions = async (parts: PartResult[]) => {
-  const oems = parts.map((p) => p.oem_number);
+  const oems = [...new Set(parts.map((p) => normalizeOem(p.oem_number)).filter(Boolean))];
   if (oems.length === 0) return;
   const [byOld, byNew] = await Promise.all([
     supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("old_oem_number", oems),
@@ -143,9 +143,40 @@ export const enrichWithSupersessions = async (parts: PartResult[]) => {
   byOld.data?.forEach((s) => supersededMap.set(s.old_oem_number, s.new_oem_number));
   byNew.data?.forEach((s) => supersedesMap.set(s.new_oem_number, s.old_oem_number));
   parts.forEach((p) => {
-    if (!p.superseded_by) p.superseded_by = supersededMap.get(p.oem_number) || null;
-    if (!p.supersedes) p.supersedes = supersedesMap.get(p.oem_number) || null;
+    const norm = normalizeOem(p.oem_number);
+    if (!p.superseded_by) p.superseded_by = supersededMap.get(norm) || null;
+    if (!p.supersedes) p.supersedes = supersedesMap.get(norm) || null;
   });
+
+  // Collect superseded OEM numbers that aren't already in results — fetch their alternatives too
+  const extraOems: string[] = [];
+  for (const [, newOem] of supersededMap) {
+    if (!oems.includes(newOem)) extraOems.push(newOem);
+  }
+  for (const [, oldOem] of supersedesMap) {
+    if (!oems.includes(oldOem)) extraOems.push(oldOem);
+  }
+
+  if (extraOems.length > 0) {
+    const sagKeys = extraOems.map(o => `SAG-${o}`);
+    const akKeys = extraOems.map(o => `AK-${o}`);
+    const { data: altParts } = await supabase
+      .from("parts_new")
+      .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+      .in("oem_number", [...extraOems, ...sagKeys, ...akKeys])
+      .gt("price_with_vat", 0);
+
+    if (altParts) {
+      const existingIds = new Set(parts.map(p => p.id));
+      for (const p of altParts) {
+        const mapped = mapToPartResult(p, p.catalog_source || "mopar");
+        if (!existingIds.has(mapped.id) && !isPartBlocked(mapped)) {
+          parts.push(mapped);
+          existingIds.add(mapped.id);
+        }
+      }
+    }
+  }
 };
 
 // ---- Apply client-side filters ----
