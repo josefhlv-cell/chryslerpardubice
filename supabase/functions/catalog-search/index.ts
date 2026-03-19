@@ -173,34 +173,51 @@ Deno.serve(async (req) => {
         }
       }
 
-      // --- Search SAG Connect ---
+      // --- Look up cross-reference part numbers for aftermarket search ---
+      const { data: crossRefs } = await supabase
+        .from('part_crossref')
+        .select('part_number, manufacturer')
+        .eq('oem_number', cleanOem);
+
+      const altSearchCodes = crossRefs?.map(cr => cr.part_number) || [];
+      // Try aftermarket part numbers first, then raw OEM as fallback
+      const altSearchCodesWithOem = [...altSearchCodes, cleanOem];
+      console.log(`Cross-refs for ${cleanOem}: ${altSearchCodes.length} found — ${altSearchCodes.slice(0, 5).join(', ')}`);
+
+      // --- Search SAG Connect (try cross-ref numbers) ---
       let sagResult: { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } = {
         found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown',
       };
       if (sagEnabled) {
-        try {
-          const sagStart = Date.now();
-          sagResult = await searchSAG(sagUser, sagPass, FIRECRAWL_API_KEY, cleanOem);
-          diagnostics.sag.responseTime = Math.max(diagnostics.sag.responseTime, Date.now() - sagStart);
-          if (sagResult.found) {
-            console.log(`SAG found ${cleanOem}: ${sagResult.name}, ${sagResult.price_with_vat} Kč`);
-          }
-        } catch (err) { console.error('SAG search failed:', err); }
+        for (const searchCode of altSearchCodesWithOem) {
+          if (sagResult.found) break;
+          try {
+            const sagStart = Date.now();
+            sagResult = await searchSAG(sagUser, sagPass, FIRECRAWL_API_KEY, searchCode);
+            diagnostics.sag.responseTime = Math.max(diagnostics.sag.responseTime, Date.now() - sagStart);
+            if (sagResult.found) {
+              console.log(`SAG found ${searchCode} (OEM: ${cleanOem}): ${sagResult.name}, ${sagResult.price_with_vat} Kč`);
+            }
+          } catch (err) { console.error('SAG search failed:', err); }
+        }
       }
 
-      // --- Search AutoKelly ---
+      // --- Search AutoKelly (try cross-ref numbers) ---
       let akResult: { found: boolean; name: string; price_without_vat: number; price_with_vat: number; manufacturer: string; availability: string } = {
         found: false, name: '', price_without_vat: 0, price_with_vat: 0, manufacturer: '', availability: 'unknown',
       };
       if (akEnabled) {
-        try {
-          const akStart = Date.now();
-          akResult = await searchAutoKelly(akEmail, akPass, FIRECRAWL_API_KEY, cleanOem);
-          diagnostics.autokelly.responseTime = Math.max(diagnostics.autokelly.responseTime, Date.now() - akStart);
-          if (akResult.found) {
-            console.log(`AutoKelly found ${cleanOem}: ${akResult.name}, ${akResult.price_with_vat} Kč`);
-          }
-        } catch (err) { console.error('AutoKelly search failed:', err); }
+        for (const searchCode of altSearchCodesWithOem) {
+          if (akResult.found) break;
+          try {
+            const akStart = Date.now();
+            akResult = await searchAutoKelly(akEmail, akPass, FIRECRAWL_API_KEY, searchCode);
+            diagnostics.autokelly.responseTime = Math.max(diagnostics.autokelly.responseTime, Date.now() - akStart);
+            if (akResult.found) {
+              console.log(`AutoKelly found ${searchCode} (OEM: ${cleanOem}): ${akResult.name}, ${akResult.price_with_vat} Kč`);
+            }
+          } catch (err) { console.error('AutoKelly search failed:', err); }
+        }
       }
 
       // Save Mopar result to DB
