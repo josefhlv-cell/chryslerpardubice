@@ -93,8 +93,9 @@ const SearchBar = ({
           ) : (
             <>
               <RefreshCw className="w-4 h-4 shrink-0" />
-              <span><strong>Značkové náhrady</strong> — vyberte vozidlo a kategorii pro zobrazení alternativ od dodavatelů.</span>
+              <span><strong>Značkové náhrady</strong> — projděte katalog krok za krokem stejně jako v AutoKelly a SAG.</span>
             </>
+
           )}
         </div>
       )}

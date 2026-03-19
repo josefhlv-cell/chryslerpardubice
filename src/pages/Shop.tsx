@@ -454,32 +454,35 @@ const Shop = () => {
                   />
                 </div>
                 {/* Mobile filter toggle */}
-                <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" className="h-11 md:hidden px-3 mt-[2.75rem]">
-                      <SlidersHorizontal className="w-4 h-4" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="w-80 overflow-y-auto">
-                    <SheetHeader><SheetTitle>Filtry a historie</SheetTitle></SheetHeader>
-                    <div className="mt-4 space-y-4">
-                      <Filters
-                        searchMode={searchMode} brand={brand} setBrand={setBrand}
-                        model={model} setModel={setModel} motor={motor} setMotor={setMotor}
-                        category={category} setCategory={setCategory}
-                        subCategory={subCategory} setSubCategory={setSubCategory}
-                        filters={filters} setFilters={setFilters}
-                        onSearch={handleSearch} searching={searching}
-                        onReset={handleResetFilters}
-                        vinQuery={vinQuery} setVinQuery={setVinQuery}
-                        onVinDecode={handleVinDecode} vinLoading={vinLoading} vinDecoded={vinDecoded}
-                        onQuickSearch={handleSearchOem}
-                      />
-                      <Separator />
-                      <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
-                    </div>
-                  </SheetContent>
-                </Sheet>
+                {searchMode !== "vehicle_alt" && (
+                  <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <SheetTrigger asChild>
+                      <Button variant="outline" className="h-11 md:hidden px-3 mt-[2.75rem]">
+                        <SlidersHorizontal className="w-4 h-4" />
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-80 overflow-y-auto">
+                      <SheetHeader><SheetTitle>Filtry a historie</SheetTitle></SheetHeader>
+                      <div className="mt-4 space-y-4">
+                        <Filters
+                          searchMode={searchMode} brand={brand} setBrand={setBrand}
+                          model={model} setModel={setModel} motor={motor} setMotor={setMotor}
+                          category={category} setCategory={setCategory}
+                          subCategory={subCategory} setSubCategory={setSubCategory}
+                          filters={filters} setFilters={setFilters}
+                          onSearch={handleSearch} searching={searching}
+                          onReset={handleResetFilters}
+                          vinQuery={vinQuery} setVinQuery={setVinQuery}
+                          onVinDecode={handleVinDecode} vinLoading={vinLoading} vinDecoded={vinDecoded}
+                          onQuickSearch={handleSearchOem}
+                        />
+                        <Separator />
+                        <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
+
               </div>
 
               {/* Inline vehicle selectors */}

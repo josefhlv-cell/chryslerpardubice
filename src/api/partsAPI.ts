@@ -440,9 +440,10 @@ export async function searchByCategory(
       }
     }
 
-    // ---- Step 3: If still few alternatives, trigger external catalog-search (BLOCKING) ----
+    // ---- Step 3: If still few alternatives, trigger external catalog-search only for precise drill-down ----
     const altCount = allResults.filter(r => ["sag", "autokelly"].includes(r.catalog_source)).length;
-    if (altCount < 3 && baseOems.length > 0) {
+    const isPreciseAlternativePath = Boolean(filters.brand && filters.model && filters.motor && searchTerm);
+    if (altCount < 3 && isPreciseAlternativePath && baseOems.length > 0) {
       const uncachedBatch = baseOems.slice(0, 5);
       try {
         const { data: extData } = await supabase.functions.invoke("catalog-search", {
@@ -479,6 +480,7 @@ export async function searchByCategory(
         // Non-critical: external search failed
       }
     }
+
   } else {
     // OEM mode: still fire background enrichment for future alt searches
     const localOems = [...new Set(allResults.map(r => normalizeOem(r.oem_number)).filter(Boolean))];
