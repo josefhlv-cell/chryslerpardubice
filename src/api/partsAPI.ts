@@ -374,7 +374,7 @@ export async function searchByCategory(
   if (sourceFilter === "alternatives" || sourceFilter === "all") {
     // Collect base OEM numbers from the OEM results found above
     // Also directly query parts_new for sag/autokelly entries matching vehicle filters
-    const altQueries: Promise<any>[] = [];
+    const altQueries: PromiseLike<any>[] = [];
 
     // Direct query: find SAG/AK parts that match the vehicle/category filters
     let altDirectQuery = supabase
