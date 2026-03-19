@@ -1,9 +1,10 @@
 /**
  * SearchBar Component
- * Main search input with mode tabs (part number, vehicle, VIN, EPC).
+ * Main search input with mode tabs (part number, vehicle OEM, vehicle alternatives, VIN, EPC).
+ * OEM vs Alternatives modes are visually distinct with clear descriptions.
  */
 
-import { Search, Loader2, Hash, Car, Tag, Layers } from "lucide-react";
+import { Search, Loader2, Hash, Car, Tag, Layers, ShieldCheck, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -19,12 +20,12 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
-const modeConfig: { mode: SearchMode; label: string; Icon: any }[] = [
-  { mode: "part_number", label: "Číslo dílu", Icon: Hash },
-  { mode: "vehicle_oem", label: "OEM", Icon: Car },
-  { mode: "vehicle_alt", label: "Náhrady", Icon: Layers },
-  { mode: "vin", label: "VIN", Icon: Tag },
-  { mode: "epc", label: "EPC", Icon: Layers },
+const modeConfig: { mode: SearchMode; label: string; shortLabel: string; Icon: any; description: string; colorClass: string }[] = [
+  { mode: "part_number", label: "Číslo dílu", shortLabel: "OEM #", Icon: Hash, description: "Hledat podle OEM čísla", colorClass: "" },
+  { mode: "vehicle_oem", label: "Originální díly", shortLabel: "Originál", Icon: ShieldCheck, description: "Originální díly Mopar", colorClass: "data-[active=true]:bg-blue-600 data-[active=true]:text-white" },
+  { mode: "vehicle_alt", label: "Náhrady za OEM", shortLabel: "Náhrady", Icon: RefreshCw, description: "Alternativy od SAG a AutoKelly", colorClass: "data-[active=true]:bg-amber-600 data-[active=true]:text-white" },
+  { mode: "vin", label: "VIN", shortLabel: "VIN", Icon: Tag, description: "Hledat podle VIN kódu", colorClass: "" },
+  { mode: "epc", label: "EPC", shortLabel: "EPC", Icon: Layers, description: "Prohlížeč dílů podle diagramu", colorClass: "" },
 ];
 
 const SearchBar = ({
@@ -41,27 +42,59 @@ const SearchBar = ({
       ? "Zadejte OEM číslo dílu (např. 68218951AA)..."
       : searchMode === "vin"
       ? "Hledat díl po dekódování VIN..."
+      : searchMode === "vehicle_oem"
+      ? "Hledat originální díl podle názvu nebo kategorie..."
+      : searchMode === "vehicle_alt"
+      ? "Hledat náhrady za OEM díly..."
       : "Název nebo číslo dílu...";
+
+  const isVehicleMode = searchMode === "vehicle_oem" || searchMode === "vehicle_alt";
 
   return (
     <div className="space-y-3">
       {/* Mode tabs */}
       <div className="flex gap-1 p-0.5 rounded-lg bg-secondary">
-        {modeConfig.map(({ mode, label, Icon }) => (
-          <button
-            key={mode}
-            onClick={() => onModeChange(mode)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs font-medium transition-all ${
-              searchMode === mode
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{label}</span>
-          </button>
-        ))}
+        {modeConfig.map(({ mode, label, shortLabel, Icon, colorClass }) => {
+          const isActive = searchMode === mode;
+          return (
+            <button
+              key={mode}
+              data-active={isActive}
+              onClick={() => onModeChange(mode)}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs font-medium transition-all ${
+                isActive
+                  ? colorClass || "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{label}</span>
+              <span className="sm:hidden">{shortLabel}</span>
+            </button>
+          );
+        })}
       </div>
+
+      {/* Active mode description banner for vehicle modes */}
+      {isVehicleMode && (
+        <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
+          searchMode === "vehicle_oem"
+            ? "bg-blue-50 text-blue-800 border border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800"
+            : "bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800"
+        }`}>
+          {searchMode === "vehicle_oem" ? (
+            <>
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              <span><strong>Originální díly</strong> — zobrazují se pouze originální díly Mopar/FCA pro vybrané vozidlo.</span>
+            </>
+          ) : (
+            <>
+              <RefreshCw className="w-4 h-4 shrink-0" />
+              <span><strong>Značkové náhrady</strong> — alternativní díly od dodavatelů (Zdroj 2 a Zdroj 3) za výhodné ceny.</span>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Search input */}
       <div className="flex gap-2">

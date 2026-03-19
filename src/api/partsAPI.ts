@@ -295,6 +295,7 @@ export async function searchParts(
 
 /**
  * Search by category (vehicle / EPC mode)
+ * sourceFilter: "oem" = only originals, "alternatives" = SAG/AutoKelly only, "all" = everything
  */
 export async function searchByCategory(
   searchTerm: string,
@@ -304,13 +305,18 @@ export async function searchByCategory(
 ): Promise<SearchResult> {
   const allResults: PartResult[] = [];
 
-  // Build parts_new query with vehicle filters
+  // ---- Step 1: Always get OEM parts first (to collect OEM numbers for alt lookup) ----
   let pnQuery = supabase
     .from("parts_new")
     .select(
       "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source",
       { count: "exact" }
     );
+
+  // For OEM mode: exclude sag/autokelly. For alternatives: we still need OEM numbers as base.
+  if (sourceFilter === "oem") {
+    pnQuery = pnQuery.not("catalog_source", "in", '("sag","autokelly")');
+  }
 
   if (searchTerm) {
     pnQuery = pnQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
@@ -321,94 +327,178 @@ export async function searchByCategory(
 
   pnQuery = pnQuery.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
 
-  // Build parts_catalog query with brand filter
-  let pcQuery = supabase
-    .from("parts_catalog")
-    .select("id, name, oem_code, price, brand, category, available", { count: "exact" });
+  // parts_catalog (CSV) — only for OEM mode
+  let pcQuery = sourceFilter !== "alternatives"
+    ? supabase
+        .from("parts_catalog")
+        .select("id, name, oem_code, price, brand, category, available", { count: "exact" })
+    : null;
 
-  if (searchTerm) {
-    pcQuery = pcQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+  if (pcQuery) {
+    if (searchTerm) pcQuery = pcQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+    if (filters.brand) pcQuery = pcQuery.ilike("brand", `%${filters.brand}%`);
+    pcQuery = pcQuery.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
   }
-  if (filters.brand) {
-    pcQuery = pcQuery.ilike("brand", `%${filters.brand}%`);
+
+  const [pnRes, pcRes] = await Promise.all([
+    pnQuery,
+    pcQuery || Promise.resolve({ data: null, count: 0 }),
+  ]);
+
+  // Collect OEM results (needed as reference OEM numbers even in alternatives mode)
+  const oemResults: PartResult[] = [];
+  if (pnRes.data) {
+    for (const p of pnRes.data) {
+      const mapped = mapToPartResult(p, p.catalog_source || "mopar");
+      if (sourceFilter !== "alternatives" || !["sag", "autokelly"].includes(mapped.catalog_source)) {
+        oemResults.push(mapped);
+      }
+      // Always add to allResults if in OEM or all mode
+      if (sourceFilter !== "alternatives") {
+        allResults.push(mapped);
+      }
+    }
   }
-
-  pcQuery = pcQuery.range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
-
-  const [pnRes, pcRes] = await Promise.all([pnQuery, pcQuery]);
-
-  if (pnRes.data) allResults.push(...pnRes.data.map((p) => mapToPartResult(p, "mopar")));
-  if (pcRes.data) {
+  if (pcRes && (pcRes as any).data) {
     const existingOems = new Set(allResults.map((r) => normalizeOem(r.oem_number)));
-    for (const item of pcRes.data) {
-      if (!existingOems.has(normalizeOem(item.oem_code))) allResults.push(mapToPartResult(item, "csv"));
+    for (const item of (pcRes as any).data) {
+      if (!existingOems.has(normalizeOem(item.oem_code))) {
+        const mapped = mapToPartResult(item, "csv");
+        oemResults.push(mapped);
+        if (sourceFilter !== "alternatives") allResults.push(mapped);
+      }
     }
   }
 
-  // Enrich with alternatives from external sources (SAG, AutoKelly)
-  // Collect unique OEM numbers from local results and query catalog-search
-  const localOems = [...new Set(allResults.map(r => normalizeOem(r.oem_number)).filter(Boolean))];
-  if (localOems.length > 0) {
-    try {
-      // Query up to 10 OEMs at a time to avoid overloading
-      const batch = localOems.slice(0, 10);
+  // ---- Step 2: For alternatives or all mode — find SAG/AK parts ----
+  if (sourceFilter === "alternatives" || sourceFilter === "all") {
+    // Collect base OEM numbers from the OEM results found above
+    // Also directly query parts_new for sag/autokelly entries matching vehicle filters
+    const altQueries: Promise<any>[] = [];
 
-      // Also check DB for already-cached SAG/AK entries
+    // Direct query: find SAG/AK parts that match the vehicle/category filters
+    let altDirectQuery = supabase
+      .from("parts_new")
+      .select(
+        "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source"
+      )
+      .in("catalog_source", ["sag", "autokelly"])
+      .gt("price_with_vat", 0);
+
+    if (filters.brand) {
+      altDirectQuery = altDirectQuery.or(`compatible_vehicles.ilike.%${filters.brand}%,family.ilike.%${filters.brand}%`);
+    }
+    if (searchTerm) {
+      altDirectQuery = altDirectQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+    }
+    altDirectQuery = altDirectQuery.limit(100);
+    altQueries.push(altDirectQuery);
+
+    // Also look up by OEM-number prefix match
+    const baseOems = [...new Set([
+      ...oemResults.map(r => normalizeOem(r.oem_number)),
+      ...((pnRes.data || []) as any[])
+        .filter((p: any) => !["sag", "autokelly"].includes(p.catalog_source))
+        .map((p: any) => normalizeOem(p.oem_number))
+    ].filter(Boolean))];
+
+    if (baseOems.length > 0) {
+      const batch = baseOems.slice(0, 20);
       const sagOems = batch.map(o => `SAG-${o}`);
       const akOems = batch.map(o => `AK-${o}`);
-      const { data: cachedAlts } = await supabase
-        .from("parts_new")
-        .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
-        .in("oem_number", [...sagOems, ...akOems]);
+      altQueries.push(
+        supabase
+          .from("parts_new")
+          .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+          .in("oem_number", [...sagOems, ...akOems])
+          .gt("price_with_vat", 0)
+      );
+    }
 
-      if (cachedAlts) {
-        const validAlts = cachedAlts.filter(p =>
-          (p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0
-        );
-        for (const alt of validAlts) {
-          const mapped = mapToPartResult(alt, alt.catalog_source || "sag");
-          const exists = allResults.some(r =>
-            r.catalog_source === mapped.catalog_source &&
-            normalizeOem(r.oem_number) === normalizeOem(mapped.oem_number) &&
-            r.manufacturer === mapped.manufacturer
-          );
-          if (!exists) allResults.push(mapped);
+    const altResults = await Promise.all(altQueries);
+    const existingIds = new Set(allResults.map(r => r.id));
+
+    for (const res of altResults) {
+      if (res.data) {
+        for (const p of res.data) {
+          if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0) {
+            const mapped = mapToPartResult(p, p.catalog_source);
+            if (!existingIds.has(mapped.id)) {
+              // Extra dedup by catalog_source + normalized OEM + manufacturer
+              const dedupKey = `${mapped.catalog_source}:${normalizeOem(mapped.oem_number)}:${(mapped.manufacturer || '').toLowerCase()}`;
+              const isDup = allResults.some(r => 
+                `${r.catalog_source}:${normalizeOem(r.oem_number)}:${(r.manufacturer || '').toLowerCase()}` === dedupKey
+              );
+              if (!isDup) {
+                allResults.push(mapped);
+                existingIds.add(mapped.id);
+              }
+            }
+          }
         }
       }
+    }
 
-      // Fire external search in background for OEMs not yet cached
-      const uncachedOems = batch.filter(oem => {
-        const hasSag = cachedAlts?.some(a => a.oem_number === `SAG-${oem}` && a.price_with_vat > 0);
-        const hasAk = cachedAlts?.some(a => a.oem_number === `AK-${oem}` && a.price_with_vat > 0);
-        return !hasSag || !hasAk;
-      });
-
-      if (uncachedOems.length > 0) {
-        // Non-blocking: trigger catalog-search to cache results for next time
-        supabase.functions.invoke("catalog-search", {
-          body: { oemCodes: uncachedOems },
-        }).then(({ data: extData }) => {
-          // Results are cached in DB by the edge function automatically
-          console.log(`[searchByCategory] Triggered catalog-search for ${uncachedOems.length} OEMs`);
-        }).catch(() => {
-          // Silently ignore background fetch errors
+    // ---- Step 3: If still few alternatives, trigger external catalog-search (BLOCKING) ----
+    const altCount = allResults.filter(r => ["sag", "autokelly"].includes(r.catalog_source)).length;
+    if (altCount < 3 && baseOems.length > 0) {
+      const uncachedBatch = baseOems.slice(0, 5);
+      try {
+        const { data: extData } = await supabase.functions.invoke("catalog-search", {
+          body: { oemCodes: uncachedBatch },
         });
+
+        // After edge function caches results, re-fetch from DB
+        if (extData?.results) {
+          const sagOems2 = uncachedBatch.map(o => `SAG-${o}`);
+          const akOems2 = uncachedBatch.map(o => `AK-${o}`);
+          const { data: freshAlts } = await supabase
+            .from("parts_new")
+            .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+            .in("oem_number", [...sagOems2, ...akOems2])
+            .gt("price_with_vat", 0);
+
+          if (freshAlts) {
+            for (const p of freshAlts) {
+              const mapped = mapToPartResult(p, p.catalog_source || "sag");
+              if (!existingIds.has(mapped.id)) {
+                const dedupKey = `${mapped.catalog_source}:${normalizeOem(mapped.oem_number)}:${(mapped.manufacturer || '').toLowerCase()}`;
+                const isDup = allResults.some(r =>
+                  `${r.catalog_source}:${normalizeOem(r.oem_number)}:${(r.manufacturer || '').toLowerCase()}` === dedupKey
+                );
+                if (!isDup) {
+                  allResults.push(mapped);
+                  existingIds.add(mapped.id);
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Non-critical: external search failed
       }
-    } catch (err) {
-      console.warn("[searchByCategory] Alt enrichment failed:", err);
+    }
+  } else {
+    // OEM mode: still fire background enrichment for future alt searches
+    const localOems = [...new Set(allResults.map(r => normalizeOem(r.oem_number)).filter(Boolean))];
+    if (localOems.length > 0) {
+      const batch = localOems.slice(0, 10);
+      supabase.functions.invoke("catalog-search", {
+        body: { oemCodes: batch },
+      }).catch(() => {});
     }
   }
 
   await enrichWithSupersessions(allResults);
-  
-  // Apply source filter: "oem" = only original sources, "alternatives" = only SAG/AutoKelly
+
+  // Final source filter (safety net)
   let sourceFiltered = allResults;
   if (sourceFilter === "oem") {
     sourceFiltered = allResults.filter(p => !["sag", "autokelly"].includes(p.catalog_source));
   } else if (sourceFilter === "alternatives") {
     sourceFiltered = allResults.filter(p => ["sag", "autokelly"].includes(p.catalog_source));
   }
-  
+
   const filtered = applyFilters(sourceFiltered, filters);
   return { results: sortByPriority(filtered), totalCount: sourceFiltered.length };
 }
