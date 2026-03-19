@@ -690,7 +690,7 @@ async function searchAutoKelly(
   try {
     console.log(`AutoKelly: searching ${oemCode} via Firecrawl`);
 
-    // AutoKelly search URL pattern: login first, then search
+    // AutoKelly shows results without login for basic search — use direct scrape
     const searchResultUrl = `https://www.autokelly.cz/Search/ResultList?searchTerm=${encodeURIComponent(oemCode)}`;
 
     const fcResp = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -700,104 +700,29 @@ async function searchAutoKelly(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: 'https://www.autokelly.cz',
+        url: searchResultUrl,
         formats: ['markdown', 'html'],
-        waitFor: 5000,
+        waitFor: 8000,
         onlyMainContent: false,
         timeout: 60000,
         actions: [
-          // Step 1: Wait for page to load
+          { type: 'wait', milliseconds: 5000 },
+          // Accept cookies if banner appears
+          {
+            type: 'executeJavascript',
+            script: `
+              (function() {
+                const btns = document.querySelectorAll('button, a');
+                for (const b of btns) {
+                  const txt = (b.textContent || '').toLowerCase();
+                  if (txt.includes('souhlasím') || txt.includes('přijmout') || txt.includes('accept')) {
+                    b.click(); break;
+                  }
+                }
+              })();
+            `
+          },
           { type: 'wait', milliseconds: 3000 },
-          // Step 2: Click login button to open modal
-          {
-            type: 'executeJavascript',
-            script: `
-              (function() {
-                // Click the "Přihlášení" link to open login modal
-                const loginLinks = document.querySelectorAll('a');
-                for (const a of loginLinks) {
-                  if ((a.textContent || '').trim().includes('Přihlášení')) {
-                    a.click();
-                    break;
-                  }
-                }
-              })();
-            `
-          },
-          { type: 'wait', milliseconds: 2000 },
-          // Step 3: Fill login form
-          {
-            type: 'executeJavascript',
-            script: `
-              (function() {
-                // Find the login modal inputs
-                const modal = document.querySelector('#modal-simple') || document;
-                const inputs = modal.querySelectorAll('input');
-                let emailInput = null, passInput = null;
-                
-                for (const inp of inputs) {
-                  const t = (inp.type || '').toLowerCase();
-                  const name = (inp.name || '').toLowerCase();
-                  const placeholder = (inp.placeholder || '').toLowerCase();
-                  
-                  if (t === 'password') {
-                    passInput = inp;
-                  } else if (t === 'text' || t === 'email' || name.includes('user') || name.includes('email') || placeholder.includes('email') || placeholder.includes('uživatel')) {
-                    if (!emailInput) emailInput = inp;
-                  }
-                }
-                
-                // Fallback: first two visible inputs
-                if (!emailInput || !passInput) {
-                  const visibleInputs = Array.from(inputs).filter(i => i.offsetParent !== null && i.type !== 'hidden');
-                  if (visibleInputs.length >= 2) {
-                    emailInput = emailInput || visibleInputs[0];
-                    passInput = passInput || visibleInputs[1];
-                  }
-                }
-                
-                function setVal(el, val) {
-                  if (!el) return;
-                  el.focus();
-                  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-                  if (nativeSetter) nativeSetter.call(el, val);
-                  else el.value = val;
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                  el.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                
-                if (emailInput) setVal(emailInput, '${email}');
-                if (passInput) setVal(passInput, '${password}');
-                
-                // Click submit button
-                setTimeout(() => {
-                  const btns = modal.querySelectorAll('button, input[type="submit"]');
-                  for (const btn of btns) {
-                    const txt = ((btn.textContent || '') + (btn.value || '')).toLowerCase();
-                    if (txt.includes('přihlásit') || btn.type === 'submit') {
-                      btn.click();
-                      break;
-                    }
-                  }
-                }, 500);
-                
-                document.title = 'AK_FILLED:email=' + !!emailInput + ',pass=' + !!passInput;
-              })();
-            `
-          },
-          // Step 4: Wait for login to complete
-          { type: 'wait', milliseconds: 8000 },
-          // Step 5: Navigate to search results
-          {
-            type: 'executeJavascript',
-            script: `
-              document.title = 'AK_PRE_SEARCH:' + window.location.href;
-              window.location.href = '${searchResultUrl}';
-            `
-          },
-          // Step 6: Wait for search results to render
-          { type: 'wait', milliseconds: 8000 },
-          // Step 7: Scrape
           { type: 'scrape' },
         ],
       }),
@@ -815,10 +740,10 @@ async function searchAutoKelly(
     console.log(`AutoKelly markdown (first 1500): ${markdown.substring(0, 1500)}`);
 
     // Check if we're still on login page
-    const stillOnLogin = markdown.includes('Uživatelské jméno / Email') && markdown.includes('Heslo') && !markdown.includes('Odhlásit') && !markdown.includes('Košík');
+    const stillOnLogin = markdown.includes('Uživatelské jméno / Email') && markdown.includes('Heslo') && !markdown.includes('Odhlásit') && !markdown.includes('Košík') && !markdown.includes('Výsledky');
     if (stillOnLogin) {
-      console.log('AutoKelly: Still on login page, authentication failed');
-      return empty;
+      console.log('AutoKelly: Still on login page, trying without login');
+      // Even if login wall appears, there might be results visible
     }
 
     // Check for 404 or no results
