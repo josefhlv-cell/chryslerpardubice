@@ -392,7 +392,7 @@ export async function searchByCategory(
       altDirectQuery = altDirectQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
     }
     altDirectQuery = altDirectQuery.limit(100);
-    altQueries.push(altDirectQuery);
+    altQueries.push(altDirectQuery.then(res => res));
 
     // Also look up by OEM-number prefix match
     const baseOems = [...new Set([
@@ -412,6 +412,7 @@ export async function searchByCategory(
           .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
           .in("oem_number", [...sagOems, ...akOems])
           .gt("price_with_vat", 0)
+          .then(res => res)
       );
     }
 
