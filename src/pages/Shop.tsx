@@ -98,6 +98,19 @@ const Shop = () => {
   const isBusinessActive = profile?.account_type === "business" && profile?.status === "active";
   const discountPercent = isBusinessActive ? (profile?.discount_percent ?? 0) : 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const alternativeSubcategories = category ? (subCategoriesMap[category] || []) : [];
+  const alternativeRequiresSubcategory = searchMode === "vehicle_alt" && alternativeSubcategories.length > 0;
+  const isAlternativePathReady =
+    searchMode !== "vehicle_alt" ||
+    Boolean(brand && model && motor && category && (!alternativeRequiresSubcategory || subCategory));
+  const nextAlternativeStep =
+    !brand ? "značku" :
+    !model ? "model" :
+    !motor ? "motorizaci" :
+    !category ? "hlavní skupinu dílů" :
+    alternativeRequiresSubcategory && !subCategory ? "podskupinu dílů" :
+    null;
+  const alternativePathSummary = [brand, model, motor, category, subCategory].filter(Boolean).join(" › ");
 
   // ---- Debounce ----
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -119,10 +132,12 @@ const Shop = () => {
 
   // ---- Search logic ----
   const doSearch = useCallback(async (searchQuery: string, pageNum: number) => {
-    // In vehicle mode, allow search with brand only (no query/category required)
+    const isAlternativeSearch = searchMode === "vehicle_alt";
     const hasVehicleParams = brand || model || motor;
+
+    if (isAlternativeSearch && !isAlternativePathReady) return;
     if (!searchQuery && !category && !subCategory && !hasVehicleParams) return;
-    
+
     const signal = cancelPrevious();
     setSearching(true);
     setPriceFetching(true);
@@ -157,8 +172,8 @@ const Shop = () => {
         const searchTerm = subCategory || category || searchQuery || "";
         result = await searchByCategory(searchTerm, pageNum, mergedFilters, "alternatives");
         if (result.results.length === 0) {
-          const desc = [brand, model, category].filter(Boolean).join(" / ");
-          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné náhrady.` : "Vyberte značku a kategorii pro vyhledání.");
+          const desc = [brand, model, motor, category, subCategory].filter(Boolean).join(" / ");
+          toast.info(desc ? `Pro "${desc}" nebyly nalezeny žádné náhrady.` : "Dokončete celou cestu katalogem.");
         }
       } else if (searchQuery) {
         result = await searchParts(searchQuery, pageNum, mergedFilters);
@@ -176,7 +191,7 @@ const Shop = () => {
         if (result.results.length > 0) setSearchCollapsed(true);
       }
     } catch (err: any) {
-      if (signal.aborted) return; // Silently ignore aborted requests
+      if (signal.aborted) return;
       toast.error("Chyba: " + err.message);
       setResults([]);
     } finally {
@@ -185,7 +200,7 @@ const Shop = () => {
         setPriceFetching(false);
       }
     }
-  }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry]);
+  }, [category, subCategory, searchMode, brand, model, motor, filters, addEntry, isAlternativePathReady]);
 
   // Auto-search disabled for part_number mode to prevent request flooding
   // User must press Enter or click search button
@@ -193,20 +208,31 @@ const Shop = () => {
 
   const handleSearch = () => { setPage(0); doSearch(query, 0); };
 
-  // Auto-search when category/subcategory changes in vehicle_alt mode
-  const prevAltCategory = useRef({ category: "", subCategory: "" });
+  // Auto-search only after the full AutoKelly-style path is selected
+  const prevAltPath = useRef("");
   useEffect(() => {
     if (searchMode !== "vehicle_alt") return;
-    if (!brand) return;
-    // Only trigger when category or subcategory actually changed
-    const changed = prevAltCategory.current.category !== category || prevAltCategory.current.subCategory !== subCategory;
-    prevAltCategory.current = { category, subCategory };
-    if (changed && (category || subCategory)) {
-      setPage(0);
-      doSearch("", 0);
-    }
-  }, [searchMode, brand, model, motor, category, subCategory, doSearch]);
 
+    const pathKey = [brand, model, motor, category, subCategory].join("|");
+    const changed = prevAltPath.current !== pathKey;
+    prevAltPath.current = pathKey;
+
+    if (!changed) return;
+
+    abortRef.current?.abort();
+    setSearchCollapsed(false);
+
+    if (!isAlternativePathReady) {
+      setResults(null);
+      setTotalCount(0);
+      setSearching(false);
+      setPriceFetching(false);
+      return;
+    }
+
+    setPage(0);
+    doSearch("", 0);
+  }, [searchMode, brand, model, motor, category, subCategory, isAlternativePathReady, doSearch]);
   // ---- VIN decode ----
   const handleVinDecode = async () => {
     if (!vinQuery || vinQuery.length < 11) { toast.error("Zadejte platný VIN"); return; }
@@ -428,100 +454,162 @@ const Shop = () => {
                   />
                 </div>
                 {/* Mobile filter toggle */}
-                <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-                  <SheetTrigger asChild>
-                    <Button variant="outline" className="h-11 md:hidden px-3 mt-[2.75rem]">
-                      <SlidersHorizontal className="w-4 h-4" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="w-80 overflow-y-auto">
-                    <SheetHeader><SheetTitle>Filtry a historie</SheetTitle></SheetHeader>
-                    <div className="mt-4 space-y-4">
-                      <Filters
-                        searchMode={searchMode} brand={brand} setBrand={setBrand}
-                        model={model} setModel={setModel} motor={motor} setMotor={setMotor}
-                        category={category} setCategory={setCategory}
-                        subCategory={subCategory} setSubCategory={setSubCategory}
-                        filters={filters} setFilters={setFilters}
-                        onSearch={handleSearch} searching={searching}
-                        onReset={handleResetFilters}
-                        vinQuery={vinQuery} setVinQuery={setVinQuery}
-                        onVinDecode={handleVinDecode} vinLoading={vinLoading} vinDecoded={vinDecoded}
-                        onQuickSearch={handleSearchOem}
-                      />
-                      <Separator />
-                      <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
-                    </div>
-                  </SheetContent>
-                </Sheet>
+                {searchMode !== "vehicle_alt" && (
+                  <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <SheetTrigger asChild>
+                      <Button variant="outline" className="h-11 md:hidden px-3 mt-[2.75rem]">
+                        <SlidersHorizontal className="w-4 h-4" />
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-80 overflow-y-auto">
+                      <SheetHeader><SheetTitle>Filtry a historie</SheetTitle></SheetHeader>
+                      <div className="mt-4 space-y-4">
+                        <Filters
+                          searchMode={searchMode} brand={brand} setBrand={setBrand}
+                          model={model} setModel={setModel} motor={motor} setMotor={setMotor}
+                          category={category} setCategory={setCategory}
+                          subCategory={subCategory} setSubCategory={setSubCategory}
+                          filters={filters} setFilters={setFilters}
+                          onSearch={handleSearch} searching={searching}
+                          onReset={handleResetFilters}
+                          vinQuery={vinQuery} setVinQuery={setVinQuery}
+                          onVinDecode={handleVinDecode} vinLoading={vinLoading} vinDecoded={vinDecoded}
+                          onQuickSearch={handleSearchOem}
+                        />
+                        <Separator />
+                        <HistoryList history={history} onSelect={handleSearchOem} onRemove={removeEntry} onClear={clearHistory} />
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                )}
+
               </div>
 
-              {/* Inline vehicle selectors — vehicle_alt: always visible (all screens); others: mobile only */}
+              {/* Inline vehicle selectors */}
               {(searchMode === "vehicle_oem" || searchMode === "vehicle_alt" || searchMode === "epc") && (
-                <div className={searchMode === "vehicle_alt" ? "space-y-2" : "md:hidden space-y-2"}>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
-                      <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
-                    </Select>
-                    {(brand && catalogTree[brand]) ? (
-                      <Select value={model} onValueChange={(v) => { setModel(v); setMotor(""); }}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger>
-                        <SelectContent>{Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                      </Select>
-                    ) : (
-                      <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger><SelectContent /></Select>
-                    )}
-                    {(brand && model && catalogTree[brand]?.[model]) ? (
-                      <Select value={motor} onValueChange={setMotor}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
-                        <SelectContent>{catalogTree[brand][model].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-                      </Select>
-                    ) : (
-                      <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger><SelectContent /></Select>
-                    )}
+                searchMode === "vehicle_alt" ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-border/40 bg-card/70 p-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Katalogová cesta</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {["Síť", "Osobní automobil", "Náhradní díly"].map((step) => (
+                            <span key={step} className="rounded-full bg-secondary px-2 py-1 text-[10px] font-medium text-foreground">
+                              {step}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3">
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">1. Značka</p>
+                          <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte značku" /></SelectTrigger>
+                            <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">2. Model</p>
+                          <Select value={model} disabled={!brand || !catalogTree[brand]} onValueChange={(v) => { setModel(v); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte model" /></SelectTrigger>
+                            <SelectContent>{brand && catalogTree[brand] ? Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>) : null}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">3. Motorizace</p>
+                          <Select value={motor} disabled={!brand || !model || !catalogTree[brand]?.[model]} onValueChange={(v) => { setMotor(v); setCategory(""); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte motorizaci" /></SelectTrigger>
+                            <SelectContent>{brand && model && catalogTree[brand]?.[model] ? catalogTree[brand][model].map((engineOption) => <SelectItem key={engineOption} value={engineOption}>{engineOption}</SelectItem>) : null}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">4. Hlavní skupina</p>
+                          <Select value={category} disabled={!motor} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
+                            <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte hlavní skupinu" /></SelectTrigger>
+                            <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+
+                        {alternativeSubcategories.length > 0 && (
+                          <div className="space-y-1.5">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">5. Podskupina</p>
+                            <Select value={subCategory} disabled={!category} onValueChange={setSubCategory}>
+                              <SelectTrigger className="h-10 text-sm"><SelectValue placeholder="Vyberte podskupinu" /></SelectTrigger>
+                              <SelectContent>{alternativeSubcategories.map((sub) => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div className="rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-xs">
+                          {isAlternativePathReady ? (
+                            <div className="flex items-center gap-2 text-primary">
+                              {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <CheckCircle className="w-3.5 h-3.5 shrink-0" />}
+                              <span className="font-medium">
+                                {searching ? "Načítám náhrady podle vybrané cesty..." : `Vybraná cesta: ${alternativePathSummary}`}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                              <span>Pokračujte výběrem: <span className="font-medium text-foreground">{nextAlternativeStep}</span></span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  {/* Inline category */}
-                  <div className={searchMode === "vehicle_alt" ? "grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2"}>
-                    <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
-                      <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
-                      <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                    </Select>
-                    {/* In vehicle_alt mode, no search button — auto-searches. Others keep the button. */}
-                    {searchMode !== "vehicle_alt" && (category || brand) && (
-                      <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
-                        {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
-                        Hledat
-                      </Button>
-                    )}
-                    {searchMode === "vehicle_alt" && searching && (
-                      <div className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Hledám náhrady...</span>
+                ) : (
+                  <div className="md:hidden space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select value={brand} onValueChange={(v) => { setBrand(v); setModel(""); setMotor(""); setCategory(""); setSubCategory(""); }}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Značka" /></SelectTrigger>
+                        <SelectContent>{brands.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {(brand && catalogTree[brand]) ? (
+                        <Select value={model} onValueChange={(v) => { setModel(v); setMotor(""); }}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger>
+                          <SelectContent>{Object.keys(catalogTree[brand]).map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Model" /></SelectTrigger><SelectContent /></Select>
+                      )}
+                      {(brand && model && catalogTree[brand]?.[model]) ? (
+                        <Select value={motor} onValueChange={setMotor}>
+                          <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
+                          <SelectContent>{catalogTree[brand][model].map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
+                        </Select>
+                      ) : (
+                        <Select disabled><SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger><SelectContent /></Select>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select value={category} onValueChange={(v) => { setCategory(v); setSubCategory(""); }}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Kategorie" /></SelectTrigger>
+                        <SelectContent>{partCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {(category || brand) && (
+                        <Button size="sm" className="h-9" onClick={handleSearch} disabled={searching}>
+                          {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Search className="w-3.5 h-3.5 mr-1" />}
+                          Hledat
+                        </Button>
+                      )}
+                    </div>
+                    {subCategoriesMap[category] && (
+                      <div className="flex flex-wrap gap-1">
+                        {subCategoriesMap[category].map((sub) => (
+                          <button key={sub} onClick={() => setSubCategory(subCategory === sub ? "" : sub)}
+                            className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${subCategory === sub ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                            {sub}
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
-                  {subCategoriesMap[category] && (
-                    <div className="flex flex-wrap gap-1">
-                      {subCategoriesMap[category].map((sub) => (
-                        <button key={sub} onClick={() => setSubCategory(subCategory === sub ? "" : sub)}
-                          className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${subCategory === sub ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
-                          {sub}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {/* Breadcrumb-like summary for vehicle_alt */}
-                  {searchMode === "vehicle_alt" && brand && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground flex-wrap">
-                      <span className="font-medium text-foreground">{brand}</span>
-                      {model && <><span>›</span><span className="font-medium text-foreground">{model}</span></>}
-                      {motor && <><span>›</span><span className="font-medium text-foreground">{motor}</span></>}
-                      {category && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{category}</span></>}
-                      {subCategory && <><span>›</span><span className="font-medium text-amber-600 dark:text-amber-400">{subCategory}</span></>}
-                    </div>
-                  )}
-                </div>
+                )
               )}
 
               {/* Inline VIN input — always visible in vin mode on mobile */}
@@ -761,17 +849,24 @@ const Shop = () => {
               </div>
             )}
 
-            {/* Vehicle_alt mode — prompt to select category when no results yet */}
-            {partType === "new" && searchMode === "vehicle_alt" && !searching && (!results || results.length === 0) && brand && !category && (
+            {/* Vehicle_alt mode — prompt to continue the AutoKelly-style path */}
+            {partType === "new" && searchMode === "vehicle_alt" && !searching && !results && !isAlternativePathReady && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center py-16 gap-3">
-                <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
-                  <RefreshCw className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                <div className="w-14 h-14 rounded-full bg-secondary flex items-center justify-center">
+                  <RefreshCw className="w-6 h-6 text-primary" />
                 </div>
-                <p className="text-sm font-medium">Vyberte kategorii dílů</p>
+                <p className="text-sm font-medium">Postupujte krok za krokem</p>
                 <p className="text-xs text-muted-foreground text-center max-w-xs">
-                  Pro zobrazení alternativních dílů od dodavatelů vyberte kategorii (např. Brzdy, Motor, Filtry...)
+                  {nextAlternativeStep
+                    ? `Další krok: vyberte ${nextAlternativeStep}. Jakmile dokončíte celou cestu, náhrady se načtou automaticky.`
+                    : "Dokončete celou cestu katalogem."}
                 </p>
+                {alternativePathSummary && (
+                  <p className="text-[11px] text-muted-foreground text-center max-w-xs">
+                    Aktuálně: <span className="font-medium text-foreground">{alternativePathSummary}</span>
+                  </p>
+                )}
               </motion.div>
             )}
 
