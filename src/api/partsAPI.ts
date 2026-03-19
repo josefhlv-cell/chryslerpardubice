@@ -812,27 +812,33 @@ export async function enrichEPCPrices(
     .select("oem_number, name, price_without_vat, price_with_vat, availability, last_price_update, catalog_source")
     .in("oem_number", unique);
 
-  // Also check for SAG alternatives already in DB
+  // Also check for SAG + AutoKelly alternatives already in DB
   const sagKeys = unique.map(oem => `SAG-${oem}`);
-  const { data: sagCached } = await supabase
+  const akKeys = unique.map(oem => `AK-${oem}`);
+  const { data: altCached } = await supabase
     .from("parts_new")
     .select("oem_number, name, price_without_vat, price_with_vat, availability, manufacturer, catalog_source")
-    .in("oem_number", sagKeys);
+    .in("oem_number", [...sagKeys, ...akKeys])
+    .gt("price_with_vat", 0);
 
-  // Populate from SAG cache — filter out invalid entries
-  if (sagCached) {
-    for (const s of sagCached) {
-      if (s.price_with_vat <= 0) continue; // Skip garbage entries
-      const originalOem = s.oem_number.replace(/^SAG-/, '');
+  // Populate from SAG/AK cache — filter out invalid entries
+  if (altCached) {
+    for (const s of altCached) {
+      const originalOem = s.oem_number.replace(/^(SAG|AK)-/, '');
       if (!alternativesMap.has(originalOem)) alternativesMap.set(originalOem, []);
-      alternativesMap.get(originalOem)!.push({
-        name: s.name,
-        price_without_vat: s.price_without_vat,
-        price_with_vat: s.price_with_vat,
-        availability: s.availability || 'unknown',
-        manufacturer: s.manufacturer || 'SAG',
-        catalog_source: 'sag',
-      });
+      // Avoid duplicates
+      const existing = alternativesMap.get(originalOem)!;
+      const dedupKey = `${s.catalog_source}:${s.name}`;
+      if (!existing.some(e => `${e.catalog_source}:${e.name}` === dedupKey)) {
+        existing.push({
+          name: s.name,
+          price_without_vat: s.price_without_vat,
+          price_with_vat: s.price_with_vat,
+          availability: s.availability || 'unknown',
+          manufacturer: s.manufacturer || (s.catalog_source === 'autokelly' ? 'AutoKelly' : 'SAG'),
+          catalog_source: s.catalog_source || 'sag',
+        });
+      }
     }
   }
 
