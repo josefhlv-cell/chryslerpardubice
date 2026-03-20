@@ -7,7 +7,6 @@ workflows:
         NODE_VERSION: "18"
       flutter: stable
       cocoapods: default
-      xcode: default
       java: openjdk-11
     scripts:
       - name: Install Node modules
