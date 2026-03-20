@@ -902,7 +902,7 @@ const Shop = () => {
                 <p className="text-xs text-muted-foreground text-center max-w-xs">
                   {searchMode === "vehicle_alt"
                     ? "Pro tuto kombinaci nebyly nalezeny aftermarket náhrady. Zkuste jinou kategorii nebo změňte motorizaci."
-                    : "Zkuste jiný dotaz, změňte filtry nebo přepněte na režim „Náhrady za OEM" pro více možností."}
+                    : 'Zkuste jiný dotaz, změňte filtry nebo přepněte na režim "Náhrady za OEM" pro více možností.'}
                 </p>
                 {searchMode !== "vehicle_alt" && (
                   <Button size="sm" variant="outline" className="text-xs mt-2" onClick={() => { setSearchMode("vehicle_alt"); setResults(null); }}>
