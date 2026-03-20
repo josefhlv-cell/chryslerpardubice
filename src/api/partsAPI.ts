@@ -873,19 +873,18 @@ export async function enrichEPCPrices(
           for (const r of data.results) {
             if (!r.found || r.price_with_vat <= 0) continue;
 
-            if (r.catalog_source === 'sag') {
-              // SAG alternative
+            if (r.catalog_source === 'sag' || r.catalog_source === 'autokelly') {
+              // SAG or AutoKelly alternative
               if (!alternativesMap.has(r.oem_number)) alternativesMap.set(r.oem_number, []);
-              // Avoid duplicates
               const existing = alternativesMap.get(r.oem_number)!;
-              if (!existing.some(e => e.catalog_source === 'sag' && e.name === r.name)) {
+              if (!existing.some(e => e.catalog_source === r.catalog_source && e.name === r.name)) {
                 existing.push({
                   name: r.name,
                   price_without_vat: r.price_without_vat,
                   price_with_vat: r.price_with_vat,
                   availability: r.availability || 'available',
-                  manufacturer: r.manufacturer || 'SAG',
-                  catalog_source: 'sag',
+                  manufacturer: r.manufacturer || (r.catalog_source === 'autokelly' ? 'AutoKelly' : 'SAG'),
+                  catalog_source: r.catalog_source,
                 });
               }
             } else {
