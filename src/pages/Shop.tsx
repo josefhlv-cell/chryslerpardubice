@@ -841,11 +841,32 @@ const Shop = () => {
               </ErrorBoundary>
             )}
 
-            {/* Loading */}
+            {/* Loading with skeleton cards */}
             {partType === "new" && searching && (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Vyhledávám v katalozích...</p>
+              <div className="space-y-3">
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Vyhledávám v katalozích (Mopar, SAG, AutoKelly)...</p>
+                </div>
+                {/* Skeleton cards */}
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="rounded-xl border border-border bg-card p-4 animate-pulse">
+                      <div className="flex gap-3">
+                        <div className="w-16 h-16 rounded-lg bg-muted" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-2/3 rounded bg-muted" />
+                          <div className="h-3 w-1/3 rounded bg-muted" />
+                          <div className="h-3 w-1/2 rounded bg-muted" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="h-5 w-20 rounded bg-muted" />
+                          <div className="h-3 w-16 rounded bg-muted" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -875,10 +896,19 @@ const Shop = () => {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center py-16 gap-3">
                 <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
-                  <Search className="w-6 h-6 text-muted-foreground" />
+                  <AlertTriangle className="w-6 h-6 text-muted-foreground" />
                 </div>
-                <p className="text-sm text-muted-foreground">Žádné výsledky</p>
-                <p className="text-xs text-muted-foreground">Zkuste jiný dotaz nebo změňte filtry</p>
+                <p className="text-sm font-medium">Žádné výsledky</p>
+                <p className="text-xs text-muted-foreground text-center max-w-xs">
+                  {searchMode === "vehicle_alt"
+                    ? "Pro tuto kombinaci nebyly nalezeny aftermarket náhrady. Zkuste jinou kategorii nebo změňte motorizaci."
+                    : "Zkuste jiný dotaz, změňte filtry nebo přepněte na režim „Náhrady za OEM" pro více možností."}
+                </p>
+                {searchMode !== "vehicle_alt" && (
+                  <Button size="sm" variant="outline" className="text-xs mt-2" onClick={() => { setSearchMode("vehicle_alt"); setResults(null); }}>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1" />Hledat náhrady
+                  </Button>
+                )}
               </motion.div>
             )}
 
