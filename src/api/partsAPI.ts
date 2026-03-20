@@ -134,14 +134,35 @@ export const sortByPriority = (parts: PartResult[]) =>
 export const enrichWithSupersessions = async (parts: PartResult[]) => {
   const oems = [...new Set(parts.map((p) => normalizeOem(p.oem_number)).filter(Boolean))];
   if (oems.length === 0) return;
-  const [byOld, byNew] = await Promise.all([
-    supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("old_oem_number", oems),
-    supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("new_oem_number", oems),
-  ]);
-  const supersededMap = new Map<string, string>();
-  const supersedesMap = new Map<string, string>();
-  byOld.data?.forEach((s) => supersededMap.set(s.old_oem_number, s.new_oem_number));
-  byNew.data?.forEach((s) => supersedesMap.set(s.new_oem_number, s.old_oem_number));
+
+  // Check cache for supersession mappings
+  const cachedSupersessions = await cacheGet<{ superseded: [string, string][]; supersedes: [string, string][] }>('oem_crossref', `supersession_batch_${oems.sort().join(',').slice(0, 100)}`);
+
+  let supersededMap: Map<string, string>;
+  let supersedesMap: Map<string, string>;
+
+  if (cachedSupersessions) {
+    supersededMap = new Map(cachedSupersessions.superseded);
+    supersedesMap = new Map(cachedSupersessions.supersedes);
+  } else {
+    const [byOld, byNew] = await Promise.all([
+      supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("old_oem_number", oems),
+      supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("new_oem_number", oems),
+    ]);
+    supersededMap = new Map<string, string>();
+    supersedesMap = new Map<string, string>();
+    byOld.data?.forEach((s) => supersededMap.set(s.old_oem_number, s.new_oem_number));
+    byNew.data?.forEach((s) => supersedesMap.set(s.new_oem_number, s.old_oem_number));
+
+    // Cache the mapping for 30 days
+    if (supersededMap.size > 0 || supersedesMap.size > 0) {
+      cacheSet('oem_crossref', `supersession_batch_${oems.sort().join(',').slice(0, 100)}`, {
+        superseded: [...supersededMap.entries()],
+        supersedes: [...supersedesMap.entries()],
+      });
+    }
+  }
+
   parts.forEach((p) => {
     const norm = normalizeOem(p.oem_number);
     if (!p.superseded_by) p.superseded_by = supersededMap.get(norm) || null;
@@ -873,19 +894,18 @@ export async function enrichEPCPrices(
           for (const r of data.results) {
             if (!r.found || r.price_with_vat <= 0) continue;
 
-            if (r.catalog_source === 'sag') {
-              // SAG alternative
+            if (r.catalog_source === 'sag' || r.catalog_source === 'autokelly') {
+              // SAG or AutoKelly alternative
               if (!alternativesMap.has(r.oem_number)) alternativesMap.set(r.oem_number, []);
-              // Avoid duplicates
               const existing = alternativesMap.get(r.oem_number)!;
-              if (!existing.some(e => e.catalog_source === 'sag' && e.name === r.name)) {
+              if (!existing.some(e => e.catalog_source === r.catalog_source && e.name === r.name)) {
                 existing.push({
                   name: r.name,
                   price_without_vat: r.price_without_vat,
                   price_with_vat: r.price_with_vat,
                   availability: r.availability || 'available',
-                  manufacturer: r.manufacturer || 'SAG',
-                  catalog_source: 'sag',
+                  manufacturer: r.manufacturer || (r.catalog_source === 'autokelly' ? 'AutoKelly' : 'SAG'),
+                  catalog_source: r.catalog_source,
                 });
               }
             } else {
