@@ -100,46 +100,45 @@ const Filters = ({
 
   const [sourceStats, setSourceStats] = useState<SourceStats[]>([]);
   const [brandStats, setBrandStats] = useState<BrandStats[]>([]);
+  const [statsLoaded, setStatsLoaded] = useState(false);
 
   useEffect(() => {
+    if (statsLoaded) return;
     const fetchStats = async () => {
-      const { data } = await supabase
-        .from("parts_new")
-        .select("catalog_source, family, compatible_vehicles");
-      if (data) {
-        // Source counts
-        const counts: Record<string, number> = {};
-        data.forEach((r: any) => {
-          const src = r.catalog_source || "unknown";
-          counts[src] = (counts[src] || 0) + 1;
+      try {
+        // Use lightweight count queries instead of fetching all rows
+        const sources = ["mopar", "epc-ai", "sag", "autokelly", "csv", "intercars"];
+        const sourcePromises = sources.map(async (src) => {
+          const { count } = await supabase
+            .from("parts_new")
+            .select("id", { count: "exact", head: true })
+            .eq("catalog_source", src);
+          return { source: src, count: count ?? 0 };
         });
-        setSourceStats(
-          Object.entries(counts)
-            .map(([source, count]) => ({ source, count }))
-            .sort((a, b) => b.count - a.count)
-        );
 
-        // Brand counts from family / compatible_vehicles
-        const brandCounts: Record<string, number> = {};
         const targetBrands = ["Chrysler", "Dodge", "Jeep", "RAM"];
-        data.forEach((r: any) => {
-          const text = `${r.family || ""} ${r.compatible_vehicles || ""}`.toLowerCase();
-          for (const b of targetBrands) {
-            if (text.includes(b.toLowerCase())) {
-              brandCounts[b] = (brandCounts[b] || 0) + 1;
-              break; // count each part only once
-            }
-          }
+        const brandPromises = targetBrands.map(async (b) => {
+          const { count } = await supabase
+            .from("parts_new")
+            .select("id", { count: "exact", head: true })
+            .or(`compatible_vehicles.ilike.%${b}%,family.ilike.%${b}%`);
+          return { brand: b, count: count ?? 0 };
         });
-        setBrandStats(
-          targetBrands
-            .map((b) => ({ brand: b, count: brandCounts[b] || 0 }))
-            .sort((a, b) => b.count - a.count)
-        );
+
+        const [sourceResults, brandResults] = await Promise.all([
+          Promise.all(sourcePromises),
+          Promise.all(brandPromises),
+        ]);
+
+        setSourceStats(sourceResults.filter(s => s.count > 0).sort((a, b) => b.count - a.count));
+        setBrandStats(brandResults.sort((a, b) => b.count - a.count));
+        setStatsLoaded(true);
+      } catch {
+        // Stats are non-critical
       }
     };
     fetchStats();
-  }, []);
+  }, [statsLoaded]);
 
   const totalParts = sourceStats.reduce((s, r) => s + r.count, 0);
 
