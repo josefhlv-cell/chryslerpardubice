@@ -474,8 +474,22 @@ export async function searchByCategory(
         .map((p: any) => normalizeOem(p.oem_number))
     ].filter(Boolean))];
 
+    // Also include superseded OEM numbers for alternative lookup
+    let expandedOems = [...baseOems];
     if (baseOems.length > 0) {
-      const batch = baseOems.slice(0, 20);
+      const batch20 = baseOems.slice(0, 20);
+      const [{ data: supersededBy }, { data: supersedesData }] = await Promise.all([
+        supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("old_oem_number", batch20),
+        supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("new_oem_number", batch20),
+      ]);
+      const extraOems: string[] = [];
+      supersededBy?.forEach(s => { if (!expandedOems.includes(s.new_oem_number)) extraOems.push(s.new_oem_number); });
+      supersedesData?.forEach(s => { if (!expandedOems.includes(s.old_oem_number)) extraOems.push(s.old_oem_number); });
+      expandedOems = [...new Set([...expandedOems, ...extraOems])];
+    }
+
+    if (expandedOems.length > 0) {
+      const batch = expandedOems.slice(0, 30);
       const sagOems = batch.map(o => `SAG-${o}`);
       const akOems = batch.map(o => `AK-${o}`);
       altQueries.push(
