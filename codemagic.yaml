@@ -9,8 +9,6 @@ workflows:
       cocoapods: default
       xcode: default
       java: openjdk-11
-      android:
-        gradle_cache: true
     scripts:
       - name: Install Node modules
         script: |
