@@ -130,9 +130,9 @@ export const mapToPartResult = (item: any, source: string): PartResult => {
 export const sortByPriority = (parts: PartResult[]) =>
   [...parts].filter(p => !isPartBlocked(p)).sort((a, b) => (sourcePriority[a.catalog_source] || 99) - (sourcePriority[b.catalog_source] || 99));
 
-/** Enrich parts with supersession data from DB */
+/** Enrich parts with supersession data from DB + fetch alternatives for superseded OEMs */
 export const enrichWithSupersessions = async (parts: PartResult[]) => {
-  const oems = parts.map((p) => p.oem_number);
+  const oems = [...new Set(parts.map((p) => normalizeOem(p.oem_number)).filter(Boolean))];
   if (oems.length === 0) return;
   const [byOld, byNew] = await Promise.all([
     supabase.from("part_supersessions").select("old_oem_number, new_oem_number").in("old_oem_number", oems),
@@ -143,9 +143,40 @@ export const enrichWithSupersessions = async (parts: PartResult[]) => {
   byOld.data?.forEach((s) => supersededMap.set(s.old_oem_number, s.new_oem_number));
   byNew.data?.forEach((s) => supersedesMap.set(s.new_oem_number, s.old_oem_number));
   parts.forEach((p) => {
-    if (!p.superseded_by) p.superseded_by = supersededMap.get(p.oem_number) || null;
-    if (!p.supersedes) p.supersedes = supersedesMap.get(p.oem_number) || null;
+    const norm = normalizeOem(p.oem_number);
+    if (!p.superseded_by) p.superseded_by = supersededMap.get(norm) || null;
+    if (!p.supersedes) p.supersedes = supersedesMap.get(norm) || null;
   });
+
+  // Collect superseded OEM numbers that aren't already in results — fetch their alternatives too
+  const extraOems: string[] = [];
+  for (const [, newOem] of supersededMap) {
+    if (!oems.includes(newOem)) extraOems.push(newOem);
+  }
+  for (const [, oldOem] of supersedesMap) {
+    if (!oems.includes(oldOem)) extraOems.push(oldOem);
+  }
+
+  if (extraOems.length > 0) {
+    const sagKeys = extraOems.map(o => `SAG-${o}`);
+    const akKeys = extraOems.map(o => `AK-${o}`);
+    const { data: altParts } = await supabase
+      .from("parts_new")
+      .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+      .in("oem_number", [...extraOems, ...sagKeys, ...akKeys])
+      .gt("price_with_vat", 0);
+
+    if (altParts) {
+      const existingIds = new Set(parts.map(p => p.id));
+      for (const p of altParts) {
+        const mapped = mapToPartResult(p, p.catalog_source || "mopar");
+        if (!existingIds.has(mapped.id) && !isPartBlocked(mapped)) {
+          parts.push(mapped);
+          existingIds.add(mapped.id);
+        }
+      }
+    }
+  }
 };
 
 // ---- Apply client-side filters ----
@@ -184,9 +215,10 @@ export async function searchParts(
   const normalized = normalizeOem(query);
   const allResults: PartResult[] = [];
 
-  // 1. Search local DB (parallel)
+  // 1. Search local DB (parallel) — includes SAG/AK prefix lookup
   const pnFilter = `oem_number.ilike.%${query}%,oem_number.ilike.%${normalized}%,name.ilike.%${query}%,internal_code.ilike.%${query}%`;
-  const [pnRes, pcRes] = await Promise.all([
+  const sagAkOems = [`SAG-${normalized}`, `AK-${normalized}`];
+  const [pnRes, pcRes, altRes] = await Promise.all([
     supabase
       .from("parts_new")
       .select(
@@ -202,13 +234,32 @@ export async function searchParts(
       .or(`oem_code.ilike.%${query}%,oem_code.ilike.%${normalized}%,name.ilike.%${query}%`)
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
       .order("name"),
+    // Explicit SAG/AK lookup by prefixed OEM
+    supabase
+      .from("parts_new")
+      .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+      .in("oem_number", sagAkOems)
+      .gt("price_with_vat", 0),
   ]);
 
-  if (pnRes.data) allResults.push(...pnRes.data.map((p) => mapToPartResult(p, "mopar")));
+  if (pnRes.data) allResults.push(...pnRes.data.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
+  
+  // Merge SAG/AK alternatives found by prefix
+  const existingIds = new Set(allResults.map(r => r.id));
+  if (altRes.data) {
+    for (const p of altRes.data) {
+      const mapped = mapToPartResult(p, p.catalog_source || "sag");
+      if (!existingIds.has(mapped.id) && !isPartBlocked(mapped)) {
+        allResults.push(mapped);
+        existingIds.add(mapped.id);
+      }
+    }
+  }
+  
   if (pcRes.data) {
-    const existingOems = new Set(allResults.map((r) => normalizeOem(r.oem_number)));
+    const existingOems = new Set(allResults.map((r) => `${r.catalog_source}:${normalizeOem(r.oem_number)}`));
     for (const item of pcRes.data) {
-      if (!existingOems.has(normalizeOem(item.oem_code))) {
+      if (!existingOems.has(`csv:${normalizeOem(item.oem_code)}`)) {
         allResults.push(mapToPartResult(item, "csv"));
       }
     }
@@ -217,7 +268,7 @@ export async function searchParts(
   if (allResults.length > 0) {
     await enrichWithSupersessions(allResults);
     const filtered = applyFilters(allResults, filters);
-    return { results: sortByPriority(filtered), totalCount: (pnRes.count ?? 0) + (pcRes.count ?? 0) };
+    return { results: sortByPriority(filtered), totalCount: (pnRes.count ?? 0) + (pcRes.count ?? 0) + (altRes.data?.length ?? 0) };
   }
 
   // 2. External catalog search
@@ -761,27 +812,33 @@ export async function enrichEPCPrices(
     .select("oem_number, name, price_without_vat, price_with_vat, availability, last_price_update, catalog_source")
     .in("oem_number", unique);
 
-  // Also check for SAG alternatives already in DB
+  // Also check for SAG + AutoKelly alternatives already in DB
   const sagKeys = unique.map(oem => `SAG-${oem}`);
-  const { data: sagCached } = await supabase
+  const akKeys = unique.map(oem => `AK-${oem}`);
+  const { data: altCached } = await supabase
     .from("parts_new")
     .select("oem_number, name, price_without_vat, price_with_vat, availability, manufacturer, catalog_source")
-    .in("oem_number", sagKeys);
+    .in("oem_number", [...sagKeys, ...akKeys])
+    .gt("price_with_vat", 0);
 
-  // Populate from SAG cache — filter out invalid entries
-  if (sagCached) {
-    for (const s of sagCached) {
-      if (s.price_with_vat <= 0) continue; // Skip garbage entries
-      const originalOem = s.oem_number.replace(/^SAG-/, '');
+  // Populate from SAG/AK cache — filter out invalid entries
+  if (altCached) {
+    for (const s of altCached) {
+      const originalOem = s.oem_number.replace(/^(SAG|AK)-/, '');
       if (!alternativesMap.has(originalOem)) alternativesMap.set(originalOem, []);
-      alternativesMap.get(originalOem)!.push({
-        name: s.name,
-        price_without_vat: s.price_without_vat,
-        price_with_vat: s.price_with_vat,
-        availability: s.availability || 'unknown',
-        manufacturer: s.manufacturer || 'SAG',
-        catalog_source: 'sag',
-      });
+      // Avoid duplicates
+      const existing = alternativesMap.get(originalOem)!;
+      const dedupKey = `${s.catalog_source}:${s.name}`;
+      if (!existing.some(e => `${e.catalog_source}:${e.name}` === dedupKey)) {
+        existing.push({
+          name: s.name,
+          price_without_vat: s.price_without_vat,
+          price_with_vat: s.price_with_vat,
+          availability: s.availability || 'unknown',
+          manufacturer: s.manufacturer || (s.catalog_source === 'autokelly' ? 'AutoKelly' : 'SAG'),
+          catalog_source: s.catalog_source || 'sag',
+        });
+      }
     }
   }
 
