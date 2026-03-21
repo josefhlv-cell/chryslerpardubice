@@ -438,7 +438,7 @@ const Admin = () => {
                       const { data, error } = await supabase.functions.invoke("cleanup-orders", { body: { mode: "manual" } });
                       if (error) throw error;
                       toast({ title: "Vyčištěno", description: `Smazáno ${data?.deleted || 0} objednávek` });
-                      fetchData();
+                      fetchAll();
                     } catch (e: any) {
                       toast({ title: "Chyba", description: e?.message || "Nepodařilo se", variant: "destructive" });
                     }
