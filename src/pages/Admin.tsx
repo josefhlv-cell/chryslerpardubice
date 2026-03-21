@@ -196,8 +196,26 @@ const Admin = () => {
     ]);
     setPendingProfiles((profilesRes.data as Profile[]) || []);
     setOrders((ordersRes.data as OrderRow[]) || []);
-    setBookings((bookingsRes.data as Booking[]) || []);
     setInquiries((inquiriesRes.data as Inquiry[]) || []);
+
+    // Enrich bookings with profile data
+    const rawBookings = (bookingsRes.data as Booking[]) || [];
+    const bookingUserIds = [...new Set(rawBookings.map(b => b.user_id))];
+    let profileMap = new Map<string, { full_name: string | null; email: string | null; phone: string | null }>();
+    if (bookingUserIds.length > 0) {
+      const { data: bookingProfiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, email, phone")
+        .in("user_id", bookingUserIds);
+      (bookingProfiles || []).forEach(p => profileMap.set(p.user_id, p));
+    }
+    setBookings(rawBookings.map(b => ({
+      ...b,
+      profile_name: profileMap.get(b.user_id)?.full_name || null,
+      profile_email: profileMap.get(b.user_id)?.email || null,
+      profile_phone: profileMap.get(b.user_id)?.phone || null,
+    })));
+
     setLoading(false);
   };
 
