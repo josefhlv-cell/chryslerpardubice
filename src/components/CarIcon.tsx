@@ -15,7 +15,6 @@ import chryslerTownCountry from "@/assets/cars/chrysler-town-country.png";
 import dodgeDurango from "@/assets/cars/dodge-durango.png";
 import dodgeChallenger from "@/assets/cars/dodge-challenger.png";
 import dodgeCharger from "@/assets/cars/dodge-charger.png";
-import jeepGrandCherokee from "@/assets/cars/jeep-grand-cherokee.png";
 import ram1500 from "@/assets/cars/ram-1500.png";
 
 type CarData = {
