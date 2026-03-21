@@ -23,6 +23,8 @@ const defaultCatalogs: CatalogConfig[] = [
   { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", flagKey: "catalog_intercars", enabled: false, ready: false },
 ];
 
+const alternativeFlagKeys = ["catalog_sag", "catalog_autokelly"] as const;
+
 type DiagResult = {
   mopar: { status: string; responseTime: number };
   sag: { status: string; responseTime: number };
@@ -45,10 +47,20 @@ const AdminCatalogSettings = () => {
 
   // Load catalog enabled states from feature_flags
   const loadSettings = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("feature_flags")
       .select("feature_key, enabled")
       .in("feature_key", defaultCatalogs.map(c => c.flagKey));
+
+    if (error) {
+      toast({
+        title: "Nepodařilo se načíst nastavení katalogů",
+        description: error.message,
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
 
     if (data) {
       const flagMap: Record<string, boolean> = {};
@@ -83,25 +95,44 @@ const AdminCatalogSettings = () => {
   };
 
   const saveChanges = async () => {
-    // Save each catalog's state to its feature flag
-    await Promise.all(
-      catalogs.map(c =>
+    try {
+      const flagPayload = catalogs.map((catalog) => ({
+        feature_key: catalog.flagKey,
+        enabled: catalog.enabled,
+        description: catalog.description,
+      }));
+
+      const anyAltEnabled = catalogs.some(
+        (catalog) => alternativeFlagKeys.includes(catalog.flagKey as typeof alternativeFlagKeys[number]) && catalog.enabled
+      );
+
+      const [{ error: flagsError }, { error: alternativesError }] = await Promise.all([
         supabase
           .from("feature_flags")
-          .update({ enabled: c.enabled } as any)
-          .eq("feature_key", c.flagKey)
-      )
-    );
+          .upsert(flagPayload as any, { onConflict: "feature_key" }),
+        supabase
+          .from("feature_flags")
+          .upsert({
+            feature_key: "catalog_alternatives",
+            enabled: anyAltEnabled,
+            description: "Zobrazit režim Náhrady za OEM v katalogu dílů (SAG, AutoKelly)",
+          } as any, { onConflict: "feature_key" }),
+      ]);
 
-    // Update catalog_alternatives: true if any non-mopar source is enabled
-    const anyAltEnabled = catalogs.some(c => c.id !== "mopar" && c.enabled);
-    await supabase
-      .from("feature_flags")
-      .update({ enabled: anyAltEnabled } as any)
-      .eq("feature_key", "catalog_alternatives");
+      if (flagsError || alternativesError) {
+        throw new Error(flagsError?.message || alternativesError?.message || "Uložení selhalo");
+      }
 
-    toast({ title: "Nastavení katalogů uloženo" });
-    setHasChanges(false);
+      await loadSettings();
+      setHasChanges(false);
+      toast({ title: "Nastavení katalogů uloženo" });
+    } catch (err: any) {
+      toast({
+        title: "Nepodařilo se uložit nastavení katalogů",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const runDiagnostics = async () => {
