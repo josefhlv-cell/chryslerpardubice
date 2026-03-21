@@ -7,7 +7,6 @@ const corsHeaders = {
 const BRAND_SLUGS: Record<string, string> = {
   'Chrysler': 'chrysler',
   'Dodge': 'dodge',
-  'Jeep': 'jeep',
   'RAM': 'ram',
 };
 
