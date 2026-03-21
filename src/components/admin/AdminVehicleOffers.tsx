@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { ArrowDownUp, Plane, RefreshCw } from "lucide-react";
+import { ArrowDownUp, Plane, RefreshCw, Car, Loader2 } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
 
 type BuybackRow = {
