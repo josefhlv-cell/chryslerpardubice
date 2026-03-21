@@ -93,6 +93,10 @@ type Booking = {
   final_price: number | null;
   user_id: string;
   created_at: string;
+  // enriched
+  profile_name?: string | null;
+  profile_email?: string | null;
+  profile_phone?: string | null;
 };
 
 type Inquiry = {
