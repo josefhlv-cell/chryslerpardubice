@@ -68,8 +68,21 @@ const AdminServiceOrders = () => {
       supabase.from("service_orders").select("*").order("created_at", { ascending: false }),
       supabase.from("user_vehicles").select("*"),
     ]);
-    setOrders((ordersRes.data as ServiceOrder[]) || []);
+    const rawOrders = (ordersRes.data as ServiceOrder[]) || [];
     setVehicles((vehiclesRes.data as Vehicle[]) || []);
+
+    // Enrich with profile data
+    const userIds = [...new Set(rawOrders.map(o => o.user_id))];
+    let profileMap = new Map<string, ProfileInfo>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase.from("profiles").select("user_id, full_name, email, phone").in("user_id", userIds);
+      (profiles || []).forEach(p => profileMap.set(p.user_id, p));
+    }
+    setOrders(rawOrders.map(o => ({
+      ...o,
+      profile_name: profileMap.get(o.user_id)?.full_name || null,
+      profile_email: profileMap.get(o.user_id)?.email || null,
+    })));
     setLoading(false);
   };
 
