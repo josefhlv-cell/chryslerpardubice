@@ -528,7 +528,7 @@ export async function searchByCategory(
 
     // ---- Step 3: If still few alternatives, trigger external catalog-search only for precise drill-down ----
     const altCount = allResults.filter(r => ["sag", "autokelly"].includes(r.catalog_source)).length;
-    const isPreciseAlternativePath = Boolean(filters.brand && filters.model && filters.motor) || Boolean(searchTerm && filters.brand);
+    const isPreciseAlternativePath = Boolean(filters.brand) || Boolean(searchTerm && filters.brand);
     if (altCount < 3 && isPreciseAlternativePath && expandedOems.length > 0) {
       const uncachedBatch = expandedOems.slice(0, 5);
       try {
