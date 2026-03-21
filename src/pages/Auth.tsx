@@ -158,8 +158,13 @@ const Auth = () => {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Jméno a příjmení</Label>
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Jméno a příjmení *</Label>
                 <Input placeholder="Jan Novák" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Telefon *</Label>
+                <Input type="tel" placeholder="+420 123 456 789" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </div>
 
               <AnimatePresence>
