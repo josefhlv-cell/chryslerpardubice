@@ -13,6 +13,7 @@ import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
 
 type Vehicle = { id: string; brand: string; model: string; year: number | null; license_plate: string | null; user_id: string };
+type ProfileInfo = { user_id: string; full_name: string | null; email: string | null; phone: string | null };
 type ServiceOrder = {
   id: string; vehicle_id: string | null; user_id: string; status: string;
   description: string | null; mileage: number | null; planned_work: string | null;
@@ -20,6 +21,7 @@ type ServiceOrder = {
   labor_price: number | null; parts_total: number | null; total_price: number | null;
   customer_approved: boolean | null; created_at: string; updated_at: string;
   mechanic_id: string | null; lift_id: string | null;
+  profile_name?: string | null; profile_email?: string | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {
