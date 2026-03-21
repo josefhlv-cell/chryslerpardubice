@@ -493,6 +493,7 @@ const Admin = () => {
                               {o.order_type === "new" ? "Nový" : "Použitý"}
                             </Badge>
                           </div>
+                          <p className="text-xs text-primary font-medium">{o.profile_name || "–"} · {o.profile_email || "–"}</p>
                           <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "–"} · {o.quantity}×</p>
                           {o.catalog_source && (
                             <Badge variant="outline" className="text-[10px] mt-0.5 bg-secondary/50">
