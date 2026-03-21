@@ -164,6 +164,7 @@ const AdminServiceOrders = () => {
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate">{getVehicleLabel(o.vehicle_id)}</p>
+                  <p className="text-xs text-primary font-medium truncate">{o.profile_name || "–"} · {o.profile_email || "–"}</p>
                   <p className="text-xs text-muted-foreground truncate">{o.description || o.planned_work || "—"}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(o.created_at).toLocaleDateString("cs-CZ")}
