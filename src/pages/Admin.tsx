@@ -519,7 +519,8 @@ const Admin = () => {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-semibold text-sm">{b.service_type}</p>
-                          <p className="text-xs text-muted-foreground">{b.vehicle_brand} {b.vehicle_model}</p>
+                          <p className="text-xs text-primary font-medium">{b.profile_name || "–"} · {b.profile_email || b.profile_phone || "–"}</p>
+                          <p className="text-xs text-muted-foreground">{b.vehicle_brand || "–"} {b.vehicle_model || ""}</p>
                           <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
                           {b.wants_replacement_vehicle && <Badge variant="outline" className="text-xs mt-1">Náhradní vůz</Badge>}
                         </div>
