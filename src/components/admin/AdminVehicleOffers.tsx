@@ -85,6 +85,7 @@ const AdminVehicleOffers = () => {
   const [editImport, setEditImport] = useState<ImportRow | null>(null);
   const [formStatus, setFormStatus] = useState("");
   const [formNote, setFormNote] = useState("");
+  const [updatingVehicles, setUpdatingVehicles] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -138,8 +139,6 @@ const AdminVehicleOffers = () => {
   if (loading) {
     return <div className="flex justify-center py-8"><RefreshCw className="w-5 h-5 animate-spin text-primary" /></div>;
   }
-
-  const [updatingVehicles, setUpdatingVehicles] = useState(false);
 
   const updateVehiclesFromWeb = async () => {
     setUpdatingVehicles(true);
