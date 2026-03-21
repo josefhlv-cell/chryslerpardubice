@@ -16,6 +16,12 @@ const contacts = [
     href: "tel:+420603372911",
   },
   {
+    icon: Package,
+    label: "Použité díly",
+    value: "+420 603 372 911",
+    href: "tel:+420603372911",
+  },
+  {
     icon: Phone,
     label: "Pevná linka",
     value: "+420 466 931 611",
