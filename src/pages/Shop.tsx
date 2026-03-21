@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Modular components ----
 import SearchBar from "@/components/catalog/SearchBar";
@@ -52,6 +53,9 @@ type SidebarTab = "filters" | "favorites" | "history";
 const Shop = () => {
   const navigate = useNavigate();
   const { user, profile, isPendingBusiness, canPlaceOrder } = useAuth();
+  const { isEnabled } = useFeatureFlags();
+  const alternativesEnabled = isEnabled("catalog_alternatives");
+  const hiddenModes: SearchMode[] = alternativesEnabled ? [] : ["vehicle_alt"];
 
   // ---- State ----
   const [partType, setPartType] = useState<PartType>("new");
@@ -451,6 +455,7 @@ const Shop = () => {
                         setQuery("");
                       }
                     }}
+                    hiddenModes={hiddenModes}
                   />
                 </div>
                 {/* Mobile filter toggle */}

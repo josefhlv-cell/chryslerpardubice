@@ -56,7 +56,16 @@ const AdminCatalogSettings = () => {
     setHasChanges(true);
   };
 
-  const saveChanges = () => {
+  const saveChanges = async () => {
+    // Check if any alternative catalog (non-mopar) is enabled
+    const anyAltEnabled = catalogs.some(c => c.id !== "mopar" && c.enabled);
+    
+    // Persist to feature_flags → controls visibility of "Náhrady" tab in Shop
+    await supabase
+      .from("feature_flags")
+      .update({ enabled: anyAltEnabled } as any)
+      .eq("feature_key", "catalog_alternatives");
+
     toast({ title: "Nastavení katalogů uloženo" });
     setHasChanges(false);
   };

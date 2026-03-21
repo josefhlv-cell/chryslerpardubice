@@ -18,6 +18,7 @@ interface SearchBarProps {
   searchMode: SearchMode;
   onModeChange: (mode: SearchMode) => void;
   placeholder?: string;
+  hiddenModes?: SearchMode[];
 }
 
 const modeConfig: { mode: SearchMode; label: string; shortLabel: string; Icon: any; description: string; colorClass: string }[] = [
@@ -36,6 +37,7 @@ const SearchBar = ({
   searchMode,
   onModeChange,
   placeholder,
+  hiddenModes = [],
 }: SearchBarProps) => {
   const defaultPlaceholder =
     searchMode === "part_number"
@@ -57,7 +59,7 @@ const SearchBar = ({
     <div className="space-y-3">
       {/* Mode tabs */}
       <div className="flex gap-1 p-0.5 rounded-lg bg-secondary">
-        {modeConfig.map(({ mode, label, shortLabel, Icon, colorClass }) => {
+        {modeConfig.filter(({ mode }) => !hiddenModes.includes(mode)).map(({ mode, label, shortLabel, Icon, colorClass }) => {
           const isActive = searchMode === mode;
           return (
             <button
