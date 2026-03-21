@@ -74,6 +74,9 @@ type OrderRow = {
   customer_note: string | null;
   catalog_source: string | null;
   created_at: string;
+  // enriched
+  profile_name?: string | null;
+  profile_email?: string | null;
 };
 
 type Booking = {
