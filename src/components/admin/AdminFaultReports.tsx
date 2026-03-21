@@ -161,7 +161,14 @@ const AdminFaultReports = () => {
                 </div>
                 {selected.vehicle_engine && <p><span className="font-medium">Motor:</span> {selected.vehicle_engine}</p>}
                 {selected.mileage && <p><span className="font-medium">km:</span> {selected.mileage.toLocaleString("cs")}</p>}
-                <p><span className="font-medium">Čas:</span> {new Date(selected.created_at).toLocaleString("cs-CZ")}</p>
+                 <p><span className="font-medium">Čas:</span> {new Date(selected.created_at).toLocaleString("cs-CZ")}</p>
+                 {(selected.profile_name || selected.profile_email) && (
+                   <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 mt-1">
+                     <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Zákazník</p>
+                     <p>{selected.profile_name || "–"}</p>
+                     <p className="text-xs text-muted-foreground">{selected.profile_email || "–"}{selected.profile_phone && ` · ${selected.profile_phone}`}</p>
+                   </div>
+                 )}
               </div>
 
               <div>
