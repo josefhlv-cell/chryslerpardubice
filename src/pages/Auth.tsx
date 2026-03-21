@@ -55,6 +55,16 @@ const Auth = () => {
         toast.success("Přihlášení úspěšné!");
         navigate(path);
       } else if (view === "register") {
+        if (!fullName.trim()) {
+          toast.error("Vyplňte jméno a příjmení");
+          setLoading(false);
+          return;
+        }
+        if (!phone.trim()) {
+          toast.error("Vyplňte telefonní číslo");
+          setLoading(false);
+          return;
+        }
         if (accountType === "business" && !companyName) {
           toast.error("Vyplňte název firmy");
           setLoading(false);
@@ -72,6 +82,11 @@ const Auth = () => {
           ico: accountType === "business" ? ico : undefined,
           dic: accountType === "business" ? dic : undefined,
         });
+        // Save phone to profile after signup
+        const { data: { user: newUser } } = await supabase.auth.getUser();
+        if (newUser) {
+          await supabase.from("profiles").update({ phone: phone.trim() }).eq("user_id", newUser.id);
+        }
         if (accountType === "business") {
           toast.success("Registrace odeslána! Váš firemní účet čeká na schválení administrátorem.");
         } else {
