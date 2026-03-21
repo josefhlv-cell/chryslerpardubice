@@ -1,25 +1,25 @@
 workflows:
-  android-workflow:
-    name: Android APK Build
-    max_build_duration: 60
-    environment:
-      vars:
-        NODE_VERSION: "18"
-        java: 17b
-    scripts:
-      - name: Install Node modules
-        script: |
-          npm install
-          npm install @capacitor/core @capacitor/cli
-          npm install @capacitor-community/bluetooth-le
-      - name: Initialize Capacitor
-        script: |
-          npx cap sync android
-      - name: Build Android APK
-        script: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-          ./
-    artifacts:
-      - android/app/build/outputs/apk/debug/app-debug.apk
+    android-workflow:
+      name: Android APK Build
+      max_build_duration: 60
+      environment:
+        java: 21
+        vars:
+          NODE_VERSION: "18"
+      scripts:
+        - name: Install Node modules
+          script: |
+            npm install
+            npm install @capacitor/core @capacitor/cli
+            npm install @capacitor-community/bluetooth-le
+        - name: Sync Capacitor
+          script: |
+            npx cap sync android
+        - name: Build Android APK
+          script: |
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleDebug --no-daemon
+      artifacts:
+        - android/app/build/outputs/apk/debug/app-debug.apk
+  
