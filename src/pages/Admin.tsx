@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp, Trash2, Loader2 } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -413,19 +413,40 @@ const Admin = () => {
           {/* ORDERS */}
           <TabsContent value="orders">
             <div className="space-y-3 mt-2">
-              {/* Type filter */}
-              <div className="flex gap-1">
-                {(["all", "new", "used"] as const).map((t) => (
-                  <Button
-                    key={t}
-                    size="sm"
-                    variant={orderTypeFilter === t ? "default" : "outline"}
-                    onClick={() => setOrderTypeFilter(t)}
-                    className="text-xs"
-                  >
-                    {t === "all" ? "Vše" : t === "new" ? "Nové díly" : "Použité díly"}
-                  </Button>
-                ))}
+              {/* Type filter + cleanup button */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex gap-1">
+                  {(["all", "new", "used"] as const).map((t) => (
+                    <Button
+                      key={t}
+                      size="sm"
+                      variant={orderTypeFilter === t ? "default" : "outline"}
+                      onClick={() => setOrderTypeFilter(t)}
+                      className="text-xs"
+                    >
+                      {t === "all" ? "Vše" : t === "new" ? "Nové díly" : "Použité díly"}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="text-xs gap-1"
+                  onClick={async () => {
+                    if (!confirm("Smazat všechny vyřízené a zrušené objednávky?")) return;
+                    try {
+                      const { data, error } = await supabase.functions.invoke("cleanup-orders", { body: { mode: "manual" } });
+                      if (error) throw error;
+                      toast({ title: "Vyčištěno", description: `Smazáno ${data?.deleted || 0} objednávek` });
+                      fetchAll();
+                    } catch (e: any) {
+                      toast({ title: "Chyba", description: e?.message || "Nepodařilo se", variant: "destructive" });
+                    }
+                  }}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Smazat vyřízené
+                </Button>
               </div>
 
               {filteredOrders.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné objednávky</p>}

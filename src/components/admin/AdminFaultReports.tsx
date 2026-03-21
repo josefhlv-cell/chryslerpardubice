@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, AlertTriangle, Phone, Eye } from "lucide-react";
+import { Loader2, AlertTriangle, Phone, Eye, User } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
 
 type FaultReport = {
@@ -26,6 +26,10 @@ type FaultReport = {
   status: string;
   admin_note: string | null;
   created_at: string;
+  // joined profile data
+  profile_name?: string | null;
+  profile_email?: string | null;
+  profile_phone?: string | null;
 };
 
 const statusColors: Record<string, string> = {
@@ -52,7 +56,21 @@ const AdminFaultReports = () => {
   const fetchReports = async () => {
     setLoading(true);
     const { data } = await supabase.from("fault_reports" as any).select("*").order("created_at", { ascending: false });
-    setReports((data as any as FaultReport[]) || []);
+    const reportsRaw = (data as any as FaultReport[]) || [];
+    
+    // Fetch profile info for each unique user_id
+    const userIds = [...new Set(reportsRaw.map(r => r.user_id))];
+    const { data: profiles } = await supabase.from("profiles").select("user_id, full_name, email, phone").in("user_id", userIds);
+    const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+    
+    const enriched = reportsRaw.map(r => ({
+      ...r,
+      profile_name: profileMap.get(r.user_id)?.full_name || null,
+      profile_email: profileMap.get(r.user_id)?.email || null,
+      profile_phone: profileMap.get(r.user_id)?.phone || null,
+    }));
+    
+    setReports(enriched);
     setLoading(false);
   };
 
@@ -101,7 +119,14 @@ const AdminFaultReports = () => {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
                 {r.vin && <p className="text-[10px] text-muted-foreground mt-1">VIN: {r.vin}</p>}
-                <p className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
+                 <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
+                 {(r.profile_name || r.profile_email) && (
+                   <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                     <User className="w-3 h-3" />
+                     {r.profile_name || "–"} · {r.profile_email || "–"}
+                     {r.profile_phone && ` · ${r.profile_phone}`}
+                   </p>
+                 )}
                 {r.photos?.length > 0 && (
                   <div className="flex gap-1 mt-1.5">
                     {r.photos.slice(0, 3).map((url, i) => (
@@ -136,7 +161,14 @@ const AdminFaultReports = () => {
                 </div>
                 {selected.vehicle_engine && <p><span className="font-medium">Motor:</span> {selected.vehicle_engine}</p>}
                 {selected.mileage && <p><span className="font-medium">km:</span> {selected.mileage.toLocaleString("cs")}</p>}
-                <p><span className="font-medium">Čas:</span> {new Date(selected.created_at).toLocaleString("cs-CZ")}</p>
+                 <p><span className="font-medium">Čas:</span> {new Date(selected.created_at).toLocaleString("cs-CZ")}</p>
+                 {(selected.profile_name || selected.profile_email) && (
+                   <div className="p-2 rounded-lg bg-primary/5 border border-primary/20 mt-1">
+                     <p className="text-xs font-medium text-primary mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Zákazník</p>
+                     <p>{selected.profile_name || "–"}</p>
+                     <p className="text-xs text-muted-foreground">{selected.profile_email || "–"}{selected.profile_phone && ` · ${selected.profile_phone}`}</p>
+                   </div>
+                 )}
               </div>
 
               <div>

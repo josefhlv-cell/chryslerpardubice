@@ -136,7 +136,7 @@ const Service = () => {
               <Wrench className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-display font-semibold">Autorizovaný servis</p>
+              <p className="text-sm font-display font-semibold">Značkový servis</p>
               <p className="text-xs text-muted-foreground">
                 Chrysler · Dodge · Jeep · RAM
               </p>
