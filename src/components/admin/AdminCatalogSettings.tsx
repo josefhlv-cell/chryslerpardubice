@@ -11,9 +11,17 @@ type CatalogConfig = {
   id: string;
   name: string;
   description: string;
+  flagKey: string; // feature_flags key
   enabled: boolean;
   ready: boolean;
 };
+
+const defaultCatalogs: CatalogConfig[] = [
+  { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Dodge, RAM", flagKey: "catalog", enabled: true, ready: true },
+  { id: "sag", name: "SAG Connect", description: "Alternativní díly – SAG/QWP (+ 15% marže)", flagKey: "catalog_sag", enabled: true, ready: true },
+  { id: "autokelly", name: "AutoKelly", description: "Alternativní díly – AutoKelly (+ 15% marže)", flagKey: "catalog_autokelly", enabled: true, ready: true },
+  { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", flagKey: "catalog_intercars", enabled: false, ready: false },
+];
 
 type DiagResult = {
   mopar: { status: string; responseTime: number };
@@ -23,20 +31,38 @@ type DiagResult = {
 };
 
 const AdminCatalogSettings = () => {
-  const [catalogs, setCatalogs] = useState<CatalogConfig[]>([
-    { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Dodge, RAM", enabled: true, ready: true },
-    { id: "sag", name: "SAG Connect", description: "Alternativní díly – SAG/QWP (+ 15% marže)", enabled: true, ready: true },
-    { id: "autokelly", name: "AutoKelly", description: "Alternativní díly – AutoKelly (+ 15% marže)", enabled: true, ready: true },
-    { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", enabled: false, ready: false },
-  ]);
+  const [catalogs, setCatalogs] = useState<CatalogConfig[]>(defaultCatalogs);
   const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
   const [partsCount, setPartsCount] = useState({ parts_new: 0, parts_catalog: 0, supersessions: 0 });
 
   useEffect(() => {
+    loadSettings();
     loadCounts();
   }, []);
+
+  // Load catalog enabled states from feature_flags
+  const loadSettings = async () => {
+    const { data } = await supabase
+      .from("feature_flags")
+      .select("feature_key, enabled")
+      .in("feature_key", defaultCatalogs.map(c => c.flagKey));
+
+    if (data) {
+      const flagMap: Record<string, boolean> = {};
+      (data as { feature_key: string; enabled: boolean }[]).forEach(f => {
+        flagMap[f.feature_key] = f.enabled;
+      });
+
+      setCatalogs(prev => prev.map(c => ({
+        ...c,
+        enabled: flagMap[c.flagKey] !== undefined ? flagMap[c.flagKey] : c.enabled,
+      })));
+    }
+    setLoading(false);
+  };
 
   const loadCounts = async () => {
     const [pn, pc, ss] = await Promise.all([
@@ -57,10 +83,18 @@ const AdminCatalogSettings = () => {
   };
 
   const saveChanges = async () => {
-    // Check if any alternative catalog (non-mopar) is enabled
+    // Save each catalog's state to its feature flag
+    await Promise.all(
+      catalogs.map(c =>
+        supabase
+          .from("feature_flags")
+          .update({ enabled: c.enabled } as any)
+          .eq("feature_key", c.flagKey)
+      )
+    );
+
+    // Update catalog_alternatives: true if any non-mopar source is enabled
     const anyAltEnabled = catalogs.some(c => c.id !== "mopar" && c.enabled);
-    
-    // Persist to feature_flags → controls visibility of "Náhrady" tab in Shop
     await supabase
       .from("feature_flags")
       .update({ enabled: anyAltEnabled } as any)
@@ -106,6 +140,10 @@ const AdminCatalogSettings = () => {
     if (status === 'disabled') return <Badge variant="outline" className="text-[10px]">Vypnuto</Badge>;
     return <Badge className="bg-red-100 text-red-800 text-[10px]">Chyba</Badge>;
   };
+
+  if (loading) {
+    return <div className="text-center py-4 text-sm text-muted-foreground">Načítám nastavení...</div>;
+  }
 
   return (
     <div className="space-y-4">
@@ -153,7 +191,6 @@ const AdminCatalogSettings = () => {
           </div>
 
           <div className="space-y-2">
-            {/* Database stats */}
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-muted/50 rounded-lg p-2 text-center">
                 <Database className="w-4 h-4 mx-auto text-primary mb-1" />
@@ -172,7 +209,6 @@ const AdminCatalogSettings = () => {
               </div>
             </div>
 
-            {/* Catalog status */}
             {diagResult && (
               <div className="space-y-1.5 mt-2">
                 <div className="flex items-center justify-between text-xs">
