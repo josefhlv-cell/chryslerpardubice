@@ -67,7 +67,7 @@ const getLocalImage = (brand: string, model: string): string | null => {
 // Normalize brand names for imagin API
 const normalizeBrand = (brand: string): string => {
   const map: Record<string, string> = {
-    "CHRYSLER": "chrysler", "DODGE": "dodge", "RAM": "ram", "JEEP": "jeep",
+    "CHRYSLER": "chrysler", "DODGE": "dodge", "RAM": "ram",
     "FIAT": "fiat", "ALFA ROMEO": "alfa-romeo", "VOLKSWAGEN": "volkswagen",
     "MERCEDES-BENZ": "mercedes-benz", "BMW": "bmw", "AUDI": "audi",
     "TOYOTA": "toyota", "HONDA": "honda", "FORD": "ford", "CHEVROLET": "chevrolet",

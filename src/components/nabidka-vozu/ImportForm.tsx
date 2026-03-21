@@ -34,7 +34,7 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const brands = ["Chrysler", "Dodge", "Jeep", "RAM", "Fiat", "Alfa Romeo", "Jiná"];
+const brands = ["Chrysler", "Dodge", "RAM", "Fiat", "Alfa Romeo", "Jiná"];
 
 const ImportForm = () => {
   const { user } = useAuth();
