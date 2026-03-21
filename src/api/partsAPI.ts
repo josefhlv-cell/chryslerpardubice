@@ -764,20 +764,51 @@ export async function decodeVIN(vin: string) {
  * Get recommended similar parts based on category/family
  */
 export async function getRecommendations(part: PartResult): Promise<PartResult[]> {
-  if (!part.category && !part.family) return [];
-  let query = supabase
-    .from("parts_new")
-    .select(
-      "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source"
-    )
-    .neq("id", part.id)
-    .limit(6);
+  const queries: PromiseLike<any>[] = [];
 
-  if (part.category) query = query.eq("category", part.category);
-  else if (part.family) query = query.eq("family", part.family);
+  // 1. Same category/family
+  if (part.category || part.family) {
+    let q = supabase
+      .from("parts_new")
+      .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+      .neq("id", part.id)
+      .gt("price_with_vat", 0)
+      .limit(4);
+    if (part.category) q = q.eq("category", part.category);
+    else if (part.family) q = q.eq("family", part.family);
+    queries.push(q.then(r => r));
+  }
 
-  const { data } = await query;
-  return (data || []).map((p) => mapToPartResult(p, "mopar"));
+  // 2. Supersession-related alternatives
+  const norm = normalizeOem(part.oem_number);
+  const sagKey = `SAG-${norm}`;
+  const akKey = `AK-${norm}`;
+  queries.push(
+    supabase
+      .from("parts_new")
+      .select("id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source")
+      .in("oem_number", [sagKey, akKey])
+      .gt("price_with_vat", 0)
+      .limit(4)
+      .then(r => r)
+  );
+
+  const results = await Promise.all(queries);
+  const seen = new Set<string>([part.id]);
+  const combined: PartResult[] = [];
+
+  for (const res of results) {
+    if (res.data) {
+      for (const p of res.data) {
+        if (!seen.has(p.id)) {
+          combined.push(mapToPartResult(p, p.catalog_source || "mopar"));
+          seen.add(p.id);
+        }
+      }
+    }
+  }
+
+  return combined.filter(p => !isPartBlocked(p)).slice(0, 6);
 }
 
 /**
