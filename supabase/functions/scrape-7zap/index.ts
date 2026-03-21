@@ -7,7 +7,6 @@ const corsHeaders = {
 const BRAND_SLUGS: Record<string, string> = {
   'Chrysler': 'chrysler',
   'Dodge': 'dodge',
-  'Jeep': 'jeep',
   'RAM': 'ram',
 };
 
@@ -20,7 +19,7 @@ const MODEL_SLUGS: Record<string, string> = {
 };
 
 const REGIONS: Record<string, string> = {
-  'Chrysler': 'global', 'Dodge': 'global', 'Jeep': 'global', 'RAM': 'global',
+  'Chrysler': 'global', 'Dodge': 'global', 'RAM': 'global',
 };
 
 // Czech category translations
@@ -267,7 +266,7 @@ Deno.serve(async (req) => {
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       if (!LOVABLE_API_KEY) return jsonResponse({ success: false, error: 'AI not configured' }, 500);
 
-      const prompt = `You are an expert Mopar/Chrysler/Dodge/Jeep/RAM parts specialist. Generate a comprehensive OEM parts catalog for ${brand} ${model}${year ? ` ${year}` : ''}.
+      const prompt = `You are an expert Mopar/Chrysler/Dodge/RAM parts specialist. Generate a comprehensive OEM parts catalog for ${brand} ${model}${year ? ` ${year}` : ''}.
 
 Return a JSON array of parts. Each part must have REAL Mopar OEM part numbers. Include 60-80 parts across these categories:
 - Motor (Engine): oil filter, air filter, spark plugs, timing belt/chain, water pump, thermostat, gaskets, valve cover, oil pan

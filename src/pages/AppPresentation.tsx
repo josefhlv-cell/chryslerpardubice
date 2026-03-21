@@ -63,7 +63,7 @@ const slides: Slide[] = [
     icon: Presentation,
     title: "Chrysler & Dodge Pardubice",
     subtitle: "Kompletní digitální platforma pro autoservis a prodej dílů",
-    description: "Mobilní webová aplikace (PWA) spojující zákazníky s autorizovaným servisem Chrysler, Dodge, Jeep & RAM. Nabízí AI diagnostiku, EPC katalog originálních dílů, digitální servisní knížku, online objednávky a kompletní řízení servisní dílny.",
+    description: "Mobilní webová aplikace (PWA) spojující zákazníky s autorizovaným servisem Chrysler, Dodge & RAM. Nabízí AI diagnostiku, EPC katalog originálních dílů, digitální servisní knížku, online objednávky a kompletní řízení servisní dílny.",
     image: heroImg,
     features: [
       "Originální Mopar díly + aftermarket alternativy (SAG Connect)",

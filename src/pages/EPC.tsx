@@ -112,7 +112,7 @@ const EPC = () => {
             <div className="flex-1">
               <h1 className="font-display text-xl md:text-2xl font-bold">EPC Katalog</h1>
               <p className="text-xs text-muted-foreground">
-                Elektronický katalog dílů · Chrysler · Dodge · Jeep · RAM
+                Elektronický katalog dílů · Chrysler · Dodge · RAM
               </p>
             </div>
             {hasVehicle && (

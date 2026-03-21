@@ -17,11 +17,10 @@ import type { SearchFilters } from "@/api/partsAPI";
 
 // ---- Static data ----
 
-export const brands = ["Chrysler", "Jeep", "Dodge", "RAM", "Fiat", "Lancia"];
+export const brands = ["Chrysler", "Dodge", "RAM", "Fiat", "Lancia"];
 
 export const catalogTree: Record<string, Record<string, string[]>> = {
   Chrysler: { "300C": ["3.6L V6", "5.7L HEMI V8"], "300": ["2.7L V6", "3.5L V6", "5.7L HEMI", "6.1L SRT8"], Pacifica: ["3.6L V6", "3.6L Hybrid"], "Town & Country": ["3.6L V6", "3.8L V6"], Voyager: ["3.6L V6"], "200": ["2.4L", "3.6L V6"] },
-  Jeep: { "Grand Cherokee": ["3.0L CRD", "3.6L V6", "5.7L HEMI V8", "6.4L SRT"], Wrangler: ["2.0T", "3.6L V6", "2.2L CRD"], Cherokee: ["2.0L", "2.4L", "3.2L V6"], Compass: ["1.4T", "2.4L"], Renegade: ["1.0T", "1.3T", "1.6L CRD"] },
   Dodge: { Charger: ["3.6L V6", "5.7L HEMI V8", "6.2L Hellcat"], Challenger: ["3.6L V6", "5.7L HEMI V8", "6.2L Hellcat", "6.4L Scat Pack"], Durango: ["3.6L V6", "5.7L HEMI V8", "6.4L SRT"], Journey: ["2.4L", "3.6L V6"], "Grand Caravan": ["3.6L V6"] },
   RAM: { "1500": ["3.0L EcoDiesel", "3.6L V6", "5.7L HEMI"], "2500": ["6.4L HEMI", "6.7L Cummins"], ProMaster: ["3.6L V6", "3.0L EcoDiesel"] },
   Fiat: { "500": ["1.2L", "1.4L"], Ducato: ["2.3L", "3.0L"], Punto: ["1.2L", "1.4L"] },
@@ -116,7 +115,7 @@ const Filters = ({
           return { source: src, count: count ?? 0 };
         });
 
-        const targetBrands = ["Chrysler", "Dodge", "Jeep", "RAM"];
+        const targetBrands = ["Chrysler", "Dodge", "RAM"];
         const brandPromises = targetBrands.map(async (b) => {
           const { count } = await supabase
             .from("parts_new")

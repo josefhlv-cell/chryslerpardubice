@@ -9,12 +9,11 @@ import { toast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles, Loader2, Package, CheckCircle, XCircle, Layers } from "lucide-react";
 
-const BRANDS = ["Chrysler", "Dodge", "Jeep", "RAM"];
+const BRANDS = ["Chrysler", "Dodge", "RAM"];
 
 const MODELS: Record<string, string[]> = {
   Chrysler: ["300C", "300", "Pacifica", "Town & Country", "Voyager"],
   Dodge: ["Grand Caravan", "Durango", "Charger", "Challenger", "Journey", "Nitro"],
-  Jeep: ["Grand Cherokee", "Wrangler", "Cherokee", "Compass", "Renegade"],
   RAM: ["1500", "2500", "3500"],
 };
 

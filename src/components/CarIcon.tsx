@@ -15,7 +15,6 @@ import chryslerTownCountry from "@/assets/cars/chrysler-town-country.png";
 import dodgeDurango from "@/assets/cars/dodge-durango.png";
 import dodgeChallenger from "@/assets/cars/dodge-challenger.png";
 import dodgeCharger from "@/assets/cars/dodge-charger.png";
-import jeepGrandCherokee from "@/assets/cars/jeep-grand-cherokee.png";
 import ram1500 from "@/assets/cars/ram-1500.png";
 
 type CarData = {
@@ -51,7 +50,6 @@ const localImages: Record<string, string> = {
   "dodge|durango": dodgeDurango,
   "dodge|challenger": dodgeChallenger,
   "dodge|charger": dodgeCharger,
-  "jeep|grand cherokee": jeepGrandCherokee,
   "ram|1500": ram1500,
 };
 
@@ -69,7 +67,7 @@ const getLocalImage = (brand: string, model: string): string | null => {
 // Normalize brand names for imagin API
 const normalizeBrand = (brand: string): string => {
   const map: Record<string, string> = {
-    "CHRYSLER": "chrysler", "DODGE": "dodge", "RAM": "ram", "JEEP": "jeep",
+    "CHRYSLER": "chrysler", "DODGE": "dodge", "RAM": "ram",
     "FIAT": "fiat", "ALFA ROMEO": "alfa-romeo", "VOLKSWAGEN": "volkswagen",
     "MERCEDES-BENZ": "mercedes-benz", "BMW": "bmw", "AUDI": "audi",
     "TOYOTA": "toyota", "HONDA": "honda", "FORD": "ford", "CHEVROLET": "chevrolet",

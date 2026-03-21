@@ -368,7 +368,7 @@ const Shop = () => {
           <div className="flex items-center gap-4">
             <div className="flex-1">
               <h1 className="font-display text-xl md:text-2xl font-bold tracking-tight">Katalog náhradních dílů</h1>
-              <p className="text-[11px] text-muted-foreground hidden md:block">Originální díly Chrysler · Jeep · Dodge · RAM · Fiat</p>
+              <p className="text-[11px] text-muted-foreground hidden md:block">Originální díly Chrysler · Dodge · RAM · Fiat</p>
             </div>
 
             {/* Part type toggle */}
