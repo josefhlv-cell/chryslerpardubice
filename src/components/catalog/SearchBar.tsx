@@ -18,6 +18,7 @@ interface SearchBarProps {
   searchMode: SearchMode;
   onModeChange: (mode: SearchMode) => void;
   placeholder?: string;
+  hiddenModes?: SearchMode[];
 }
 
 const modeConfig: { mode: SearchMode; label: string; shortLabel: string; Icon: any; description: string; colorClass: string }[] = [
