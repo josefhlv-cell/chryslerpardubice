@@ -119,7 +119,14 @@ const AdminFaultReports = () => {
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
                 {r.vin && <p className="text-[10px] text-muted-foreground mt-1">VIN: {r.vin}</p>}
-                <p className="text-[10px] text-muted-foreground">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
+                 <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
+                 {(r.profile_name || r.profile_email) && (
+                   <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                     <User className="w-3 h-3" />
+                     {r.profile_name || "–"} · {r.profile_email || "–"}
+                     {r.profile_phone && ` · ${r.profile_phone}`}
+                   </p>
+                 )}
                 {r.photos?.length > 0 && (
                   <div className="flex gap-1 mt-1.5">
                     {r.photos.slice(0, 3).map((url, i) => (
