@@ -74,6 +74,9 @@ type OrderRow = {
   customer_note: string | null;
   catalog_source: string | null;
   created_at: string;
+  // enriched
+  profile_name?: string | null;
+  profile_email?: string | null;
 };
 
 type Booking = {
@@ -93,6 +96,10 @@ type Booking = {
   final_price: number | null;
   user_id: string;
   created_at: string;
+  // enriched
+  profile_name?: string | null;
+  profile_email?: string | null;
+  profile_phone?: string | null;
 };
 
 type Inquiry = {
@@ -191,9 +198,33 @@ const Admin = () => {
       supabase.from("vehicle_inquiries").select("*").order("created_at", { ascending: false }),
     ]);
     setPendingProfiles((profilesRes.data as Profile[]) || []);
-    setOrders((ordersRes.data as OrderRow[]) || []);
-    setBookings((bookingsRes.data as Booking[]) || []);
+    const rawOrders = (ordersRes.data as OrderRow[]) || [];
     setInquiries((inquiriesRes.data as Inquiry[]) || []);
+
+    // Collect all user IDs from orders + bookings for profile enrichment
+    const rawBookings = (bookingsRes.data as Booking[]) || [];
+    const allUserIds = [...new Set([...rawOrders.map(o => o.user_id), ...rawBookings.map(b => b.user_id)])];
+    let profileMap = new Map<string, { full_name: string | null; email: string | null; phone: string | null }>();
+    if (allUserIds.length > 0) {
+      const { data: allProfiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, email, phone")
+        .in("user_id", allUserIds);
+      (allProfiles || []).forEach(p => profileMap.set(p.user_id, p));
+    }
+
+    setOrders(rawOrders.map(o => ({
+      ...o,
+      profile_name: profileMap.get(o.user_id)?.full_name || null,
+      profile_email: profileMap.get(o.user_id)?.email || null,
+    })));
+    setBookings(rawBookings.map(b => ({
+      ...b,
+      profile_name: profileMap.get(b.user_id)?.full_name || null,
+      profile_email: profileMap.get(b.user_id)?.email || null,
+      profile_phone: profileMap.get(b.user_id)?.phone || null,
+    })));
+
     setLoading(false);
   };
 
@@ -462,6 +493,7 @@ const Admin = () => {
                               {o.order_type === "new" ? "Nový" : "Použitý"}
                             </Badge>
                           </div>
+                          <p className="text-xs text-primary font-medium">{o.profile_name || "–"} · {o.profile_email || "–"}</p>
                           <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "–"} · {o.quantity}×</p>
                           {o.catalog_source && (
                             <Badge variant="outline" className="text-[10px] mt-0.5 bg-secondary/50">
@@ -497,7 +529,8 @@ const Admin = () => {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-semibold text-sm">{b.service_type}</p>
-                          <p className="text-xs text-muted-foreground">{b.vehicle_brand} {b.vehicle_model}</p>
+                          <p className="text-xs text-primary font-medium">{b.profile_name || "–"} · {b.profile_email || b.profile_phone || "–"}</p>
+                          <p className="text-xs text-muted-foreground">{b.vehicle_brand || "–"} {b.vehicle_model || ""}</p>
                           <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
                           {b.wants_replacement_vehicle && <Badge variant="outline" className="text-xs mt-1">Náhradní vůz</Badge>}
                         </div>

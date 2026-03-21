@@ -13,6 +13,7 @@ import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
 
 type Vehicle = { id: string; brand: string; model: string; year: number | null; license_plate: string | null; user_id: string };
+type ProfileInfo = { user_id: string; full_name: string | null; email: string | null; phone: string | null };
 type ServiceOrder = {
   id: string; vehicle_id: string | null; user_id: string; status: string;
   description: string | null; mileage: number | null; planned_work: string | null;
@@ -20,6 +21,7 @@ type ServiceOrder = {
   labor_price: number | null; parts_total: number | null; total_price: number | null;
   customer_approved: boolean | null; created_at: string; updated_at: string;
   mechanic_id: string | null; lift_id: string | null;
+  profile_name?: string | null; profile_email?: string | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -66,8 +68,21 @@ const AdminServiceOrders = () => {
       supabase.from("service_orders").select("*").order("created_at", { ascending: false }),
       supabase.from("user_vehicles").select("*"),
     ]);
-    setOrders((ordersRes.data as ServiceOrder[]) || []);
+    const rawOrders = (ordersRes.data as ServiceOrder[]) || [];
     setVehicles((vehiclesRes.data as Vehicle[]) || []);
+
+    // Enrich with profile data
+    const userIds = [...new Set(rawOrders.map(o => o.user_id))];
+    let profileMap = new Map<string, ProfileInfo>();
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase.from("profiles").select("user_id, full_name, email, phone").in("user_id", userIds);
+      (profiles || []).forEach(p => profileMap.set(p.user_id, p));
+    }
+    setOrders(rawOrders.map(o => ({
+      ...o,
+      profile_name: profileMap.get(o.user_id)?.full_name || null,
+      profile_email: profileMap.get(o.user_id)?.email || null,
+    })));
     setLoading(false);
   };
 
@@ -149,6 +164,7 @@ const AdminServiceOrders = () => {
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate">{getVehicleLabel(o.vehicle_id)}</p>
+                  <p className="text-xs text-primary font-medium truncate">{o.profile_name || "–"} · {o.profile_email || "–"}</p>
                   <p className="text-xs text-muted-foreground truncate">{o.description || o.planned_work || "—"}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(o.created_at).toLocaleDateString("cs-CZ")}

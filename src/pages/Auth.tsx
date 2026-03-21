@@ -19,6 +19,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [accountType, setAccountType] = useState<"private" | "business">("private");
   const [companyName, setCompanyName] = useState("");
   const [ico, setIco] = useState("");
@@ -54,6 +55,16 @@ const Auth = () => {
         toast.success("Přihlášení úspěšné!");
         navigate(path);
       } else if (view === "register") {
+        if (!fullName.trim()) {
+          toast.error("Vyplňte jméno a příjmení");
+          setLoading(false);
+          return;
+        }
+        if (!phone.trim()) {
+          toast.error("Vyplňte telefonní číslo");
+          setLoading(false);
+          return;
+        }
         if (accountType === "business" && !companyName) {
           toast.error("Vyplňte název firmy");
           setLoading(false);
@@ -71,6 +82,11 @@ const Auth = () => {
           ico: accountType === "business" ? ico : undefined,
           dic: accountType === "business" ? dic : undefined,
         });
+        // Save phone to profile after signup
+        const { data: { user: newUser } } = await supabase.auth.getUser();
+        if (newUser) {
+          await supabase.from("profiles").update({ phone: phone.trim() }).eq("user_id", newUser.id);
+        }
         if (accountType === "business") {
           toast.success("Registrace odeslána! Váš firemní účet čeká na schválení administrátorem.");
         } else {
@@ -142,8 +158,13 @@ const Auth = () => {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Jméno a příjmení</Label>
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Jméno a příjmení *</Label>
                 <Input placeholder="Jan Novák" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">Telefon *</Label>
+                <Input type="tel" placeholder="+420 123 456 789" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </div>
 
               <AnimatePresence>
@@ -257,11 +278,6 @@ const Auth = () => {
               Zpět na přihlášení
             </button>
           )}
-          <div className="pt-2">
-            <button onClick={() => navigate("/shop")} className="text-xs text-muted-foreground hover:text-foreground transition-colors tracking-wide">
-              Pokračovat jako host →
-            </button>
-          </div>
         </div>
       </motion.div>
     </div>
