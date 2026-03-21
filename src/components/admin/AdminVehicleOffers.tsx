@@ -139,11 +139,39 @@ const AdminVehicleOffers = () => {
     return <div className="flex justify-center py-8"><RefreshCw className="w-5 h-5 animate-spin text-primary" /></div>;
   }
 
+  const [updatingVehicles, setUpdatingVehicles] = useState(false);
+
+  const updateVehiclesFromWeb = async () => {
+    setUpdatingVehicles(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-vehicles", { body: {} });
+      if (error) throw error;
+      toast({ 
+        title: "Aktualizace nabídky vozů", 
+        description: data?.message || "Hotovo" 
+      });
+    } catch (e: any) {
+      toast({ 
+        title: "Chyba aktualizace", 
+        description: e?.message || "Nepodařilo se aktualizovat nabídku", 
+        variant: "destructive" 
+      });
+    } finally {
+      setUpdatingVehicles(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm text-muted-foreground">Správa požadavků na výkup a individuální dovoz</p>
-        <Button size="sm" variant="outline" onClick={fetchData}><RefreshCw className="w-4 h-4 mr-1" />Obnovit</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={updateVehiclesFromWeb} disabled={updatingVehicles}>
+            {updatingVehicles ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Car className="w-4 h-4 mr-1" />}
+            Aktualizovat nabídku vozů
+          </Button>
+          <Button size="sm" variant="outline" onClick={fetchData}><RefreshCw className="w-4 h-4 mr-1" />Obnovit</Button>
+        </div>
       </div>
 
       <Tabs defaultValue="buyback">
