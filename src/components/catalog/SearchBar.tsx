@@ -37,6 +37,7 @@ const SearchBar = ({
   searchMode,
   onModeChange,
   placeholder,
+  hiddenModes = [],
 }: SearchBarProps) => {
   const defaultPlaceholder =
     searchMode === "part_number"
