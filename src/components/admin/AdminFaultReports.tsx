@@ -56,7 +56,21 @@ const AdminFaultReports = () => {
   const fetchReports = async () => {
     setLoading(true);
     const { data } = await supabase.from("fault_reports" as any).select("*").order("created_at", { ascending: false });
-    setReports((data as any as FaultReport[]) || []);
+    const reportsRaw = (data as any as FaultReport[]) || [];
+    
+    // Fetch profile info for each unique user_id
+    const userIds = [...new Set(reportsRaw.map(r => r.user_id))];
+    const { data: profiles } = await supabase.from("profiles").select("user_id, full_name, email, phone").in("user_id", userIds);
+    const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+    
+    const enriched = reportsRaw.map(r => ({
+      ...r,
+      profile_name: profileMap.get(r.user_id)?.full_name || null,
+      profile_email: profileMap.get(r.user_id)?.email || null,
+      profile_phone: profileMap.get(r.user_id)?.phone || null,
+    }));
+    
+    setReports(enriched);
     setLoading(false);
   };
 
