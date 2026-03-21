@@ -19,6 +19,7 @@ const Auth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [accountType, setAccountType] = useState<"private" | "business">("private");
   const [companyName, setCompanyName] = useState("");
   const [ico, setIco] = useState("");
