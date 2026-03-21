@@ -455,6 +455,7 @@ const Shop = () => {
                         setQuery("");
                       }
                     }}
+                    hiddenModes={hiddenModes}
                   />
                 </div>
                 {/* Mobile filter toggle */}
