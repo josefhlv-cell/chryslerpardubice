@@ -38,7 +38,7 @@ const conditions = [
   { value: "damaged", label: "Havarovaný" },
 ];
 
-const brands = ["Chrysler", "Dodge", "Jeep", "RAM", "Fiat", "Alfa Romeo", "Jiná"];
+const brands = ["Chrysler", "Dodge", "RAM", "Fiat", "Alfa Romeo", "Jiná"];
 
 const BuybackForm = () => {
   const { user } = useAuth();

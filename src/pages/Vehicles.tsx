@@ -41,7 +41,6 @@ const Vehicles = () => {
                 <SelectItem value="all">Vše</SelectItem>
                 <SelectItem value="Chrysler">Chrysler</SelectItem>
                 <SelectItem value="Dodge">Dodge</SelectItem>
-                <SelectItem value="Jeep">Jeep</SelectItem>
                 <SelectItem value="RAM">RAM</SelectItem>
               </SelectContent>
             </Select>

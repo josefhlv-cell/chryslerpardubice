@@ -19,7 +19,7 @@ const MODEL_SLUGS: Record<string, string> = {
 };
 
 const REGIONS: Record<string, string> = {
-  'Chrysler': 'global', 'Dodge': 'global', 'Jeep': 'global', 'RAM': 'global',
+  'Chrysler': 'global', 'Dodge': 'global', 'RAM': 'global',
 };
 
 // Czech category translations

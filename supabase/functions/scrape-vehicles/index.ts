@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
         formats: [
           {
             type: 'json',
-            prompt: 'Extract all vehicles for sale from this car dealership page. For each vehicle extract: brand (e.g. Chrysler, Dodge, Jeep, RAM), model, year, price in CZK (number only), mileage in km (number only), fuel type, transmission, engine, power, color, condition, description, image URLs (array), and the direct link/URL to the vehicle detail page if available.',
+            prompt: 'Extract all vehicles for sale from this car dealership page. For each vehicle extract: brand (e.g. Chrysler, Dodge, RAM), model, year, price in CZK (number only), mileage in km (number only), fuel type, transmission, engine, power, color, condition, description, image URLs (array), and the direct link/URL to the vehicle detail page if available.',
             schema: {
               type: 'object',
               properties: {

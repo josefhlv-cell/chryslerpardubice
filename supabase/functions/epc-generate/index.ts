@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     }
 
     // Step 3: AI — generate ONLY categories (fast, <20s)
-    const aiPrompt = `You are an expert Mopar/Chrysler/Dodge/Jeep/RAM parts catalog specialist.
+    const aiPrompt = `You are an expert Mopar/Chrysler/Dodge/RAM parts catalog specialist.
 
 Generate the EPC category structure for: ${vehicleDesc}
 

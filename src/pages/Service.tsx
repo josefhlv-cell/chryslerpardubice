@@ -138,7 +138,7 @@ const Service = () => {
             <div className="flex-1">
               <p className="text-sm font-display font-semibold">Značkový servis</p>
               <p className="text-xs text-muted-foreground">
-                Chrysler · Dodge · Jeep · RAM
+                Chrysler · Dodge · RAM
               </p>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

@@ -115,7 +115,7 @@ const Filters = ({
           return { source: src, count: count ?? 0 };
         });
 
-        const targetBrands = ["Chrysler", "Dodge", "Jeep", "RAM"];
+        const targetBrands = ["Chrysler", "Dodge", "RAM"];
         const brandPromises = targetBrands.map(async (b) => {
           const { count } = await supabase
             .from("parts_new")
