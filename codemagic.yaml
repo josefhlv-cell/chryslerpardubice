@@ -5,8 +5,7 @@ workflows:
     environment:
       vars:
         NODE_VERSION: "18"
-      flutter: stable
-      cocoapods: default
+        java: 17b
     scripts:
       - name: Install Node modules
         script: |
@@ -20,6 +19,7 @@ workflows:
         script: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon
+          ./
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
