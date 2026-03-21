@@ -25,6 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Modular components ----
 import SearchBar from "@/components/catalog/SearchBar";
