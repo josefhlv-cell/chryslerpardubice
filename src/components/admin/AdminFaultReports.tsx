@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, AlertTriangle, Phone, Eye } from "lucide-react";
+import { Loader2, AlertTriangle, Phone, Eye, User } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
 
 type FaultReport = {
@@ -26,6 +26,10 @@ type FaultReport = {
   status: string;
   admin_note: string | null;
   created_at: string;
+  // joined profile data
+  profile_name?: string | null;
+  profile_email?: string | null;
+  profile_phone?: string | null;
 };
 
 const statusColors: Record<string, string> = {
