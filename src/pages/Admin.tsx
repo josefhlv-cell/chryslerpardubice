@@ -198,20 +198,26 @@ const Admin = () => {
       supabase.from("vehicle_inquiries").select("*").order("created_at", { ascending: false }),
     ]);
     setPendingProfiles((profilesRes.data as Profile[]) || []);
-    setOrders((ordersRes.data as OrderRow[]) || []);
+    const rawOrders = (ordersRes.data as OrderRow[]) || [];
     setInquiries((inquiriesRes.data as Inquiry[]) || []);
 
-    // Enrich bookings with profile data
+    // Collect all user IDs from orders + bookings for profile enrichment
     const rawBookings = (bookingsRes.data as Booking[]) || [];
-    const bookingUserIds = [...new Set(rawBookings.map(b => b.user_id))];
+    const allUserIds = [...new Set([...rawOrders.map(o => o.user_id), ...rawBookings.map(b => b.user_id)])];
     let profileMap = new Map<string, { full_name: string | null; email: string | null; phone: string | null }>();
-    if (bookingUserIds.length > 0) {
-      const { data: bookingProfiles } = await supabase
+    if (allUserIds.length > 0) {
+      const { data: allProfiles } = await supabase
         .from("profiles")
         .select("user_id, full_name, email, phone")
-        .in("user_id", bookingUserIds);
-      (bookingProfiles || []).forEach(p => profileMap.set(p.user_id, p));
+        .in("user_id", allUserIds);
+      (allProfiles || []).forEach(p => profileMap.set(p.user_id, p));
     }
+
+    setOrders(rawOrders.map(o => ({
+      ...o,
+      profile_name: profileMap.get(o.user_id)?.full_name || null,
+      profile_email: profileMap.get(o.user_id)?.email || null,
+    })));
     setBookings(rawBookings.map(b => ({
       ...b,
       profile_name: profileMap.get(b.user_id)?.full_name || null,
