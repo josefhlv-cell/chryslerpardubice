@@ -36,7 +36,8 @@ export type FeatureKey =
   | "onboarding"
   | "email_templates"
   | "i18n"
-  | "pwa_offline";
+  | "pwa_offline"
+  | "catalog_alternatives";
 
 type FeatureFlag = {
   id: string;
