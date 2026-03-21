@@ -50,7 +50,6 @@ const localImages: Record<string, string> = {
   "dodge|durango": dodgeDurango,
   "dodge|challenger": dodgeChallenger,
   "dodge|charger": dodgeCharger,
-  "jeep|grand cherokee": jeepGrandCherokee,
   "ram|1500": ram1500,
 };
 
