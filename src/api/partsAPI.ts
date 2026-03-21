@@ -134,6 +134,7 @@ export const sortByPriority = (parts: PartResult[]) =>
 export const enrichWithSupersessions = async (parts: PartResult[]) => {
   const oems = [...new Set(parts.map((p) => normalizeOem(p.oem_number)).filter(Boolean))];
   if (oems.length === 0) return;
+  console.log(`[enrichSupersessions] Processing ${oems.length} OEMs, ${parts.length} parts`);
 
   // Check cache for supersession mappings
   const cachedSupersessions = await cacheGet<{ superseded: [string, string][]; supersedes: [string, string][] }>('oem_crossref', `supersession_batch_${oems.sort().join(',').slice(0, 100)}`);
