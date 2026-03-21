@@ -278,11 +278,6 @@ const Auth = () => {
               Zpět na přihlášení
             </button>
           )}
-          <div className="pt-2">
-            <button onClick={() => navigate("/shop")} className="text-xs text-muted-foreground hover:text-foreground transition-colors tracking-wide">
-              Pokračovat jako host →
-            </button>
-          </div>
         </div>
       </motion.div>
     </div>
