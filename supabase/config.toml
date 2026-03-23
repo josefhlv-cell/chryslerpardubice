@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.scrape-service-procedures]
 verify_jwt = false
+
+[functions.scrape-makro]
+verify_jwt = false
