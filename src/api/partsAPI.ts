@@ -81,6 +81,27 @@ export const sourcePriority: Record<string, number> = {
 /** Alternative catalog sources (non-OEM) */
 export const ALT_SOURCES = ["sag", "autokelly", "makro"];
 
+/** Mapping from Czech UI category names to makro slug prefixes */
+const makroCategoryMap: Record<string, string[]> = {
+  "Motor": ["motor"],
+  "Převodovka": ["prevodovka", "remeny"],
+  "Brzdy": ["brzdovy-system"],
+  "Chlazení": ["chlazeni"],
+  "Řízení": ["rizeni"],
+  "Podvozek": ["zaveseni-napravy-vedeni-kol"],
+  "Elektroinstalace": ["elektroinstalace"],
+  "Karoserie": ["karoserie"],
+  "Interiér": ["informacni-komunikacni-system"],
+  "Klimatizace": ["klimatizace"],
+  "Výfuk": ["vyfuk"],
+  "Filtry": ["filtr"],
+  "Oleje a kapaliny": ["dily-pro-servis-kontrolu-udrzbu"],
+};
+
+/** Get makro slug category prefixes for a given UI category name */
+export const getMakroSlugs = (uiCategory: string): string[] =>
+  makroCategoryMap[uiCategory] || [];
+
 /** Check if a source is an alternative (non-OEM) source */
 export const isAltSource = (source: string) => ALT_SOURCES.includes(source);
 
