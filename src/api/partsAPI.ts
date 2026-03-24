@@ -490,7 +490,13 @@ export async function searchByCategory(
       altDirectQuery = altDirectQuery.or(`compatible_vehicles.ilike.%${filters.brand}%,family.ilike.%${filters.brand}%`);
     }
     if (searchTerm) {
-      altDirectQuery = altDirectQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+      // Build OR filter that matches both Czech UI category names AND makro slug prefixes
+      const makroSlugs = getMakroSlugs(searchTerm);
+      const orParts = [`name.ilike.%${searchTerm}%`, `category.ilike.%${searchTerm}%`];
+      for (const slug of makroSlugs) {
+        orParts.push(`category.ilike.${slug}%`);
+      }
+      altDirectQuery = altDirectQuery.or(orParts.join(","));
     }
     altDirectQuery = altDirectQuery.limit(100);
     altQueries.push(altDirectQuery.then(res => res));
