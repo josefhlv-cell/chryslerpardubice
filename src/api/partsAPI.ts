@@ -498,7 +498,7 @@ export async function searchByCategory(
       }
       altDirectQuery = altDirectQuery.or(orParts.join(","));
     }
-    altDirectQuery = altDirectQuery.limit(100);
+    altDirectQuery = altDirectQuery.limit(200);
     altQueries.push(altDirectQuery.then(res => res));
 
     // Also look up by OEM-number prefix match
