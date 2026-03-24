@@ -50,7 +50,7 @@ const SearchBar = ({
       ? "Hledat náhrady za OEM díly..."
       : "Název nebo číslo dílu...";
 
-  const isVehicleMode = searchMode === "vehicle_oem" || searchMode === "vehicle_alt";
+  
 
   // In vehicle_alt mode, hide the search input — drill-down only
   const hideSearchInput = searchMode === "vehicle_alt";
