@@ -56,28 +56,36 @@ export const PAGE_SIZE = 20;
 export const sourceLabel: Record<string, string> = {
   mopar: "Zdroj 1",
   "epc-ai": "Zdroj 1",
-  sag: "Zdroj 2",
-  autokelly: "Zdroj 3",
-  intercars: "Zdroj 4",
-  csv: "Zdroj 5",
-  epc: "Zdroj 6",
-  "7zap": "Zdroj 7",
-  ai: "Zdroj 8",
+  makro: "Zdroj 2",
+  sag: "Zdroj 3",
+  autokelly: "Zdroj 4",
+  intercars: "Zdroj 5",
+  csv: "Zdroj 6",
+  epc: "Zdroj 7",
+  "7zap": "Zdroj 8",
+  ai: "Zdroj 9",
 };
 
 export const sourcePriority: Record<string, number> = {
   mopar: 1,
   "epc-ai": 1,
-  sag: 2,
-  autokelly: 3,
-  csv: 4,
-  intercars: 5,
+  makro: 2,
+  sag: 3,
+  autokelly: 4,
+  csv: 5,
+  intercars: 6,
 };
 
 // ---- Catalog config ----
 
+/** Alternative catalog sources (non-OEM) */
+export const ALT_SOURCES = ["sag", "autokelly", "makro"];
+
+/** Check if a source is an alternative (non-OEM) source */
+export const isAltSource = (source: string) => ALT_SOURCES.includes(source);
+
 /** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly"]);
+export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly", "makro"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
@@ -340,14 +348,14 @@ export async function searchParts(
     if (freshData && freshData.length > 0) {
       // Filter out invalid SAG entries (zero price, garbage names)
       const validFresh = freshData.filter(p => {
-        if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat <= 0) return false;
+        if (isAltSource(p.catalog_source || '') && p.catalog_source !== 'makro' && p.price_with_vat <= 0) return false;
         return true;
       });
       dbResults.push(...validFresh.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
     }
 
     // Also merge alternative results from edge function that may not be in DB yet
-    const altFromEdge = partResults.filter(p => (p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0);
+    const altFromEdge = partResults.filter(p => isAltSource(p.catalog_source) && (p.catalog_source === 'makro' || p.price_with_vat > 0));
     for (const alt of altFromEdge) {
       const alreadyInDb = dbResults.some(d =>
         d.catalog_source === alt.catalog_source && normalizeOem(d.oem_number) === normalizeOem(alt.oem_number) && d.name === alt.name
@@ -388,7 +396,7 @@ export async function searchByCategory(
 
   // For OEM mode: exclude sag/autokelly. For alternatives: we still need OEM numbers as base.
   if (sourceFilter === "oem") {
-    pnQuery = pnQuery.not("catalog_source", "in", '("sag","autokelly")');
+    pnQuery = pnQuery.not("catalog_source", "in", '("sag","autokelly","makro")');
   }
 
   if (searchTerm) {
@@ -423,7 +431,7 @@ export async function searchByCategory(
   if (pnRes.data) {
     for (const p of pnRes.data) {
       const mapped = mapToPartResult(p, p.catalog_source || "mopar");
-      if (sourceFilter !== "alternatives" || !["sag", "autokelly"].includes(mapped.catalog_source)) {
+      if (sourceFilter !== "alternatives" || !isAltSource(mapped.catalog_source)) {
         oemResults.push(mapped);
       }
       // Always add to allResults if in OEM or all mode
@@ -455,8 +463,7 @@ export async function searchByCategory(
       .select(
         "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source"
       )
-      .in("catalog_source", ["sag", "autokelly"])
-      .gt("price_with_vat", 0);
+      .in("catalog_source", ALT_SOURCES);
 
     if (filters.brand) {
       altDirectQuery = altDirectQuery.or(`compatible_vehicles.ilike.%${filters.brand}%,family.ilike.%${filters.brand}%`);
@@ -471,7 +478,7 @@ export async function searchByCategory(
     const baseOems = [...new Set([
       ...oemResults.map(r => normalizeOem(r.oem_number)),
       ...((pnRes.data || []) as any[])
-        .filter((p: any) => !["sag", "autokelly"].includes(p.catalog_source))
+        .filter((p: any) => !isAltSource(p.catalog_source))
         .map((p: any) => normalizeOem(p.oem_number))
     ].filter(Boolean))];
 
@@ -509,7 +516,7 @@ export async function searchByCategory(
     for (const res of altResults) {
       if (res.data) {
         for (const p of res.data) {
-          if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0) {
+          if (isAltSource(p.catalog_source)) {
             const mapped = mapToPartResult(p, p.catalog_source);
             if (!existingIds.has(mapped.id)) {
               // Extra dedup by catalog_source + normalized OEM + manufacturer
@@ -528,7 +535,7 @@ export async function searchByCategory(
     }
 
     // ---- Step 3: If still few alternatives, trigger external catalog-search only for precise drill-down ----
-    const altCount = allResults.filter(r => ["sag", "autokelly"].includes(r.catalog_source)).length;
+    const altCount = allResults.filter(r => isAltSource(r.catalog_source)).length;
     const isPreciseAlternativePath = Boolean(filters.brand) || Boolean(searchTerm && filters.brand);
     if (altCount < 3 && isPreciseAlternativePath && expandedOems.length > 0) {
       const uncachedBatch = expandedOems.slice(0, 5);
@@ -584,9 +591,9 @@ export async function searchByCategory(
   // Final source filter (safety net)
   let sourceFiltered = allResults;
   if (sourceFilter === "oem") {
-    sourceFiltered = allResults.filter(p => !["sag", "autokelly"].includes(p.catalog_source));
+    sourceFiltered = allResults.filter(p => !isAltSource(p.catalog_source));
   } else if (sourceFilter === "alternatives") {
-    sourceFiltered = allResults.filter(p => ["sag", "autokelly"].includes(p.catalog_source));
+    sourceFiltered = allResults.filter(p => isAltSource(p.catalog_source));
   }
 
   const filtered = applyFilters(sourceFiltered, filters);
@@ -940,7 +947,7 @@ export async function enrichEPCPrices(
           for (const r of data.results) {
             if (!r.found || r.price_with_vat <= 0) continue;
 
-            if (r.catalog_source === 'sag' || r.catalog_source === 'autokelly') {
+            if (isAltSource(r.catalog_source)) {
               // SAG or AutoKelly alternative
               if (!alternativesMap.has(r.oem_number)) alternativesMap.set(r.oem_number, []);
               const existing = alternativesMap.get(r.oem_number)!;
