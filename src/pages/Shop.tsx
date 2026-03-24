@@ -367,7 +367,7 @@ const Shop = () => {
         <img src="/images/logo-chrysler-dodge-full.png" alt="" className="w-[85vw] max-w-[500px] opacity-[0.17]" draggable={false} />
       </div>
       {/* ---- HEADER ---- */}
-      <div className="border-b border-border/30 bg-background/90 backdrop-blur-2xl sticky top-12 z-30">
+      <div className="border-b border-border/30 bg-background/90 backdrop-blur-2xl sticky top-14 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center gap-4">
             <div className="flex-1">
@@ -774,8 +774,8 @@ const Shop = () => {
                 {usedSubmitted ? (
                   <motion.div key="submitted" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
                     className="max-w-md mx-auto rounded-xl border border-border bg-card p-8 flex flex-col items-center gap-4 text-center mt-8">
-                    <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
-                      <CheckCircle className="w-7 h-7 text-green-400" />
+                    <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center">
+                      <CheckCircle className="w-7 h-7 text-success" />
                     </div>
                     <h3 className="font-display font-semibold text-lg">Poptávka odeslána</h3>
                     <p className="text-sm text-muted-foreground">Ověříme dostupnost a ozveme se.</p>

@@ -40,9 +40,10 @@ const Terms = () => (
       <p>Vztahy neupravené těmito podmínkami se řídí příslušnými ustanoveními občanského zákoníku (zákon č. 89/2012 Sb.).</p>
 
       <div className="mt-8 p-4 rounded-lg bg-muted/50 text-xs text-muted-foreground">
-        <p className="font-semibold">Chrysler Pardubice</p>
-        <p>Provozovatel: Chrysler Pardubice s.r.o.</p>
-        <p>Kontakt: info@chrysler.cz</p>
+        <p className="font-semibold">Chrysler &amp; Dodge Pardubice</p>
+        <p>Provozovatel: CHRYSLER PARDUBICE CHDP s.r.o., IČO: 27527638</p>
+        <p>Sídlo: Lukovna 11, 533 04 Sezemice</p>
+        <p>Kontakt: obchod@chrysler.cz · +420 603 372 911</p>
       </div>
     </div>
   </div>

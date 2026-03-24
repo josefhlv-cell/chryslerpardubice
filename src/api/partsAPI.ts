@@ -236,7 +236,7 @@ async function fetchMakroLiveAlternatives(
   });
   if (productsError || !productsData?.success) return { results: [], totalCount: 0 };
 
-  const liveResults = (productsData.products || []).map((product: any, index: number) => ({
+  const liveResults: PartResult[] = (productsData.products || []).map((product: any, index: number): PartResult => ({
     id: `makro-live-${product.catalog_number || product.ean || index}`,
     name: product.name || "Makro díl",
     oem_number: product.catalog_number || product.ean || `makro-${index}`,
@@ -254,9 +254,9 @@ async function fetchMakroLiveAlternatives(
     compatible_vehicles: [filters.brand, formatMakroLabel(filters.model), formatMakroLabel(filters.motor)].filter(Boolean).join(" "),
     superseded_by: null,
     supersedes: null,
-  } satisfies PartResult));
+  }));
 
-  const uniqueResults = Array.from(new Map(liveResults.map((part) => [`${part.oem_number}:${part.name}`, part])).values());
+  const uniqueResults: PartResult[] = Array.from(new Map(liveResults.map((part) => [`${part.oem_number}:${part.name}`, part] as [string, PartResult])).values());
   const paged = uniqueResults.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   return { results: sortByPriority(paged), totalCount: uniqueResults.length };
 }
