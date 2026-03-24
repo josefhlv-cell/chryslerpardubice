@@ -256,7 +256,7 @@ async function fetchMakroLiveAlternatives(
     supersedes: null,
   } satisfies PartResult));
 
-  const uniqueResults = Array.from(new Map(liveResults.map((part) => [`${part.oem_number}:${part.name}`, part])).values());
+  const uniqueResults: PartResult[] = Array.from(new Map(liveResults.map((part) => [`${part.oem_number}:${part.name}`, part] as [string, PartResult])).values());
   const paged = uniqueResults.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   return { results: sortByPriority(paged), totalCount: uniqueResults.length };
 }
