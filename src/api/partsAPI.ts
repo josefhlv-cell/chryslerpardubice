@@ -396,7 +396,7 @@ export async function searchByCategory(
 
   // For OEM mode: exclude sag/autokelly. For alternatives: we still need OEM numbers as base.
   if (sourceFilter === "oem") {
-    pnQuery = pnQuery.not("catalog_source", "in", '("sag","autokelly")');
+    pnQuery = pnQuery.not("catalog_source", "in", '("sag","autokelly","makro")');
   }
 
   if (searchTerm) {
