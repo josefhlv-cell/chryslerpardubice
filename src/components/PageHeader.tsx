@@ -12,7 +12,7 @@ const PageHeader = ({ title, showBack = false, rightElement, subtitle }: PageHea
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-14 z-40 flex items-center justify-between h-14 px-4 border-b border-border/30 bg-background/90 backdrop-blur-2xl safe-top">
+    <header className="sticky top-14 z-40 flex items-center justify-between h-14 px-4 border-b border-border/30 bg-background/90 backdrop-blur-2xl">
       <div className="flex items-center gap-3">
         {showBack && (
           <button
