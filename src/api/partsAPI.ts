@@ -42,6 +42,9 @@ export interface SearchFilters {
   availability?: string;
   partType?: string;
   catalogSource?: string;
+  sourceBrandKey?: string;
+  sourceModelUrl?: string;
+  sourceEngineUrl?: string;
 }
 
 export interface SearchResult {
@@ -125,6 +128,138 @@ export const isPartBlocked = (part: PartResult): boolean => {
 // ---- Helpers ----
 
 export const normalizeOem = (q: string) => q.replace(/[\s-]/g, "").toUpperCase();
+
+const normalizeText = (value?: string) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const slugifyCatalogText = (value?: string) =>
+  normalizeText(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const getVehicleSearchTokens = (value?: string) => {
+  const normalized = normalizeText(value).replace(/[_-]+/g, " ");
+  return [...new Set(normalized.split(/\s+/).filter((token) => token.length >= 3 && !/^\d+$/.test(token)))];
+};
+
+const formatMakroLabel = (value?: string) =>
+  (value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+
+const pickBestMakroOption = <T extends { name: string; url: string }>(options: T[], wanted?: string) => {
+  if (!options.length) return null;
+  const wantedTokens = getVehicleSearchTokens(wanted);
+  if (wantedTokens.length === 0) return options[0];
+
+  const scored = options
+    .map((option) => {
+      const haystack = normalizeText(option.name).replace(/[_-]+/g, " ");
+      const score = wantedTokens.reduce((sum, token) => sum + (haystack.includes(token) ? 1 : 0), 0);
+      return { option, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.score > 0 ? scored[0].option : options[0];
+};
+
+const pickMakroCategoryUrl = (urls: string[], category?: string, subCategory?: string) => {
+  const categorySlugs = getMakroSlugs(category || "").map(slugifyCatalogText);
+  const subSlug = slugifyCatalogText(subCategory || "");
+  const normalized = urls.map((url) => ({ url, key: slugifyCatalogText(url) }));
+
+  if (subSlug) {
+    const subMatch = normalized.find((entry) =>
+      entry.key.includes(subSlug) && (categorySlugs.length === 0 || categorySlugs.some((slug) => entry.key.includes(slug)))
+    );
+    if (subMatch) return subMatch.url;
+  }
+
+  const categoryMatch = normalized.find((entry) => categorySlugs.some((slug) => entry.key.includes(slug)));
+  return categoryMatch?.url || null;
+};
+
+async function fetchMakroLiveAlternatives(
+  searchTerm: string,
+  page: number,
+  filters: SearchFilters = {}
+): Promise<SearchResult> {
+  const brandKey = normalizeText(filters.sourceBrandKey || filters.brand);
+  if (!brandKey) return { results: [], totalCount: 0 };
+
+  let modelUrl = filters.sourceModelUrl;
+  if (!modelUrl) {
+    const { data, error } = await supabase.functions.invoke("scrape-makro", {
+      body: { action: "list-models", brand: brandKey },
+    });
+    if (error || !data?.success) return { results: [], totalCount: 0 };
+    const bestModel = pickBestMakroOption(data.models || [], filters.model);
+    modelUrl = bestModel?.url;
+  }
+
+  if (!modelUrl) return { results: [], totalCount: 0 };
+
+  let engineUrl = filters.sourceEngineUrl;
+  if (!engineUrl) {
+    const { data, error } = await supabase.functions.invoke("scrape-makro", {
+      body: { action: "list-engines", modelUrl },
+    });
+    if (error || !data?.success) return { results: [], totalCount: 0 };
+    const bestEngine = pickBestMakroOption(data.engines || [], filters.motor);
+    engineUrl = bestEngine?.url;
+  }
+
+  if (!engineUrl) return { results: [], totalCount: 0 };
+
+  const { data: categoriesData, error: categoriesError } = await supabase.functions.invoke("scrape-makro", {
+    body: { action: "list-categories", engineUrl },
+  });
+  if (categoriesError || !categoriesData?.success) return { results: [], totalCount: 0 };
+
+  const categoryUrl = pickMakroCategoryUrl(categoriesData.categories || [], filters.category || searchTerm, filters.subCategory);
+  if (!categoryUrl) return { results: [], totalCount: 0 };
+
+  const { data: productsData, error: productsError } = await supabase.functions.invoke("scrape-makro", {
+    body: {
+      action: "scrape-products",
+      brand: filters.brand || "",
+      model: formatMakroLabel(filters.model),
+      engine: formatMakroLabel(filters.motor),
+      category: filters.subCategory || filters.category || searchTerm,
+      categoryUrl,
+    },
+  });
+  if (productsError || !productsData?.success) return { results: [], totalCount: 0 };
+
+  const liveResults = (productsData.products || []).map((product: any, index: number) => ({
+    id: `makro-live-${product.catalog_number || product.ean || index}`,
+    name: product.name || "Makro díl",
+    oem_number: product.catalog_number || product.ean || `makro-${index}`,
+    internal_code: product.ean || null,
+    price_without_vat: 0,
+    price_with_vat: 0,
+    category: product.category || filters.subCategory || filters.category || searchTerm || null,
+    family: filters.brand || null,
+    segment: null,
+    packaging: null,
+    description: product.params || null,
+    manufacturer: product.manufacturer || null,
+    catalog_source: "makro",
+    availability: product.availability || "unknown",
+    compatible_vehicles: [filters.brand, formatMakroLabel(filters.model), formatMakroLabel(filters.motor)].filter(Boolean).join(" "),
+    superseded_by: null,
+    supersedes: null,
+  } satisfies PartResult));
+
+  const uniqueResults = Array.from(new Map(liveResults.map((part) => [`${part.oem_number}:${part.name}`, part])).values());
+  const paged = uniqueResults.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  return { results: sortByPriority(paged), totalCount: uniqueResults.length };
+}
 
 /** Map raw DB row to PartResult */
 export const mapToPartResult = (item: any, source: string): PartResult => {
@@ -491,18 +626,18 @@ async function searchAlternativesByVehicle(
   filters: SearchFilters = {}
 ): Promise<SearchResult> {
   let query = supabase
-    .from("parts_new")
+    .from("parts_new_public")
     .select(
       "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source, image_urls",
       { count: "exact" }
     )
     .in("catalog_source", ALT_SOURCES);
 
-  // Filter by vehicle: brand, model, motor all match against compatible_vehicles
-  const vehicleParts: string[] = [];
-  if (filters.brand) vehicleParts.push(filters.brand);
-  if (filters.model) vehicleParts.push(filters.model);
-  if (filters.motor) vehicleParts.push(filters.motor);
+   // Filter by vehicle based on public cache first; live fallback handles the exact source path.
+   const vehicleParts = [
+     filters.brand,
+     ...getVehicleSearchTokens(filters.model),
+   ].filter(Boolean) as string[];
 
   for (const term of vehicleParts) {
     query = query.ilike("compatible_vehicles", `%${term}%`);
@@ -538,7 +673,11 @@ async function searchAlternativesByVehicle(
   }
 
   const filtered = applyFilters(results, filters);
-  return { results: sortByPriority(filtered), totalCount: count ?? filtered.length };
+  if (filtered.length > 0) {
+    return { results: sortByPriority(filtered), totalCount: count ?? filtered.length };
+  }
+
+  return fetchMakroLiveAlternatives(searchTerm, page, filters);
 }
 
 // ---- EPC types ----
