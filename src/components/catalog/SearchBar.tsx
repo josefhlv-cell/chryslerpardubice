@@ -80,27 +80,6 @@ const SearchBar = ({
         })}
       </div>
 
-      {/* Active mode description banner for vehicle modes */}
-      {isVehicleMode && (
-        <div className={`rounded-lg px-3 py-2 text-xs flex items-center gap-2 ${
-          searchMode === "vehicle_oem"
-            ? "bg-blue-50 text-blue-800 border border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800"
-            : "bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800"
-        }`}>
-          {searchMode === "vehicle_oem" ? (
-            <>
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              <span><strong>Originální díly</strong> — zobrazují se pouze originální díly Mopar/FCA pro vybrané vozidlo.</span>
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-4 h-4 shrink-0" />
-              <span><strong>Značkové náhrady</strong> — projděte katalog krok za krokem stejně jako v AutoKelly a SAG.</span>
-            </>
-
-          )}
-        </div>
-      )}
 
       {/* Search input — hidden in vehicle_alt mode (drill-down only) */}
       {!hideSearchInput && (

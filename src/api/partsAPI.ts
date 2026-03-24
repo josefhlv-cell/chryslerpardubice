@@ -431,7 +431,7 @@ export async function searchByCategory(
   if (pnRes.data) {
     for (const p of pnRes.data) {
       const mapped = mapToPartResult(p, p.catalog_source || "mopar");
-      if (sourceFilter !== "alternatives" || !["sag", "autokelly"].includes(mapped.catalog_source)) {
+      if (sourceFilter !== "alternatives" || !isAltSource(mapped.catalog_source)) {
         oemResults.push(mapped);
       }
       // Always add to allResults if in OEM or all mode
@@ -463,8 +463,7 @@ export async function searchByCategory(
       .select(
         "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source"
       )
-      .in("catalog_source", ["sag", "autokelly"])
-      .gt("price_with_vat", 0);
+      .in("catalog_source", ALT_SOURCES);
 
     if (filters.brand) {
       altDirectQuery = altDirectQuery.or(`compatible_vehicles.ilike.%${filters.brand}%,family.ilike.%${filters.brand}%`);
@@ -479,7 +478,7 @@ export async function searchByCategory(
     const baseOems = [...new Set([
       ...oemResults.map(r => normalizeOem(r.oem_number)),
       ...((pnRes.data || []) as any[])
-        .filter((p: any) => !["sag", "autokelly"].includes(p.catalog_source))
+        .filter((p: any) => !isAltSource(p.catalog_source))
         .map((p: any) => normalizeOem(p.oem_number))
     ].filter(Boolean))];
 
@@ -517,7 +516,7 @@ export async function searchByCategory(
     for (const res of altResults) {
       if (res.data) {
         for (const p of res.data) {
-          if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0) {
+          if (isAltSource(p.catalog_source)) {
             const mapped = mapToPartResult(p, p.catalog_source);
             if (!existingIds.has(mapped.id)) {
               // Extra dedup by catalog_source + normalized OEM + manufacturer
@@ -536,7 +535,7 @@ export async function searchByCategory(
     }
 
     // ---- Step 3: If still few alternatives, trigger external catalog-search only for precise drill-down ----
-    const altCount = allResults.filter(r => ["sag", "autokelly"].includes(r.catalog_source)).length;
+    const altCount = allResults.filter(r => isAltSource(r.catalog_source)).length;
     const isPreciseAlternativePath = Boolean(filters.brand) || Boolean(searchTerm && filters.brand);
     if (altCount < 3 && isPreciseAlternativePath && expandedOems.length > 0) {
       const uncachedBatch = expandedOems.slice(0, 5);
@@ -592,9 +591,9 @@ export async function searchByCategory(
   // Final source filter (safety net)
   let sourceFiltered = allResults;
   if (sourceFilter === "oem") {
-    sourceFiltered = allResults.filter(p => !["sag", "autokelly"].includes(p.catalog_source));
+    sourceFiltered = allResults.filter(p => !isAltSource(p.catalog_source));
   } else if (sourceFilter === "alternatives") {
-    sourceFiltered = allResults.filter(p => ["sag", "autokelly"].includes(p.catalog_source));
+    sourceFiltered = allResults.filter(p => isAltSource(p.catalog_source));
   }
 
   const filtered = applyFilters(sourceFiltered, filters);
