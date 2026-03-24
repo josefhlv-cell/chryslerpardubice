@@ -81,6 +81,27 @@ export const sourcePriority: Record<string, number> = {
 /** Alternative catalog sources (non-OEM) */
 export const ALT_SOURCES = ["sag", "autokelly", "makro"];
 
+/** Mapping from Czech UI category names to makro slug prefixes */
+const makroCategoryMap: Record<string, string[]> = {
+  "Motor": ["motor"],
+  "Převodovka": ["prevodovka", "remeny"],
+  "Brzdy": ["brzdovy-system"],
+  "Chlazení": ["chlazeni"],
+  "Řízení": ["rizeni"],
+  "Podvozek": ["zaveseni-napravy-vedeni-kol"],
+  "Elektroinstalace": ["elektroinstalace"],
+  "Karoserie": ["karoserie"],
+  "Interiér": ["informacni-komunikacni-system"],
+  "Klimatizace": ["klimatizace"],
+  "Výfuk": ["vyfuk"],
+  "Filtry": ["filtr"],
+  "Oleje a kapaliny": ["dily-pro-servis-kontrolu-udrzbu"],
+};
+
+/** Get makro slug category prefixes for a given UI category name */
+export const getMakroSlugs = (uiCategory: string): string[] =>
+  makroCategoryMap[uiCategory] || [];
+
 /** Check if a source is an alternative (non-OEM) source */
 export const isAltSource = (source: string) => ALT_SOURCES.includes(source);
 
@@ -469,9 +490,15 @@ export async function searchByCategory(
       altDirectQuery = altDirectQuery.or(`compatible_vehicles.ilike.%${filters.brand}%,family.ilike.%${filters.brand}%`);
     }
     if (searchTerm) {
-      altDirectQuery = altDirectQuery.or(`name.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+      // Build OR filter that matches both Czech UI category names AND makro slug prefixes
+      const makroSlugs = getMakroSlugs(searchTerm);
+      const orParts = [`name.ilike.%${searchTerm}%`, `category.ilike.%${searchTerm}%`];
+      for (const slug of makroSlugs) {
+        orParts.push(`category.ilike.${slug}%`);
+      }
+      altDirectQuery = altDirectQuery.or(orParts.join(","));
     }
-    altDirectQuery = altDirectQuery.limit(100);
+    altDirectQuery = altDirectQuery.limit(200);
     altQueries.push(altDirectQuery.then(res => res));
 
     // Also look up by OEM-number prefix match
