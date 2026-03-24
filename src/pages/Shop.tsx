@@ -367,7 +367,7 @@ const Shop = () => {
         <img src="/images/logo-chrysler-dodge-full.png" alt="" className="w-[85vw] max-w-[500px] opacity-[0.17]" draggable={false} />
       </div>
       {/* ---- HEADER ---- */}
-      <div className="border-b border-border/30 bg-background/90 backdrop-blur-2xl sticky top-12 z-30">
+      <div className="border-b border-border/30 bg-background/90 backdrop-blur-2xl sticky top-14 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center gap-4">
             <div className="flex-1">
