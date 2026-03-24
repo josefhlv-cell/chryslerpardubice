@@ -56,28 +56,36 @@ export const PAGE_SIZE = 20;
 export const sourceLabel: Record<string, string> = {
   mopar: "Zdroj 1",
   "epc-ai": "Zdroj 1",
-  sag: "Zdroj 2",
-  autokelly: "Zdroj 3",
-  intercars: "Zdroj 4",
-  csv: "Zdroj 5",
-  epc: "Zdroj 6",
-  "7zap": "Zdroj 7",
-  ai: "Zdroj 8",
+  makro: "Zdroj 2",
+  sag: "Zdroj 3",
+  autokelly: "Zdroj 4",
+  intercars: "Zdroj 5",
+  csv: "Zdroj 6",
+  epc: "Zdroj 7",
+  "7zap": "Zdroj 8",
+  ai: "Zdroj 9",
 };
 
 export const sourcePriority: Record<string, number> = {
   mopar: 1,
   "epc-ai": 1,
-  sag: 2,
-  autokelly: 3,
-  csv: 4,
-  intercars: 5,
+  makro: 2,
+  sag: 3,
+  autokelly: 4,
+  csv: 5,
+  intercars: 6,
 };
 
 // ---- Catalog config ----
 
+/** Alternative catalog sources (non-OEM) */
+export const ALT_SOURCES = ["sag", "autokelly", "makro"];
+
+/** Check if a source is an alternative (non-OEM) source */
+export const isAltSource = (source: string) => ALT_SOURCES.includes(source);
+
 /** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly"]);
+export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly", "makro"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
