@@ -348,14 +348,14 @@ export async function searchParts(
     if (freshData && freshData.length > 0) {
       // Filter out invalid SAG entries (zero price, garbage names)
       const validFresh = freshData.filter(p => {
-        if ((p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat <= 0) return false;
+        if (isAltSource(p.catalog_source || '') && p.catalog_source !== 'makro' && p.price_with_vat <= 0) return false;
         return true;
       });
       dbResults.push(...validFresh.map((p) => mapToPartResult(p, p.catalog_source || "mopar")));
     }
 
     // Also merge alternative results from edge function that may not be in DB yet
-    const altFromEdge = partResults.filter(p => (p.catalog_source === 'sag' || p.catalog_source === 'autokelly') && p.price_with_vat > 0);
+    const altFromEdge = partResults.filter(p => isAltSource(p.catalog_source) && (p.catalog_source === 'makro' || p.price_with_vat > 0));
     for (const alt of altFromEdge) {
       const alreadyInDb = dbResults.some(d =>
         d.catalog_source === alt.catalog_source && normalizeOem(d.oem_number) === normalizeOem(alt.oem_number) && d.name === alt.name
@@ -947,7 +947,7 @@ export async function enrichEPCPrices(
           for (const r of data.results) {
             if (!r.found || r.price_with_vat <= 0) continue;
 
-            if (r.catalog_source === 'sag' || r.catalog_source === 'autokelly') {
+            if (isAltSource(r.catalog_source)) {
               // SAG or AutoKelly alternative
               if (!alternativesMap.has(r.oem_number)) alternativesMap.set(r.oem_number, []);
               const existing = alternativesMap.get(r.oem_number)!;
