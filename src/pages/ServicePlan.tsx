@@ -196,7 +196,7 @@ const ServicePlan = () => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        {status.urgent ? <AlertTriangle className="w-4 h-4 text-destructive shrink-0" /> : <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />}
+                        {status.urgent ? <AlertTriangle className="w-4 h-4 text-destructive shrink-0" /> : <CheckCircle className="w-4 h-4 text-success shrink-0" />}
                         <p className="font-semibold text-sm">{plan.service_name}</p>
                       </div>
                       <div className="flex gap-2 mt-1.5 flex-wrap">
