@@ -43,6 +43,25 @@ Deno.serve(async (req) => {
       exportCsv = false,
     } = await req.json();
 
+    // Auth check - manual calls require admin, auto/cron calls are allowed
+    if (mode !== 'auto') {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+      const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+      if (claimsError || !claimsData?.claims?.sub) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+      const adminCheck = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { data: roleData } = await adminCheck.from('user_roles').select('role').eq('user_id', claimsData.claims.sub).eq('role', 'admin').maybeSingle();
+      if (!roleData) {
+        return json({ error: 'Forbidden: admin required' }, 403);
+      }
+    }
+
     const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
