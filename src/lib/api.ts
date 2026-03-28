@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 // ---- Vehicles ----
 export const fetchVehicles = async (filters?: { brand?: string; search?: string }) => {
-  let query = supabase.from("vehicles").select("*").eq("is_active", true).order("created_at", { ascending: false });
+  let query = supabase.from("vehicles").select("id, brand, model, year, price, mileage, fuel, transmission, engine, power, color, condition, description, images, listing_url, is_active, created_at, updated_at").eq("is_active", true).order("created_at", { ascending: false });
   if (filters?.brand && filters.brand !== "all") {
     query = query.eq("brand", filters.brand);
   }
@@ -15,7 +15,7 @@ export const fetchVehicles = async (filters?: { brand?: string; search?: string 
 };
 
 export const fetchVehicleById = async (id: string) => {
-  const { data, error } = await supabase.from("vehicles").select("*").eq("id", id).single();
+  const { data, error } = await supabase.from("vehicles").select("id, brand, model, year, price, mileage, fuel, transmission, engine, power, color, condition, description, images, listing_url, is_active, created_at, updated_at").eq("id", id).single();
   if (error) throw error;
   return data;
 };

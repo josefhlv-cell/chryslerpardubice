@@ -90,7 +90,7 @@ const VehicleDetail = () => {
             ["Motor", vehicle.engine],
             ["Převodovka", vehicle.transmission],
             ["Barva", vehicle.color],
-            ["VIN", vehicle.vin],
+            ["Stav", vehicle.condition],
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{label}</span>
