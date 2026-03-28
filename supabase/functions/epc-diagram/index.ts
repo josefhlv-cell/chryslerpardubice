@@ -104,6 +104,8 @@ Requirements:
 
     let svg = svgMatch[0];
     svg = svg.replace(/<script[\s\S]*?<\/script>/gi, '');
+    svg = svg.replace(/\s+on\w+="[^"]*"/gi, '');
+    svg = svg.replace(/\s+on\w+='[^']*'/gi, '');
 
     // Count parts in SVG
     const partsCount = (svg.match(/data-oem=/g) || []).length;

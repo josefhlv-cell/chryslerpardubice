@@ -549,7 +549,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
                 <div
                   ref={diagramRef}
                   className="w-full overflow-x-auto [&_svg]:w-full [&_svg]:h-auto [&_[data-oem]]:cursor-pointer [&_[data-oem]:hover]:opacity-80"
-                  dangerouslySetInnerHTML={{ __html: diagramSvg }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(diagramSvg, { USE_PROFILES: { svg: true, svgFilters: true }, ADD_ATTR: ['data-oem', 'data-name'] }) }}
                 />
               </div>
             )}
