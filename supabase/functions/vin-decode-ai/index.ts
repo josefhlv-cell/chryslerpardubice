@@ -9,6 +9,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Auth check - require authenticated user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
+    }
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const authClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+    if (claimsError || !claimsData?.claims?.sub) {
+      return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
+    }
+
     const { vin } = await req.json();
     if (!vin || vin.length < 11) {
       return jsonResponse({ success: false, error: 'Valid VIN required' }, 400);

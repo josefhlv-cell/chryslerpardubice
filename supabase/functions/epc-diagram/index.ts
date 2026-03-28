@@ -9,6 +9,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Auth check - require authenticated user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+    const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+    if (claimsError || !claimsData?.claims?.sub) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+
     const body = await req.json();
     const { vehicle, category, subcategory, parts } = body;
 
