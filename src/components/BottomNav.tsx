@@ -43,6 +43,8 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
             <button
               key={item.path}
               onClick={() => navigate(item.path === "/" ? "/shop" : item.path)}
+              aria-label={item.label}
+              aria-current={active ? "page" : undefined}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-0.5 w-14 h-12 transition-all duration-200",
                 active

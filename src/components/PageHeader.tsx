@@ -17,6 +17,7 @@ const PageHeader = ({ title, showBack = false, rightElement, subtitle }: PageHea
         {showBack && (
           <button
             onClick={() => navigate(-1)}
+            aria-label="Zpět"
             className="w-8 h-8 rounded-xl bg-card/60 border border-border/40 flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

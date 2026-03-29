@@ -72,6 +72,7 @@ const TopBar = () => {
         )}
         <button
           onClick={() => navigate("/cart")}
+          aria-label={`Košík${totalItems > 0 ? ` (${totalItems})` : ''}`}
           className="relative p-2 rounded-lg hover:bg-card/50 transition-colors"
         >
           <ShoppingCart className="w-4.5 h-4.5 text-foreground" />
