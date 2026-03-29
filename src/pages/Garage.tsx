@@ -65,8 +65,8 @@ const Garage = () => {
                   <p className="text-xs text-muted-foreground">
                     {vehicles[0].year} · {vehicles[0].current_mileage ? `${(vehicles[0].current_mileage / 1000).toFixed(0)}tis km` : "—"}
                   </p>
-                  {vehicles[0].vin && (
-                    <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5 truncate">{vehicles[0].vin}</p>
+                  {vehicles[0].license_plate && (
+                    <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5 truncate">{vehicles[0].license_plate}</p>
                   )}
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
