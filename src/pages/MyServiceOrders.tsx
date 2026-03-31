@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchUserServiceOrders, fetchUserReviews, subscribeToServiceOrders } from "@/api/serviceOrdersAPI";
+import { fetchUserVehicles } from "@/api/garageAPI";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PageHeader from "@/components/PageHeader";
