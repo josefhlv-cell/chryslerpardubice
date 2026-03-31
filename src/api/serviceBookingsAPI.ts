@@ -1,9 +1,18 @@
 /**
  * Service Bookings API Layer
  * Handles service booking creation and admin notification.
+ * Includes input validation, structured logging, and error handling.
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import {
+  withErrorHandling,
+  requireUUID,
+  requireString,
+  logger,
+} from "./errors";
+
+const MODULE = "ServiceBookings";
 
 export interface ServiceBookingInput {
   user_id: string;
@@ -16,13 +25,25 @@ export interface ServiceBookingInput {
 }
 
 export const createServiceBooking = async (booking: ServiceBookingInput) => {
-  const { data, error } = await supabase
-    .from("service_bookings")
-    .insert(booking)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  requireUUID(booking.user_id, "user_id");
+  requireString(booking.service_type, "service_type");
+  requireString(booking.preferred_date, "preferred_date");
+
+  logger.info(MODULE, "createServiceBooking", {
+    userId: booking.user_id,
+    serviceType: booking.service_type,
+    date: booking.preferred_date,
+  });
+
+  return withErrorHandling(MODULE, "createServiceBooking", async () => {
+    const { data, error } = await supabase
+      .from("service_bookings")
+      .insert(booking)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }, { userId: booking.user_id });
 };
 
 export const notifyAdminServiceBooking = async (record: {
@@ -34,15 +55,20 @@ export const notifyAdminServiceBooking = async (record: {
     .invoke("notify-admin", {
       body: { type: "service_booking", record },
     })
-    .catch(() => {});
+    .catch((err) => {
+      logger.warn(MODULE, "notifyAdminServiceBooking", "Notifikace admina selhala", { error: String(err) });
+    });
 };
 
 export const fetchMyBookings = async (userId: string) => {
-  const { data, error } = await supabase
-    .from("service_bookings")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data || [];
+  requireUUID(userId, "userId");
+  return withErrorHandling(MODULE, "fetchMyBookings", async () => {
+    const { data, error } = await supabase
+      .from("service_bookings")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  }, { userId });
 };
