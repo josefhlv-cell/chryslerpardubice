@@ -63,14 +63,14 @@ const AdminNotifications = () => {
     }
     setSending(true);
     const rows = Array.from(selected).map(user_id => ({ user_id, title, message }));
-    const { error } = await supabase.from("notifications").insert(rows);
-    if (error) {
-      toast({ title: "Chyba", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await createNotifications(rows);
       toast({ title: `Oznámení odesláno ${rows.length} zákazníkům` });
       setTitle("");
       setMessage("");
       setSelected(new Set());
+    } catch (error: any) {
+      toast({ title: "Chyba", description: error.message, variant: "destructive" });
     }
     setSending(false);
   };

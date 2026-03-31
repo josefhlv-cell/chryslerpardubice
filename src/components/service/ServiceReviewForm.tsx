@@ -47,9 +47,11 @@ const ServiceReviewForm = ({ serviceOrderId, existingReview, onReviewSubmitted }
         comment: comment.trim() || null,
       });
     } catch (error: any) {
+      setSubmitting(false);
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
       return;
     }
+    setSubmitting(false);
     toast({ title: "Děkujeme za hodnocení! ⭐" });
     onReviewSubmitted?.();
   };
