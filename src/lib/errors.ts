@@ -101,6 +101,10 @@ export async function withErrorHandling<T>(
     return result;
   } catch (err) {
     logger.error(module, action, err, context);
+    // Capture for monitoring
+    import("@/lib/monitoring").then(({ captureError }) => {
+      captureError(err, { module, action, ...context });
+    }).catch(() => {});
     if (err instanceof AppError) throw err;
     const message = err instanceof Error ? err.message : "Neočekávaná chyba";
     throw new AppError(message, ErrorCodes.DB_ERROR, 500, { module, action, ...context });

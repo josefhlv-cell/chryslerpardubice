@@ -50,14 +50,17 @@ export const notifyAdminServiceBooking = async (record: {
   title: string;
   message: string;
 }) => {
-  // Fire-and-forget notification
-  supabase.functions
-    .invoke("notify-admin", {
-      body: { type: "service_booking", record },
-    })
-    .catch((err) => {
-      logger.warn(MODULE, "notifyAdminServiceBooking", "Notifikace admina selhala", { error: String(err) });
+  // Fire-and-forget notification with retry
+  import("@/lib/retry").then(({ withRetry, isTransientError }) => {
+    withRetry(
+      () => supabase.functions.invoke("notify-admin", {
+        body: { type: "service_booking", record },
+      }).then(({ error }) => { if (error) throw error; }),
+      { maxAttempts: 3, module: MODULE, action: "notifyAdminServiceBooking", retryIf: isTransientError }
+    ).catch((err) => {
+      logger.warn(MODULE, "notifyAdminServiceBooking", "Notifikace admina selhala po retries", { error: String(err) });
     });
+  });
 };
 
 export const fetchMyBookings = async (userId: string) => {
