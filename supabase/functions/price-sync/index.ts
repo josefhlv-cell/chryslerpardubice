@@ -117,25 +117,35 @@ Deno.serve(async (req) => {
       );
 
       // ── Stats ──────────────────────────────────────────────────────
-      let updated = 0, errors = 0, skipped = 0, notFound = 0;
+      let updated = 0, errors = 0, skipped = 0, notFound = 0, fallbackUsed = 0;
       for (const r of results) {
         if (r.status === 'updated') updated++;
         else if (r.status === 'locked' || r.status === 'fresh') skipped++;
         else if (r.status === 'not_found') notFound++;
         else if (r.status === 'error') errors++;
+        if (r.fallback_used) fallbackUsed++;
       }
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const avgMs = batch.length > 0 ? ((Date.now() - startTime) / batch.length).toFixed(0) : '0';
+      const successRate = batch.length > 0 ? Math.round(((updated + skipped) / batch.length) * 100) : 0;
+
+      // ── Monitoring alerts ─────────────────────────────────────────
+      if (successRate < 70 && batch.length >= 10) {
+        console.warn(`🚨 PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+      }
+      if (fallbackUsed > 0) {
+        console.log(`📋 FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
+      }
 
       const summary = {
         total: oemNumbers.length,
         batchProcessed: batch.length,
-        updated, errors, notFound, skipped,
+        updated, errors, notFound, skipped, fallbackUsed,
         nextOffset: offset + batch.length,
         elapsedSeconds: parseFloat(elapsed),
         avgMsPerPart: parseInt(avgMs),
-        successRate: batch.length > 0 ? `${Math.round(((updated + skipped) / batch.length) * 100)}%` : '0%',
+        successRate: `${successRate}%`,
       };
 
       let csv: string | undefined;
