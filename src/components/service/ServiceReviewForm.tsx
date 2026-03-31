@@ -39,14 +39,14 @@ const ServiceReviewForm = ({ serviceOrderId, existingReview, onReviewSubmitted }
   const handleSubmit = async () => {
     if (!user || rating === 0) return;
     setSubmitting(true);
-    const { error } = await supabase.from("service_reviews" as any).insert({
-      service_order_id: serviceOrderId,
-      user_id: user.id,
-      rating,
-      comment: comment.trim() || null,
-    } as any);
-    setSubmitting(false);
-    if (error) {
+    try {
+      await createServiceReview({
+        service_order_id: serviceOrderId,
+        user_id: user.id,
+        rating,
+        comment: comment.trim() || null,
+      });
+    } catch (error: any) {
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
       return;
     }
