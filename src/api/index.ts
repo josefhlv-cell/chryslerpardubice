@@ -5,6 +5,9 @@
  * Components should import from here or from individual modules.
  */
 
+// Shared utilities
+export { AppError, ValidationError, NotFoundError, AuthorizationError, logger } from "./errors";
+
 // Core / shared
 export * from "./garageAPI";
 export * from "./notificationsAPI";
