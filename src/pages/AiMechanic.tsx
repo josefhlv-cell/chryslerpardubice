@@ -105,9 +105,8 @@ const AiMechanic = () => {
   };
 
   const checkForDanger = (text: string) => {
-    const dangerKeywords = ["motor", "přehřátí", "brzd", "olej", "teplota", "kouř", "únik", "nebezpeč", "nehod", "požár"];
-    const lower = text.toLowerCase();
-    return dangerKeywords.some(k => lower.includes(k));
+    const intent = classifyIntent(text);
+    return intent.riskLevel === "critical" || intent.riskLevel === "high";
   };
 
   const searchRecommendedParts = async (aiResponse: string) => {
