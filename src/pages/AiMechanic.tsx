@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { classifyIntent } from "@/services/ai.service";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -104,9 +105,8 @@ const AiMechanic = () => {
   };
 
   const checkForDanger = (text: string) => {
-    const dangerKeywords = ["motor", "přehřátí", "brzd", "olej", "teplota", "kouř", "únik", "nebezpeč", "nehod", "požár"];
-    const lower = text.toLowerCase();
-    return dangerKeywords.some(k => lower.includes(k));
+    const intent = classifyIntent(text);
+    return intent.riskLevel === "critical" || intent.riskLevel === "high";
   };
 
   const searchRecommendedParts = async (aiResponse: string) => {
