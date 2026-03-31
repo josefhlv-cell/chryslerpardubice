@@ -372,7 +372,8 @@ async function processPartWithRetry(
     } catch (e) {
       adaptThrottle(throttle, false);
       if (attempt === MAX_RETRIES) {
-        return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt };
+        console.error(`❌ PRICE_SYNC_FAILED: ${partNumber} after ${attempt} attempts — ${String(e)}`);
+        return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt, fallback_used: false };
       }
       await randomDelay(throttle);
     }
