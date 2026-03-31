@@ -9,6 +9,8 @@ const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
 const CONCURRENCY = 8;
 const BATCH_SIZE = 50;
 const CACHE_TTL_MINUTES = 20;
+const FRESH_THRESHOLD_HOURS = 24; // Skip parts updated within 24h
+const STALE_THRESHOLD_HOURS = 168; // 7 days = "old"
 const MAX_RETRIES = 3;
 const MIN_DELAY = 200;
 const MAX_DELAY = 600;
@@ -115,25 +117,35 @@ Deno.serve(async (req) => {
       );
 
       // ── Stats ──────────────────────────────────────────────────────
-      let updated = 0, errors = 0, skipped = 0, notFound = 0;
+      let updated = 0, errors = 0, skipped = 0, notFound = 0, fallbackUsed = 0;
       for (const r of results) {
         if (r.status === 'updated') updated++;
         else if (r.status === 'locked' || r.status === 'fresh') skipped++;
         else if (r.status === 'not_found') notFound++;
         else if (r.status === 'error') errors++;
+        if (r.fallback_used) fallbackUsed++;
       }
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       const avgMs = batch.length > 0 ? ((Date.now() - startTime) / batch.length).toFixed(0) : '0';
+      const successRate = batch.length > 0 ? Math.round(((updated + skipped) / batch.length) * 100) : 0;
+
+      // ── Monitoring alerts ─────────────────────────────────────────
+      if (successRate < 70 && batch.length >= 10) {
+        console.warn(`🚨 PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+      }
+      if (fallbackUsed > 0) {
+        console.log(`📋 FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
+      }
 
       const summary = {
         total: oemNumbers.length,
         batchProcessed: batch.length,
-        updated, errors, notFound, skipped,
+        updated, errors, notFound, skipped, fallbackUsed,
         nextOffset: offset + batch.length,
         elapsedSeconds: parseFloat(elapsed),
         avgMsPerPart: parseInt(avgMs),
-        successRate: batch.length > 0 ? `${Math.round(((updated + skipped) / batch.length) * 100)}%` : '0%',
+        successRate: `${successRate}%`,
       };
 
       let csv: string | undefined;
@@ -165,8 +177,9 @@ Deno.serve(async (req) => {
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number): Promise<string[]> {
   const results: string[] = [];
+  const freshCutoff = new Date(Date.now() - FRESH_THRESHOLD_HOURS * 3600000).toISOString();
 
-  // Priority 1: Parts from recent orders (last 7 days)
+  // Priority 1: Parts from recent orders (last 7 days) that aren't fresh
   if (offset === 0) {
     const { data: orderParts } = await supabase
       .from('orders')
@@ -174,7 +187,7 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number)
       .not('oem_number', 'is', null)
       .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(20);
     if (orderParts) {
       for (const p of orderParts) {
         if (p.oem_number && !results.includes(p.oem_number)) results.push(p.oem_number);
@@ -182,16 +195,17 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number)
     }
   }
 
-  // Priority 2+3: Rest by oldest update
+  // Priority 2: Stale/old parts (not updated in last 24h) ordered by oldest first
   const remaining = limit - results.length;
   if (remaining > 0) {
-    const { data: topParts } = await supabase
+    const { data: staleParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
       .order('last_price_update', { ascending: true, nullsFirst: true })
       .range(offset, offset + remaining - 1);
-    if (topParts) {
-      for (const p of topParts) {
+    if (staleParts) {
+      for (const p of staleParts) {
         if (!results.includes(p.oem_number)) results.push(p.oem_number);
       }
     }
@@ -358,7 +372,8 @@ async function processPartWithRetry(
     } catch (e) {
       adaptThrottle(throttle, false);
       if (attempt === MAX_RETRIES) {
-        return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt };
+        console.error(`❌ PRICE_SYNC_FAILED: ${partNumber} after ${attempt} attempts — ${String(e)}`);
+        return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt, fallback_used: false };
       }
       await randomDelay(throttle);
     }
@@ -455,17 +470,20 @@ async function processPart(
       }).eq('id', cached.id);
     }
 
+    console.log(`✅ PRICE_UPDATED: ${partNumber} → ${priceWithVat} Kč`);
     return {
       oem_number: partNumber, status: 'updated', searchCode,
       price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
     };
   } else {
+    // NEVER overwrite existing price — just bump timestamp to avoid re-checking too soon
     if (cached) {
       await supabase.from('parts_new').update({
         last_price_update: new Date().toISOString(),
       }).eq('id', cached.id);
     }
-    return { oem_number: partNumber, status: 'not_found', searchCode };
+    console.log(`⚠️ PRICE_SYNC_NOT_FOUND: ${partNumber} — keeping existing price (${cached?.price_with_vat || 0} Kč)`);
+    return { oem_number: partNumber, status: 'not_found', searchCode, fallback_used: !!cached && cached.price_with_vat > 0 };
   }
 }
 

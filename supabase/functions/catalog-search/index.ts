@@ -323,12 +323,31 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Build primary result (Mopar)
+      // Build primary result (Mopar) — NEVER return null/0 price if we have fallback
+      let finalPriceWithout = moparResult.found ? moparResult.price_without_vat : (cached?.price_without_vat || 0);
+      let finalPriceWith = moparResult.found ? moparResult.price_with_vat : (cached?.price_with_vat || 0);
+
+      // Price fallback: if price is still 0, try price_history for last known price
+      if (finalPriceWith <= 0 && cached?.id) {
+        const { data: lastPrice } = await supabase
+          .from('price_history')
+          .select('new_price_with_vat, new_price_without_vat')
+          .eq('part_id', cached.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lastPrice && lastPrice.new_price_with_vat > 0) {
+          finalPriceWith = lastPrice.new_price_with_vat;
+          finalPriceWithout = lastPrice.new_price_without_vat;
+          console.log(`📋 FALLBACK_USED: ${cleanOem} — using last known price ${finalPriceWith} Kč from price_history`);
+        }
+      }
+
       results.push({
         oem_number: cleanOem,
         name: moparResult.found ? (moparResult.name || `Díl ${cleanOem}`) : (cached?.name || `Díl ${cleanOem}`),
-        price_without_vat: moparResult.found ? moparResult.price_without_vat : (cached?.price_without_vat || 0),
-        price_with_vat: moparResult.found ? moparResult.price_with_vat : (cached?.price_with_vat || 0),
+        price_without_vat: finalPriceWithout,
+        price_with_vat: finalPriceWith,
         found: moparResult.found || !!cached,
         cached: false, search_code: usedSearchCode,
         catalog_source: 'mopar',
@@ -385,9 +404,10 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, results, diagnostics }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('catalog-search error:', error);
+    // FAIL-SAFE: never crash the catalog — return empty results instead of 500
     return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, results: [], diagnostics: { error: error instanceof Error ? error.message : 'Unknown error' } }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
