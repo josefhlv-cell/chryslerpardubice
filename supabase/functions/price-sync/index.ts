@@ -469,17 +469,20 @@ async function processPart(
       }).eq('id', cached.id);
     }
 
+    console.log(`✅ PRICE_UPDATED: ${partNumber} → ${priceWithVat} Kč`);
     return {
       oem_number: partNumber, status: 'updated', searchCode,
       price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
     };
   } else {
+    // NEVER overwrite existing price — just bump timestamp to avoid re-checking too soon
     if (cached) {
       await supabase.from('parts_new').update({
         last_price_update: new Date().toISOString(),
       }).eq('id', cached.id);
     }
-    return { oem_number: partNumber, status: 'not_found', searchCode };
+    console.log(`⚠️ PRICE_SYNC_NOT_FOUND: ${partNumber} — keeping existing price (${cached?.price_with_vat || 0} Kč)`);
+    return { oem_number: partNumber, status: 'not_found', searchCode, fallback_used: !!cached && cached.price_with_vat > 0 };
   }
 }
 
