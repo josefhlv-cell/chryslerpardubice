@@ -28,13 +28,15 @@ const AdminNotifications = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    const fetch = async () => {
+    const load = async () => {
       setLoading(true);
-      const { data } = await supabase.from("profiles").select("id, user_id, full_name, email, company_name, account_type").order("full_name");
-      setProfiles((data as Profile[]) || []);
+      try {
+        const data = await fetchAllProfiles();
+        setProfiles(data as Profile[]);
+      } catch {}
       setLoading(false);
     };
-    fetch();
+    load();
   }, []);
 
   const toggle = (userId: string) => {
