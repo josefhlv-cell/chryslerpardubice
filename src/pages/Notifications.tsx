@@ -50,13 +50,13 @@ const Notifications = () => {
   }, [user]);
 
   const markRead = async (id: string) => {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    await markNotificationRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    await markAllNotificationsRead(user.id);
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 

@@ -68,13 +68,7 @@ const MyServiceOrders = () => {
     if (user) fetchData();
 
     if (user) {
-      const channel = supabase
-        .channel("my-service-orders")
-        .on("postgres_changes", { event: "*", schema: "public", table: "service_orders", filter: `user_id=eq.${user.id}` }, () => {
-          fetchData();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
+      return subscribeToServiceOrders(user.id, fetchData);
     }
   }, [user]);
 
