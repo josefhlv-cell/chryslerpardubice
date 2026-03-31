@@ -9,6 +9,8 @@ const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
 const CONCURRENCY = 8;
 const BATCH_SIZE = 50;
 const CACHE_TTL_MINUTES = 20;
+const FRESH_THRESHOLD_HOURS = 24; // Skip parts updated within 24h
+const STALE_THRESHOLD_HOURS = 168; // 7 days = "old"
 const MAX_RETRIES = 3;
 const MIN_DELAY = 200;
 const MAX_DELAY = 600;
