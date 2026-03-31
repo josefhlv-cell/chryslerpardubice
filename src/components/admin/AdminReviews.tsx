@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchAllReviews } from "@/api/adminAPI";
 import { Card, CardContent } from "@/components/ui/card";
 import { Star, Loader2 } from "lucide-react";
 
@@ -8,12 +8,10 @@ const AdminReviews = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetch = async () => {
-      const { data } = await supabase.from("service_reviews" as any).select("*").order("created_at", { ascending: false });
-      setReviews((data as any[]) || []);
-      setLoading(false);
-    };
-    fetch();
+    fetchAllReviews()
+      .then(setReviews)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>;

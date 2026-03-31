@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import TondaAvatar from "@/components/TondaAvatar";
 import CarIcon from "@/components/CarIcon";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchUserVehicles, fetchActiveServiceOrder } from "@/api/garageAPI";
 import ServiceProgressIndicator from "@/components/ServiceProgressIndicator";
 import VehicleCarousel from "@/components/dashboard/VehicleCarousel";
 import ServiceRecommendations from "@/components/ServiceRecommendations";
@@ -21,11 +21,8 @@ const Garage = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("user_vehicles").select("*").eq("user_id", user.id).order("created_at", { ascending: true })
-      .then(({ data }) => { if (data) setVehicles(data); });
-    supabase.from("service_orders").select("*").eq("user_id", user.id).neq("status", "completed")
-      .order("created_at", { ascending: false }).limit(1)
-      .then(({ data }) => { if (data?.length) setActiveOrder(data[0]); });
+    fetchUserVehicles(user.id).then(setVehicles).catch(() => {});
+    fetchActiveServiceOrder(user.id).then(setActiveOrder).catch(() => {});
   }, [user]);
 
   const garageItems = [

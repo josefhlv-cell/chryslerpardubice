@@ -1,19 +1,17 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  fetchNotifications as apiFetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  subscribeToNotifications,
+  type Notification,
+} from "@/api/notificationsAPI";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Bell, Check, Loader2, Wrench, ShoppingCart, AlertTriangle, Info } from "lucide-react";
-
-type Notification = {
-  id: string;
-  title: string;
-  message: string;
-  is_read: boolean;
-  created_at: string;
-};
 
 const getNotificationIcon = (title: string) => {
   if (title.includes("servis") || title.includes("🔧")) return { icon: Wrench, color: "text-primary", bg: "bg-primary/10" };
@@ -35,12 +33,8 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    setNotifications((data as Notification[]) || []);
+    const data = await apiFetchNotifications(user.id);
+    setNotifications(data);
     setLoading(false);
   };
 
@@ -50,28 +44,19 @@ const Notifications = () => {
 
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel("user-notifications")
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${user.id}`,
-      }, (payload) => {
-        setNotifications(prev => [payload.new as Notification, ...prev]);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return subscribeToNotifications(user.id, (newNotification) => {
+      setNotifications(prev => [newNotification, ...prev]);
+    });
   }, [user]);
 
   const markRead = async (id: string) => {
-    await supabase.from("notifications").update({ is_read: true }).eq("id", id);
+    await markNotificationRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ is_read: true }).eq("user_id", user.id).eq("is_read", false);
+    await markAllNotificationsRead(user.id);
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 

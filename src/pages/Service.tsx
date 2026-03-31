@@ -13,7 +13,7 @@ import { format } from "date-fns";
 import { cs } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { createServiceBooking, notifyAdminServiceBooking } from "@/api/serviceBookingsAPI";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -54,7 +54,7 @@ const Service = () => {
     }
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("service_bookings").insert({
+      await createServiceBooking({
         user_id: user.id,
         service_type: serviceType,
         vehicle_brand: brand || null,
@@ -63,17 +63,11 @@ const Service = () => {
         note: note || null,
         wants_replacement_vehicle: false,
       });
-      if (error) throw error;
 
-      supabase.functions.invoke("notify-admin", {
-        body: {
-          type: "service_booking",
-          record: {
-            title: "🔧 Nová rezervace servisu",
-            message: `${brand || "?"} ${model || "?"} – ${serviceType}, termín: ${format(date, "d.M.yyyy")}`,
-          },
-        },
-      }).catch(() => {});
+      notifyAdminServiceBooking({
+        title: "🔧 Nová rezervace servisu",
+        message: `${brand || "?"} ${model || "?"} – ${serviceType}, termín: ${format(date, "d.M.yyyy")}`,
+      });
 
       setSubmitted(true);
       toast.success("Rezervace servisu odeslána!");

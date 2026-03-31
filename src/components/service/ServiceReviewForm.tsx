@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { createServiceReview } from "@/api/serviceOrdersAPI";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,17 +39,19 @@ const ServiceReviewForm = ({ serviceOrderId, existingReview, onReviewSubmitted }
   const handleSubmit = async () => {
     if (!user || rating === 0) return;
     setSubmitting(true);
-    const { error } = await supabase.from("service_reviews" as any).insert({
-      service_order_id: serviceOrderId,
-      user_id: user.id,
-      rating,
-      comment: comment.trim() || null,
-    } as any);
-    setSubmitting(false);
-    if (error) {
+    try {
+      await createServiceReview({
+        service_order_id: serviceOrderId,
+        user_id: user.id,
+        rating,
+        comment: comment.trim() || null,
+      });
+    } catch (error: any) {
+      setSubmitting(false);
       toast({ title: "Chyba", description: error.message, variant: "destructive" });
       return;
     }
+    setSubmitting(false);
     toast({ title: "Děkujeme za hodnocení! ⭐" });
     onReviewSubmitted?.();
   };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchAllProfiles } from "@/api/adminAPI";
+import { createNotifications } from "@/api/notificationsAPI";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,13 +28,15 @@ const AdminNotifications = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    const fetch = async () => {
+    const load = async () => {
       setLoading(true);
-      const { data } = await supabase.from("profiles").select("id, user_id, full_name, email, company_name, account_type").order("full_name");
-      setProfiles((data as Profile[]) || []);
+      try {
+        const data = await fetchAllProfiles();
+        setProfiles(data as Profile[]);
+      } catch {}
       setLoading(false);
     };
-    fetch();
+    load();
   }, []);
 
   const toggle = (userId: string) => {
@@ -60,14 +63,14 @@ const AdminNotifications = () => {
     }
     setSending(true);
     const rows = Array.from(selected).map(user_id => ({ user_id, title, message }));
-    const { error } = await supabase.from("notifications").insert(rows);
-    if (error) {
-      toast({ title: "Chyba", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await createNotifications(rows);
       toast({ title: `Oznámení odesláno ${rows.length} zákazníkům` });
       setTitle("");
       setMessage("");
       setSelected(new Set());
+    } catch (error: any) {
+      toast({ title: "Chyba", description: error.message, variant: "destructive" });
     }
     setSending(false);
   };

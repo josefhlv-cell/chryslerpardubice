@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { fetchUserServiceOrders, fetchUserReviews, subscribeToServiceOrders } from "@/api/serviceOrdersAPI";
+import { fetchUserVehicles } from "@/api/garageAPI";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PageHeader from "@/components/PageHeader";
@@ -50,15 +51,15 @@ const MyServiceOrders = () => {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
-    const [ordersRes, vehiclesRes, reviewsRes] = await Promise.all([
-      supabase.from("service_orders").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
-      supabase.from("user_vehicles").select("*").eq("user_id", user.id),
-      supabase.from("service_reviews" as any).select("*").eq("user_id", user.id),
+    const [ordersData, vehiclesData, reviewsData] = await Promise.all([
+      fetchUserServiceOrders(user.id),
+      fetchUserVehicles(user.id),
+      fetchUserReviews(user.id),
     ]);
-    setOrders(ordersRes.data || []);
-    setVehicles(vehiclesRes.data || []);
+    setOrders(ordersData);
+    setVehicles(vehiclesData);
     const reviewMap: Record<string, any> = {};
-    ((reviewsRes.data as any[]) || []).forEach((r: any) => { reviewMap[r.service_order_id] = r; });
+    reviewsData.forEach((r: any) => { reviewMap[r.service_order_id] = r; });
     setReviews(reviewMap);
     setLoading(false);
   };
@@ -67,13 +68,7 @@ const MyServiceOrders = () => {
     if (user) fetchData();
 
     if (user) {
-      const channel = supabase
-        .channel("my-service-orders")
-        .on("postgres_changes", { event: "*", schema: "public", table: "service_orders", filter: `user_id=eq.${user.id}` }, () => {
-          fetchData();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
+      return subscribeToServiceOrders(user.id, fetchData);
     }
   }, [user]);
 
