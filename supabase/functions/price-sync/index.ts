@@ -177,8 +177,9 @@ Deno.serve(async (req) => {
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number): Promise<string[]> {
   const results: string[] = [];
+  const freshCutoff = new Date(Date.now() - FRESH_THRESHOLD_HOURS * 3600000).toISOString();
 
-  // Priority 1: Parts from recent orders (last 7 days)
+  // Priority 1: Parts from recent orders (last 7 days) that aren't fresh
   if (offset === 0) {
     const { data: orderParts } = await supabase
       .from('orders')
@@ -186,7 +187,7 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number)
       .not('oem_number', 'is', null)
       .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(20);
     if (orderParts) {
       for (const p of orderParts) {
         if (p.oem_number && !results.includes(p.oem_number)) results.push(p.oem_number);
@@ -194,16 +195,17 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number)
     }
   }
 
-  // Priority 2+3: Rest by oldest update
+  // Priority 2: Stale/old parts (not updated in last 24h) ordered by oldest first
   const remaining = limit - results.length;
   if (remaining > 0) {
-    const { data: topParts } = await supabase
+    const { data: staleParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
       .order('last_price_update', { ascending: true, nullsFirst: true })
       .range(offset, offset + remaining - 1);
-    if (topParts) {
-      for (const p of topParts) {
+    if (staleParts) {
+      for (const p of staleParts) {
         if (!results.includes(p.oem_number)) results.push(p.oem_number);
       }
     }
