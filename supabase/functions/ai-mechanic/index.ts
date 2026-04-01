@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
     if (claimsError || !claimsData?.claims?.sub) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+    const userId = claimsData.claims.sub as string;
 
     const { messages, vehicle } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -84,6 +85,18 @@ Deno.serve(async (req) => {
     const intent = lastUserMsg ? classifyIntent(lastUserMsg.content) : { type: "unknown" as IntentType, riskLevel: "info" as RiskLevel, contextHint: "" };
 
     console.log(`[AI-Mechanic] Intent: ${intent.type}, Risk: ${intent.riskLevel}`);
+
+    // Log conversation to ai_conversations (fire-and-forget, non-blocking)
+    const serviceClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    serviceClient.from('ai_conversations').insert({
+      user_id: userId,
+      intent_type: intent.type,
+      risk_level: intent.riskLevel,
+      vehicle_brand: vehicle?.brand || null,
+      vehicle_model: vehicle?.model || null,
+    }).then(({ error: logErr }) => {
+      if (logErr) console.warn('[AI-Mechanic] Failed to log conversation:', logErr.message);
+    });
 
     const vehicleContext = vehicle
       ? `Zákazník vlastní vozidlo: ${vehicle.brand} ${vehicle.model} ${vehicle.year || ''} ${vehicle.engine || ''} (VIN: ${vehicle.vin || 'neznámý'}, km: ${vehicle.mileage || 'neznámé'}).`
