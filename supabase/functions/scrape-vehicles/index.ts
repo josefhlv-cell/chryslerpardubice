@@ -42,40 +42,37 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         url: 'https://www.chrysler.cz',
-        formats: [
-          {
-            type: 'json',
-            prompt: 'Extract all vehicles for sale from this car dealership page. For each vehicle extract: brand (e.g. Chrysler, Dodge, RAM), model, year, price in CZK (number only), mileage in km (number only), fuel type, transmission, engine, power, color, condition, description, image URLs (array), and the direct link/URL to the vehicle detail page if available.',
-            schema: {
-              type: 'object',
-              properties: {
-                vehicles: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      brand: { type: 'string' },
-                      model: { type: 'string' },
-                      year: { type: 'number' },
-                      price: { type: 'number' },
-                      mileage: { type: 'number' },
-                      fuel: { type: 'string' },
-                      transmission: { type: 'string' },
-                      engine: { type: 'string' },
-                      power: { type: 'string' },
-                      color: { type: 'string' },
-                      condition: { type: 'string' },
-                      description: { type: 'string' },
-                      images: { type: 'array', items: { type: 'string' } },
-                      listing_url: { type: 'string' },
-                    },
+        formats: ['extract', 'markdown'],
+        extract: {
+          prompt: 'Extract all vehicles for sale from this car dealership page. For each vehicle extract: brand (e.g. Chrysler, Dodge, RAM), model, year, price in CZK (number only), mileage in km (number only), fuel type, transmission, engine, power, color, condition, description, image URLs (array), and the direct link/URL to the vehicle detail page if available.',
+          schema: {
+            type: 'object',
+            properties: {
+              vehicles: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    brand: { type: 'string' },
+                    model: { type: 'string' },
+                    year: { type: 'number' },
+                    price: { type: 'number' },
+                    mileage: { type: 'number' },
+                    fuel: { type: 'string' },
+                    transmission: { type: 'string' },
+                    engine: { type: 'string' },
+                    power: { type: 'string' },
+                    color: { type: 'string' },
+                    condition: { type: 'string' },
+                    description: { type: 'string' },
+                    images: { type: 'array', items: { type: 'string' } },
+                    listing_url: { type: 'string' },
                   },
                 },
               },
             },
           },
-          'markdown',
-        ],
+        },
         waitFor: 3000,
       }),
     });
@@ -87,7 +84,7 @@ Deno.serve(async (req) => {
       return json({ success: false, error: data.error || 'Scrape failed' }, 500);
     }
 
-    const vehicles = data?.data?.json?.vehicles || data?.json?.vehicles || [];
+    const vehicles = data?.data?.extract?.vehicles || data?.extract?.vehicles || data?.data?.json?.vehicles || [];
     console.log(`Found ${vehicles.length} vehicles`);
 
     if (vehicles.length === 0) {
