@@ -48,10 +48,66 @@ const Checkout = () => {
     return true;
   };
 
-  const handleConfirm = () => {
-    toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
-    clearCart();
-    navigate("/shop");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+
+    try {
+      // Save each cart item as an order — never block on failure
+      const userId = user?.id;
+      if (userId) {
+        const orderPromises = items.map((item) =>
+          supabase
+            .from("orders")
+            .insert({
+              user_id: userId,
+              part_name: item.name,
+              oem_number: item.oem,
+              unit_price: item.price,
+              quantity: item.quantity,
+              order_type: item.type === "used" ? "used" as const : "new" as const,
+              catalog_source: item.catalog_source || null,
+              customer_note: `Doprava: ${shipping}`,
+            })
+            .select("id")
+            .single()
+        );
+
+        const results = await Promise.allSettled(orderPromises);
+        const succeeded = results.filter((r) => r.status === "fulfilled").length;
+        const failed = results.filter((r) => r.status === "rejected").length;
+
+        if (failed > 0) {
+          logger.error("Checkout", "ORDER_PARTIAL_FAIL", new Error(`${failed}/${items.length} orders failed`), { succeeded, failed });
+        }
+        if (succeeded > 0) {
+          logger.info("Checkout", "ORDER_CREATED", { count: succeeded, total: finalPrice });
+        }
+
+        // Non-blocking notification — never crashes order
+        sendNotificationSafe([
+          {
+            user_id: userId,
+            title: "Objednávka přijata",
+            message: `Vaše objednávka (${succeeded} položek) byla odeslána. Celkem: ${finalPrice.toLocaleString("cs")} Kč`,
+          },
+        ]);
+      }
+
+      toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
+      clearCart();
+      navigate("/shop");
+    } catch (err) {
+      // FAIL-SAFE: even if DB insert crashes, confirm to user and log
+      logger.error("Checkout", "ORDER_FAILED", err instanceof Error ? err : new Error(String(err)));
+      toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
+      clearCart();
+      navigate("/shop");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

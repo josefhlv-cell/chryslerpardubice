@@ -78,11 +78,38 @@ export const createNotifications = async (
   logger.info(MODULE, "createNotifications", { count: notifications.length });
 
   return withErrorHandling(MODULE, "createNotifications", async () => {
-    const { error } = await supabase
-      .from("notifications")
-      .insert(notifications);
-    if (error) throw error;
+    await withRetry(
+      async () => {
+        const { error } = await supabase
+          .from("notifications")
+          .insert(notifications);
+        if (error) throw error;
+      },
+      {
+        maxAttempts: 3,
+        module: MODULE,
+        action: "createNotifications",
+        retryIf: isTransientError,
+      }
+    );
   });
+};
+
+/**
+ * Fire-and-forget notification helper.
+ * Never throws — logs failures silently. Use for non-critical notifications
+ * that should never block the main operation (e.g. order confirmation).
+ */
+export const sendNotificationSafe = async (
+  notifications: Array<{ user_id: string; title: string; message: string }>
+): Promise<boolean> => {
+  try {
+    await createNotifications(notifications);
+    return true;
+  } catch (err) {
+    logger.error(MODULE, "NOTIFICATION_FAILED", err, { count: notifications.length });
+    return false;
+  }
 };
 
 export const subscribeToNotifications = (
