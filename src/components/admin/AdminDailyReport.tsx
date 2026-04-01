@@ -20,6 +20,7 @@ interface DailyStats {
   newImportRequests: number;
   newVehicleInquiries: number;
   newUsedPartRequests: number;
+  aiConversations: number;
   revenue: number;
 }
 
@@ -57,7 +58,7 @@ const AdminDailyReport = () => {
     try {
       const [
         usersRes, ordersRes, bookingsRes, serviceOrdersRes,
-        faultRes, buybackRes, importRes, inquiryRes, usedPartsRes
+        faultRes, buybackRes, importRes, inquiryRes, usedPartsRes, aiRes
       ] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
         supabase.from("orders").select("id, price_with_vat", { count: "exact" }).gte("created_at", yStart).lt("created_at", yEnd),
@@ -68,6 +69,7 @@ const AdminDailyReport = () => {
         supabase.from("vehicle_import_requests" as any).select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
         supabase.from("vehicle_inquiries").select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
         supabase.from("used_part_requests").select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
+        supabase.from("ai_conversations" as any).select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
       ]);
 
       const orders = ordersRes.data || [];
@@ -86,6 +88,7 @@ const AdminDailyReport = () => {
         newImportRequests: importRes.count || 0,
         newVehicleInquiries: inquiryRes.count || 0,
         newUsedPartRequests: usedPartsRes.count || 0,
+        aiConversations: aiRes.count || 0,
         revenue: Math.round(orderRevenue + serviceRevenue),
       });
 
@@ -120,6 +123,7 @@ const AdminDailyReport = () => {
     { icon: MessageSquare, label: "Zájem o vozy", value: stats.newVehicleInquiries, highlight: stats.newVehicleInquiries > 0 },
     { icon: MessageSquare, label: "Poptávky použitých dílů", value: stats.newUsedPartRequests, highlight: stats.newUsedPartRequests > 0 },
     { icon: AlertTriangle, label: "OBD hlášení", value: stats.newFaultReports, highlight: stats.newFaultReports > 0 },
+    { icon: Bot, label: "AI Tonda konverzace", value: stats.aiConversations, highlight: stats.aiConversations > 0 },
   ];
 
   return (

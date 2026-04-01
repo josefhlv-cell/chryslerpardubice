@@ -41,6 +41,36 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          intent_type: string | null
+          risk_level: string | null
+          user_id: string
+          vehicle_brand: string | null
+          vehicle_model: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intent_type?: string | null
+          risk_level?: string | null
+          user_id: string
+          vehicle_brand?: string | null
+          vehicle_model?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intent_type?: string | null
+          risk_level?: string | null
+          user_id?: string
+          vehicle_brand?: string | null
+          vehicle_model?: string | null
+        }
+        Relationships: []
+      }
       api_cache: {
         Row: {
           cache_key: string
