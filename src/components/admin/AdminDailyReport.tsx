@@ -20,6 +20,7 @@ interface DailyStats {
   newImportRequests: number;
   newVehicleInquiries: number;
   newUsedPartRequests: number;
+  aiConversations: number;
   revenue: number;
 }
 
