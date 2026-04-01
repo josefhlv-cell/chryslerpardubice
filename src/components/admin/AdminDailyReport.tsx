@@ -88,6 +88,7 @@ const AdminDailyReport = () => {
         newImportRequests: importRes.count || 0,
         newVehicleInquiries: inquiryRes.count || 0,
         newUsedPartRequests: usedPartsRes.count || 0,
+        aiConversations: aiRes.count || 0,
         revenue: Math.round(orderRevenue + serviceRevenue),
       });
 
