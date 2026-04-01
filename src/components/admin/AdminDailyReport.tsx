@@ -58,7 +58,7 @@ const AdminDailyReport = () => {
     try {
       const [
         usersRes, ordersRes, bookingsRes, serviceOrdersRes,
-        faultRes, buybackRes, importRes, inquiryRes, usedPartsRes
+        faultRes, buybackRes, importRes, inquiryRes, usedPartsRes, aiRes
       ] = await Promise.all([
         supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
         supabase.from("orders").select("id, price_with_vat", { count: "exact" }).gte("created_at", yStart).lt("created_at", yEnd),
@@ -69,6 +69,7 @@ const AdminDailyReport = () => {
         supabase.from("vehicle_import_requests" as any).select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
         supabase.from("vehicle_inquiries").select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
         supabase.from("used_part_requests").select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
+        supabase.from("ai_conversations" as any).select("id", { count: "exact", head: true }).gte("created_at", yStart).lt("created_at", yEnd),
       ]);
 
       const orders = ordersRes.data || [];
