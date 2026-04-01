@@ -16,6 +16,7 @@ import { logger } from "@/lib/logger";
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, discountPercent, clearCart } = useCart();
+  const { user } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form state
