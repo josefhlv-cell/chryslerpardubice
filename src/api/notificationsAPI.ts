@@ -2,6 +2,7 @@
  * Notifications API Layer
  * Handles fetching, creating and updating notifications.
  * Includes input validation, structured logging, and error handling.
+ * Notifications are non-blocking — failures are logged but never crash the app.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +13,7 @@ import {
   ValidationError,
   logger,
 } from "./errors";
+import { withRetry, isTransientError } from "@/lib/retry";
 
 const MODULE = "Notifications";
 
