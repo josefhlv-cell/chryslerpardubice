@@ -27,6 +27,7 @@ const Checkout = () => {
   const [city, setCity] = useState("");
   const [zip, setZip] = useState("");
   const [shipping, setShipping] = useState("pickup");
+  const [submitting, setSubmitting] = useState(false);
 
   const discountAmount = Math.round(totalPrice * (discountPercent / 100));
   const shippingCost = shipping === "pickup" ? 0 : shipping === "dpd" ? 149 : 129;
@@ -48,8 +49,6 @@ const Checkout = () => {
     }
     return true;
   };
-
-  const [submitting, setSubmitting] = useState(false);
 
   const handleConfirm = async () => {
     if (submitting) return;
