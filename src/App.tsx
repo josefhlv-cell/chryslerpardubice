@@ -65,6 +65,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <OnboardingGuide />
+              <AdminDailyReport />
               <TopBar />
               <div className="flex w-full">
                 <DesktopSidebar />
