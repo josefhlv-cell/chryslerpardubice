@@ -87,6 +87,10 @@ const AdminVehicleOffers = () => {
   const [formStatus, setFormStatus] = useState("");
   const [formNote, setFormNote] = useState("");
   const [updatingVehicles, setUpdatingVehicles] = useState(false);
+  const [syncSteps, setSyncSteps] = useState<SyncStep[]>([]);
+  const [syncPercent, setSyncPercent] = useState(0);
+  const [syncSummary, setSyncSummary] = useState("");
+  const [syncError, setSyncError] = useState("");
 
   const fetchData = async () => {
     setLoading(true);
