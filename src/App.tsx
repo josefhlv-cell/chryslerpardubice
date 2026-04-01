@@ -11,6 +11,7 @@ import DesktopSidebar from "@/components/layout/DesktopSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OnboardingGuide from "@/components/OnboardingGuide";
+import AdminDailyReport from "@/components/admin/AdminDailyReport";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { Loader2 } from "lucide-react";
 
