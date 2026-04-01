@@ -264,9 +264,9 @@ const Checkout = () => {
               </div>
             </div>
 
-            <Button variant="hero" className="w-full h-12 text-base" onClick={handleConfirm}>
+            <Button variant="hero" className="w-full h-12 text-base" onClick={handleConfirm} disabled={submitting}>
               <Check className="w-4 h-4" />
-              Potvrdit objednávku
+              {submitting ? "Odesílám..." : "Potvrdit objednávku"}
             </Button>
           </motion.div>
         )}
