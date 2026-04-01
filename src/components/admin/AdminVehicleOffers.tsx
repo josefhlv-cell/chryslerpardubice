@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { ArrowDownUp, Plane, RefreshCw, Car, Loader2 } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
+import SyncProgressOverlay, { SyncStep } from "@/components/admin/SyncProgressOverlay";
 
 type BuybackRow = {
   id: string;
@@ -86,6 +87,10 @@ const AdminVehicleOffers = () => {
   const [formStatus, setFormStatus] = useState("");
   const [formNote, setFormNote] = useState("");
   const [updatingVehicles, setUpdatingVehicles] = useState(false);
+  const [syncSteps, setSyncSteps] = useState<SyncStep[]>([]);
+  const [syncPercent, setSyncPercent] = useState(0);
+  const [syncSummary, setSyncSummary] = useState("");
+  const [syncError, setSyncError] = useState("");
 
   const fetchData = async () => {
     setLoading(true);
@@ -142,21 +147,79 @@ const AdminVehicleOffers = () => {
 
   const updateVehiclesFromWeb = async () => {
     setUpdatingVehicles(true);
+    setSyncError("");
+    setSyncSummary("");
+    
+    const steps: SyncStep[] = [
+      { label: "Připojování ke zdroji dat…", status: "active" },
+      { label: "Stahování nabídky vozů", status: "pending" },
+      { label: "Porovnávání s databází", status: "pending" },
+      { label: "Ukládání změn", status: "pending" },
+    ];
+    setSyncSteps([...steps]);
+    setSyncPercent(5);
+
     try {
+      // Step 1 → 2
+      await new Promise(r => setTimeout(r, 600));
+      steps[0].status = "done";
+      steps[1].status = "active";
+      setSyncSteps([...steps]);
+      setSyncPercent(20);
+
+      // Call edge function
       const { data, error } = await supabase.functions.invoke("scrape-vehicles", { body: {} });
+
+      // Step 2 done
+      steps[1].status = "done";
+      steps[2].status = "active";
+      setSyncSteps([...steps]);
+      setSyncPercent(55);
+
       if (error) throw error;
+
+      await new Promise(r => setTimeout(r, 400));
+
+      // Step 3 done
+      const vehicleCount = data?.vehicles?.length || data?.count || 0;
+      const added = data?.added || 0;
+      const updated = data?.updated || 0;
+      const removed = data?.removed || 0;
+
+      steps[2].status = "done";
+      steps[3].status = "active";
+      setSyncSteps([...steps]);
+      setSyncPercent(80);
+
+      await new Promise(r => setTimeout(r, 300));
+
+      steps[3].status = "done";
+      setSyncSteps([...steps]);
+      setSyncPercent(100);
+
+      const summaryParts = [];
+      if (vehicleCount) summaryParts.push(`${vehicleCount} vozů celkem`);
+      if (added) summaryParts.push(`${added} přidáno`);
+      if (updated) summaryParts.push(`${updated} aktualizováno`);
+      if (removed) summaryParts.push(`${removed} odebráno`);
+      setSyncSummary(summaryParts.length > 0 ? summaryParts.join(" · ") : (data?.message || "Aktualizace dokončena"));
+
       toast({ 
         title: "Aktualizace nabídky vozů", 
         description: data?.message || "Hotovo" 
       });
     } catch (e: any) {
+      const failIdx = steps.findIndex(s => s.status === "active");
+      if (failIdx >= 0) steps[failIdx].status = "error";
+      setSyncSteps([...steps]);
+      setSyncError(e?.message || "Nepodařilo se aktualizovat nabídku");
       toast({ 
         title: "Chyba aktualizace", 
         description: e?.message || "Nepodařilo se aktualizovat nabídku", 
         variant: "destructive" 
       });
     } finally {
-      setUpdatingVehicles(false);
+      setTimeout(() => setUpdatingVehicles(false), 2500);
     }
   };
 
@@ -172,6 +235,14 @@ const AdminVehicleOffers = () => {
           <Button size="sm" variant="outline" onClick={fetchData}><RefreshCw className="w-4 h-4 mr-1" />Obnovit</Button>
         </div>
       </div>
+      <SyncProgressOverlay
+        visible={updatingVehicles}
+        title="Aktualizace nabídky vozů"
+        steps={syncSteps}
+        percent={syncPercent}
+        summary={syncSummary}
+        error={syncError}
+      />
 
       <Tabs defaultValue="buyback">
         <TabsList className="grid w-full grid-cols-2">
