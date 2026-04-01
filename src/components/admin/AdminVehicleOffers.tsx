@@ -235,6 +235,14 @@ const AdminVehicleOffers = () => {
           <Button size="sm" variant="outline" onClick={fetchData}><RefreshCw className="w-4 h-4 mr-1" />Obnovit</Button>
         </div>
       </div>
+      <SyncProgressOverlay
+        visible={updatingVehicles}
+        title="Aktualizace nabídky vozů"
+        steps={syncSteps}
+        percent={syncPercent}
+        summary={syncSummary}
+        error={syncError}
+      />
 
       <Tabs defaultValue="buyback">
         <TabsList className="grid w-full grid-cols-2">
