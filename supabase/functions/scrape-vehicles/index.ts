@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       return json({ success: false, error: data.error || 'Scrape failed' }, 500);
     }
 
-    const vehicles = data?.data?.json?.vehicles || data?.json?.vehicles || [];
+    const vehicles = data?.data?.extract?.vehicles || data?.extract?.vehicles || data?.data?.json?.vehicles || [];
     console.log(`Found ${vehicles.length} vehicles`);
 
     if (vehicles.length === 0) {
