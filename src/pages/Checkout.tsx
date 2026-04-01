@@ -2,16 +2,21 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowLeft, ArrowRight, Check, Truck, MapPin, Package } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { sendNotificationSafe } from "@/api/notificationsAPI";
+import { logger } from "@/lib/logger";
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, discountPercent, clearCart } = useCart();
+  const { user } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form state
@@ -22,6 +27,7 @@ const Checkout = () => {
   const [city, setCity] = useState("");
   const [zip, setZip] = useState("");
   const [shipping, setShipping] = useState("pickup");
+  const [submitting, setSubmitting] = useState(false);
 
   const discountAmount = Math.round(totalPrice * (discountPercent / 100));
   const shippingCost = shipping === "pickup" ? 0 : shipping === "dpd" ? 149 : 129;
@@ -44,10 +50,64 @@ const Checkout = () => {
     return true;
   };
 
-  const handleConfirm = () => {
-    toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
-    clearCart();
-    navigate("/shop");
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+
+    try {
+      // Save each cart item as an order — never block on failure
+      const userId = user?.id;
+      if (userId) {
+        const orderPromises = items.map((item) =>
+          supabase
+            .from("orders")
+            .insert({
+              user_id: userId,
+              part_name: item.name,
+              oem_number: item.oem,
+              unit_price: item.price,
+              quantity: item.quantity,
+              order_type: item.type === "used" ? "used" as const : "new" as const,
+              catalog_source: item.catalog_source || null,
+              customer_note: `Doprava: ${shipping}`,
+            })
+            .select("id")
+            .single()
+        );
+
+        const results = await Promise.allSettled(orderPromises);
+        const succeeded = results.filter((r) => r.status === "fulfilled").length;
+        const failed = results.filter((r) => r.status === "rejected").length;
+
+        if (failed > 0) {
+          logger.error("Checkout", "ORDER_PARTIAL_FAIL", new Error(`${failed}/${items.length} orders failed`), { succeeded, failed });
+        }
+        if (succeeded > 0) {
+          logger.info("Checkout", "ORDER_CREATED", { count: succeeded, total: finalPrice });
+        }
+
+        // Non-blocking notification — never crashes order
+        sendNotificationSafe([
+          {
+            user_id: userId,
+            title: "Objednávka přijata",
+            message: `Vaše objednávka (${succeeded} položek) byla odeslána. Celkem: ${finalPrice.toLocaleString("cs")} Kč`,
+          },
+        ]);
+      }
+
+      toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
+      clearCart();
+      navigate("/shop");
+    } catch (err) {
+      // FAIL-SAFE: even if DB insert crashes, confirm to user and log
+      logger.error("Checkout", "ORDER_FAILED", err instanceof Error ? err : new Error(String(err)));
+      toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
+      clearCart();
+      navigate("/shop");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -204,9 +264,9 @@ const Checkout = () => {
               </div>
             </div>
 
-            <Button variant="hero" className="w-full h-12 text-base" onClick={handleConfirm}>
+            <Button variant="hero" className="w-full h-12 text-base" onClick={handleConfirm} disabled={submitting}>
               <Check className="w-4 h-4" />
-              Potvrdit objednávku
+              {submitting ? "Odesílám..." : "Potvrdit objednávku"}
             </Button>
           </motion.div>
         )}

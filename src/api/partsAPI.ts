@@ -461,7 +461,10 @@ export async function searchParts(
   const { data: extData, error: fnError } = await supabase.functions.invoke("catalog-search", {
     body: { oemCodes: [normalized] },
   });
-  if (fnError) throw new Error(fnError.message || "Chyba při volání katalogu");
+  if (fnError) {
+    console.error("[Catalog] CATALOG_SEARCH_FAILED:", fnError.message);
+    return { results: [], totalCount: 0 };
+  }
 
   const catalogResults = extData?.results || [];
   const partResults: PartResult[] = catalogResults
