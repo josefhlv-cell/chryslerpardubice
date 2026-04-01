@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { ArrowDownUp, Plane, RefreshCw, Car, Loader2 } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
+import SyncProgressOverlay, { SyncStep } from "@/components/admin/SyncProgressOverlay";
 
 type BuybackRow = {
   id: string;
