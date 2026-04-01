@@ -123,6 +123,7 @@ const AdminDailyReport = () => {
     { icon: MessageSquare, label: "Zájem o vozy", value: stats.newVehicleInquiries, highlight: stats.newVehicleInquiries > 0 },
     { icon: MessageSquare, label: "Poptávky použitých dílů", value: stats.newUsedPartRequests, highlight: stats.newUsedPartRequests > 0 },
     { icon: AlertTriangle, label: "OBD hlášení", value: stats.newFaultReports, highlight: stats.newFaultReports > 0 },
+    { icon: Bot, label: "AI Tonda konverzace", value: stats.aiConversations, highlight: stats.aiConversations > 0 },
   ];
 
   return (
