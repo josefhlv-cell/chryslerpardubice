@@ -87,8 +87,8 @@ const ServiceOrderPhotos = ({ orderId, isAdmin }: { orderId: string; isAdmin: bo
               <Badge variant="outline" className="text-[10px] mb-1.5">{PHASE_LABELS[key]}</Badge>
               <div className="flex gap-1.5 flex-wrap">
                 {items.map(p => (
-                  <img key={p.id} src={p.photo_url} alt="" className="w-20 h-20 rounded object-cover border cursor-pointer"
-                    onClick={() => window.open(p.photo_url, "_blank")} />
+                  <img key={p.id} src={resolvedUrls[p.id] || ""} alt="" className="w-20 h-20 rounded object-cover border cursor-pointer"
+                    onClick={() => { const url = resolvedUrls[p.id]; if (url) window.open(url, "_blank"); }} />
                 ))}
               </div>
             </div>

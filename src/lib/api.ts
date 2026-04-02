@@ -15,7 +15,7 @@ export const fetchVehicles = async (filters?: { brand?: string; search?: string 
 };
 
 export const fetchVehicleById = async (id: string) => {
-  const { data, error } = await supabase.from("vehicles").select("id, brand, model, year, price, mileage, fuel, transmission, engine, power, color, condition, description, images, listing_url, is_active, created_at, updated_at").eq("id", id).single();
+  const { data, error } = await supabase.from("vehicles_public").select("id, brand, model, year, price, mileage, fuel, transmission, engine, power, color, condition, description, images, listing_url, is_active, created_at, updated_at").eq("id", id).single();
   if (error) throw error;
   return data;
 };
