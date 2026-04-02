@@ -133,10 +133,16 @@ Deno.serve(async (req) => {
 
       // ── Monitoring alerts ─────────────────────────────────────────
       if (successRate < 70 && batch.length >= 10) {
-        console.warn(`🚨 PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+        console.warn(`[ALERT] PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+      }
+      if (errors > 5) {
+        console.warn(`[ALERT] PRICE_SYNC_HIGH_ERROR_RATE: ${errors} errors in batch of ${batch.length}`);
+      }
+      if (fallbackUsed > 10) {
+        console.warn(`[ALERT] PRICE_SYNC_EXCESSIVE_FALLBACK: ${fallbackUsed} fallbacks in batch of ${batch.length}`);
       }
       if (fallbackUsed > 0) {
-        console.log(`📋 FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
+        console.log(`[MONITOR] FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
       }
 
       const summary = {
