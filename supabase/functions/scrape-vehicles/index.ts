@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
 
     console.log('Scraping chrysler.cz for vehicle listings...');
 
-    // Use Firecrawl to scrape the main page with JSON extraction
+    // Step 1: Get markdown only (fast, no extraction overhead)
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -41,10 +41,44 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        url: 'https://www.chrysler.cz',
-        formats: ['extract', 'markdown'],
+        url: 'https://www.chrysler.cz/#nabidka',
+        formats: ['markdown'],
+        onlyMainContent: true,
+        timeout: 120000,
+        waitFor: 8000,
+      }),
+    });
+
+    const scrapeData = await response.json();
+
+    if (!response.ok) {
+      console.error('Firecrawl error:', scrapeData);
+      return json({ success: false, error: scrapeData.error || 'Scrape failed' }, 500);
+    }
+
+    const markdown = scrapeData?.data?.markdown || scrapeData?.markdown || '';
+    console.log(`Got markdown (${markdown.length} chars)`);
+
+    if (!markdown || markdown.length < 100) {
+      return json({
+        success: true,
+        message: 'Stránka nevrátila dostatek obsahu. Zkuste to znovu.',
+        vehicles: [],
+      });
+    }
+
+    // Step 2: Use AI to extract vehicles from the markdown
+    const extractResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: 'https://www.chrysler.cz/#nabidka',
+        formats: ['extract'],
         extract: {
-          prompt: 'Extract all vehicles for sale from this car dealership page. For each vehicle extract: brand (e.g. Chrysler, Dodge, RAM), model, year, price in CZK (number only), mileage in km (number only), fuel type, transmission, engine, power, color, condition, description, image URLs (array), and the direct link/URL to the vehicle detail page if available.',
+          prompt: 'Extract all vehicles for sale. For each vehicle get: brand, model, year, price (number in CZK), mileage (km number), fuel, transmission, engine, power, color, condition, description, image URLs array, and listing_url.',
           schema: {
             type: 'object',
             properties: {
@@ -73,34 +107,32 @@ Deno.serve(async (req) => {
             },
           },
         },
-        waitFor: 5000,
-        timeout: 60000,
+        timeout: 120000,
+        waitFor: 8000,
       }),
     });
 
-    const data = await response.json();
+    const extractData = await extractResponse.json();
 
-    if (!response.ok) {
-      console.error('Firecrawl error:', data);
-      return json({ success: false, error: data.error || 'Scrape failed' }, 500);
+    if (!extractResponse.ok) {
+      console.error('Extract error:', extractData);
+      return json({ success: false, error: extractData.error || 'Extract failed' }, 500);
     }
 
-    const vehicles = data?.data?.extract?.vehicles || data?.extract?.vehicles || data?.data?.json?.vehicles || [];
+    const vehicles = extractData?.data?.extract?.vehicles || extractData?.extract?.vehicles || [];
     console.log(`Found ${vehicles.length} vehicles`);
 
     if (vehicles.length === 0) {
-      return json({ 
-        success: true, 
-        message: 'No vehicles found on the page. The website may use dynamic loading that requires manual update.',
+      return json({
+        success: true,
+        message: 'Nepodařilo se extrahovat vozy. Web pravděpodobně používá dynamické načítání.',
         vehicles: [],
-        raw_markdown: (data?.data?.markdown || data?.markdown || '').substring(0, 2000),
+        raw_markdown: markdown.substring(0, 2000),
       });
     }
 
-    // Update database - reuse adminCheck client (service_role)
+    // Update database
     const supabase = adminCheck;
-
-    // Deactivate all current vehicles
     await supabase.from('vehicles').update({ is_active: false }).eq('is_active', true);
 
     let updated = 0;
@@ -109,7 +141,6 @@ Deno.serve(async (req) => {
     for (const v of vehicles) {
       if (!v.brand || !v.model) continue;
 
-      // Try to find existing vehicle by brand + model + year
       const { data: existing } = await supabase
         .from('vehicles')
         .select('id')
@@ -132,7 +163,7 @@ Deno.serve(async (req) => {
         condition: v.condition || null,
         description: v.description || null,
         images: v.images || [],
-        listing_url: v.listing_url || `https://www.chrysler.cz`,
+        listing_url: v.listing_url || 'https://www.chrysler.cz/#nabidka',
         is_active: true,
         updated_at: new Date().toISOString(),
       };
@@ -146,8 +177,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ 
-      success: true, 
+    return json({
+      success: true,
       message: `Aktualizováno: ${updated}, Nových: ${created}, Celkem: ${vehicles.length}`,
       vehicles: vehicles.length,
       updated,
