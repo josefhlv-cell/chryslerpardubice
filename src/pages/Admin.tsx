@@ -380,6 +380,7 @@ const Admin = () => {
             {isEnabled("admin_statistics") && <TabsTrigger value="dashboard-stats" className="text-[11px] gap-1 shrink-0"><TrendingUp className="w-3 h-3" />Přehled</TabsTrigger>}
             <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
             {isAdmin && <TabsTrigger value="activity" className="text-[11px] gap-1 shrink-0"><Clock className="w-3 h-3" />Aktivita</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="backups" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Zálohy</TabsTrigger>}
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
