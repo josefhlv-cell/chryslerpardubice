@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Camera, Loader2 } from "lucide-react";
+import { getSignedUrl } from "@/lib/storageHelpers";
 
 type Photo = {
   id: string;
