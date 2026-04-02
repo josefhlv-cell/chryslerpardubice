@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
     }
 
     const startTime = Date.now();
+    console.log(`[MONITOR] PRICE_SYNC_STARTED mode=${mode} batchSize=${batchSize} offset=${offset}`);
 
     try {
       // ── Resolve OEM numbers with priority ─────────────────────────
