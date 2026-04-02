@@ -149,7 +149,7 @@ const AdminVehicleOffers = () => {
     setUpdatingVehicles(true);
     setSyncError("");
     setSyncSummary("");
-    
+
     const steps: SyncStep[] = [
       { label: "Připojování ke zdroji dat…", status: "active" },
       { label: "Stahování nabídky vozů", status: "pending" },
@@ -159,64 +159,106 @@ const AdminVehicleOffers = () => {
     setSyncSteps([...steps]);
     setSyncPercent(5);
 
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const applyStatus = (statusData: any) => {
+      const phase = statusData?.phase;
+      const progress = typeof statusData?.progress === "number" ? statusData.progress : 5;
+
+      if (phase === "queued") {
+        steps[0].status = "active";
+        steps[1].status = "pending";
+        steps[2].status = "pending";
+        steps[3].status = "pending";
+      } else if (phase === "scraping") {
+        steps[0].status = "done";
+        steps[1].status = "active";
+        steps[2].status = "pending";
+        steps[3].status = "pending";
+      } else if (phase === "extracting") {
+        steps[0].status = "done";
+        steps[1].status = "done";
+        steps[2].status = "active";
+        steps[3].status = "pending";
+      } else if (phase === "saving") {
+        steps[0].status = "done";
+        steps[1].status = "done";
+        steps[2].status = "done";
+        steps[3].status = "active";
+      } else if (statusData?.status === "completed") {
+        steps.forEach((step) => {
+          step.status = "done";
+        });
+      } else if (statusData?.status === "failed") {
+        const activeIndex = steps.findIndex((step) => step.status === "active");
+        steps.forEach((step, index) => {
+          if (step.status !== "done") step.status = index === (activeIndex >= 0 ? activeIndex : 3) ? "error" : "pending";
+        });
+      }
+
+      setSyncSteps([...steps]);
+      setSyncPercent(progress);
+      if (statusData?.message) {
+        setSyncSummary(statusData.message);
+      }
+    };
+
     try {
-      // Step 1 → 2
-      await new Promise(r => setTimeout(r, 600));
-      steps[0].status = "done";
-      steps[1].status = "active";
-      setSyncSteps([...steps]);
-      setSyncPercent(20);
+      const { data: startData, error: startError } = await supabase.functions.invoke("scrape-vehicles", { body: {} });
+      if (startError) throw startError;
 
-      // Call edge function
-      const { data, error } = await supabase.functions.invoke("scrape-vehicles", { body: {} });
+      const jobId = startData?.jobId;
+      if (!jobId) {
+        throw new Error(startData?.error || "Nepodařilo se spustit synchronizaci nabídky vozů.");
+      }
 
-      // Step 2 done
-      steps[1].status = "done";
-      steps[2].status = "active";
-      setSyncSteps([...steps]);
-      setSyncPercent(55);
+      applyStatus(startData);
 
-      if (error) throw error;
+      for (let attempt = 0; attempt < 90; attempt++) {
+        await sleep(2000);
 
-      await new Promise(r => setTimeout(r, 400));
+        const { data: statusData, error: statusError } = await supabase.functions.invoke("scrape-vehicles", {
+          body: { jobId },
+        });
 
-      // Step 3 done
-      const vehicleCount = data?.vehicles?.length || data?.count || 0;
-      const added = data?.added || 0;
-      const updated = data?.updated || 0;
-      const removed = data?.removed || 0;
+        if (statusError) throw statusError;
+        applyStatus(statusData);
 
-      steps[2].status = "done";
-      steps[3].status = "active";
-      setSyncSteps([...steps]);
-      setSyncPercent(80);
+        if (statusData?.status === "completed") {
+          const vehicleCount = typeof statusData?.vehicles === "number" ? statusData.vehicles : (statusData?.count || 0);
+          const added = statusData?.added ?? statusData?.created ?? 0;
+          const updated = statusData?.updated ?? 0;
+          const removed = statusData?.removed ?? 0;
 
-      await new Promise(r => setTimeout(r, 300));
+          const summaryParts = [];
+          if (vehicleCount) summaryParts.push(`${vehicleCount} vozů celkem`);
+          if (added) summaryParts.push(`${added} přidáno`);
+          if (updated) summaryParts.push(`${updated} aktualizováno`);
+          if (removed) summaryParts.push(`${removed} odebráno`);
+          setSyncSummary(summaryParts.length > 0 ? summaryParts.join(" · ") : (statusData?.message || "Aktualizace dokončena"));
 
-      steps[3].status = "done";
-      setSyncSteps([...steps]);
-      setSyncPercent(100);
+          toast({
+            title: "Aktualizace nabídky vozů",
+            description: statusData?.message || "Hotovo",
+          });
+          return;
+        }
 
-      const summaryParts = [];
-      if (vehicleCount) summaryParts.push(`${vehicleCount} vozů celkem`);
-      if (added) summaryParts.push(`${added} přidáno`);
-      if (updated) summaryParts.push(`${updated} aktualizováno`);
-      if (removed) summaryParts.push(`${removed} odebráno`);
-      setSyncSummary(summaryParts.length > 0 ? summaryParts.join(" · ") : (data?.message || "Aktualizace dokončena"));
+        if (statusData?.status === "failed") {
+          throw new Error(statusData?.error || statusData?.message || "Nepodařilo se aktualizovat nabídku vozů.");
+        }
+      }
 
-      toast({ 
-        title: "Aktualizace nabídky vozů", 
-        description: data?.message || "Hotovo" 
-      });
+      throw new Error("Synchronizace trvá déle než obvykle. Zkuste za chvíli Obnovit.");
     } catch (e: any) {
-      const failIdx = steps.findIndex(s => s.status === "active");
+      const failIdx = steps.findIndex((s) => s.status === "active");
       if (failIdx >= 0) steps[failIdx].status = "error";
       setSyncSteps([...steps]);
       setSyncError(e?.message || "Nepodařilo se aktualizovat nabídku");
-      toast({ 
-        title: "Chyba aktualizace", 
-        description: e?.message || "Nepodařilo se aktualizovat nabídku", 
-        variant: "destructive" 
+      toast({
+        title: "Chyba aktualizace",
+        description: e?.message || "Nepodařilo se aktualizovat nabídku",
+        variant: "destructive",
       });
     } finally {
       setTimeout(() => setUpdatingVehicles(false), 2500);
