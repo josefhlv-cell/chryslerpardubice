@@ -100,13 +100,13 @@ const AdminBackups = () => {
           </div>
 
           {lastResult?.success && (
-            <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3 text-sm space-y-1">
-              <p className="font-medium text-green-800 dark:text-green-200">✅ Záloha úspěšná</p>
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-sm space-y-1">
+              <p className="font-medium text-primary">✅ Záloha úspěšná</p>
               <p className="text-muted-foreground">
                 {lastResult.tables} tabulek · {lastResult.total_rows} řádků · {lastResult.size_kb} KB
               </p>
               {lastResult.errors?.length > 0 && (
-                <p className="text-amber-600 text-xs">{lastResult.errors.length} chyb(y): {lastResult.errors.join(", ")}</p>
+                <p className="text-destructive text-xs">{lastResult.errors.length} chyb(y): {lastResult.errors.join(", ")}</p>
               )}
             </div>
           )}
