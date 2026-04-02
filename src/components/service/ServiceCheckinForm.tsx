@@ -50,8 +50,8 @@ const ServiceCheckinForm = ({ orderId, isAdmin }: { orderId: string; isAdmin: bo
     const path = `checkin/${orderId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("service-order-photos").upload(path, file);
     if (error) { toast({ title: "Chyba uploadu", variant: "destructive" }); setUploading(false); return; }
-    const { data: urlData } = supabase.storage.from("service-order-photos").getPublicUrl(path);
-    setPhotos(prev => [...prev, urlData.publicUrl]);
+    const { data: signedData } = await supabase.storage.from("service-order-photos").createSignedUrl(path, 3600);
+    setPhotos(prev => [...prev, signedData?.signedUrl || path]);
     setUploading(false);
   };
 

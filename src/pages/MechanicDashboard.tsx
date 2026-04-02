@@ -180,12 +180,11 @@ const MechanicDashboard = () => {
     if (error) {
       toast({ title: "Chyba nahrávání", description: error.message, variant: "destructive" });
     } else {
-      const { data: urlData } = supabase.storage.from("service-order-photos").getPublicUrl(path);
       const task = tasks.find(t => t.id === taskId);
       if (task) {
         await supabase.from("service_order_photos").insert({
           service_order_id: task.service_order_id,
-          photo_url: urlData.publicUrl,
+          photo_url: path,
           phase: "during",
           description: `Mechanik: ${employee.name}`,
         } as any);

@@ -189,10 +189,10 @@ const MyVehicles = () => {
       const path = `ocr/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
       const { error: upErr } = await supabase.storage.from("fault-photos").upload(path, file);
       if (upErr) throw upErr;
-      const { data: urlData } = supabase.storage.from("fault-photos").getPublicUrl(path);
+      const { data: signedData } = await supabase.storage.from("fault-photos").createSignedUrl(path, 3600);
 
       const { data, error } = await supabase.functions.invoke("vin-ocr", {
-        body: { imageUrl: urlData.publicUrl, type: "spz" },
+        body: { imageUrl: signedData?.signedUrl || path, type: "spz" },
       });
       if (error) throw error;
       if (data?.spz) {
