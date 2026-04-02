@@ -711,6 +711,12 @@ const Admin = () => {
               <div className="mt-2"><AdminActivityLog /></div>
             </TabsContent>
           )}
+
+          {isAdmin && (
+            <TabsContent value="backups">
+              <div className="mt-2"><AdminBackups /></div>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
