@@ -133,8 +133,8 @@ const AdminServiceHistory = () => {
         toast({ title: "Chyba nahrávání", description: error.message, variant: "destructive" });
         continue;
       }
-      const { data: urlData } = supabase.storage.from("service-photos").getPublicUrl(path);
-      newPhotos.push(urlData.publicUrl);
+      const { data: urlData } = await supabase.storage.from("service-photos").createSignedUrl(path, 3600);
+      newPhotos.push(urlData?.signedUrl || path);
     }
     setPhotos(newPhotos);
     setUploading(false);

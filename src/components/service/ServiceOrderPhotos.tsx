@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Camera, Loader2 } from "lucide-react";
+import { getSignedUrl } from "@/lib/storageHelpers";
 
 type Photo = {
   id: string;
@@ -37,17 +38,29 @@ const ServiceOrderPhotos = ({ orderId, isAdmin }: { orderId: string; isAdmin: bo
 
   useEffect(() => { fetchPhotos(); }, [orderId]);
 
+  // Resolve signed URLs for display
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const resolve = async () => {
+      const urls: Record<string, string> = {};
+      for (const p of photos) {
+        urls[p.id] = await getSignedUrl("service-order-photos", p.photo_url);
+      }
+      setResolvedUrls(urls);
+    };
+    if (photos.length) resolve();
+  }, [photos]);
+
   const uploadPhoto = async (file: File) => {
     setUploading(true);
     const ext = file.name.split(".").pop();
     const path = `orders/${orderId}/${phase}/${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from("service-order-photos").upload(path, file);
     if (uploadError) { toast({ title: "Chyba uploadu", variant: "destructive" }); setUploading(false); return; }
-    const { data: urlData } = supabase.storage.from("service-order-photos").getPublicUrl(path);
 
     await supabase.from("service_order_photos").insert({
       service_order_id: orderId,
-      photo_url: urlData.publicUrl,
+      photo_url: path,
       phase,
     } as any);
 
@@ -74,8 +87,8 @@ const ServiceOrderPhotos = ({ orderId, isAdmin }: { orderId: string; isAdmin: bo
               <Badge variant="outline" className="text-[10px] mb-1.5">{PHASE_LABELS[key]}</Badge>
               <div className="flex gap-1.5 flex-wrap">
                 {items.map(p => (
-                  <img key={p.id} src={p.photo_url} alt="" className="w-20 h-20 rounded object-cover border cursor-pointer"
-                    onClick={() => window.open(p.photo_url, "_blank")} />
+                  <img key={p.id} src={resolvedUrls[p.id] || ""} alt="" className="w-20 h-20 rounded object-cover border cursor-pointer"
+                    onClick={() => { const url = resolvedUrls[p.id]; if (url) window.open(url, "_blank"); }} />
                 ))}
               </div>
             </div>

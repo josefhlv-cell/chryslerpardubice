@@ -66,8 +66,8 @@ const AiMechanic = () => {
       const path = `${user?.id || "anon"}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
       const { error } = await supabase.storage.from("fault-photos").upload(path, file);
       if (error) { toast.error("Chyba nahrávání fotky"); continue; }
-      const { data: urlData } = supabase.storage.from("fault-photos").getPublicUrl(path);
-      newPhotos.push(urlData.publicUrl);
+      const { data: signedData } = await supabase.storage.from("fault-photos").createSignedUrl(path, 3600);
+      newPhotos.push(signedData?.signedUrl || path);
     }
     setUploadedPhotos(newPhotos);
     setUploading(false);

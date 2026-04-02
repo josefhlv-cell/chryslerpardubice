@@ -1937,6 +1937,13 @@ export type Database = {
             referencedRelation: "vehicles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "vehicle_inquiries_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       vehicles: {
@@ -2135,6 +2142,69 @@ export type Database = {
           price_with_vat?: number | null
           segment?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      vehicles_public: {
+        Row: {
+          brand: string | null
+          color: string | null
+          condition: string | null
+          created_at: string | null
+          description: string | null
+          engine: string | null
+          fuel: string | null
+          id: string | null
+          images: string[] | null
+          is_active: boolean | null
+          listing_url: string | null
+          mileage: number | null
+          model: string | null
+          power: string | null
+          price: number | null
+          transmission: string | null
+          updated_at: string | null
+          year: number | null
+        }
+        Insert: {
+          brand?: string | null
+          color?: string | null
+          condition?: string | null
+          created_at?: string | null
+          description?: string | null
+          engine?: string | null
+          fuel?: string | null
+          id?: string | null
+          images?: string[] | null
+          is_active?: boolean | null
+          listing_url?: string | null
+          mileage?: number | null
+          model?: string | null
+          power?: string | null
+          price?: number | null
+          transmission?: string | null
+          updated_at?: string | null
+          year?: number | null
+        }
+        Update: {
+          brand?: string | null
+          color?: string | null
+          condition?: string | null
+          created_at?: string | null
+          description?: string | null
+          engine?: string | null
+          fuel?: string | null
+          id?: string | null
+          images?: string[] | null
+          is_active?: boolean | null
+          listing_url?: string | null
+          mileage?: number | null
+          model?: string | null
+          power?: string | null
+          price?: number | null
+          transmission?: string | null
+          updated_at?: string | null
+          year?: number | null
         }
         Relationships: []
       }
