@@ -38,6 +38,19 @@ const ServiceOrderPhotos = ({ orderId, isAdmin }: { orderId: string; isAdmin: bo
 
   useEffect(() => { fetchPhotos(); }, [orderId]);
 
+  // Resolve signed URLs for display
+  const [resolvedUrls, setResolvedUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const resolve = async () => {
+      const urls: Record<string, string> = {};
+      for (const p of photos) {
+        urls[p.id] = await getSignedUrl("service-order-photos", p.photo_url);
+      }
+      setResolvedUrls(urls);
+    };
+    if (photos.length) resolve();
+  }, [photos]);
+
   const uploadPhoto = async (file: File) => {
     setUploading(true);
     const ext = file.name.split(".").pop();
