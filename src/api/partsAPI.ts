@@ -631,7 +631,7 @@ async function searchAlternativesByVehicle(
   let query = supabase
     .from("parts_new_public")
     .select(
-      "id, name, oem_number, internal_code, price_without_vat, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source, image_urls",
+      "id, name, oem_number, internal_code, price_with_vat, category, family, segment, packaging, description, manufacturer, availability, compatible_vehicles, catalog_source, image_urls",
       { count: "exact" }
     )
     .in("catalog_source", ALT_SOURCES);

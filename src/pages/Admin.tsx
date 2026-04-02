@@ -378,7 +378,7 @@ const Admin = () => {
             {isEnabled("service_reviews") && <TabsTrigger value="reviews" className="text-[11px] gap-1 shrink-0"><Star className="w-3 h-3" />Hodnocení</TabsTrigger>}
             {isEnabled("admin_statistics") && <TabsTrigger value="dashboard-stats" className="text-[11px] gap-1 shrink-0"><TrendingUp className="w-3 h-3" />Přehled</TabsTrigger>}
             <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
-            {user?.email === "josefhlv@gmail.com" && <TabsTrigger value="activity" className="text-[11px] gap-1 shrink-0"><Clock className="w-3 h-3" />Aktivita</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="activity" className="text-[11px] gap-1 shrink-0"><Clock className="w-3 h-3" />Aktivita</TabsTrigger>}
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -704,7 +704,7 @@ const Admin = () => {
             <div className="mt-2"><AdminFeatureSettings /></div>
           </TabsContent>
 
-          {user?.email === "josefhlv@gmail.com" && (
+          {isAdmin && (
             <TabsContent value="activity">
               <div className="mt-2"><AdminActivityLog /></div>
             </TabsContent>
