@@ -37,8 +37,9 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
   try {
-    // Auth check - require authenticated user
+    console.log(`[MONITOR] CATALOG_SEARCH_STARTED codes=${body?.oemCodes?.length || 0} mode=${body?.mode || 'default'}`);
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -401,9 +402,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const foundCount = results.filter((r: PartResult) => r.found).length;
+    const cachedCount = results.filter((r: PartResult) => r.cached).length;
+
+    if (foundCount === 0 && oemCodes.length > 0) {
+      console.warn(`[ALERT] CATALOG_EMPTY_RESULT: 0/${oemCodes.length} found in ${elapsed}s`);
+    }
+
+    console.log(`[MONITOR] CATALOG_SEARCH_COMPLETED duration=${elapsed}s total=${results.length} found=${foundCount} cached=${cachedCount} sources=${JSON.stringify(diagnostics)}`);
+
     return new Response(JSON.stringify({ success: true, results, diagnostics }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
-    console.error('catalog-search error:', error);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.error(`[ALERT] CATALOG_SEARCH_FAILED duration=${elapsed}s error=${error instanceof Error ? error.message : 'Unknown'}`);
     // FAIL-SAFE: never crash the catalog — return empty results instead of 500
     return new Response(
       JSON.stringify({ success: true, results: [], diagnostics: { error: error instanceof Error ? error.message : 'Unknown error' } }),

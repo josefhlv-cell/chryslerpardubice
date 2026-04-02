@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
     }
 
     const startTime = Date.now();
+    console.log(`[MONITOR] PRICE_SYNC_STARTED mode=${mode} batchSize=${batchSize} offset=${offset}`);
 
     try {
       // ── Resolve OEM numbers with priority ─────────────────────────
@@ -132,10 +133,16 @@ Deno.serve(async (req) => {
 
       // ── Monitoring alerts ─────────────────────────────────────────
       if (successRate < 70 && batch.length >= 10) {
-        console.warn(`🚨 PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+        console.warn(`[ALERT] PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+      }
+      if (errors > 5) {
+        console.warn(`[ALERT] PRICE_SYNC_HIGH_ERROR_RATE: ${errors} errors in batch of ${batch.length}`);
+      }
+      if (fallbackUsed > 10) {
+        console.warn(`[ALERT] PRICE_SYNC_EXCESSIVE_FALLBACK: ${fallbackUsed} fallbacks in batch of ${batch.length}`);
       }
       if (fallbackUsed > 0) {
-        console.log(`📋 FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
+        console.log(`[MONITOR] FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
       }
 
       const summary = {
@@ -162,13 +169,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`✅ Sync done in ${elapsed}s: ${updated} updated, ${notFound} not found, ${errors} errors, ${skipped} skipped | ${avgMs}ms/part`);
+      console.log(`[MONITOR] PRICE_SYNC_COMPLETED duration=${elapsed}s updated=${updated} notFound=${notFound} errors=${errors} skipped=${skipped} successRate=${successRate}% avgMs=${avgMs}`);
       return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
     } finally {
       await releaseLock(supabase);
     }
   } catch (e) {
-    console.error('price-sync error:', e);
+    console.error(`[ALERT] PRICE_SYNC_FAILED: ${e instanceof Error ? e.message : 'Unknown error'}`);
     return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
   }
 });

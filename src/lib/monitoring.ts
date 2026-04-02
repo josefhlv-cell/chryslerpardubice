@@ -8,7 +8,7 @@
  *   captureError(error, { module: "ServiceOrders", action: "create" });
  */
 
-import { logger } from "@/lib/logger";
+import { logger, metrics } from "@/lib/logger";
 
 interface ErrorContext {
   module?: string;
@@ -23,17 +23,15 @@ interface EventData {
 
 /**
  * Capture and report an error.
- * Currently logs structured error; ready for Sentry integration.
- * 
- * To enable Sentry:
- *   import * as Sentry from "@sentry/react";
- *   Sentry.captureException(error, { extra: context });
+ * Increments error counter and logs structured error.
  */
 export function captureError(error: unknown, context?: ErrorContext): void {
   const module = context?.module ?? "App";
   const action = context?.action ?? "unknown";
 
   logger.error(module, action, error, context);
+  metrics.increment("error");
+  metrics.checkAlerts();
 
   // Sentry integration point:
   // if (typeof window !== "undefined" && window.__SENTRY__) {
@@ -43,14 +41,11 @@ export function captureError(error: unknown, context?: ErrorContext): void {
 
 /**
  * Track a business event for analytics/monitoring.
- * Currently logs; ready for LogRocket / analytics integration.
- * 
- * To enable LogRocket:
- *   import LogRocket from "logrocket";
- *   LogRocket.track(eventName, data);
+ * Increments named counter and logs.
  */
 export function trackEvent(eventName: string, data?: EventData): void {
-  logger.info("Monitor", eventName, data);
+  logger.event("Monitor", eventName, data);
+  metrics.increment(eventName.toLowerCase());
 
   // LogRocket integration point:
   // if (typeof window !== "undefined" && window.__LOGROCKET__) {
@@ -66,4 +61,25 @@ export function identifyUser(userId: string, traits?: Record<string, string>): v
 
   // Sentry.setUser({ id: userId, ...traits });
   // LogRocket.identify(userId, traits);
+}
+
+/**
+ * Track a catalog search and whether results were found.
+ */
+export function trackCatalogSearch(query: string, resultCount: number, source: string): void {
+  if (resultCount === 0) {
+    metrics.increment("catalog_empty_result");
+    logger.event("Catalog", "CATALOG_EMPTY_RESULT", { query, source }, "warn");
+  }
+  metrics.increment("catalog_search");
+  metrics.checkAlerts();
+}
+
+/**
+ * Track a fallback being used (e.g. price history fallback).
+ */
+export function trackFallback(module: string, reason: string, data?: EventData): void {
+  metrics.increment("fallback_used");
+  logger.event(module, "FALLBACK_USED", { reason, ...data }, "warn");
+  metrics.checkAlerts();
 }
