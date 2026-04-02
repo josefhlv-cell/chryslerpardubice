@@ -37,8 +37,9 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
   try {
-    // Auth check - require authenticated user
+    console.log(`[MONITOR] CATALOG_SEARCH_STARTED codes=${body?.oemCodes?.length || 0} mode=${body?.mode || 'default'}`);
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
