@@ -39,20 +39,20 @@ Deno.serve(async (req) => {
 
   const startTime = Date.now();
   try {
-    console.log(`[MONITOR] CATALOG_SEARCH_STARTED codes=${body?.oemCodes?.length || 0} mode=${body?.mode || 'default'}`);
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (claimsError || !claimsData?.claims?.sub) {
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
       return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const body = await req.json();
     const { oemCodes, mode } = body;
+    console.log(`[MONITOR] CATALOG_SEARCH_STARTED codes=${oemCodes?.length || 0} mode=${mode || 'default'}`);
     if (!oemCodes || !Array.isArray(oemCodes) || oemCodes.length === 0) {
       return new Response(
         JSON.stringify({ success: false, error: 'oemCodes array is required' }),
