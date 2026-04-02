@@ -77,6 +77,26 @@ export function canManageVehicle(userId: string, vehicleOwnerId: string, userIsA
 /** Require admin role — throws if not admin */
 export function requireAdmin(user: PermissionUser | null): void {
   if (!isAdmin(user)) {
+    logSecurityEvent("UNAUTHORIZED_ACCESS_ATTEMPT", {
+      userId: user?.id ?? "anonymous",
+      reason: "admin role required",
+    });
     throw new Error("Nedostatečná oprávnění — vyžadována role administrátora.");
   }
+}
+
+/**
+ * Security event logger.
+ * Logs security-relevant events in structured format for monitoring.
+ */
+export function logSecurityEvent(
+  event: "UNAUTHORIZED_ACCESS_ATTEMPT" | "RLS_BLOCK" | "ADMIN_ACTION" | "SECURITY_VIOLATION",
+  details: Record<string, unknown>
+): void {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    event,
+    ...details,
+  };
+  console.warn(`[SECURITY] ${event}`, JSON.stringify(entry));
 }
