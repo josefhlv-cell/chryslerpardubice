@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log(`✅ Sync done in ${elapsed}s: ${updated} updated, ${notFound} not found, ${errors} errors, ${skipped} skipped | ${avgMs}ms/part`);
+      console.log(`[MONITOR] PRICE_SYNC_COMPLETED duration=${elapsed}s updated=${updated} notFound=${notFound} errors=${errors} skipped=${skipped} successRate=${successRate}% avgMs=${avgMs}`);
       return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
     } finally {
       await releaseLock(supabase);
