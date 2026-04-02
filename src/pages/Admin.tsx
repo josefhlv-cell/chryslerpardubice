@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp, Trash2, Loader2 } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp, Trash2, Loader2, Database } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -39,6 +39,7 @@ import AdminNotificationToggle from "@/components/admin/AdminNotificationToggle"
 import AdminActivityLog from "@/components/admin/AdminActivityLog";
 import AdminReviews from "@/components/admin/AdminReviews";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
+import AdminBackups from "@/components/admin/AdminBackups";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -379,6 +380,7 @@ const Admin = () => {
             {isEnabled("admin_statistics") && <TabsTrigger value="dashboard-stats" className="text-[11px] gap-1 shrink-0"><TrendingUp className="w-3 h-3" />Přehled</TabsTrigger>}
             <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
             {isAdmin && <TabsTrigger value="activity" className="text-[11px] gap-1 shrink-0"><Clock className="w-3 h-3" />Aktivita</TabsTrigger>}
+            {isAdmin && <TabsTrigger value="backups" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Zálohy</TabsTrigger>}
           </TabsList>
 
           {/* FIRMS / PENDING BUSINESS */}
@@ -707,6 +709,12 @@ const Admin = () => {
           {isAdmin && (
             <TabsContent value="activity">
               <div className="mt-2"><AdminActivityLog /></div>
+            </TabsContent>
+          )}
+
+          {isAdmin && (
+            <TabsContent value="backups">
+              <div className="mt-2"><AdminBackups /></div>
             </TabsContent>
           )}
         </Tabs>
