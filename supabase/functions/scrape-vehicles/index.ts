@@ -14,14 +14,14 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith('Bearer ')) {
       return json({ success: false, error: 'Unauthorized' }, 401);
     }
-    const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (claimsError || !claimsData?.claims?.sub) {
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const authClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
       return json({ success: false, error: 'Unauthorized' }, 401);
     }
-    const adminCheck = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: roleData } = await adminCheck.from('user_roles').select('role').eq('user_id', claimsData.claims.sub).eq('role', 'admin').maybeSingle();
+    const adminCheck = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data: roleData } = await adminCheck.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
     if (!roleData) {
       return json({ success: false, error: 'Forbidden: admin required' }, 403);
     }
@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
             },
           },
         },
-        waitFor: 3000,
+        waitFor: 5000,
+        timeout: 60000,
       }),
     });
 
@@ -96,12 +97,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update database
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // Update database - reuse adminCheck client (service_role)
+    const supabase = adminCheck;
 
     // Deactivate all current vehicles
     await supabase.from('vehicles').update({ is_active: false }).eq('is_active', true);
