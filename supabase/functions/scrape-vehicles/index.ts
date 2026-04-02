@@ -97,12 +97,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update database
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // Update database - reuse adminCheck client (service_role)
+    const supabase = adminCheck;
 
     // Deactivate all current vehicles
     await supabase.from('vehicles').update({ is_active: false }).eq('is_active', true);
