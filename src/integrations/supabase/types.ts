@@ -2093,7 +2093,6 @@ export type Database = {
           oem_number: string | null
           packaging: string | null
           price_with_vat: number | null
-          price_without_vat: number | null
           segment: string | null
           updated_at: string | null
         }
@@ -2114,7 +2113,6 @@ export type Database = {
           oem_number?: string | null
           packaging?: string | null
           price_with_vat?: number | null
-          price_without_vat?: number | null
           segment?: string | null
           updated_at?: string | null
         }
@@ -2135,7 +2133,6 @@ export type Database = {
           oem_number?: string | null
           packaging?: string | null
           price_with_vat?: number | null
-          price_without_vat?: number | null
           segment?: string | null
           updated_at?: string | null
         }
