@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
       await releaseLock(supabase);
     }
   } catch (e) {
-    console.error('price-sync error:', e);
+    console.error(`[ALERT] PRICE_SYNC_FAILED: ${e instanceof Error ? e.message : 'Unknown error'}`);
     return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
   }
 });
