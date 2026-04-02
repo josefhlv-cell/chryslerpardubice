@@ -44,11 +44,10 @@ const ServiceOrderPhotos = ({ orderId, isAdmin }: { orderId: string; isAdmin: bo
     const path = `orders/${orderId}/${phase}/${Date.now()}.${ext}`;
     const { error: uploadError } = await supabase.storage.from("service-order-photos").upload(path, file);
     if (uploadError) { toast({ title: "Chyba uploadu", variant: "destructive" }); setUploading(false); return; }
-    const { data: urlData } = supabase.storage.from("service-order-photos").getPublicUrl(path);
 
     await supabase.from("service_order_photos").insert({
       service_order_id: orderId,
-      photo_url: urlData.publicUrl,
+      photo_url: path,
       phase,
     } as any);
 
