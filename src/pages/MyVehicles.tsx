@@ -369,6 +369,31 @@ const MyVehicles = () => {
                   </div>
                 </div>
 
+                {/* Highway vignette check */}
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs gap-1.5"
+                    onClick={async () => {
+                      if (!v.license_plate) {
+                        toast({ title: "Chybí SPZ", description: "Doplňte registrační značku vozidla pro ověření dálniční známky.", variant: "destructive" });
+                        return;
+                      }
+                      try {
+                        await navigator.clipboard.writeText(v.license_plate);
+                        toast({ title: "SPZ zkopírována", description: `SPZ „${v.license_plate}" byla zkopírována do schránky. Vložte ji do formuláře na edalnice.cz.` });
+                      } catch {
+                        toast({ title: "Otevírám ověření", description: `Zadejte SPZ: ${v.license_plate}` });
+                      }
+                      window.open("https://edalnice.cz/index.html#payment-validation", "_blank");
+                    }}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Ověřit platnost dálniční známky
+                  </Button>
+                </div>
+
                 {/* Auto part recommendations */}
                 {isEnabled("auto_part_recommendations") && v.current_mileage && (
                   <div className="mt-3">
