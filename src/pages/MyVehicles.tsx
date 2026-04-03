@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen, Cpu, Share2 } from "lucide-react";
+import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen, Cpu, Share2, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import CarIcon from "@/components/CarIcon";
 import VINDetailPanel from "@/components/VINDetailPanel";
@@ -367,6 +367,31 @@ const MyVehicles = () => {
                   </div>
                 </div>
                   </div>
+                </div>
+
+                {/* Highway vignette check */}
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs gap-1.5"
+                    onClick={async () => {
+                      if (!v.license_plate) {
+                        toast({ title: "Chybí SPZ", description: "Doplňte registrační značku vozidla pro ověření dálniční známky.", variant: "destructive" });
+                        return;
+                      }
+                      try {
+                        await navigator.clipboard.writeText(v.license_plate);
+                        toast({ title: "SPZ zkopírována", description: `SPZ „${v.license_plate}" byla zkopírována do schránky. Vložte ji do formuláře na edalnice.cz.` });
+                      } catch {
+                        toast({ title: "Otevírám ověření", description: `Zadejte SPZ: ${v.license_plate}` });
+                      }
+                      window.open("https://edalnice.cz/index.html#payment-validation", "_blank");
+                    }}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Ověřit platnost dálniční známky
+                  </Button>
                 </div>
 
                 {/* Auto part recommendations */}
