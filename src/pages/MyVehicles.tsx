@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen, Cpu, Share2 } from "lucide-react";
+import { Car, Plus, Trash2, Edit, Search, Loader2, History, Camera, ImagePlus, Gauge, FileText, BookOpen, Cpu, Share2, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import CarIcon from "@/components/CarIcon";
 import VINDetailPanel from "@/components/VINDetailPanel";
