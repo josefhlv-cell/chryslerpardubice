@@ -28,6 +28,7 @@ type UserVehicle = {
   engine: string | null;
   license_plate: string | null;
   current_mileage: number | null;
+  transmission: string | null;
   created_at: string;
 };
 
