@@ -1739,6 +1739,7 @@ export type Database = {
           id: string
           license_plate: string | null
           model: string
+          transmission: string | null
           user_id: string
           vin: string | null
           year: number | null
@@ -1751,6 +1752,7 @@ export type Database = {
           id?: string
           license_plate?: string | null
           model: string
+          transmission?: string | null
           user_id: string
           vin?: string | null
           year?: number | null
@@ -1763,6 +1765,7 @@ export type Database = {
           id?: string
           license_plate?: string | null
           model?: string
+          transmission?: string | null
           user_id?: string
           vin?: string | null
           year?: number | null
