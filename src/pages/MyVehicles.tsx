@@ -101,7 +101,7 @@ const MyVehicles = () => {
   }, [user]);
 
   const resetForm = () => {
-    setVin(""); setBrand(""); setModel(""); setYear(""); setEngine(""); setLicensePlate(""); setCurrentMileage("");
+    setVin(""); setBrand(""); setModel(""); setYear(""); setEngine(""); setLicensePlate(""); setCurrentMileage(""); setTransmission("");
     setEditVehicle(null); setVinDecodeResult(null);
   };
 
