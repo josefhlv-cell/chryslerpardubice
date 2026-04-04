@@ -283,7 +283,7 @@ export const fetchAllUserVehicles = async () => {
   return withErrorHandling(MODULE, "fetchAllUserVehicles", async () => {
     const { data, error } = await supabase
       .from("user_vehicles")
-      .select("id, brand, model, year, license_plate, user_id");
+      .select("id, brand, model, year, license_plate, user_id, transmission");
     if (error) throw error;
     return data || [];
   });

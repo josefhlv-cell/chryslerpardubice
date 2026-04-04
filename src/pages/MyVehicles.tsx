@@ -28,6 +28,7 @@ type UserVehicle = {
   engine: string | null;
   license_plate: string | null;
   current_mileage: number | null;
+  transmission: string | null;
   created_at: string;
 };
 
@@ -74,6 +75,7 @@ const MyVehicles = () => {
   const [engine, setEngine] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [currentMileage, setCurrentMileage] = useState("");
+  const [transmission, setTransmission] = useState("");
   const [vinDecodeResult, setVinDecodeResult] = useState<VINDecodeResult | null>(null);
 
   const serviceHistoryEnabled = profile?.service_history_enabled ?? false;
@@ -99,7 +101,7 @@ const MyVehicles = () => {
   }, [user]);
 
   const resetForm = () => {
-    setVin(""); setBrand(""); setModel(""); setYear(""); setEngine(""); setLicensePlate(""); setCurrentMileage("");
+    setVin(""); setBrand(""); setModel(""); setYear(""); setEngine(""); setLicensePlate(""); setCurrentMileage(""); setTransmission("");
     setEditVehicle(null); setVinDecodeResult(null);
   };
 
@@ -110,6 +112,7 @@ const MyVehicles = () => {
     setVin(v.vin || ""); setBrand(v.brand); setModel(v.model);
     setYear(v.year?.toString() || ""); setEngine(v.engine || "");
     setLicensePlate(v.license_plate || ""); setCurrentMileage(v.current_mileage?.toString() || "");
+    setTransmission(v.transmission || "");
     setDialogOpen(true);
   };
 
@@ -221,6 +224,7 @@ const MyVehicles = () => {
       engine: engine || null,
       license_plate: licensePlate || null,
       current_mileage: currentMileage ? parseInt(currentMileage) : null,
+      transmission: transmission || null,
     };
 
     if (editVehicle) {
@@ -327,6 +331,7 @@ const MyVehicles = () => {
                     <div className="flex gap-2 mt-1 flex-wrap">
                       {v.year && <Badge variant="outline" className="text-xs">{v.year}</Badge>}
                       {v.engine && <Badge variant="outline" className="text-xs">{v.engine}</Badge>}
+                      {v.transmission && <Badge variant="outline" className="text-xs">{v.transmission}</Badge>}
                       {v.license_plate && <Badge variant="outline" className="text-xs">{v.license_plate}</Badge>}
                       {v.current_mileage != null && (
                         <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => { setMileageVehicle(v); setMileageInput(v.current_mileage?.toString() || ""); }}>
@@ -466,9 +471,13 @@ const MyVehicles = () => {
                 <Input value={engine} onChange={e => setEngine(e.target.value)} placeholder="3.6L V6" />
               </div>
               <div>
-                <label className="text-sm font-medium">Kilometry</label>
-                <Input type="number" value={currentMileage} onChange={e => setCurrentMileage(e.target.value)} placeholder="50000" />
+                <label className="text-sm font-medium">Převodovka</label>
+                <Input value={transmission} onChange={e => setTransmission(e.target.value)} placeholder="Automatická / Manuální" />
               </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Kilometry</label>
+              <Input type="number" value={currentMileage} onChange={e => setCurrentMileage(e.target.value)} placeholder="50000" />
             </div>
             {/* AI VIN Detail Panel */}
             {vin && vin.length >= 11 && (
