@@ -1,4 +1,4 @@
-import tondaImg from "@/assets/tonda-avatar.png";
+import tondaImg from "@/assets/tonda-avatar.webp";
 
 interface TondaAvatarProps {
   size?: "sm" | "md" | "lg" | "nav";
