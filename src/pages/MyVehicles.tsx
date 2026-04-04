@@ -331,6 +331,7 @@ const MyVehicles = () => {
                     <div className="flex gap-2 mt-1 flex-wrap">
                       {v.year && <Badge variant="outline" className="text-xs">{v.year}</Badge>}
                       {v.engine && <Badge variant="outline" className="text-xs">{v.engine}</Badge>}
+                      {v.transmission && <Badge variant="outline" className="text-xs">{v.transmission}</Badge>}
                       {v.license_plate && <Badge variant="outline" className="text-xs">{v.license_plate}</Badge>}
                       {v.current_mileage != null && (
                         <Badge variant="secondary" className="text-xs cursor-pointer" onClick={() => { setMileageVehicle(v); setMileageInput(v.current_mileage?.toString() || ""); }}>
