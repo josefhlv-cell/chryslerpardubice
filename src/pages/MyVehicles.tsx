@@ -75,6 +75,7 @@ const MyVehicles = () => {
   const [engine, setEngine] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [currentMileage, setCurrentMileage] = useState("");
+  const [transmission, setTransmission] = useState("");
   const [vinDecodeResult, setVinDecodeResult] = useState<VINDecodeResult | null>(null);
 
   const serviceHistoryEnabled = profile?.service_history_enabled ?? false;
