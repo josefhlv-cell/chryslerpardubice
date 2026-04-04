@@ -224,6 +224,7 @@ const MyVehicles = () => {
       engine: engine || null,
       license_plate: licensePlate || null,
       current_mileage: currentMileage ? parseInt(currentMileage) : null,
+      transmission: transmission || null,
     };
 
     if (editVehicle) {
