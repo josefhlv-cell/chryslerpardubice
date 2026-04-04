@@ -67,6 +67,11 @@ const Vehicles = () => {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
                   />
+                  <img
+                    src="/images/badge-logo.webp"
+                    alt=""
+                    className="absolute top-2 left-2 w-10 h-auto opacity-80 drop-shadow-lg pointer-events-none"
+                  />
                 </div>
                 <div className="p-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
