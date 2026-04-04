@@ -52,6 +52,11 @@ const VehicleDetail = () => {
           alt={`${vehicle.brand} ${vehicle.model}`}
           className="w-full h-full object-cover"
         />
+        <img
+          src="/images/badge-logo.webp"
+          alt=""
+          className="absolute top-3 left-3 w-12 h-auto opacity-80 drop-shadow-lg pointer-events-none"
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
       </div>
 
