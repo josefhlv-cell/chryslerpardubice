@@ -7,15 +7,15 @@ import { useState, memo } from "react";
 import { cn } from "@/lib/utils";
 
 // Local car images
-import dodgeGrandCaravan from "@/assets/cars/dodge-grand-caravan.png";
-import chrysler300 from "@/assets/cars/chrysler-300.png";
-import chryslerPacifica from "@/assets/cars/chrysler-pacifica.png";
-import chryslerVoyager from "@/assets/cars/chrysler-voyager.png";
-import chryslerTownCountry from "@/assets/cars/chrysler-town-country.png";
-import dodgeDurango from "@/assets/cars/dodge-durango.png";
-import dodgeChallenger from "@/assets/cars/dodge-challenger.png";
-import dodgeCharger from "@/assets/cars/dodge-charger.png";
-import ram1500 from "@/assets/cars/ram-1500.png";
+import dodgeGrandCaravan from "@/assets/cars/dodge-grand-caravan.webp";
+import chrysler300 from "@/assets/cars/chrysler-300.webp";
+import chryslerPacifica from "@/assets/cars/chrysler-pacifica.webp";
+import chryslerVoyager from "@/assets/cars/chrysler-voyager.webp";
+import chryslerTownCountry from "@/assets/cars/chrysler-town-country.webp";
+import dodgeDurango from "@/assets/cars/dodge-durango.webp";
+import dodgeChallenger from "@/assets/cars/dodge-challenger.webp";
+import dodgeCharger from "@/assets/cars/dodge-charger.webp";
+import ram1500 from "@/assets/cars/ram-1500.webp";
 
 type CarData = {
   brand: string;
