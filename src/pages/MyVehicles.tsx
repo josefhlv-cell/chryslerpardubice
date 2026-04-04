@@ -112,6 +112,7 @@ const MyVehicles = () => {
     setVin(v.vin || ""); setBrand(v.brand); setModel(v.model);
     setYear(v.year?.toString() || ""); setEngine(v.engine || "");
     setLicensePlate(v.license_plate || ""); setCurrentMileage(v.current_mileage?.toString() || "");
+    setTransmission(v.transmission || "");
     setDialogOpen(true);
   };
 
