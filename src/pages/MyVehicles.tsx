@@ -471,9 +471,13 @@ const MyVehicles = () => {
                 <Input value={engine} onChange={e => setEngine(e.target.value)} placeholder="3.6L V6" />
               </div>
               <div>
-                <label className="text-sm font-medium">Kilometry</label>
-                <Input type="number" value={currentMileage} onChange={e => setCurrentMileage(e.target.value)} placeholder="50000" />
+                <label className="text-sm font-medium">Převodovka</label>
+                <Input value={transmission} onChange={e => setTransmission(e.target.value)} placeholder="Automatická / Manuální" />
               </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Kilometry</label>
+              <Input type="number" value={currentMileage} onChange={e => setCurrentMileage(e.target.value)} placeholder="50000" />
             </div>
             {/* AI VIN Detail Panel */}
             {vin && vin.length >= 11 && (
