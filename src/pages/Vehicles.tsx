@@ -19,16 +19,27 @@ const Vehicles = () => {
     queryFn: () => fetchVehicles({ brand: brandFilter, search: searchQuery }),
   });
 
+  const marqueeText = "Garantujeme stav vozu díky přísné výstupní kontrole — Zakládáme si na tom, že od nás odjíždíte v naprosto bezpečném a prověřeném voze. Každý automobil v naší nabídce prochází důkladným procesem kontroly všech klíčových částí. Pokud během prohlídky narazíme na díl vykazující známky poškození, automaticky jej opravujeme nebo měníme za nový. Za kvalitou našich vozů si plně stojíme.";
+
   return (
     <div className="min-h-screen pb-20">
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-center justify-between mb-3">
-            <h1 className="font-display text-2xl font-bold">Vozy k prodeji</h1>
+            <h1 className="font-display text-2xl font-bold">Skladové vozy</h1>
             <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => navigate("/vehicle-offer")}>
               <ArrowDownUp className="w-3.5 h-3.5" />
               Výkup / Dovoz
             </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Pečlivě vybrané vozy Chrysler – Dodge připravené k předání
+          </p>
+          <div className="overflow-hidden rounded-md border border-border/40 bg-card/50 py-2 mb-3">
+            <div className="animate-marquee whitespace-nowrap text-xs text-primary/90 font-medium">
+              <span className="mx-8">{marqueeText}</span>
+              <span className="mx-8">{marqueeText}</span>
+            </div>
           </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
