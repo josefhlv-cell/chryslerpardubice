@@ -234,7 +234,7 @@
 
   /* ---- Brushed metal texture ---- */
   .brushed-metal {
-    background: linear-gradient(135deg, hsl(0 0% 10%), hsl(0 0% 8%));
+    background: linear-gradient(135deg, hsl(220 25% 12%), hsl(220 25% 10%));
     background-image: repeating-linear-gradient(
       90deg,
       transparent,
