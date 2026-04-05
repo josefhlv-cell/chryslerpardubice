@@ -19,7 +19,7 @@ const Vehicles = () => {
     queryFn: () => fetchVehicles({ brand: brandFilter, search: searchQuery }),
   });
 
-  const marqueeText = "Garantujeme stav vozu díky přísné výstupní kontrole — Zakládáme si na tom, že od nás odjíždíte v naprosto bezpečném a prověřeném voze. Každý automobil v naší nabídce prochází důkladným procesem kontroly všech klíčových částí. Pokud během prohlídky narazíme na díl vykazující známky poškození, automaticky jej opravujeme nebo měníme za nový. Za kvalitou našich vozů si plně stojíme.";
+  const marqueeText = "Prověřené vozy se zárukou Chrysler Pardubice — • Důkladná prověrka: Každé vozidlo u nás prochází kompletní výstupní kontrolou všech mechanických skupin. Nic nenecháváme náhodě. — • Bezvadný stav: Poškozené nebo nadměrně opotřebované díly neprodleně opravujeme či měníme za nové. — • Osobní garance: Za kvalitou si stojíme. Na každý vůz vystavujeme kupujícímu garanční list přímo naší společností Chrysler Pardubice. — • GARANCE 100 000 km: Tato garance je platná po dobu 1 roku nebo do nájezdu 100 000 km, podle toho, co nastane dříve.";
 
   return (
     <div className="min-h-screen pb-20">
