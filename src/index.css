@@ -6,22 +6,23 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
+    /* BACKUP original: --background: 0 0% 4%; --card: 0 0% 8%; --popover: 0 0% 7%; --secondary: 0 0% 10%; --muted: 0 0% 12%; --input: 0 0% 12%; --border: 0 0% 14%; --sidebar-background: 0 0% 3%; --sidebar-accent: 0 0% 10%; --sidebar-border: 0 0% 12%; */
+    --background: 220 30% 6%;
     --foreground: 0 0% 95%;
 
-    --card: 0 0% 8%;
+    --card: 220 25% 10%;
     --card-foreground: 0 0% 95%;
 
-    --popover: 0 0% 7%;
+    --popover: 220 28% 9%;
     --popover-foreground: 0 0% 95%;
 
     --primary: 32 80% 50%;
     --primary-foreground: 0 0% 4%;
 
-    --secondary: 0 0% 10%;
+    --secondary: 220 25% 12%;
     --secondary-foreground: 0 0% 55%;
 
-    --muted: 0 0% 12%;
+    --muted: 220 20% 14%;
     --muted-foreground: 0 0% 50%;
 
     --accent: 32 80% 50%;
@@ -30,8 +31,8 @@
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 14%;
-    --input: 0 0% 12%;
+    --border: 220 20% 16%;
+    --input: 220 20% 14%;
     --ring: 32 80% 50%;
 
     --radius: 0.75rem;
@@ -42,13 +43,13 @@
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --sidebar-background: 0 0% 3%;
+    --sidebar-background: 220 32% 5%;
     --sidebar-foreground: 0 0% 95%;
     --sidebar-primary: 32 80% 50%;
     --sidebar-primary-foreground: 0 0% 4%;
-    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent: 220 25% 12%;
     --sidebar-accent-foreground: 0 0% 85%;
-    --sidebar-border: 0 0% 12%;
+    --sidebar-border: 220 20% 14%;
     --sidebar-ring: 32 80% 50%;
 
     --font-display: 'Space Grotesk', sans-serif;
