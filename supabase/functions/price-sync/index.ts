@@ -87,10 +87,10 @@ Deno.serve(async (req) => {
 
     try {
       // ── Resolve OEM numbers with priority ─────────────────────────
-      let oemNumbers: string[] = partNumbers || [];
-      if (oemNumbers.length === 0) {
-        oemNumbers = await getPrioritizedParts(supabase, batchSize, offset);
-      }
+        let oemNumbers: string[] = partNumbers || [];
+        if (oemNumbers.length === 0) {
+          oemNumbers = await getPrioritizedParts(supabase, batchSize, offset, mode);
+        }
 
       if (oemNumbers.length === 0) {
         return json({ success: true, summary: { total: 0, message: 'No parts to sync' } });
@@ -182,11 +182,22 @@ Deno.serve(async (req) => {
 
 // ─── Priority-based part selection ──────────────────────────────────────────
 
-async function getPrioritizedParts(supabase: any, limit: number, offset: number): Promise<string[]> {
+async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
+  if (mode === 'force') {
+    const { data: allParts } = await supabase
+      .from('parts_new')
+      .select('oem_number')
+      .not('oem_number', 'like', 'SAG-%')
+      .not('oem_number', 'like', 'AK-%')
+      .order('oem_number', { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    return (allParts || []).map((part: { oem_number: string }) => part.oem_number).filter(Boolean);
+  }
+
   const results: string[] = [];
   const freshCutoff = new Date(Date.now() - FRESH_THRESHOLD_HOURS * 3600000).toISOString();
 
-  // Priority 1: Parts from recent orders (last 7 days) that aren't fresh
   if (offset === 0) {
     const { data: orderParts } = await supabase
       .from('orders')
@@ -202,12 +213,13 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number)
     }
   }
 
-  // Priority 2: Stale/old parts (not updated in last 24h) ordered by oldest first
   const remaining = limit - results.length;
   if (remaining > 0) {
     const { data: staleParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .not('oem_number', 'like', 'SAG-%')
+      .not('oem_number', 'like', 'AK-%')
       .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
       .order('last_price_update', { ascending: true, nullsFirst: true })
       .range(offset, offset + remaining - 1);
@@ -396,7 +408,7 @@ async function processPart(
 ): Promise<any> {
   const { data: cached } = await supabase
     .from('parts_new')
-    .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked')
+    .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked, availability')
     .eq('oem_number', partNumber)
     .single();
 
@@ -474,6 +486,7 @@ async function processPart(
         price_without_vat: priceWithoutVat,
         price_with_vat: priceWithVat,
         last_price_update: new Date().toISOString(),
+        availability: 'available',
       }).eq('id', cached.id);
     }
 
@@ -487,6 +500,7 @@ async function processPart(
     if (cached) {
       await supabase.from('parts_new').update({
         last_price_update: new Date().toISOString(),
+        ...(cached.price_with_vat > 0 ? {} : { availability: 'on_order' }),
       }).eq('id', cached.id);
     }
     console.log(`⚠️ PRICE_SYNC_NOT_FOUND: ${partNumber} — keeping existing price (${cached?.price_with_vat || 0} Kč)`);
