@@ -41,6 +41,8 @@ const SourceBadge = ({ source }: { source: string }) => {
 const AvailabilityDot = ({ availability }: { availability: string }) => {
   if (availability === "available")
     return <span className="inline-flex items-center gap-1 text-xs font-medium text-green-400"><span className="w-1.5 h-1.5 rounded-full bg-green-400" />Skladem</span>;
+  if (availability === "on_order")
+    return <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Na objednávku</span>;
   if (availability === "unavailable")
     return <span className="inline-flex items-center gap-1 text-xs font-medium text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />Nedostupné</span>;
   return <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />Na dotaz</span>;
@@ -88,7 +90,7 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
       <div className="rounded-xl bg-secondary p-4 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Cena s DPH</span>
-          <span className="text-xl font-bold">{part.price_with_vat > 0 ? `${part.price_with_vat.toLocaleString("cs")} Kč` : "Na dotaz"}</span>
+          <span className="text-xl font-bold">{part.price_with_vat > 0 ? `${part.price_with_vat.toLocaleString("cs")} Kč` : "Na objednávku"}</span>
         </div>
         {part.price_without_vat > 0 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">

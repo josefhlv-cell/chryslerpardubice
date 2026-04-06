@@ -44,7 +44,7 @@ type PriceData = { price_without_vat: number; price_with_vat: number; availabili
 const PARTS_PER_PAGE = 20;
 
 const formatPrice = (price: number) =>
-  price > 0 ? `${price.toLocaleString("cs-CZ")} Kč` : "—";
+  price > 0 ? `${price.toLocaleString("cs-CZ")} Kč` : "Na objednávku";
 
 // Diagram SVG cache (in-memory per session)
 const diagramCache = new Map<string, string>();
