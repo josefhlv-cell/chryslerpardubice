@@ -6,8 +6,8 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const CONCURRENCY = 8;
-const BATCH_SIZE = 50;
+const CONCURRENCY = 12;
+const BATCH_SIZE = 100;
 const CACHE_TTL_MINUTES = 20;
 const FRESH_THRESHOLD_HOURS = 24; // Skip parts updated within 24h
 const STALE_THRESHOLD_HOURS = 168; // 7 days = "old"
