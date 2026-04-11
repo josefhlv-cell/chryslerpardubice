@@ -69,13 +69,20 @@ Deno.serve(async (req) => {
 
     if (action === 'pause') {
       const { error } = await supabase.rpc('manage_price_sync_cron', { p_action: 'pause' });
-      if (error) throw error;
+      if (error) {
+        // Job might not exist — treat as already paused
+        console.warn('cron pause error (job may not exist):', error.message);
+        return json({ success: true, active: false, note: 'Job was not scheduled' });
+      }
       return json({ success: true, active: false });
     }
 
     if (action === 'resume') {
       const { error } = await supabase.rpc('manage_price_sync_cron', { p_action: 'resume' });
-      if (error) throw error;
+      if (error) {
+        console.error('cron resume error:', error);
+        return json({ error: error.message }, 500);
+      }
       return json({ success: true, active: true });
     }
 
