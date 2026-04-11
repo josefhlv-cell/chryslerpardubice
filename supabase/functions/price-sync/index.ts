@@ -458,18 +458,22 @@ async function processPart(
       prices = extractPricesDOM(searchHtml);
       if (prices.length > 0) break;
     }
-    // Small delay between variant attempts
     await new Promise(r => setTimeout(r, 150));
   }
 
   if (debugMode) {
-    // Extract table area for debugging
-    const tableMatch = searchHtml.match(/<table[\s\S]*?<\/table>/gi);
-    const tableHtml = tableMatch ? tableMatch.map(t => t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).join(' ||| ') : 'NO TABLE FOUND';
+  // Extract catalog name
+  const catalogName = partFound ? extractPartName(searchHtml) : null;
+
+  if (debugMode) {
     return {
       oem_number: partNumber, searchCode, debug: true,
       htmlLength: searchHtml.length, partFound, pricesFound: prices,
-      tableContent: tableHtml.substring(0, 3000),
+      catalogName,
+      tableContent: (() => {
+        const tableMatch = searchHtml.match(/<table[\s\S]*?<\/table>/gi);
+        return tableMatch ? tableMatch.map(t => t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).join(' ||| ').substring(0, 3000) : 'NO TABLE';
+      })(),
     };
   }
 
@@ -487,12 +491,21 @@ async function processPart(
       });
     }
     if (cached) {
-      await supabase.from('parts_new').update({
+      const updateData: any = {
         price_without_vat: priceWithoutVat,
         price_with_vat: priceWithVat,
         last_price_update: new Date().toISOString(),
         availability: 'available',
-      }).eq('id', cached.id);
+      };
+      // Update name from catalog if available and current name looks AI-generated
+      if (catalogName && catalogName.length > 2) {
+        const currentName = cached.name || '';
+        const isAiName = currentName.includes('Náhradní díl') || currentName.includes('(') || /[čšžřďťňáéíóúůý]/.test(currentName);
+        if (isAiName || !currentName) {
+          updateData.name = catalogName;
+        }
+      }
+      await supabase.from('parts_new').update(updateData).eq('id', cached.id);
     }
 
     console.log(`✅ PRICE_UPDATED: ${partNumber} → ${priceWithVat} Kč`);
