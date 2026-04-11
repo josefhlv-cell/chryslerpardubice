@@ -461,7 +461,6 @@ async function processPart(
     await new Promise(r => setTimeout(r, 150));
   }
 
-  if (debugMode) {
   // Extract catalog name
   const catalogName = partFound ? extractPartName(searchHtml) : null;
 
