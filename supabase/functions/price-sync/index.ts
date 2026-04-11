@@ -174,7 +174,7 @@ Deno.serve(async (req) => {
       console.log(`[MONITOR] PRICE_SYNC_COMPLETED duration=${elapsed}s updated=${updated} notFound=${notFound} errors=${errors} skipped=${skipped} successRate=${successRate}% avgMs=${avgMs}`);
       return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
     } finally {
-      await releaseLock(supabase);
+      await releaseLock(supabase, lockKey);
     }
   } catch (e) {
     console.error(`[ALERT] PRICE_SYNC_FAILED: ${e instanceof Error ? e.message : 'Unknown error'}`);
