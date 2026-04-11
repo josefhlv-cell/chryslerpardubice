@@ -463,10 +463,13 @@ async function processPart(
   }
 
   if (debugMode) {
+    // Extract table area for debugging
+    const tableMatch = searchHtml.match(/<table[\s\S]*?<\/table>/gi);
+    const tableHtml = tableMatch ? tableMatch.map(t => t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).join(' ||| ') : 'NO TABLE FOUND';
     return {
       oem_number: partNumber, searchCode, debug: true,
       htmlLength: searchHtml.length, partFound, pricesFound: prices,
-      textSnippet: searchHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').substring(0, 1500),
+      tableContent: tableHtml.substring(0, 3000),
     };
   }
 
