@@ -25,8 +25,8 @@ type SyncSummary = {
   nextOffset: number;
 };
 
-const BATCH_SIZE = 50;
-const INTER_BATCH_DELAY = 1500;
+const BATCH_SIZE = 100;
+const INTER_BATCH_DELAY = 800;
 
 const AdminBulkPriceSync = () => {
   const [running, setRunning] = useState(false);
