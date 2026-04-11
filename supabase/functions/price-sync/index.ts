@@ -77,7 +77,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // ── Lock mechanism ──────────────────────────────────────────────
-    const lockAcquired = await acquireLock(supabase);
+    const lockKey = segment ? `${LOCK_KEY}-seg${segment}` : LOCK_KEY;
+    const lockAcquired = await acquireLock(supabase, lockKey);
     if (!lockAcquired) {
       console.log('⏭️ Another sync is still running, skipping');
       return json({ success: true, summary: { total: 0, message: 'Skipped - previous run still active' } });
