@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
       offset = 0,
       debugMode = false,
       exportCsv = false,
+      segment,
     } = await req.json();
 
     // Auth check - manual calls require admin, auto/cron calls are allowed
@@ -76,7 +77,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // ── Lock mechanism ──────────────────────────────────────────────
-    const lockAcquired = await acquireLock(supabase);
+    const lockKey = segment ? `${LOCK_KEY}-seg${segment}` : LOCK_KEY;
+    const lockAcquired = await acquireLock(supabase, lockKey);
     if (!lockAcquired) {
       console.log('⏭️ Another sync is still running, skipping');
       return json({ success: true, summary: { total: 0, message: 'Skipped - previous run still active' } });
@@ -172,7 +174,7 @@ Deno.serve(async (req) => {
       console.log(`[MONITOR] PRICE_SYNC_COMPLETED duration=${elapsed}s updated=${updated} notFound=${notFound} errors=${errors} skipped=${skipped} successRate=${successRate}% avgMs=${avgMs}`);
       return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
     } finally {
-      await releaseLock(supabase);
+      await releaseLock(supabase, lockKey);
     }
   } catch (e) {
     console.error(`[ALERT] PRICE_SYNC_FAILED: ${e instanceof Error ? e.message : 'Unknown error'}`);
@@ -235,22 +237,22 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number,
 
 // ─── Lock ───────────────────────────────────────────────────────────────────
 
-async function acquireLock(supabase: any): Promise<boolean> {
+async function acquireLock(supabase: any, key: string = LOCK_KEY): Promise<boolean> {
   const { data: existing } = await supabase
     .from('api_cache')
     .select('created_at')
-    .eq('cache_key', LOCK_KEY)
+    .eq('cache_key', key)
     .eq('cache_type', 'lock')
     .single();
 
   if (existing) {
     const age = (Date.now() - new Date(existing.created_at).getTime()) / 1000;
     if (age < LOCK_TTL_SECONDS) return false;
-    await supabase.from('api_cache').delete().eq('cache_key', LOCK_KEY).eq('cache_type', 'lock');
+    await supabase.from('api_cache').delete().eq('cache_key', key).eq('cache_type', 'lock');
   }
 
   const { error } = await supabase.from('api_cache').insert({
-    cache_key: LOCK_KEY,
+    cache_key: key,
     cache_type: 'lock',
     data: { started: new Date().toISOString() },
     ttl_seconds: LOCK_TTL_SECONDS,
@@ -259,8 +261,8 @@ async function acquireLock(supabase: any): Promise<boolean> {
   return !error;
 }
 
-async function releaseLock(supabase: any): Promise<void> {
-  await supabase.from('api_cache').delete().eq('cache_key', LOCK_KEY).eq('cache_type', 'lock');
+async function releaseLock(supabase: any, key: string = LOCK_KEY): Promise<void> {
+  await supabase.from('api_cache').delete().eq('cache_key', key).eq('cache_type', 'lock');
 }
 
 // ─── Adaptive throttle ─────────────────────────────────────────────────────
