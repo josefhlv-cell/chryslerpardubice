@@ -410,7 +410,7 @@ async function processPart(
 ): Promise<any> {
   const { data: cached } = await supabase
     .from('parts_new')
-    .select('id, oem_number, price_without_vat, price_with_vat, last_price_update, price_locked, availability')
+    .select('id, oem_number, name, price_without_vat, price_with_vat, last_price_update, price_locked, availability')
     .eq('oem_number', partNumber)
     .single();
 
