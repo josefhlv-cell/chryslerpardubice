@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
       offset = 0,
       debugMode = false,
       exportCsv = false,
+      segment,
     } = await req.json();
 
     // Auth check - manual calls require admin, auto/cron calls are allowed
