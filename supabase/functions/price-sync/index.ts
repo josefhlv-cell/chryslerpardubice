@@ -545,7 +545,35 @@ function verifyPartInResults(html: string, partNumber: string, searchCode: strin
   return false;
 }
 
+// ─── Part name extraction ───────────────────────────────────────────────────
+
+function extractPartName(html: string): string | null {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (!doc) return null;
+    // Table structure: Kód dílu | Název | Famílie | Kategorie | Segment | Balení | Cena bez DPH | Cena s DPH
+    const rows = doc.querySelectorAll('tr');
+    for (const row of rows) {
+      const tds = row.querySelectorAll('td');
+      if (tds.length >= 7) {
+        const name = ((tds[1] as any).textContent || '').trim();
+        if (name && name.length > 1 && !name.includes('Název')) {
+          return name;
+        }
+      }
+    }
+  } catch (e) {
+    // fallback: regex
+  }
+  // Regex fallback: look for the name column after the part code
+  const m = html.match(/<td[^>]*>[^<]*K?\d{5,}[A-Z]*[^<]*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+  if (m && m[1].trim().length > 1) return m[1].trim();
+  return null;
+}
+
 // ─── Price extraction ───────────────────────────────────────────────────────
+
+const MAX_PRICE = 5000000;
 
 function extractPricesDOM(html: string): number[] {
   const prices: number[] = [];
@@ -559,7 +587,7 @@ function extractPricesDOM(html: string): number[] {
         const m = text.match(/(\d[\d\s]*[,.]\d{2})/);
         if (m) {
           const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
-          if (p > 10 && p < 1000000) prices.push(p);
+          if (p > 10 && p < MAX_PRICE) prices.push(p);
         }
       }
 
@@ -569,7 +597,7 @@ function extractPricesDOM(html: string): number[] {
         const m = text.match(/(\d[\d\s]*[,.]\d{2})/);
         if (m) {
           const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
-          if (p > 10 && p < 1000000) prices.push(p);
+          if (p > 10 && p < MAX_PRICE) prices.push(p);
         }
       }
     }
@@ -583,7 +611,7 @@ function extractPricesDOM(html: string): number[] {
   let m;
   while ((m = kcPattern.exec(text)) !== null) {
     const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
-    if (p > 10 && p < 1000000) prices.push(p);
+    if (p > 10 && p < MAX_PRICE) prices.push(p);
   }
 
   const dphPatterns = [
@@ -598,7 +626,7 @@ function extractPricesDOM(html: string): number[] {
     let m2;
     while ((m2 = pat.exec(text)) !== null) {
       const p = parseFloat(m2[1].replace(/\s/g, '').replace(',', '.'));
-      if (p > 10 && p < 1000000) prices.push(p);
+      if (p > 10 && p < MAX_PRICE) prices.push(p);
     }
   }
 
@@ -606,7 +634,7 @@ function extractPricesDOM(html: string): number[] {
   let m3;
   while ((m3 = tdPattern.exec(html)) !== null) {
     const p = parseFloat(m3[1].replace(/\s/g, '').replace(',', '.'));
-    if (p > 10 && p < 1000000) prices.push(p);
+    if (p > 10 && p < MAX_PRICE) prices.push(p);
   }
 
   return [...new Set(prices)];
