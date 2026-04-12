@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSensorDecoder } from '@/hooks/use-sensor-decoder';
-import { Sparkline } from './Sparkline';
+import { Sparkline } from '@/components/obd/xray/Sparkline';
 import { X, Wifi, WifiOff } from 'lucide-react';
 
 import engineXray from '@/assets/engine-xray.png';

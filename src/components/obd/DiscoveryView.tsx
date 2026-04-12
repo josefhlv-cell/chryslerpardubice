@@ -5,8 +5,8 @@ import {
   Eye, Zap, Flag, HelpCircle, Database, FileText, Cpu, Thermometer, Hash,
   CheckCircle2, AlertTriangle, Clock
 } from 'lucide-react';
-import { useDiscovery } from '@/hooks/use-discovery';
-import type { DiscoveredDID, DiscoveryProgress } from '@/lib/did-discovery';
+import { useDiscovery } from '@/hooks/obd/use-discovery';
+import type { DiscoveredDID, DiscoveryProgress } from '@/lib/obd/did-discovery';
 
 type Props = {
   elmReady: boolean;

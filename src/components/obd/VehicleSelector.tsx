@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Car, ChevronDown, Check } from 'lucide-react';
-import { useVehicle, type VehicleModel } from '@/hooks/use-vehicle';
-import { t } from '@/lib/i18n';
+import { useVehicle, type VehicleModel } from '@/hooks/obd/use-vehicle';
+import { t } from '@/lib/obd/i18n';
 
 export function VehicleSelector() {
   const { vehicle, vehicles, setVehicle } = useVehicle();

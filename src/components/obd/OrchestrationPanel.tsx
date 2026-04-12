@@ -5,9 +5,9 @@ import {
   Wifi, WifiOff, Gauge, Activity, TrendingUp, Clock, ChevronDown,
   ChevronRight, X, Radio, Cpu, Brain, Database
 } from 'lucide-react';
-import { useOrchestrator } from '@/hooks/use-orchestrator';
-import { t } from '@/lib/i18n';
-import type { PipelinePhase, Anomaly, PollProfile } from '@/lib/orchestrator';
+import { useOrchestrator } from '@/hooks/obd/use-orchestrator';
+import { t } from '@/lib/obd/i18n';
+import type { PipelinePhase, Anomaly, PollProfile } from '@/lib/obd/orchestrator';
 
 const PHASE_CONFIG: Record<PipelinePhase, { label: string; icon: typeof Zap; color: string }> = {
   idle: { label: t.orchestrator.idle, icon: WifiOff, color: 'text-muted-foreground' },

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { bleManager, BLEConnectionState, BLEDeviceInfo } from '@/lib/ble-manager';
-import { elm327, ELMState, InitStep } from '@/lib/elm327-engine';
-import { LIVE_PIDS, PIDS, parsePIDResponse } from '@/lib/obd-pids';
+import { bleManager, BLEConnectionState, BLEDeviceInfo } from '@/lib/obd/ble-manager';
+import { elm327, ELMState, InitStep } from '@/lib/obd/elm327-engine';
+import { LIVE_PIDS, PIDS, parsePIDResponse } from '@/lib/obd/obd-pids';
 
 export function useBLE() {
   const [connectionState, setConnectionState] = useState<BLEConnectionState>('disconnected');

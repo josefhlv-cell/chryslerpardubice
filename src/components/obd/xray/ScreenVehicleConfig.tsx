@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { DoorOpen, Truck, Grid3X3, ChevronDown, Cpu, Wifi } from 'lucide-react';
-import { useVehicle } from '@/hooks/use-vehicle';
+import { useVehicle } from '@/hooks/obd/use-vehicle';
 import pacificaXray from '@/assets/pacifica-xray.png';
 import tcXray from '@/assets/tc-xray.png';
 

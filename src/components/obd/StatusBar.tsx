@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Bluetooth, BluetoothSearching, BluetoothOff, Signal, Wifi } from 'lucide-react';
-import { BLEConnectionState, BLEDeviceInfo } from '@/lib/ble-manager';
-import { t } from '@/lib/i18n';
+import { BLEConnectionState, BLEDeviceInfo } from '@/lib/obd/ble-manager';
+import { t } from '@/lib/obd/i18n';
 
 type SignalBarsProps = {
   quality: number;

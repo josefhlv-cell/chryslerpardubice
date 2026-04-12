@@ -4,8 +4,8 @@ import { OrbitControls, Text, RoundedBox, Environment } from '@react-three/drei'
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Badge } from '@/components/ui/badge';
-import { sensorDecoder } from '@/lib/sensor-decoder';
-import { useVehicle } from '@/hooks/use-vehicle';
+import { sensorDecoder } from '@/lib/obd/sensor-decoder';
+import { useVehicle } from '@/hooks/obd/use-vehicle';
 import pacificaXray from '@/assets/pacifica-xray.png';
 import tcXray from '@/assets/tc-xray.png';
 import engineXray from '@/assets/engine-xray.png';

@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, Trash2, ZoomIn, ZoomOut, AlertTriangle, TrendingUp, Layers } from 'lucide-react';
-import { useSensorDecoder } from '@/hooks/use-sensor-decoder';
-import type { DecodedSensor } from '@/lib/sensor-decoder';
+import { useSensorDecoder } from '@/hooks/obd/use-sensor-decoder';
+import type { DecodedSensor } from '@/lib/obd/sensor-decoder';
 
 type SignalTrace = {
   did: number;

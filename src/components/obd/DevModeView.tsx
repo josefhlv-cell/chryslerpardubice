@@ -7,8 +7,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { getDIDDef } from '@/lib/chrysler-dids';
-import { parseDIDValue } from '@/lib/uds-engine';
+import { getDIDDef } from '@/lib/obd/chrysler-dids';
+import { parseDIDValue } from '@/lib/obd/uds-engine';
 
 // ─── Types ───
 type LogEntry = {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Thermometer, Droplets, Battery, Fuel, Gauge, Activity } from 'lucide-react';
-import { useVehicle } from '@/hooks/use-vehicle';
+import { useVehicle } from '@/hooks/obd/use-vehicle';
 import pacificaXray from '@/assets/pacifica-xray.png';
 import tcXray from '@/assets/tc-xray.png';
 

@@ -3,11 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Settings2, Shield, ShieldAlert, ShieldCheck, Undo2, Check, AlertTriangle, Loader2, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useCoding } from '@/hooks/use-coding';
-import { useVehicle } from '@/hooks/use-vehicle';
-import { CHRYSLER_DATABASE } from '@/lib/chrysler-database';
-import type { CodingOption, WriteMode, CodingCategory } from '@/lib/coding-system';
-import { t } from '@/lib/i18n';
+import { useCoding } from '@/hooks/obd/use-coding';
+import { useVehicle } from '@/hooks/obd/use-vehicle';
+import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
+import type { CodingOption, WriteMode, CodingCategory } from '@/lib/obd/coding-system';
+import { t } from '@/lib/obd/i18n';
 
 const CATEGORY_ICONS: Record<CodingCategory, string> = {
   comfort: '🛋️',

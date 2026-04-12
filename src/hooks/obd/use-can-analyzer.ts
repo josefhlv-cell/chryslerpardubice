@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { canAnalyzer, type TrackedFrame, type CaptureStats, type CANFilter } from '@/lib/can-analyzer';
+import { canAnalyzer, type TrackedFrame, type CaptureStats, type CANFilter } from '@/lib/obd/can-analyzer';
 
 export function useCANAnalyzer() {
   const [frames, setFrames] = useState<TrackedFrame[]>([]);

@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
 import { Sliders, Sun, Moon, Palette, Layout, Monitor } from 'lucide-react';
-import { elm327 } from '@/lib/elm327-engine';
-import { useTheme, type ColorMode, type DashboardTheme, type LayoutMode } from '@/hooks/use-theme';
+import { elm327 } from '@/lib/obd/elm327-engine';
+import { useTheme, type ColorMode, type DashboardTheme, type LayoutMode } from '@/hooks/obd/use-theme';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { t } from '@/lib/i18n';
+import { t } from '@/lib/obd/i18n';
 
 type Props = {
   commandDelay: number;

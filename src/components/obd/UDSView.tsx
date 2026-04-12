@@ -1,9 +1,9 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Square, ChevronDown, ChevronRight, Database, FileText, Cpu, Thermometer, Hash } from 'lucide-react';
-import { useUDS, isDIDResult } from '@/hooks/use-uds';
-import { DID_SCAN_RANGES } from '@/lib/chrysler-dids';
-import type { DIDResult, ScanProgress } from '@/lib/uds-engine';
+import { useUDS, isDIDResult } from '@/hooks/obd/use-uds';
+import { DID_SCAN_RANGES } from '@/lib/obd/chrysler-dids';
+import type { DIDResult, ScanProgress } from '@/lib/obd/uds-engine';
 
 type Props = {
   elmReady: boolean;

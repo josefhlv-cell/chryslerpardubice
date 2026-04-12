@@ -4,10 +4,10 @@ import {
   Brain, Play, Square, Trash2, Zap, TrendingUp, Hash, Type,
   Flag, BarChart3, Link2, ChevronDown, ChevronRight, Gauge, Activity
 } from 'lucide-react';
-import { useSignalLearning } from '@/hooks/use-signal-learning';
-import { RadialGauge, DataCard } from './Gauge';
-import { t } from '@/lib/i18n';
-import type { LearnedSignal, DashboardWidget, SignalCorrelation } from '@/lib/signal-learning';
+import { useSignalLearning } from '@/hooks/obd/use-signal-learning';
+import { RadialGauge, DataCard } from '@/components/obd/Gauge';
+import { t } from '@/lib/obd/i18n';
+import type { LearnedSignal, DashboardWidget, SignalCorrelation } from '@/lib/obd/signal-learning';
 
 type Props = { elmReady: boolean };
 

@@ -1,9 +1,9 @@
 import { useState, useCallback, useMemo } from 'react';
 import { motion, Reorder } from 'framer-motion';
 import { GripVertical, Plus, X, Settings2, RotateCcw } from 'lucide-react';
-import { RadialGauge, DataCard, BarGauge } from './Gauge';
-import { Engine3D } from './Engine3D';
-import { LiveData } from '@/hooks/use-obd';
+import { RadialGauge, DataCard, BarGauge } from '@/components/obd/Gauge';
+import { Engine3D } from '@/components/obd/Engine3D';
+import { LiveData } from '@/hooks/obd/use-obd';
 
 type WidgetType = 'radial' | 'bar' | 'card' | 'engine3d';
 

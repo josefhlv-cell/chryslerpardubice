@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { udsEngine, type DIDResult, type ScanProgress, type UDSError } from '@/lib/uds-engine';
+import { udsEngine, type DIDResult, type ScanProgress, type UDSError } from '@/lib/obd/uds-engine';
 
 export function useUDS() {
   const [scanProgress, setScanProgress] = useState<ScanProgress | null>(null);

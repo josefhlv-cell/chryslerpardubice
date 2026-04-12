@@ -5,8 +5,8 @@ import {
   Clock, Tag, ChevronDown, ChevronRight, SkipBack, SkipForward,
   Pause, Zap, AlertTriangle, Database
 } from 'lucide-react';
-import { useDataLogger } from '@/hooks/use-data-logger';
-import type { LogSession, LogEntry, LogTag } from '@/lib/data-logger';
+import { useDataLogger } from '@/hooks/obd/use-data-logger';
+import type { LogSession, LogEntry, LogTag } from '@/lib/obd/data-logger';
 
 type Props = { elmReady: boolean };
 

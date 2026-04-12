@@ -1,8 +1,8 @@
 import { motion } from 'framer-motion';
-import { RadialGauge, DataCard } from './Gauge';
-import { PIDS } from '@/lib/obd-pids';
-import { LiveData } from '@/hooks/use-obd';
-import { t } from '@/lib/i18n';
+import { RadialGauge, DataCard } from '@/components/obd/Gauge';
+import { PIDS } from '@/lib/obd/obd-pids';
+import { LiveData } from '@/hooks/obd/use-obd';
+import { t } from '@/lib/obd/i18n';
 
 type Props = {
   data: LiveData;

@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bluetooth, BluetoothSearching, RefreshCw, ChevronRight, Signal } from 'lucide-react';
-import { BLEConnectionState, BLEDeviceInfo } from '@/lib/ble-manager';
-import { InitStep } from '@/lib/elm327-engine';
-import { SignalBars } from './StatusBar';
-import { t } from '@/lib/i18n';
+import { BLEConnectionState, BLEDeviceInfo } from '@/lib/obd/ble-manager';
+import { InitStep } from '@/lib/obd/elm327-engine';
+import { SignalBars } from '@/components/obd/StatusBar';
+import { t } from '@/lib/obd/i18n';
 
 type Props = {
   connectionState: BLEConnectionState;

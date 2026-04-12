@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Trash2 } from 'lucide-react';
-import { t } from '@/lib/i18n';
+import { t } from '@/lib/obd/i18n';
 
 type LogEntry = {
   type: 'tx' | 'rx' | 'error' | 'info';

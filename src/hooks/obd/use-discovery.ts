@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { discoveryEngine, type DiscoveredDID, type DiscoveryProgress, type DiscoveryStats } from '@/lib/did-discovery';
+import { discoveryEngine, type DiscoveredDID, type DiscoveryProgress, type DiscoveryStats } from '@/lib/obd/did-discovery';
 
 export function useDiscovery() {
   const [progress, setProgress] = useState<DiscoveryProgress | null>(null);

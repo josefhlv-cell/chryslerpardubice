@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { dtcEngine, type DTCState } from '@/lib/dtc-engine';
+import { dtcEngine, type DTCState } from '@/lib/obd/dtc-engine';
 
 export function useDTC() {
   const [state, setState] = useState<DTCState>(dtcEngine.getState());

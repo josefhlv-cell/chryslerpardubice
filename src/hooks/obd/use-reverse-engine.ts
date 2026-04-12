@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { reverseEngine, type REState, type BeforeAfterResult } from '@/lib/reverse-engine';
+import { reverseEngine, type REState, type BeforeAfterResult } from '@/lib/obd/reverse-engine';
 
 export function useReverseEngine() {
   const [state, setState] = useState<REState>(reverseEngine.getState());

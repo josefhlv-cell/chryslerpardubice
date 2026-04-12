@@ -4,8 +4,8 @@ import {
   Play, Square, Trash2, Filter, ChevronDown, ChevronRight,
   Activity, Radio, Lightbulb, BarChart3, Clock
 } from 'lucide-react';
-import { useCANAnalyzer } from '@/hooks/use-can-analyzer';
-import type { TrackedFrame, SignalMapping } from '@/lib/can-analyzer';
+import { useCANAnalyzer } from '@/hooks/obd/use-can-analyzer';
+import type { TrackedFrame, SignalMapping } from '@/lib/obd/can-analyzer';
 
 type Props = { elmReady: boolean };
 

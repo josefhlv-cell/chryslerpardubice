@@ -1,7 +1,7 @@
-import { PanelPacificaXRay } from './PanelPacificaXRay';
-import { PanelTCXRay } from './PanelTCXRay';
-import { PanelDiagIcons } from './PanelDiagIcons';
-import { PanelMainDashboard } from './PanelMainDashboard';
+import { PanelPacificaXRay } from '@/components/obd/xray/PanelPacificaXRay';
+import { PanelTCXRay } from '@/components/obd/xray/PanelTCXRay';
+import { PanelDiagIcons } from '@/components/obd/xray/PanelDiagIcons';
+import { PanelMainDashboard } from '@/components/obd/xray/PanelMainDashboard';
 
 export function XRayView() {
   return (

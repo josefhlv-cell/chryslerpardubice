@@ -4,11 +4,11 @@ import { AlertTriangle, Trash2, RefreshCw, Wrench, Zap, ChevronRight, Search, Fi
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { useDTC } from '@/hooks/use-dtc';
-import { useVehicle } from '@/hooks/use-vehicle';
-import { CHRYSLER_DATABASE } from '@/lib/chrysler-database';
-import { t } from '@/lib/i18n';
-import type { DTCCode, DTCSeverity } from '@/lib/dtc-engine';
+import { useDTC } from '@/hooks/obd/use-dtc';
+import { useVehicle } from '@/hooks/obd/use-vehicle';
+import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
+import { t } from '@/lib/obd/i18n';
+import type { DTCCode, DTCSeverity } from '@/lib/obd/dtc-engine';
 
 const SEVERITY_STYLES: Record<DTCSeverity, { bg: string; text: string; border: string; label: string }> = {
   critical: { bg: 'bg-destructive/15', text: 'text-destructive', border: 'border-destructive/40', label: t.dtc.critical.toUpperCase() },

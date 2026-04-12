@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { dataLogger, type LogSession, type ReplayState } from '@/lib/data-logger';
+import { dataLogger, type LogSession, type ReplayState } from '@/lib/obd/data-logger';
 
 export function useDataLogger() {
   const [sessions, setSessions] = useState<LogSession[]>(dataLogger.getSessions());

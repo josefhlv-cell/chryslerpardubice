@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Square, Trash2, Activity, Link2, Zap, Thermometer, Gauge, Droplets, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useSensorDecoder } from '@/hooks/use-sensor-decoder';
+import { useSensorDecoder } from '@/hooks/obd/use-sensor-decoder';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 const UNIT_ICONS: Record<string, typeof Gauge> = {

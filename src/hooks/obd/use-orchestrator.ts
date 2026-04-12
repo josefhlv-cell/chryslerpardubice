@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { orchestrator, type OrchestratorState, type PollProfile, type PipelinePhase } from '@/lib/orchestrator';
+import { orchestrator, type OrchestratorState, type PollProfile, type PipelinePhase } from '@/lib/obd/orchestrator';
 
 export function useOrchestrator() {
   const [state, setState] = useState<OrchestratorState>(orchestrator.getState());

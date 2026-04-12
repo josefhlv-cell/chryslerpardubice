@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { codingSystem, type CodingState, type WriteMode, type WriteResult } from '@/lib/coding-system';
+import { codingSystem, type CodingState, type WriteMode, type WriteResult } from '@/lib/obd/coding-system';
 
 export function useCoding() {
   const [state, setState] = useState<CodingState>(codingSystem.getState());

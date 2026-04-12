@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { signalEngine, type LearnedSignal, type DashboardWidget } from '@/lib/signal-learning';
+import { signalEngine, type LearnedSignal, type DashboardWidget } from '@/lib/obd/signal-learning';
 
 export function useSignalLearning() {
   const [signals, setSignals] = useState<LearnedSignal[]>([]);

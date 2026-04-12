@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { sensorDecoder, type DecodedSensor, type CorrelationPair } from '@/lib/sensor-decoder';
+import { sensorDecoder, type DecodedSensor, type CorrelationPair } from '@/lib/obd/sensor-decoder';
 
 export function useSensorDecoder() {
   const [sensors, setSensors] = useState<DecodedSensor[]>([]);

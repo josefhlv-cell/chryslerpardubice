@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Square, Camera, CameraOff, Download, Trash2, Activity, Search, ArrowRightLeft, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useReverseEngine } from '@/hooks/use-reverse-engine';
-import type { ByteAnalysis, BeforeAfterResult, DecoderEntry } from '@/lib/reverse-engine';
+import { useReverseEngine } from '@/hooks/obd/use-reverse-engine';
+import type { ByteAnalysis, BeforeAfterResult, DecoderEntry } from '@/lib/obd/reverse-engine';
 
 const DEFAULT_RE_DIDS = [0xF420, 0xF421, 0xF422, 0xF424, 0xF425, 0xF426, 0xF427, 0xF42B, 0xF42E];
 
