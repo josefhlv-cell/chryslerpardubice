@@ -1,7 +1,7 @@
 // Advanced Reverse Engineering Engine
 // Byte-level analysis, variance, correlation, before/after, auto decoder maps
 
-import { udsEngine, type DIDResult } from './uds-engine';
+import { udsEngine, type DIDResult } from '@/lib/obd/uds-engine';
 
 // ─── Types ───
 export type ByteAnalysis = {

@@ -2,8 +2,8 @@
 // Supports OBD Mode 03/04 and UDS 0x19 ReadDTCInformation
 // Now integrated with centralized Chrysler database
 
-import { udsEngine } from './uds-engine';
-import { CHRYSLER_DATABASE, getDTCInfo } from './chrysler-database';
+import { udsEngine } from '@/lib/obd/uds-engine';
+import { CHRYSLER_DATABASE, getDTCInfo } from '@/lib/obd/chrysler-database';
 // ─── Types ───
 export type DTCSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type DTCSystem = 'powertrain' | 'body' | 'chassis' | 'network';

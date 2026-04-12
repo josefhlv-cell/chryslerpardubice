@@ -2,8 +2,8 @@
 // Comfort, Lighting, Climate, Dashboard, Sound coding for Chrysler T&C / Pacifica
 // Now integrated with centralized Chrysler database
 
-import { udsEngine, type DIDResult, type UDSError } from './uds-engine';
-import { CHRYSLER_DATABASE, getCodingDID } from './chrysler-database';
+import { udsEngine, type DIDResult, type UDSError } from '@/lib/obd/uds-engine';
+import { CHRYSLER_DATABASE, getCodingDID } from '@/lib/obd/chrysler-database';
 // ─── Types ───
 export type CodingCategory = 'comfort' | 'lighting' | 'climate' | 'dashboard' | 'sound';
 

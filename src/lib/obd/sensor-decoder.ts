@@ -1,9 +1,9 @@
 // Sensor Decoder Engine — Live F42x / 210x block parsing with correlation detection
 // Integrated with chrysler-database for auto-scaling & dashboard widget mapping
 
-import { udsEngine, parseDIDValue, type DIDResult } from './uds-engine';
-import { getDIDDef, CHRYSLER_DIDS } from './chrysler-dids';
-import { CHRYSLER_DATABASE, type LiveSensorDID } from './chrysler-database';
+import { udsEngine, parseDIDValue, type DIDResult } from '@/lib/obd/uds-engine';
+import { getDIDDef, CHRYSLER_DIDS } from '@/lib/obd/chrysler-dids';
+import { CHRYSLER_DATABASE, type LiveSensorDID } from '@/lib/obd/chrysler-database';
 
 // Build lookup from chrysler-database for scaling & widget info
 const DB_SENSOR_MAP = new Map<number, LiveSensorDID>();

@@ -2,9 +2,9 @@
 // Stores historical DID values, computes variance/activity, classifies signals,
 // detects correlations, and generates smart dashboard widget configs
 
-import { udsEngine, type DIDResult } from './uds-engine';
-import { getDIDDef, CHRYSLER_DIDS } from './chrysler-dids';
-import { PIDS } from './obd-pids';
+import { udsEngine, type DIDResult } from '@/lib/obd/uds-engine';
+import { getDIDDef, CHRYSLER_DIDS } from '@/lib/obd/chrysler-dids';
+import { PIDS } from '@/lib/obd/obd-pids';
 
 // ─── Types ───
 

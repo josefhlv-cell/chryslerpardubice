@@ -1,9 +1,9 @@
 // UDS (Unified Diagnostic Services) Module — ISO 14229
 // Read-only diagnostic services: Session Control (0x10), ReadDataByID (0x22), TesterPresent (0x3E)
 
-import { elm327 } from './elm327-engine';
-import { isotpTransport } from './isotp-transport';
-import { getDIDDef, SIMULATED_DID_RESPONSES, type DIDDefinition, type DIDScaling, type BitfieldDef } from './chrysler-dids';
+import { elm327 } from '@/lib/obd/elm327-engine';
+import { isotpTransport } from '@/lib/obd/isotp-transport';
+import { getDIDDef, SIMULATED_DID_RESPONSES, type DIDDefinition, type DIDScaling, type BitfieldDef } from '@/lib/obd/chrysler-dids';
 
 // ─── UDS Service IDs ───
 export const UDS_SERVICES = {

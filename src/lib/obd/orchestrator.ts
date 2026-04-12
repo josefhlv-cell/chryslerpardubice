@@ -11,14 +11,14 @@
  * - Cross-platform support (Chrysler T&C + Pacifica, all years)
  */
 
-import { bleManager, type BLEConnectionState } from './ble-manager';
-import { elm327, type ELMState } from './elm327-engine';
-import { discoveryEngine, type DiscoveredDID, type DiscoveryProgress } from './did-discovery';
-import { sensorDecoder, type DecodedSensor } from './sensor-decoder';
-import { signalEngine, type LearnedSignal, type DashboardWidget } from './signal-learning';
-import { dataLogger } from './data-logger';
-import { LIVE_PIDS, parsePIDResponse } from './obd-pids';
-import { udsEngine } from './uds-engine';
+import { bleManager, type BLEConnectionState } from '@/lib/obd/ble-manager';
+import { elm327, type ELMState } from '@/lib/obd/elm327-engine';
+import { discoveryEngine, type DiscoveredDID, type DiscoveryProgress } from '@/lib/obd/did-discovery';
+import { sensorDecoder, type DecodedSensor } from '@/lib/obd/sensor-decoder';
+import { signalEngine, type LearnedSignal, type DashboardWidget } from '@/lib/obd/signal-learning';
+import { dataLogger } from '@/lib/obd/data-logger';
+import { LIVE_PIDS, parsePIDResponse } from '@/lib/obd/obd-pids';
+import { udsEngine } from '@/lib/obd/uds-engine';
 
 // ─── Types ───
 

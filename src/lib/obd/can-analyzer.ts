@@ -1,7 +1,7 @@
 // CAN Bus Analyzer Engine
 // Live stream capture, frame history, byte-diff, variance detection, signal mapping
 
-import { elm327 } from './elm327-engine';
+import { elm327 } from '@/lib/obd/elm327-engine';
 
 // ─── Types ───
 

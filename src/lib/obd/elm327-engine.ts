@@ -1,7 +1,7 @@
 // ELM327 Protocol Engine
 // Handles initialization, command queuing, and response parsing
 
-import { bleManager } from './ble-manager';
+import { bleManager } from '@/lib/obd/ble-manager';
 
 export type CommandPriority = 'high' | 'normal' | 'low';
 

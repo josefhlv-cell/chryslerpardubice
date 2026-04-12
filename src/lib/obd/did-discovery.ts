@@ -1,8 +1,8 @@
 // Auto DID Discovery Engine
 // Iterates full DID ranges, classifies responses, builds decoder map
 
-import { udsEngine, type DIDResult, type UDSError } from './uds-engine';
-import { CHRYSLER_DIDS, getDIDDef } from './chrysler-dids';
+import { udsEngine, type DIDResult, type UDSError } from '@/lib/obd/uds-engine';
+import { CHRYSLER_DIDS, getDIDDef } from '@/lib/obd/chrysler-dids';
 
 // ─── Types ───
 
