@@ -33,17 +33,16 @@ import { bleManager } from "@/lib/obd/ble-manager";
 
 // Lazy-load heavy components
 import { lazy, Suspense } from "react";
-const UDSView = lazy(() => import("@/components/obd/UDSView").then(m => ({ default: m.UDSView || m.default })));
-const LoggingView = lazy(() => import("@/components/obd/LoggingView").then(m => ({ default: m.LoggingView || m.default })));
-const SensorDecoderView = lazy(() => import("@/components/obd/SensorDecoderView").then(m => ({ default: m.SensorDecoderView || m.default })));
-const DiscoveryView = lazy(() => import("@/components/obd/DiscoveryView").then(m => ({ default: m.DiscoveryView || m.default })));
-const ReverseEngineeringView = lazy(() => import("@/components/obd/ReverseEngineeringView").then(m => ({ default: m.ReverseEngineeringView || m.default })));
-const OrchestrationPanel = lazy(() => import("@/components/obd/OrchestrationPanel").then(m => ({ default: m.OrchestrationPanel || m.default })));
-const SecurityFlashView = lazy(() => import("@/components/obd/SecurityFlashView").then(m => ({ default: m.SecurityFlashView || m.default })));
-const TrendChartsView = lazy(() => import("@/components/obd/TrendChartsView").then(m => ({ default: m.TrendChartsView || m.default })));
-const Vehicle3DView = lazy(() => import("@/components/obd/Vehicle3DView").then(m => ({ default: m.Vehicle3DView || m.default })));
-const DevModeView = lazy(() => import("@/components/obd/DevModeView").then(m => ({ default: m.DevModeView || m.default })));
-const SettingsView = lazy(() => import("@/components/obd/SettingsView").then(m => ({ default: m.SettingsView || m.default })));
+const UDSView = lazy(() => import("@/components/obd/UDSView").then(m => ({ default: (m as any).UDSView || (m as any).default })));
+const LoggingView = lazy(() => import("@/components/obd/LoggingView").then(m => ({ default: (m as any).LoggingView || (m as any).default })));
+const SensorDecoderView = lazy(() => import("@/components/obd/SensorDecoderView").then(m => ({ default: (m as any).SensorDecoderView || (m as any).default })));
+const DiscoveryView = lazy(() => import("@/components/obd/DiscoveryView").then(m => ({ default: (m as any).DiscoveryView || (m as any).default })));
+const ReverseEngineeringView = lazy(() => import("@/components/obd/ReverseEngineeringView").then(m => ({ default: (m as any).ReverseEngineeringView || (m as any).default })));
+const OrchestrationPanel = lazy(() => import("@/components/obd/OrchestrationPanel").then(m => ({ default: (m as any).OrchestrationPanel || (m as any).default })));
+const SecurityFlashView = lazy(() => import("@/components/obd/SecurityFlashView").then(m => ({ default: (m as any).SecurityFlashView || (m as any).default })));
+const TrendChartsView = lazy(() => import("@/components/obd/TrendChartsView").then(m => ({ default: (m as any).TrendChartsView || (m as any).default })));
+const DevModeView = lazy(() => import("@/components/obd/DevModeView").then(m => ({ default: (m as any).DevModeView || (m as any).default })));
+const SettingsView = lazy(() => import("@/components/obd/SettingsView").then(m => ({ default: (m as any).SettingsView || (m as any).default })));
 
 type Tab = 'dashboard' | 'dtc' | 'coding' | 'can' | 'connect' | 'uds' | 'discover' | 'decoder' | 'logging' | 'terminal' | 'devmode' | 'security' | 'smart' | 'orchestrator' | 'trends' | 'vehicle3d' | 'reverse' | 'settings';
 
