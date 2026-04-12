@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSensorDecoder } from '@/hooks/use-sensor-decoder';
+import { useSensorDecoder } from '@/hooks/obd/use-sensor-decoder';
 import { Sparkline } from '@/components/obd/xray/Sparkline';
 import { X, Wifi, WifiOff } from 'lucide-react';
 
