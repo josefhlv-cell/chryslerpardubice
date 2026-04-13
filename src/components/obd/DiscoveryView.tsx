@@ -237,7 +237,7 @@ function ProgressPanel({ progress }: { progress: DiscoveryProgress }) {
   );
 }
 
-function StatsSummary({ stats }: { stats: import('@/lib/did-discovery').DiscoveryStats }) {
+function StatsSummary({ stats }: { stats: import('@/lib/obd/did-discovery').DiscoveryStats }) {
   const durSec = (stats.durationMs / 1000).toFixed(1);
   return (
     <div className="grid grid-cols-4 gap-1.5">
