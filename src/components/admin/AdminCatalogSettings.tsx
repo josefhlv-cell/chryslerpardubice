@@ -4,8 +4,9 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { Settings, CheckCircle, Save, Activity, Database, Wifi, Clock, RefreshCw } from "lucide-react";
+import { Settings, CheckCircle, Save, Activity, Database, Wifi, Clock, RefreshCw, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { jmAdapter } from "@/lib/catalog/adapters/jm";
 
 type CatalogConfig = {
   id: string;
@@ -39,10 +40,36 @@ const AdminCatalogSettings = () => {
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
   const [partsCount, setPartsCount] = useState({ parts_new: 0, parts_catalog: 0, supersessions: 0 });
+  const [jmSyncing, setJmSyncing] = useState(false);
+  const [jmStats, setJmStats] = useState({ vehicles: 0, categories: 0 });
+
+  const loadJmStats = async () => {
+    const [vh, cat] = await Promise.all([
+      supabase.from("nextis_vehicles").select("id", { count: "exact", head: true }),
+      supabase.from("catalog_categories").select("id", { count: "exact", head: true }).eq("source", "jm"),
+    ]);
+    setJmStats({ vehicles: vh.count ?? 0, categories: cat.count ?? 0 });
+  };
+
+  const runJmSync = async () => {
+    setJmSyncing(true);
+    try {
+      const result = await jmAdapter.syncCategories();
+      toast({
+        title: "J+M synchronizace dokončena",
+        description: `Naimportováno ${result.synced} uzlů (přeskočeno ${result.skipped}).`,
+      });
+      await loadJmStats();
+    } catch (err: any) {
+      toast({ title: "Chyba J+M sync", description: err.message, variant: "destructive" });
+    }
+    setJmSyncing(false);
+  };
 
   useEffect(() => {
     loadSettings();
     loadCounts();
+    loadJmStats();
   }, []);
 
   // Load catalog enabled states from feature_flags
@@ -206,6 +233,39 @@ const AdminCatalogSettings = () => {
         <Save className="w-4 h-4 mr-2" />
         Uložit nastavení katalogů
       </Button>
+
+      {/* J+M Nextis Sync */}
+      <Card className="border-primary/40">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                <Download className="w-4 h-4 text-primary" />
+                J+M Autodíly (Nextis) – synchronizace katalogu
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Stáhne hierarchii Značka → Model → Motor z Nextis API do lokálního stromu katalogu.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold">{jmStats.vehicles}</p>
+              <p className="text-[10px] text-muted-foreground">Vozidla v DB</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold">{jmStats.categories}</p>
+              <p className="text-[10px] text-muted-foreground">Uzly katalogu</p>
+            </div>
+          </div>
+
+          <Button className="w-full" variant="outline" onClick={runJmSync} disabled={jmSyncing}>
+            {jmSyncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            {jmSyncing ? "Synchronizuji…" : "Spustit J+M synchronizaci"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Diagnostics */}
       <Card>
