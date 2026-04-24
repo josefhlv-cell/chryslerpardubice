@@ -69,6 +69,7 @@ const AdminCatalogSettings = () => {
   useEffect(() => {
     loadSettings();
     loadCounts();
+    loadJmStats();
   }, []);
 
   // Load catalog enabled states from feature_flags
