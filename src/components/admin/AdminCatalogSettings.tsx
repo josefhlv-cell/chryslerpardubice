@@ -4,8 +4,9 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
-import { Settings, CheckCircle, Save, Activity, Database, Wifi, Clock, RefreshCw } from "lucide-react";
+import { Settings, CheckCircle, Save, Activity, Database, Wifi, Clock, RefreshCw, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { jmAdapter } from "@/lib/catalog/adapters/jm";
 
 type CatalogConfig = {
   id: string;
