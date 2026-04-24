@@ -76,7 +76,7 @@ const App = () => (
                   <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Landing />} />
-                    <Route path="/shop" element={<Shop />} />
+                    <Route path="/shop" element={<Navigate to="/catalog" replace />} />
                     <Route path="/catalog" element={<Catalog />} />
                     <Route path="/epc" element={<EPC />} />
                     <Route path="/cart" element={<Cart />} />
