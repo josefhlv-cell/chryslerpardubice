@@ -171,11 +171,120 @@ Deno.serve(async (req) => {
 
     const { action, payload } = await req.json();
 
+    // Admin client (service role) for writes to catalog_categories
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    // Allowed vehicle brands (Phase 1: strict whitelist)
+    const ALLOWED_BRANDS = ['chrysler', 'dodge', 'ram', 'cadillac', 'lancia'];
+    const isAllowedBrand = (b: string) =>
+      ALLOWED_BRANDS.some((a) => (b || '').toLowerCase().includes(a));
+
     let result: unknown;
     switch (action) {
       case 'ping': {
         const token = await getToken();
         result = { ok: true, hasToken: !!token };
+        break;
+      }
+      case 'syncCategories': {
+        // Pull Nextis vehicle/category tree and persist allowed brands into catalog_categories.
+        // Tries known Nextis catalog endpoints; gracefully falls back if shape differs.
+        const endpoints = [
+          '/api/v1/Catalogs/GetVehicleTree',
+          '/api/v1/Catalogs/VehicleHierarchy',
+          '/api/v1/Catalogs/GetBrands',
+        ];
+        let raw: any = null;
+        let usedEndpoint = '';
+        for (const ep of endpoints) {
+          try {
+            raw = await nextisCall(ep, { CustomerNumber: Deno.env.get('JM_CUST_NO') });
+            usedEndpoint = ep;
+            break;
+          } catch (_) { /* try next */ }
+        }
+        if (!raw) {
+          result = { synced: 0, error: 'No Nextis vehicle endpoint reachable', endpoints };
+          break;
+        }
+
+        const brands: any[] =
+          raw?.Brands || raw?.brands || raw?.Items || raw?.Data || (Array.isArray(raw) ? raw : []);
+
+        // Lookup existing brand roots so we can attach models under them
+        const { data: existingBrands } = await adminClient
+          .from('catalog_categories')
+          .select('id, vehicle_brand, slug')
+          .eq('node_type', 'brand');
+        const brandIdByName: Record<string, string> = {};
+        for (const b of existingBrands || []) {
+          if (b.vehicle_brand) brandIdByName[b.vehicle_brand.toLowerCase()] = b.id;
+        }
+
+        let inserted = 0;
+        let skipped = 0;
+
+        for (const br of brands) {
+          const brandName: string = br.Name || br.BrandName || br.name || '';
+          if (!brandName || !isAllowedBrand(brandName)) { skipped++; continue; }
+          const brandKey = ALLOWED_BRANDS.find((a) => brandName.toLowerCase().includes(a))!;
+          const parentId = brandIdByName[brandKey];
+          if (!parentId) { skipped++; continue; }
+
+          const models: any[] = br.Models || br.models || br.Items || [];
+          for (const m of models) {
+            const modelName: string = m.Name || m.ModelName || m.name || '';
+            if (!modelName) continue;
+            const slug = modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
+
+            const { data: modelRow, error: modelErr } = await adminClient
+              .from('catalog_categories')
+              .upsert({
+                parent_id: parentId,
+                slug,
+                name_cs: modelName,
+                name_en: modelName,
+                node_type: 'model',
+                vehicle_brand: brandKey.charAt(0).toUpperCase() + brandKey.slice(1),
+                vehicle_model: modelName,
+                source: 'jm',
+                external_id: String(m.Id || m.id || ''),
+              }, { onConflict: 'parent_id,slug' })
+              .select('id')
+              .single();
+            if (modelErr) continue;
+            inserted++;
+
+            // Optional: engines under model
+            const engines: any[] = m.Engines || m.engines || m.Types || [];
+            for (const e of engines) {
+              const engineName: string = e.Name || e.EngineName || e.name || '';
+              if (!engineName) continue;
+              const eSlug = engineName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
+              await adminClient
+                .from('catalog_categories')
+                .upsert({
+                  parent_id: modelRow.id,
+                  slug: eSlug,
+                  name_cs: engineName,
+                  name_en: engineName,
+                  node_type: 'engine',
+                  vehicle_brand: brandKey.charAt(0).toUpperCase() + brandKey.slice(1),
+                  vehicle_model: modelName,
+                  vehicle_engine: engineName,
+                  source: 'jm',
+                  external_id: String(e.Id || e.id || ''),
+                  year_from: e.YearFrom || e.year_from || null,
+                  year_to: e.YearTo || e.year_to || null,
+                }, { onConflict: 'parent_id,slug' });
+              inserted++;
+            }
+          }
+        }
+        result = { synced: inserted, skipped, endpoint: usedEndpoint, allowedBrands: ALLOWED_BRANDS };
         break;
       }
       case 'searchByCode': {
