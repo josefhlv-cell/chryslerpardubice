@@ -40,37 +40,26 @@ async function getToken(): Promise<string> {
     throw new Error('Missing JM credentials in secrets');
   }
 
-  // Try common Nextis auth endpoints
-  const authPayloads = [
-    { url: `${BASE_URL}/api/v1/Authentication`, body: { CustomerNumber: customerNo, Login: login, Password: password } },
-    { url: `${BASE_URL}/api/v1/login`, body: { customerNumber: customerNo, login, password } },
-    { url: `${BASE_URL}/Authentication`, body: { CustomerNumber: customerNo, Login: login, Password: password } },
-  ];
-
-  let lastErr = '';
-  for (const { url, body } of authPayloads) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        lastErr = `${url} -> ${res.status}`;
-        continue;
-      }
-      const data = await res.json();
-      const token = data.Token || data.token || data.AccessToken || data.access_token || data.BearerToken;
-      if (token) {
-        cachedToken = { token, expiresAt: Date.now() + 50 * 60 * 1000 }; // ~50 min
-        return token;
-      }
-      lastErr = `${url} -> no token in response`;
-    } catch (e) {
-      lastErr = `${url} -> ${(e as Error).message}`;
-    }
+  // Nextis auth: POST /common/authentication with { login, password }
+  const url = `${BASE_URL}/common/authentication`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ login, password }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Nextis auth failed: ${url} -> ${res.status} ${text.slice(0, 200)}`);
   }
-  throw new Error(`Nextis auth failed: ${lastErr}`);
+  const data = await res.json();
+  const token = data.token || data.Token;
+  if (!token) {
+    throw new Error(`Nextis auth: no token in response (status=${data.status ?? '?'} ${data.statusText ?? ''})`);
+  }
+  // tokenValidTo (ISO date) controls real expiry; default ~120 min. Cache slightly less.
+  const validTo = data.tokenValidTo ? new Date(data.tokenValidTo).getTime() : Date.now() + 110 * 60 * 1000;
+  cachedToken = { token, expiresAt: validTo };
+  return token;
 }
 
 async function nextisCall(path: string, body: unknown): Promise<unknown> {
