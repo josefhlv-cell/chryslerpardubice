@@ -234,6 +234,39 @@ const AdminCatalogSettings = () => {
         Uložit nastavení katalogů
       </Button>
 
+      {/* J+M Nextis Sync */}
+      <Card className="border-primary/40">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                <Download className="w-4 h-4 text-primary" />
+                J+M Autodíly (Nextis) – synchronizace katalogu
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Stáhne hierarchii Značka → Model → Motor z Nextis API do lokálního stromu katalogu.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold">{jmStats.vehicles}</p>
+              <p className="text-[10px] text-muted-foreground">Vozidla v DB</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold">{jmStats.categories}</p>
+              <p className="text-[10px] text-muted-foreground">Uzly katalogu</p>
+            </div>
+          </div>
+
+          <Button className="w-full" variant="outline" onClick={runJmSync} disabled={jmSyncing}>
+            {jmSyncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            {jmSyncing ? "Synchronizuji…" : "Spustit J+M synchronizaci"}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Diagnostics */}
       <Card>
         <CardContent className="p-4">
