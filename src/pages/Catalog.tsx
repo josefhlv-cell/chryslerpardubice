@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
   fetchCategoriesForVehicle, listPartsForVehicle,
+  fetchJmForVehicle, mergeWithJm,
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
 import CatalogListing from "@/components/catalog/CatalogListing";
@@ -64,6 +65,8 @@ const Catalog = () => {
   const [items, setItems] = useState<CatalogPart[]>([]);
   const [total, setTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
+  const [jmLoading, setJmLoading] = useState(false);
+  const [jmCount, setJmCount] = useState(0);
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -124,13 +127,16 @@ const Catalog = () => {
     if (!brand || !model || !engine || !category) {
       setItems([]);
       setTotal(0);
+      setJmCount(0);
       return;
     }
 
+    let cancelled = false;
     (async () => {
       try {
         setListLoading(true);
-        const { items, total } = await listPartsForVehicle({
+        // 1) Local OEM/Mopar listing first — paints fast.
+        const { items: oemItems, total: oemTotal } = await listPartsForVehicle({
           brand,
           model,
           engine,
@@ -138,15 +144,46 @@ const Catalog = () => {
           page,
           pageSize: 30,
         });
-        setItems(items);
-        setTotal(total);
+        if (cancelled) return;
+        setItems(oemItems);
+        setTotal(oemTotal);
+
+        // 2) Live J+M overlay — only on first page to keep it cheap.
+        if (page === 0) {
+          setJmLoading(true);
+          const jm = await fetchJmForVehicle({ brand, model });
+          if (cancelled) return;
+          // Filter J+M items by the chosen canonical category when present.
+          const filteredJm = category
+            ? jm.filter((p) => {
+                const c = (p.category || "").toLowerCase();
+                return c.includes(category.toLowerCase()) || c === "";
+              })
+            : jm;
+          setJmCount(filteredJm.length);
+          if (filteredJm.length > 0) {
+            setItems((prev) => mergeWithJm(prev, filteredJm));
+            setTotal((t) => t + filteredJm.length);
+          }
+        } else {
+          setJmCount(0);
+        }
       } catch (err: any) {
-        toast.error("Chyba načítání: " + err.message);
-        setItems([]);
+        if (!cancelled) {
+          toast.error("Chyba načítání: " + err.message);
+          setItems([]);
+        }
       } finally {
-        setListLoading(false);
+        if (!cancelled) {
+          setListLoading(false);
+          setJmLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [brand, model, engine, category, page]);
 
   useEffect(() => {
