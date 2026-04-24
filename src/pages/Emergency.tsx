@@ -91,7 +91,7 @@ const Emergency = () => {
             <Wrench className="w-5 h-5" />
             <span className="text-xs">Objednat servis</span>
           </Button>
-          <Button variant="outline" className="h-16 flex-col gap-1" onClick={() => navigate("/shop")}>
+          <Button variant="outline" className="h-16 flex-col gap-1" onClick={() => navigate("/catalog")}>
             <AlertTriangle className="w-5 h-5" />
             <span className="text-xs">Objednat díl</span>
           </Button>

@@ -109,7 +109,7 @@ const Landing = () => {
               Registrace
             </Button>
             <button
-              onClick={() => navigate("/shop")}
+              onClick={() => navigate("/catalog")}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors mt-1 text-center"
             >
               Pokračovat jako host →

@@ -34,7 +34,7 @@ const Checkout = () => {
   const finalPrice = totalPrice - discountAmount + shippingCost;
 
   if (items.length === 0) {
-    navigate("/shop");
+    navigate("/catalog");
     return null;
   }
 
@@ -98,13 +98,13 @@ const Checkout = () => {
 
       toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
       clearCart();
-      navigate("/shop");
+      navigate("/catalog");
     } catch (err) {
       // FAIL-SAFE: even if DB insert crashes, confirm to user and log
       logger.error("Checkout", "ORDER_FAILED", err instanceof Error ? err : new Error(String(err)));
       toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
       clearCart();
-      navigate("/shop");
+      navigate("/catalog");
     } finally {
       setSubmitting(false);
     }

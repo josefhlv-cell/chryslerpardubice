@@ -46,7 +46,7 @@ const DesktopSidebar = () => {
 
   const isActive = (path: string) =>
     path === "/catalog"
-      ? location.pathname === "/" || location.pathname === "/index" || location.pathname === "/catalog" || location.pathname === "/shop"
+      ? location.pathname === "/" || location.pathname === "/index" || location.pathname === "/catalog" || location.pathname === "/shop" || location.pathname === "/dily"
       : location.pathname.startsWith(path);
 
   const NavItem = ({ item }: { item: { path: string; label: string; icon: any; isTonda?: boolean } }) => (
