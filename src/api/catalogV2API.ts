@@ -44,7 +44,9 @@ export type CatalogPart = {
 };
 
 // ---- Allowed sources for v2 UI ----
-const ALLOWED_SOURCES = ["mopar", "epc-ai", "jm"] as const;
+// OEM-equivalent (rank 1): mopar, epc-ai, 7zap, epc-link, ai-epc
+// Alternative (rank 5): jm
+const ALLOWED_SOURCES = ["mopar", "epc-ai", "7zap", "epc-link", "ai-epc", "jm"] as const;
 
 // ---- Brand whitelist (Phase 1 scope) ----
 export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
@@ -79,10 +81,18 @@ export async function fetchCategoryTree(): Promise<CategoryNode[]> {
 // ---- OEM-first ranking ----
 function rankFor(source: string | null | undefined): number {
   const s = (source || "").toLowerCase();
-  if (s === "mopar" || s === "mopar_oem" || s === "epc-ai") return 1;
+  if (s === "mopar" || s === "mopar_oem") return 1;
+  if (s === "epc-ai" || s === "ai-epc" || s === "7zap" || s === "epc-link") return 2; // OEM-equivalent
   if (s === "jm") return 5;
   if (s === "csv") return 6;
   return 9;
+}
+
+function badgeFor(source: string | null | undefined): CatalogPart["badge_label"] {
+  const r = rankFor(source);
+  if (r <= 2) return "ORIGINÁL";
+  if (r >= 5 && r <= 6) return "NÁHRADA";
+  return "NEZNÁMÝ";
 }
 
 function badgeFor(source: string | null | undefined): CatalogPart["badge_label"] {
@@ -107,7 +117,7 @@ function normalize(row: any): CatalogPart {
     image_urls: row.image_urls,
     category: row.category,
     description: row.description,
-    is_oem: rank === 1,
+    is_oem: rank <= 2,
     badge_label: badgeFor(source),
     rank,
   };
