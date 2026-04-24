@@ -120,7 +120,7 @@ const EPCBrowser = ({ brand, model, engine, year, onSearchOem }: EPCBrowserProps
 
   // Load categories when vehicle params change — auto-expand if empty
   useEffect(() => {
-    if (!brand) return;
+    if (!brand || !model) return;
     setLoading(true);
     setHasSearched(true);
     setSelectedCategory(null);

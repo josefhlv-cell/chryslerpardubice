@@ -1376,6 +1376,9 @@ export async function autoExpandCatalog(
   engine?: string,
   onProgress?: (msg: string) => void
 ): Promise<{ expanded: boolean; stats?: { categories: number; parts: number } }> {
+  if (!brand || !model) {
+    return { expanded: false };
+  }
   const existingCats = await getEPCCategories(brand, model, engine, year);
   if (existingCats.length > 0) {
     return { expanded: false };
