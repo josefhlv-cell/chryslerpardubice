@@ -95,12 +95,6 @@ function badgeFor(source: string | null | undefined): CatalogPart["badge_label"]
   return "NEZNÁMÝ";
 }
 
-function badgeFor(source: string | null | undefined): CatalogPart["badge_label"] {
-  const r = rankFor(source);
-  if (r === 1) return "ORIGINÁL";
-  if (r >= 5 && r <= 6) return "NÁHRADA";
-  return "NEZNÁMÝ";
-}
 
 function normalize(row: any): CatalogPart {
   const source = row.catalog_source || "mopar";
