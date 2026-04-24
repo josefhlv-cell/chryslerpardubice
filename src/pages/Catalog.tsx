@@ -2,15 +2,14 @@
  * Unified Catalog — 5-level Nextis drill-down.
  * Brand → Model → Engine → Category → Parts (OEM/Mopar locked to top).
  *
- * Single entry point. No tabs, no logos, no sidebars. Dark cards w/ gold icons.
+ * Single entry point. No tabs, no logos, no sidebars.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, ChevronLeft, Loader2, Car, Wrench, Cog, Package,
   Snowflake, Zap, Filter as FilterIcon, Droplet, Disc, Gauge, Settings, Box,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -62,19 +61,15 @@ const Catalog = () => {
   const [category, setCategory] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
   const [items, setItems] = useState<CatalogPart[]>([]);
   const [total, setTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
   const [page, setPage] = useState(0);
 
-  // Initial brands
   useEffect(() => {
     setLoading(true);
     fetchBrands()
       .then((bs) => {
-        // Order brands per BRAND_ORDER, then alphabetical for the rest
         const sorted = [...bs].sort((a, b) => {
           const ia = BRAND_ORDER.indexOf(a);
           const ib = BRAND_ORDER.indexOf(b);
@@ -89,9 +84,11 @@ const Catalog = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  // Brand → models
   useEffect(() => {
-    if (!brand) { setModels([]); return; }
+    if (!brand) {
+      setModels([]);
+      return;
+    }
     setLoading(true);
     fetchModelsForBrand(brand)
       .then(setModels)
@@ -99,9 +96,11 @@ const Catalog = () => {
       .finally(() => setLoading(false));
   }, [brand]);
 
-  // Model → engines
   useEffect(() => {
-    if (!brand || !model) { setEngines([]); return; }
+    if (!brand || !model) {
+      setEngines([]);
+      return;
+    }
     setLoading(true);
     fetchEnginesForModel(brand, model)
       .then(setEngines)
@@ -109,9 +108,11 @@ const Catalog = () => {
       .finally(() => setLoading(false));
   }, [brand, model]);
 
-  // Vehicle ready → categories
   useEffect(() => {
-    if (!brand || !model || !engine) { setCategories([]); return; }
+    if (!brand || !model || !engine) {
+      setCategories([]);
+      return;
+    }
     setLoading(true);
     fetchCategoriesForVehicle(brand, model, engine)
       .then(setCategories)
@@ -119,23 +120,23 @@ const Catalog = () => {
       .finally(() => setLoading(false));
   }, [brand, model, engine]);
 
-  // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(search.trim()), 350);
-    return () => clearTimeout(t);
-  }, [search]);
+    if (!brand || !model || !engine || !category) {
+      setItems([]);
+      setTotal(0);
+      return;
+    }
 
-  // Listing fetch
-  useEffect(() => {
-    if (!brand || !model || !engine || !category) { setItems([]); setTotal(0); return; }
     (async () => {
       try {
         setListLoading(true);
         const { items, total } = await listPartsForVehicle({
-          brand, model, engine,
+          brand,
+          model,
+          engine,
           canonicalCategory: category,
-          search: debounced || undefined,
-          page, pageSize: 30,
+          page,
+          pageSize: 30,
         });
         setItems(items);
         setTotal(total);
@@ -146,13 +147,23 @@ const Catalog = () => {
         setListLoading(false);
       }
     })();
-  }, [brand, model, engine, category, debounced, page]);
+  }, [brand, model, engine, category, page]);
 
-  useEffect(() => { setPage(0); }, [brand, model, engine, category, debounced]);
+  useEffect(() => {
+    setPage(0);
+  }, [brand, model, engine, category]);
 
   const handleOrder = async (p: CatalogPart) => {
-    if (!user) { toast.error("Pro objednávku se přihlaste"); navigate("/auth"); return; }
-    if (!canPlaceOrder) { toast.error("Účet ještě nebyl schválen."); return; }
+    if (!user) {
+      toast.error("Pro objednávku se přihlaste");
+      navigate("/auth");
+      return;
+    }
+    if (!canPlaceOrder) {
+      toast.error("Účet ještě nebyl schválen.");
+      return;
+    }
+
     try {
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
@@ -171,11 +182,15 @@ const Catalog = () => {
     }
   };
 
-  const step: Step = !brand ? "brand"
-    : !model ? "model"
-    : !engine ? "engine"
-    : !category ? "category"
-    : "parts";
+  const step: Step = !brand
+    ? "brand"
+    : !model
+      ? "model"
+      : !engine
+        ? "engine"
+        : !category
+          ? "category"
+          : "parts";
 
   const stepTitle: Record<Step, string> = {
     brand: "Vyberte značku vozidla",
@@ -193,14 +208,16 @@ const Catalog = () => {
   };
 
   const resetAll = () => {
-    setBrand(""); setModel(""); setEngine(""); setCategory(""); setSearch("");
+    setBrand("");
+    setModel("");
+    setEngine("");
+    setCategory("");
   };
 
   const breadcrumb = [brand, model, engine, category].filter(Boolean);
 
   return (
     <div className="min-h-screen pb-24 lg:pb-8 bg-background">
-      {/* Header */}
       <div className="border-b border-border/30 bg-background/95 backdrop-blur-2xl sticky top-14 z-30">
         <div className="max-w-[1400px] mx-auto px-4 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -246,7 +263,6 @@ const Catalog = () => {
           </div>
         )}
 
-        {/* LEVEL 1: BRAND */}
         {step === "brand" && !loading && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {brands.map((b) => (
@@ -264,7 +280,6 @@ const Catalog = () => {
           </div>
         )}
 
-        {/* LEVEL 2: MODEL */}
         {step === "model" && !loading && (
           models.length === 0 ? (
             <div className="text-center py-16 text-sm text-muted-foreground">
@@ -289,7 +304,6 @@ const Catalog = () => {
           )
         )}
 
-        {/* LEVEL 3: ENGINE */}
         {step === "engine" && !loading && (
           engines.length === 0 ? (
             <div className="text-center py-16 text-sm text-muted-foreground">
@@ -314,7 +328,6 @@ const Catalog = () => {
           )
         )}
 
-        {/* LEVEL 4: CATEGORY (Dark cards w/ gold icons) */}
         {step === "category" && !loading && (
           categories.length === 0 ? (
             <div className="text-center py-16 text-sm text-muted-foreground">
@@ -343,32 +356,17 @@ const Catalog = () => {
           )
         )}
 
-        {/* LEVEL 5: PARTS */}
         {step === "parts" && (
           <>
-            <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-              <span className="text-xs text-muted-foreground">
-                {total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}
-              </span>
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input
-                  placeholder="Filtrovat OEM nebo název"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-8 h-9 text-xs"
-                />
-              </div>
+            <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground">
+              <span>{total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}</span>
             </div>
 
             <CatalogListing
               items={items}
               loading={listLoading}
               onOrder={handleOrder}
-              emptyHint={debounced
-                ? `Pro "${debounced}" nebyly nalezeny žádné díly.`
-                : "V této kategorii zatím nejsou žádné díly."
-              }
+              emptyHint="V této kategorii zatím nejsou žádné díly."
             />
 
             {total > 30 && (
