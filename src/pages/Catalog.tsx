@@ -27,7 +27,7 @@ import CatalogTree from "@/components/catalog/CatalogTree";
 import CatalogListing from "@/components/catalog/CatalogListing";
 import { jmAdapter } from "@/lib/catalog/adapters/jm";
 
-type Selection = { brand?: string; model?: string; engine?: string; category?: string; categoryId?: string };
+type Selection = { brand?: string; model?: string; engine?: string; category?: string; categoryId?: string; unmapped?: boolean };
 
 const Catalog = () => {
   const navigate = useNavigate();
@@ -74,7 +74,7 @@ const Catalog = () => {
 
   // Listing fetch
   useEffect(() => {
-    if (!selection.brand && !selection.category && !debounced) {
+    if (!selection.brand && !selection.category && !debounced && !selection.unmapped) {
       setItems([]);
       setTotal(0);
       return;
@@ -87,6 +87,7 @@ const Catalog = () => {
           model: selection.model,
           engine: selection.engine,
           category: selection.category,
+          unmappedOnly: selection.unmapped,
           search: debounced || undefined,
           page,
           pageSize: 30,
@@ -249,7 +250,7 @@ const Catalog = () => {
 
         {/* Listing */}
         <main className="flex-1 min-w-0">
-          {selection.brand || selection.category || debounced ? (
+          {selection.brand || selection.category || debounced || selection.unmapped ? (
             <>
               <div className="flex items-center justify-between mb-3 text-xs text-muted-foreground">
                 <span>

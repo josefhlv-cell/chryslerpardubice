@@ -123,7 +123,9 @@ export type ListingFilter = {
   model?: string;
   engine?: string;
   category?: string;
-  search?: string; // OEM or name fragment
+  nextisVehicleId?: string; // drill-down by exact Nextis vehicle
+  unmappedOnly?: boolean;   // "Universal / unmapped" section
+  search?: string;          // OEM or name fragment
   page?: number;
   pageSize?: number;
 };
@@ -134,6 +136,32 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
+  // Vehicle drill-down via compatibility bridge
+  let restrictPartIds: string[] | null = null;
+  if (filter.nextisVehicleId) {
+    const { data: links } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .select("part_id, is_oem")
+      .eq("nextis_vehicle_id", filter.nextisVehicleId);
+    restrictPartIds = (links || []).map((l: any) => l.part_id);
+    if (restrictPartIds.length === 0) return { items: [], total: 0 };
+  } else if (filter.unmappedOnly) {
+    // Parts WITHOUT any nextis_vehicle_id link
+    const { data: linked } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .select("part_id")
+      .not("nextis_vehicle_id", "is", null)
+      .limit(50000);
+    const linkedSet = new Set((linked || []).map((l: any) => l.part_id));
+    const { data: allParts } = await supabase
+      .from("parts_new")
+      .select("id")
+      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+      .limit(50000);
+    restrictPartIds = (allParts || []).map((p: any) => p.id).filter((id: string) => !linkedSet.has(id));
+    if (restrictPartIds.length === 0) return { items: [], total: 0 };
+  }
+
   let q = supabase
     .from("parts_new")
     .select(
@@ -142,12 +170,16 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
     )
     .in("catalog_source", ALLOWED_SOURCES as unknown as string[]);
 
-  // Brand / model / engine match against compatible_vehicles text or category text
-  if (filter.brand) {
-    q = q.ilike("compatible_vehicles", `%${filter.brand}%`);
+  if (restrictPartIds) {
+    // chunk to avoid URL size limits
+    const slice = restrictPartIds.slice(0, 1000);
+    q = q.in("id", slice);
   }
-  if (filter.model) {
-    q = q.ilike("compatible_vehicles", `%${filter.model}%`);
+
+  // Fallback text filters when no vehicle selected
+  if (!filter.nextisVehicleId) {
+    if (filter.brand) q = q.ilike("compatible_vehicles", `%${filter.brand}%`);
+    if (filter.model) q = q.ilike("compatible_vehicles", `%${filter.model}%`);
   }
   if (filter.category) {
     q = q.ilike("category", `%${filter.category}%`);
@@ -163,10 +195,29 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
   if (error) throw new Error(error.message);
 
   const items = (data || []).map(normalize);
-  // OEM-first sort within page
+  // OEM-first sort within page (rank 1 = Mopar at top)
   items.sort((a, b) => a.rank - b.rank);
 
   return { items, total: count || 0 };
+}
+
+// ---- Nextis vehicle helpers ----
+export type NextisVehicle = {
+  id: string;
+  brand: string;
+  model: string;
+  engine: string | null;
+  year_from: number | null;
+  year_to: number | null;
+};
+
+export async function fetchNextisVehicles(brand?: string, model?: string): Promise<NextisVehicle[]> {
+  let q = supabase.from("nextis_vehicles").select("id, brand, model, engine, year_from, year_to");
+  if (brand) q = q.ilike("brand", brand);
+  if (model) q = q.ilike("model", model);
+  const { data, error } = await q.order("model").order("engine");
+  if (error) throw new Error(error.message);
+  return (data || []) as NextisVehicle[];
 }
 
 // ---- Helpers ----

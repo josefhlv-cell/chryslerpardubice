@@ -47,6 +47,7 @@ const EPC = lazy(() => import("./pages/EPC"));
 const MechanicDashboard = lazy(() => import("./pages/MechanicDashboard"));
 const OBDDiagnostics = lazy(() => import("./pages/OBDDiagnostics"));
 const Garage = lazy(() => import("./pages/Garage"));
+const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
 
 const queryClient = new QueryClient();
 
@@ -101,6 +102,7 @@ const App = () => (
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/admin" element={<Admin />} />
+                    <Route path="/admin/compatibility" element={<AdminCompatibility />} />
                     <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
                     <Route path="/index" element={<Navigate to="/" replace />} />
                     <Route path="*" element={<NotFound />} />

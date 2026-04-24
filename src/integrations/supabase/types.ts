@@ -266,7 +266,11 @@ export type Database = {
           created_at: string
           engine: string | null
           id: string
+          is_oem: boolean
+          match_confidence: number | null
+          match_method: string | null
           model: string
+          nextis_vehicle_id: string | null
           notes: string | null
           part_id: string
           source: Database["public"]["Enums"]["catalog_source_type"] | null
@@ -279,7 +283,11 @@ export type Database = {
           created_at?: string
           engine?: string | null
           id?: string
+          is_oem?: boolean
+          match_confidence?: number | null
+          match_method?: string | null
           model: string
+          nextis_vehicle_id?: string | null
           notes?: string | null
           part_id: string
           source?: Database["public"]["Enums"]["catalog_source_type"] | null
@@ -292,7 +300,11 @@ export type Database = {
           created_at?: string
           engine?: string | null
           id?: string
+          is_oem?: boolean
+          match_confidence?: number | null
+          match_method?: string | null
           model?: string
+          nextis_vehicle_id?: string | null
           notes?: string | null
           part_id?: string
           source?: Database["public"]["Enums"]["catalog_source_type"] | null
@@ -301,6 +313,13 @@ export type Database = {
           year_to?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "catalog_vehicle_compatibility_nextis_vehicle_id_fkey"
+            columns: ["nextis_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "nextis_vehicles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "catalog_vehicle_compatibility_part_id_fkey"
             columns: ["part_id"]
@@ -313,6 +332,59 @@ export type Database = {
             columns: ["part_id"]
             isOneToOne: false
             referencedRelation: "parts_new_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      compatibility_match_queue: {
+        Row: {
+          created_at: string
+          id: string
+          match_confidence: number
+          match_method: string
+          matched_oem: string | null
+          nextis_vehicle_id: string
+          notes: string | null
+          oem_number: string | null
+          part_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_confidence?: number
+          match_method?: string
+          matched_oem?: string | null
+          nextis_vehicle_id: string
+          notes?: string | null
+          oem_number?: string | null
+          part_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_confidence?: number
+          match_method?: string
+          matched_oem?: string | null
+          nextis_vehicle_id?: string
+          notes?: string | null
+          oem_number?: string | null
+          part_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compatibility_match_queue_nextis_vehicle_id_fkey"
+            columns: ["nextis_vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "nextis_vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -810,6 +882,57 @@ export type Database = {
           updated_at?: string
           user_id?: string
           year?: number | null
+        }
+        Relationships: []
+      }
+      nextis_vehicles: {
+        Row: {
+          body_type: string | null
+          brand: string
+          created_at: string
+          engine: string | null
+          external_id: string | null
+          fuel: string | null
+          id: string
+          metadata: Json | null
+          model: string
+          power_kw: number | null
+          transmission: string | null
+          updated_at: string
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          body_type?: string | null
+          brand: string
+          created_at?: string
+          engine?: string | null
+          external_id?: string | null
+          fuel?: string | null
+          id?: string
+          metadata?: Json | null
+          model: string
+          power_kw?: number | null
+          transmission?: string | null
+          updated_at?: string
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          body_type?: string | null
+          brand?: string
+          created_at?: string
+          engine?: string | null
+          external_id?: string | null
+          fuel?: string | null
+          id?: string
+          metadata?: Json | null
+          model?: string
+          power_kw?: number | null
+          transmission?: string | null
+          updated_at?: string
+          year_from?: number | null
+          year_to?: number | null
         }
         Relationships: []
       }
@@ -2384,6 +2507,18 @@ export type Database = {
       }
     }
     Functions: {
+      bulk_attach_part_to_vehicles: {
+        Args: {
+          _brand: string
+          _engine_pattern?: string
+          _is_oem?: boolean
+          _model_pattern?: string
+          _part_id: string
+          _year_from?: number
+          _year_to?: number
+        }
+        Returns: number
+      }
       calculate_discounted_price: {
         Args: {
           _discount_percent: number
@@ -2396,6 +2531,17 @@ export type Database = {
         }[]
       }
       can_place_order: { Args: { _user_id: string }; Returns: boolean }
+      find_or_create_nextis_vehicle: {
+        Args: {
+          _brand: string
+          _engine?: string
+          _external_id?: string
+          _model: string
+          _year_from?: number
+          _year_to?: number
+        }
+        Returns: string
+      }
       get_cron_job_status: { Args: never; Returns: boolean }
       has_role: {
         Args: {
@@ -2405,6 +2551,7 @@ export type Database = {
         Returns: boolean
       }
       manage_price_sync_cron: { Args: { p_action: string }; Returns: boolean }
+      normalize_oem: { Args: { _oem: string }; Returns: string }
       oem_priority_rank: { Args: { _source: string }; Returns: number }
     }
     Enums: {

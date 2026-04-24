@@ -7,7 +7,7 @@ import { ChevronRight, ChevronDown, Folder, Car, Cog, Globe } from "lucide-react
 import { cn } from "@/lib/utils";
 import type { CategoryNode } from "@/api/catalogV2API";
 
-type Selection = { brand?: string; model?: string; engine?: string; category?: string; categoryId?: string };
+type Selection = { brand?: string; model?: string; engine?: string; category?: string; categoryId?: string; unmapped?: boolean };
 
 interface Props {
   brands: CategoryNode[];
@@ -134,6 +134,22 @@ const CatalogTree = ({ brands, globals, selection, onSelect }: Props) => {
           ))}
         </div>
       )}
+
+      <div>
+        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Speciální
+        </div>
+        <button
+          onClick={() => onSelect({ unmapped: true })}
+          className={cn(
+            "w-full flex items-center gap-1.5 py-1.5 px-3 rounded-md text-left text-sm transition-colors hover:bg-secondary/60",
+            selection.unmapped && "bg-primary/15 text-primary font-medium"
+          )}
+        >
+          <Globe className="w-3.5 h-3.5 opacity-70" />
+          <span>Bez specifikace vozu</span>
+        </button>
+      </div>
 
       {brands.length === 0 && globals.length === 0 && (
         <div className="px-3 py-6 text-xs text-muted-foreground text-center">
