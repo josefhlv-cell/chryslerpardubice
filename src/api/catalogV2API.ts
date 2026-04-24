@@ -408,3 +408,86 @@ export async function listPartsForVehicle(opts: {
   const items = (data || []).map(normalize).sort((a, b) => a.rank - b.rank);
   return { items, total: count || 0 };
 }
+
+// ============================================================
+// LIVE J+M (Nextis) overlay — calls jm-proxy and converts the
+// response into CatalogPart so it can be merged into the listing.
+// ============================================================
+
+type JmRawItem = {
+  oem_number?: string;
+  brand?: string;
+  name?: string;
+  price_without_vat?: number;
+  price_with_vat?: number;
+  stock?: number;
+  availability?: string;
+  image?: string;
+  category?: string;
+};
+
+function jmToCatalogPart(it: JmRawItem): CatalogPart {
+  const price_without_vat = Number(it.price_without_vat) || 0;
+  const price_with_vat =
+    Number(it.price_with_vat) || Math.round(price_without_vat * 1.21 * 100) / 100;
+  return {
+    id: `jm:${it.oem_number || crypto.randomUUID()}`,
+    oem_number: String(it.oem_number || "").trim(),
+    name: String(it.name || "").trim() || it.oem_number || "—",
+    manufacturer: it.brand || "J+M",
+    catalog_source: "jm",
+    price_without_vat,
+    price_with_vat,
+    availability: it.availability || (Number(it.stock) > 0 ? "in_stock" : "on_order"),
+    image_urls: it.image ? [it.image] : null,
+    category: it.category || null,
+    description: null,
+    is_oem: false,
+    badge_label: "NÁHRADA",
+    rank: 5,
+  };
+}
+
+/** Live search of J+M offer for a specific vehicle. Returns [] on any failure. */
+export async function fetchJmForVehicle(opts: {
+  brand: string;
+  model: string;
+  year?: number;
+}): Promise<CatalogPart[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke("jm-proxy", {
+      body: {
+        action: "searchByVehicle",
+        payload: { brand: opts.brand, model: opts.model, year: opts.year },
+      },
+    });
+    if (error || !data?.success) return [];
+    const items: JmRawItem[] = data.data?.items || [];
+    return items.map(jmToCatalogPart).filter((p) => p.oem_number);
+  } catch {
+    return [];
+  }
+}
+
+/** Live search of J+M by OEM / item code. */
+export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
+  try {
+    const { data, error } = await supabase.functions.invoke("jm-proxy", {
+      body: { action: "searchByCode", payload: { code } },
+    });
+    if (error || !data?.success) return [];
+    const items: JmRawItem[] = data.data?.items || [];
+    return items.map(jmToCatalogPart).filter((p) => p.oem_number);
+  } catch {
+    return [];
+  }
+}
+
+/** Merge OEM (Mopar/EPC) listing with live J+M results. Mopar always on top. */
+export function mergeWithJm(base: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
+  const seen = new Set(base.map((p) => p.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, "")));
+  const extra = jm.filter(
+    (p) => !seen.has(p.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, "")),
+  );
+  return [...base, ...extra].sort((a, b) => a.rank - b.rank);
+}

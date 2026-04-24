@@ -19,6 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
   fetchCategoriesForVehicle, listPartsForVehicle,
+  fetchJmForVehicle, mergeWithJm,
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
 import CatalogListing from "@/components/catalog/CatalogListing";
@@ -64,6 +65,8 @@ const Catalog = () => {
   const [items, setItems] = useState<CatalogPart[]>([]);
   const [total, setTotal] = useState(0);
   const [listLoading, setListLoading] = useState(false);
+  const [jmLoading, setJmLoading] = useState(false);
+  const [jmCount, setJmCount] = useState(0);
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -124,13 +127,16 @@ const Catalog = () => {
     if (!brand || !model || !engine || !category) {
       setItems([]);
       setTotal(0);
+      setJmCount(0);
       return;
     }
 
+    let cancelled = false;
     (async () => {
       try {
         setListLoading(true);
-        const { items, total } = await listPartsForVehicle({
+        // 1) Local OEM/Mopar listing first — paints fast.
+        const { items: oemItems, total: oemTotal } = await listPartsForVehicle({
           brand,
           model,
           engine,
@@ -138,15 +144,46 @@ const Catalog = () => {
           page,
           pageSize: 30,
         });
-        setItems(items);
-        setTotal(total);
+        if (cancelled) return;
+        setItems(oemItems);
+        setTotal(oemTotal);
+
+        // 2) Live J+M overlay — only on first page to keep it cheap.
+        if (page === 0) {
+          setJmLoading(true);
+          const jm = await fetchJmForVehicle({ brand, model });
+          if (cancelled) return;
+          // Filter J+M items by the chosen canonical category when present.
+          const filteredJm = category
+            ? jm.filter((p) => {
+                const c = (p.category || "").toLowerCase();
+                return c.includes(category.toLowerCase()) || c === "";
+              })
+            : jm;
+          setJmCount(filteredJm.length);
+          if (filteredJm.length > 0) {
+            setItems((prev) => mergeWithJm(prev, filteredJm));
+            setTotal((t) => t + filteredJm.length);
+          }
+        } else {
+          setJmCount(0);
+        }
       } catch (err: any) {
-        toast.error("Chyba načítání: " + err.message);
-        setItems([]);
+        if (!cancelled) {
+          toast.error("Chyba načítání: " + err.message);
+          setItems([]);
+        }
       } finally {
-        setListLoading(false);
+        if (!cancelled) {
+          setListLoading(false);
+          setJmLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [brand, model, engine, category, page]);
 
   useEffect(() => {
@@ -165,9 +202,12 @@ const Catalog = () => {
     }
 
     try {
+      // J+M items use a synthetic id `jm:OEM` and are not stored in parts_new,
+      // so we must order them by name + OEM only (no part_id FK).
+      const isLiveJm = p.id.startsWith("jm:") || p.catalog_source === "jm";
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
-        part_id: p.id,
+        part_id: isLiveJm ? null : p.id,
         order_type: "new" as const,
         quantity: 1,
         unit_price: p.price_without_vat,
@@ -358,13 +398,24 @@ const Catalog = () => {
 
         {step === "parts" && (
           <>
-            <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground">
-              <span>{total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}</span>
+            <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground gap-3 flex-wrap">
+              <span>
+                {total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}
+                {jmCount > 0 && (
+                  <span className="ml-2 text-primary">+ {jmCount} z J+M Autodíly</span>
+                )}
+              </span>
+              {jmLoading && (
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Hledám živou nabídku J+M…
+                </span>
+              )}
             </div>
 
             <CatalogListing
               items={items}
-              loading={listLoading}
+              loading={listLoading && items.length === 0}
               onOrder={handleOrder}
               emptyHint="V této kategorii zatím nejsou žádné díly."
             />
