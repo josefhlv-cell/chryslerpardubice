@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, ChevronRight, ChevronLeft, Loader2, Car, Wrench, Cog, Package,
+  ChevronRight, ChevronLeft, Loader2, Car, Wrench, Cog, Package,
   Snowflake, Zap, Filter as FilterIcon, Droplet, Disc, Gauge, Settings, Box,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
