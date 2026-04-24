@@ -66,6 +66,47 @@ export const jmAdapter = {
   async getPriceAndStock(codes: string[]): Promise<unknown> {
     return await callProxy("priceAndStock", { codes });
   },
+
+  /**
+   * Sync Nextis vehicle hierarchy (brand → model → engine) into catalog_categories.
+   * Only allowed brands are persisted. Idempotent (uses upsert).
+   */
+  async syncCategories(): Promise<{ synced: number; skipped: number; endpoint: string }> {
+    return await callProxy("syncCategories", {});
+  },
+
+  /**
+   * Read the unified catalog tree directly from the DB.
+   * Returns brand/model/engine nodes + global categories (Náplně, Pneu, ...).
+   */
+  async fetchCategoryTree() {
+    const { data, error } = await supabase
+      .from("catalog_categories")
+      .select("id, parent_id, slug, name_cs, name_en, node_type, vehicle_brand, vehicle_model, vehicle_engine, is_global, sort_order")
+      .order("sort_order", { ascending: true })
+      .order("name_cs", { ascending: true });
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
+  /**
+   * OEM-FIRST sort comparator. Mopar/OEM (rank=1) is always pushed to top.
+   * Use as Array.sort callback on combined results from multiple adapters.
+   */
+  oemFirstSort(a: { supplier?: string; catalog_source?: string }, b: { supplier?: string; catalog_source?: string }): number {
+    const rank = (s?: string) => {
+      const v = (s || "").toLowerCase();
+      if (v === "mopar" || v === "mopar_oem") return 1;
+      if (v === "csv") return 2;
+      if (v === "sag") return 3;
+      if (v === "autokelly") return 4;
+      if (v === "jm") return 5;
+      if (v === "epc") return 6;
+      if (v === "ai") return 9;
+      return 10;
+    };
+    return rank(a.supplier || a.catalog_source) - rank(b.supplier || b.catalog_source);
+  },
 };
 
 export default jmAdapter;
