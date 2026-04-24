@@ -40,6 +40,31 @@ const AdminCatalogSettings = () => {
   const [diagRunning, setDiagRunning] = useState(false);
   const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
   const [partsCount, setPartsCount] = useState({ parts_new: 0, parts_catalog: 0, supersessions: 0 });
+  const [jmSyncing, setJmSyncing] = useState(false);
+  const [jmStats, setJmStats] = useState({ vehicles: 0, categories: 0 });
+
+  const loadJmStats = async () => {
+    const [vh, cat] = await Promise.all([
+      supabase.from("nextis_vehicles").select("id", { count: "exact", head: true }),
+      supabase.from("catalog_categories").select("id", { count: "exact", head: true }).eq("source", "jm"),
+    ]);
+    setJmStats({ vehicles: vh.count ?? 0, categories: cat.count ?? 0 });
+  };
+
+  const runJmSync = async () => {
+    setJmSyncing(true);
+    try {
+      const result = await jmAdapter.syncCategories();
+      toast({
+        title: "J+M synchronizace dokončena",
+        description: `Naimportováno ${result.synced} uzlů (přeskočeno ${result.skipped}).`,
+      });
+      await loadJmStats();
+    } catch (err: any) {
+      toast({ title: "Chyba J+M sync", description: err.message, variant: "destructive" });
+    }
+    setJmSyncing(false);
+  };
 
   useEffect(() => {
     loadSettings();
