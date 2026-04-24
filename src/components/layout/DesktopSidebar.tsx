@@ -10,7 +10,7 @@ import {
 import { useState } from "react";
 
 const partsNav = [
-  { path: "/shop", label: "Katalog dílů", icon: Search },
+  { path: "/catalog", label: "Katalog dílů", icon: Search },
   { path: "/epc", label: "EPC Diagramy", icon: Cpu },
   { path: "/cart", label: "Košík", icon: ShoppingCart },
   { path: "/orders", label: "Objednávky", icon: FileText },
@@ -45,8 +45,8 @@ const DesktopSidebar = () => {
   if (employee && employee.role !== "admin") return null;
 
   const isActive = (path: string) =>
-    path === "/shop"
-      ? location.pathname === "/" || location.pathname === "/index" || location.pathname === "/shop"
+    path === "/catalog"
+      ? location.pathname === "/" || location.pathname === "/index" || location.pathname === "/catalog" || location.pathname === "/shop"
       : location.pathname.startsWith(path);
 
   const NavItem = ({ item }: { item: { path: string; label: string; icon: any; isTonda?: boolean } }) => (
@@ -94,7 +94,7 @@ const DesktopSidebar = () => {
     >
       {/* Logo */}
       <div className="p-4 flex items-center gap-3 border-b border-border/20">
-        <button onClick={() => navigate("/shop")} className="shrink-0">
+        <button onClick={() => navigate("/catalog")} className="shrink-0">
           <img src="/images/logo-cd-pardubice.png" alt="Logo" className="h-9 object-contain" />
         </button>
         {!collapsed && (
