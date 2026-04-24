@@ -202,9 +202,12 @@ const Catalog = () => {
     }
 
     try {
+      // J+M items use a synthetic id `jm:OEM` and are not stored in parts_new,
+      // so we must order them by name + OEM only (no part_id FK).
+      const isLiveJm = p.id.startsWith("jm:") || p.catalog_source === "jm";
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
-        part_id: p.id,
+        part_id: isLiveJm ? null : p.id,
         order_type: "new" as const,
         quantity: 1,
         unit_price: p.price_without_vat,
