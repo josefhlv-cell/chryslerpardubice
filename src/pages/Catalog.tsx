@@ -395,13 +395,24 @@ const Catalog = () => {
 
         {step === "parts" && (
           <>
-            <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground">
-              <span>{total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}</span>
+            <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground gap-3 flex-wrap">
+              <span>
+                {total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}
+                {jmCount > 0 && (
+                  <span className="ml-2 text-primary">+ {jmCount} z J+M Autodíly</span>
+                )}
+              </span>
+              {jmLoading && (
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Hledám živou nabídku J+M…
+                </span>
+              )}
             </div>
 
             <CatalogListing
               items={items}
-              loading={listLoading}
+              loading={listLoading && items.length === 0}
               onOrder={handleOrder}
               emptyHint="V této kategorii zatím nejsou žádné díly."
             />
