@@ -553,7 +553,7 @@ function extractPartName(html: string): string | null {
     // Table structure: Kód dílu | Název | Famílie | Kategorie | Segment | Balení | Cena bez DPH | Cena s DPH
     const rows = doc.querySelectorAll('tr');
     for (const row of rows) {
-      const tds = row.querySelectorAll('td');
+      const tds = (row as any).querySelectorAll('td');
       if (tds.length >= 7) {
         const name = ((tds[1] as any).textContent || '').trim();
         if (name && name.length > 1 && !name.includes('Název')) {
