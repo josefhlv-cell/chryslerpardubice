@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 
 const navItems = [
-  { path: "/", icon: Search, label: "Díly" },
+  { path: "/catalog", icon: Search, label: "Díly" },
   { path: "/service", icon: Wrench, label: "Servis" },
   { path: "/vehicles", icon: Car, label: "Vozy" },
   { path: "/garage", icon: Warehouse, label: "Garáž" },
@@ -23,8 +23,8 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
   if (employee && employee.role !== "admin") return null;
 
   const isActive = (path: string) => {
-    if (path === "/") {
-      return location.pathname === "/" || location.pathname === "/index" || location.pathname === "/shop";
+    if (path === "/catalog") {
+      return location.pathname === "/catalog" || location.pathname === "/shop" || location.pathname === "/" || location.pathname === "/index";
     }
     if (path === "/garage") {
       return ["/garage", "/my-vehicles", "/my-service-orders", "/service-book", "/service-plan", "/obd", "/epc", "/emergency", "/ai-mechanic", "/orders", "/notifications"].some(p => location.pathname.startsWith(p));
@@ -42,7 +42,7 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
           return (
             <button
               key={item.path}
-              onClick={() => navigate(item.path === "/" ? "/shop" : item.path)}
+              onClick={() => navigate(item.path)}
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
               className={cn(

@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 
 // Lazy loaded pages
 const Shop = lazy(() => import("./pages/Shop"));
+const Catalog = lazy(() => import("./pages/Catalog"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Service = lazy(() => import("./pages/Service"));
@@ -75,6 +76,7 @@ const App = () => (
                   <Routes>
                     <Route path="/" element={<Landing />} />
                     <Route path="/shop" element={<Shop />} />
+                    <Route path="/catalog" element={<Catalog />} />
                     <Route path="/epc" element={<EPC />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/checkout" element={<Checkout />} />
