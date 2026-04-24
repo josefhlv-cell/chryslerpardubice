@@ -219,7 +219,7 @@ const ServicePlan = () => {
                         <p className="text-xs font-medium">{part.name}</p>
                         <p className="text-[10px] text-muted-foreground">OEM: {part.oem_number} · {part.price_with_vat > 0 ? `${part.price_with_vat.toLocaleString("cs")} Kč` : "Na objednávku"}</p>
                       </div>
-                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => navigate("/shop")}>
+                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => navigate("/catalog")}>
                         <ShoppingCart className="w-3 h-3 mr-1" />Objednat
                       </Button>
                     </div>

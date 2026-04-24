@@ -29,7 +29,7 @@ const ResetPassword = () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       toast.success("Heslo bylo změněno!");
-      navigate("/shop");
+      navigate("/catalog");
     } catch (err: any) {
       toast.error(err.message || "Chyba při změně hesla");
     } finally {

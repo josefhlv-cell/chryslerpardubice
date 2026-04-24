@@ -21,7 +21,6 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
 // Lazy loaded pages
-const Shop = lazy(() => import("./pages/Shop"));
 const Catalog = lazy(() => import("./pages/Catalog"));
 const Cart = lazy(() => import("./pages/Cart"));
 const Checkout = lazy(() => import("./pages/Checkout"));
@@ -76,7 +75,8 @@ const App = () => (
                   <Suspense fallback={<PageLoader />}>
                   <Routes>
                     <Route path="/" element={<Landing />} />
-                    <Route path="/shop" element={<Navigate to="/catalog" replace />} />
+                    <Route path="/shop" element={<Catalog />} />
+                    <Route path="/dily" element={<Catalog />} />
                     <Route path="/catalog" element={<Catalog />} />
                     <Route path="/epc" element={<EPC />} />
                     <Route path="/cart" element={<Cart />} />
