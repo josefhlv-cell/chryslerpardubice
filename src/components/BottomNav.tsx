@@ -24,7 +24,7 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
 
   const isActive = (path: string) => {
     if (path === "/catalog") {
-      return location.pathname === "/catalog" || location.pathname === "/shop" || location.pathname === "/" || location.pathname === "/index";
+      return location.pathname === "/catalog" || location.pathname === "/shop" || location.pathname === "/dily" || location.pathname === "/" || location.pathname === "/index";
     }
     if (path === "/garage") {
       return ["/garage", "/my-vehicles", "/my-service-orders", "/service-book", "/service-plan", "/obd", "/epc", "/emergency", "/ai-mechanic", "/orders", "/notifications"].some(p => location.pathname.startsWith(p));

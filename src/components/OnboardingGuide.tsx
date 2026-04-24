@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Search, Wrench, Car, MessageCircle, ShoppingCart } from "lucide-react";
@@ -32,16 +33,19 @@ const steps = [
 ];
 
 const OnboardingGuide = () => {
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
 
   useEffect(() => {
+    if (["/catalog", "/shop", "/dily"].includes(location.pathname)) return;
+
     const seen = localStorage.getItem("onboarding_seen");
     if (!seen) {
       const timer = setTimeout(() => setOpen(true), 1500);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [location.pathname]);
 
   const handleClose = () => {
     setOpen(false);
