@@ -48,7 +48,7 @@ export const jmAdapter = {
   /** Search parts by OEM / item code. Returns only US-brand items. */
   async searchByCode(code: string): Promise<UnifiedPart[]> {
     const res = await callProxy<{ items: UnifiedPart[] }>("searchByCode", { code });
-    return (res.items || []).filter((p) => isUsBrand(p.brand));
+    return (res.items || []).filter((p) => isAllowedBrand(p.brand));
   },
 
   /** Search parts by vehicle (VIN or brand/model/year). */
@@ -59,7 +59,7 @@ export const jmAdapter = {
     year?: number;
   }): Promise<UnifiedPart[]> {
     const res = await callProxy<{ items: UnifiedPart[] }>("searchByVehicle", params);
-    return (res.items || []).filter((p) => isUsBrand(p.brand));
+    return (res.items || []).filter((p) => isAllowedBrand(p.brand));
   },
 
   /** Get current price + stock for a list of OEM codes. */
