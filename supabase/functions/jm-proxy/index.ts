@@ -136,7 +136,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    // Auth: allow either (a) authenticated user OR (b) service-role bearer (used by pg_cron)
+    // Auth strategy:
+    //   - syncCategories: server-to-server (pg_cron). Allowed with valid anon/service bearer, no user required.
+    //   - all other actions: require an authenticated user (via JWT claims).
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -145,15 +147,20 @@ Deno.serve(async (req) => {
       });
     }
     const bearer = authHeader.replace('Bearer ', '').trim();
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const isServiceRole = bearer === serviceKey;
+    const isServerKey = bearer === anonKey || bearer === serviceKey;
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
 
-    if (!isServiceRole) {
+    const body = await req.json();
+    const { action, payload } = body;
+
+    // For everything except syncCategories, require an authenticated user
+    if (action !== 'syncCategories') {
       const authClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!,
+        anonKey,
         { global: { headers: { Authorization: authHeader } } }
       );
       const { data: claims, error: claimsErr } = await authClient.auth.getClaims(bearer);
@@ -163,9 +170,13 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+    } else if (!isServerKey) {
+      // syncCategories called with something other than anon/service key -> reject
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
-
-    const { action, payload } = await req.json();
 
     // Admin client (service role) for writes to catalog_categories
     const adminClient = createClient(
