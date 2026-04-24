@@ -228,3 +228,183 @@ export function brandsOnly(roots: CategoryNode[]): CategoryNode[] {
 export function globalsOnly(roots: CategoryNode[]): CategoryNode[] {
   return roots.filter((n) => n.is_global || n.node_type === "global");
 }
+
+// ============================================================
+// Dynamic drill-down derived from parts_new.compatible_vehicles
+// (works even when nextis_vehicles / catalog_categories are empty)
+// ============================================================
+
+const PAGE = 1000;
+
+async function fetchAllCompatible(filters: { brand?: string; model?: string; engine?: string }): Promise<string[]> {
+  let q = supabase
+    .from("parts_new")
+    .select("compatible_vehicles", { count: "exact" })
+    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+    .not("compatible_vehicles", "is", null);
+
+  if (filters.brand) q = q.ilike("compatible_vehicles", `%${filters.brand}%`);
+  if (filters.model) q = q.ilike("compatible_vehicles", `%${filters.model}%`);
+  if (filters.engine) q = q.ilike("compatible_vehicles", `%${filters.engine}%`);
+
+  const all: string[] = [];
+  let from = 0;
+  for (let i = 0; i < 30; i++) {
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    for (const r of data) if (r.compatible_vehicles) all.push(r.compatible_vehicles as string);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+// Heuristic engine token extractor: "3.6L V6", "5.7L HEMI", "2.0 CRD" ...
+const ENGINE_RE = /(\d\.\d+\s*L?(?:\s*(?:V\d|HEMI|CRD|TDI|MultiAir|MultiJet|Turbo|Diesel|Hybrid))?)/i;
+
+function extractEngine(s: string, brand: string, model: string): string | null {
+  const after = s.replace(new RegExp(`^${brand}\\s+${model}`, "i"), "").trim();
+  if (!after) return null;
+  const m = after.match(ENGINE_RE);
+  return m ? m[1].toUpperCase().replace(/\s+/g, " ").trim() : null;
+}
+
+export async function fetchBrands(): Promise<string[]> {
+  return ALLOWED_BRANDS.slice() as string[];
+}
+
+export async function fetchModelsForBrand(brand: string): Promise<string[]> {
+  const rows = await fetchAllCompatible({ brand });
+  const set = new Set<string>();
+  const re = new RegExp(`^${brand}\\s+([A-Za-z0-9-]+(?:\\s+[A-Za-z0-9-]+)?)`, "i");
+  for (const s of rows) {
+    const m = s.match(re);
+    if (m) {
+      // Drop trailing engine token from model if present
+      const candidate = m[1].replace(ENGINE_RE, "").trim();
+      if (candidate) set.add(candidate);
+    }
+  }
+  return Array.from(set).sort();
+}
+
+export async function fetchEnginesForModel(brand: string, model: string): Promise<string[]> {
+  const rows = await fetchAllCompatible({ brand, model });
+  const set = new Set<string>();
+  for (const s of rows) {
+    const eng = extractEngine(s, brand, model);
+    if (eng) set.add(eng);
+  }
+  // Always include "Vše" implicitly via UI
+  return Array.from(set).sort();
+}
+
+// Normalize free-text categories ("Brzdy", "Brzdový systém", "Brakes" → "Brzdy")
+const CATEGORY_NORMALIZATION: Array<{ match: RegExp; canonical: string; icon?: string }> = [
+  { match: /brzd|brake/i, canonical: "Brzdy" },
+  { match: /motor|engine/i, canonical: "Motor" },
+  { match: /chla[dz]|cool/i, canonical: "Chlazení" },
+  { match: /odpruž|suspen|tlumi/i, canonical: "Odpružení" },
+  { match: /klimat|topen|a\/c|heat/i, canonical: "Klimatizace" },
+  { match: /elektr/i, canonical: "Elektroinstalace" },
+  { match: /filtr|filter/i, canonical: "Filtry" },
+  { match: /palivo|fuel/i, canonical: "Palivový systém" },
+  { match: /převod|transmission|gearbox/i, canonical: "Převodovka" },
+  { match: /výfuk|exhaust/i, canonical: "Výfuk" },
+  { match: /karos|body/i, canonical: "Karoserie" },
+  { match: /interi/i, canonical: "Interiér" },
+  { match: /kapalin|olej|oil|fluid|maziv/i, canonical: "Kapaliny a oleje" },
+  { match: /pneu|kol[ao]|tire|wheel/i, canonical: "Kola a pneumatiky" },
+  { match: /řízen|steer/i, canonical: "Řízení" },
+];
+
+export function normalizeCategory(raw: string | null | undefined): string {
+  if (!raw) return "Ostatní";
+  for (const r of CATEGORY_NORMALIZATION) if (r.match.test(raw)) return r.canonical;
+  return raw.split("(")[0].trim();
+}
+
+export type CategoryTile = { canonical: string; count: number; rawSamples: string[] };
+
+export async function fetchCategoriesForVehicle(brand: string, model: string, engine?: string): Promise<CategoryTile[]> {
+  // Pull category column for matching parts
+  let q = supabase
+    .from("parts_new")
+    .select("category, compatible_vehicles")
+    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+    .ilike("compatible_vehicles", `%${brand}%`)
+    .ilike("compatible_vehicles", `%${model}%`)
+    .not("category", "is", null);
+  if (engine) q = q.ilike("compatible_vehicles", `%${engine}%`);
+
+  const all: { category: string | null; compatible_vehicles: string | null }[] = [];
+  let from = 0;
+  for (let i = 0; i < 30; i++) {
+    const { data, error } = await q.range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    all.push(...(data as any));
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+
+  const map = new Map<string, CategoryTile>();
+  for (const r of all) {
+    const canon = normalizeCategory(r.category);
+    const t = map.get(canon) || { canonical: canon, count: 0, rawSamples: [] };
+    t.count++;
+    if (r.category && t.rawSamples.length < 5 && !t.rawSamples.includes(r.category)) t.rawSamples.push(r.category);
+    map.set(canon, t);
+  }
+  return Array.from(map.values()).sort((a, b) => b.count - a.count);
+}
+
+// Listing parts by free-form vehicle text + canonical category
+export async function listPartsForVehicle(opts: {
+  brand: string;
+  model: string;
+  engine?: string;
+  canonicalCategory?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: CatalogPart[]; total: number }> {
+  const page = opts.page ?? 0;
+  const pageSize = opts.pageSize ?? 30;
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+
+  let q = supabase
+    .from("parts_new")
+    .select(
+      "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
+      { count: "exact" }
+    )
+    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+    .ilike("compatible_vehicles", `%${opts.brand}%`)
+    .ilike("compatible_vehicles", `%${opts.model}%`);
+
+  if (opts.engine) q = q.ilike("compatible_vehicles", `%${opts.engine}%`);
+  if (opts.search) {
+    const t = opts.search.trim();
+    q = q.or(`oem_number.ilike.%${t}%,name.ilike.%${t}%`);
+  }
+
+  // For canonical category, fetch wider then filter client-side (precise match)
+  if (opts.canonicalCategory) {
+    // Use a wider page to allow client filter
+    const { data, error, count } = await q.range(0, 999);
+    if (error) throw new Error(error.message);
+    const filtered = (data || []).filter((r: any) => normalizeCategory(r.category) === opts.canonicalCategory);
+    const slice = filtered.slice(from, to + 1);
+    const items = slice.map(normalize).sort((a, b) => a.rank - b.rank);
+    return { items, total: filtered.length };
+  }
+
+  q = q.range(from, to);
+  const { data, error, count } = await q;
+  if (error) throw new Error(error.message);
+  const items = (data || []).map(normalize).sort((a, b) => a.rank - b.rank);
+  return { items, total: count || 0 };
+}
