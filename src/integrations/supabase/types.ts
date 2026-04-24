@@ -146,6 +146,177 @@ export type Database = {
         }
         Relationships: []
       }
+      catalog_categories: {
+        Row: {
+          created_at: string
+          external_id: string | null
+          id: string
+          is_global: boolean | null
+          name_cs: string
+          name_en: string | null
+          node_type: string
+          parent_id: string | null
+          slug: string
+          sort_order: number | null
+          source: Database["public"]["Enums"]["catalog_source_type"]
+          updated_at: string
+          vehicle_brand: string | null
+          vehicle_engine: string | null
+          vehicle_model: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          is_global?: boolean | null
+          name_cs: string
+          name_en?: string | null
+          node_type?: string
+          parent_id?: string | null
+          slug: string
+          sort_order?: number | null
+          source?: Database["public"]["Enums"]["catalog_source_type"]
+          updated_at?: string
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          is_global?: boolean | null
+          name_cs?: string
+          name_en?: string | null
+          node_type?: string
+          parent_id?: string | null
+          slug?: string
+          sort_order?: number | null
+          source?: Database["public"]["Enums"]["catalog_source_type"]
+          updated_at?: string
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_part_categories: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          part_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          part_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          part_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_part_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_part_categories_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_part_categories_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_vehicle_compatibility: {
+        Row: {
+          brand: string
+          created_at: string
+          engine: string | null
+          id: string
+          model: string
+          notes: string | null
+          part_id: string
+          source: Database["public"]["Enums"]["catalog_source_type"] | null
+          vehicle_type: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model: string
+          notes?: string | null
+          part_id: string
+          source?: Database["public"]["Enums"]["catalog_source_type"] | null
+          vehicle_type?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          engine?: string | null
+          id?: string
+          model?: string
+          notes?: string | null
+          part_id?: string
+          source?: Database["public"]["Enums"]["catalog_source_type"] | null
+          vehicle_type?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_vehicle_compatibility_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_vehicle_compatibility_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           active: boolean
@@ -2234,6 +2405,7 @@ export type Database = {
         Returns: boolean
       }
       manage_price_sync_cron: { Args: { p_action: string }; Returns: boolean }
+      oem_priority_rank: { Args: { _source: string }; Returns: number }
     }
     Enums: {
       app_role: "admin" | "customer"
@@ -2243,6 +2415,16 @@ export type Database = {
         | "in_progress"
         | "completed"
         | "cancelled"
+      catalog_source_type:
+        | "mopar"
+        | "mopar_oem"
+        | "sag"
+        | "autokelly"
+        | "jm"
+        | "csv"
+        | "epc"
+        | "ai"
+        | "manual"
       order_status:
         | "pending"
         | "confirmed"
@@ -2400,6 +2582,17 @@ export const Constants = {
         "in_progress",
         "completed",
         "cancelled",
+      ],
+      catalog_source_type: [
+        "mopar",
+        "mopar_oem",
+        "sag",
+        "autokelly",
+        "jm",
+        "csv",
+        "epc",
+        "ai",
+        "manual",
       ],
       order_status: [
         "pending",
