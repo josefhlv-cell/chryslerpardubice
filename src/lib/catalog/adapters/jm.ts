@@ -18,18 +18,17 @@ export interface UnifiedPart {
   compatible_vehicles: string[];
 }
 
-const US_BRANDS = [
-  "chrysler", "dodge", "jeep", "ram", "cadillac", "chevrolet", "chevy",
-  "gmc", "buick", "ford", "lincoln", "mercury", "pontiac", "hummer",
-  "tesla", "oldsmobile", "plymouth", "saturn", "mopar",
+// Phase 1 strict whitelist (Jeep + Hummer removed per scope decision)
+const ALLOWED_BRANDS = [
+  "chrysler", "dodge", "ram", "cadillac", "lancia",
 ];
 
 const UNIVERSAL_BRANDS = ["bosch", "mann", "mahle", "denso", "ngk", "gates", "febi", "valeo"];
 
-function isUsBrand(producer: string | null | undefined): boolean {
+function isAllowedBrand(producer: string | null | undefined): boolean {
   if (!producer) return true;
   const p = producer.toLowerCase().trim();
-  return US_BRANDS.some((b) => p.includes(b)) || UNIVERSAL_BRANDS.some((b) => p.includes(b));
+  return ALLOWED_BRANDS.some((b) => p.includes(b)) || UNIVERSAL_BRANDS.some((b) => p.includes(b));
 }
 
 async function callProxy<T>(action: string, payload: unknown): Promise<T> {
