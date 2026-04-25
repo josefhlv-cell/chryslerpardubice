@@ -196,11 +196,19 @@ const Catalog = () => {
         const [oemRes, jmVehicleRes] = await Promise.allSettled([
           listPartsForVehicle({
             brand, model, engine,
-            canonicalCategory: category,
+            nextisVehicleId: selectedVehicleId,
+            canonicalCategory: category.label,
+            categoryKeywords: category.keywords,
             page, pageSize: 30,
           }),
           page === 0
-            ? fetchJmForVehicle({ brand, model, engine })
+            ? fetchJmForVehicle({
+                brand, model, engine,
+                nextisVehicleId: selectedVehicleId,
+                sectionId: category.sectionId,
+                category: category.label,
+                categoryKeywords: category.keywords,
+              })
             : Promise.resolve({ items: [] as CatalogPart[], warning: undefined as string | undefined }),
         ]);
         if (cancelled) return;
@@ -220,14 +228,7 @@ const Catalog = () => {
           console.warn("[Catalog] J+M vehicle search failed:", jmVehicleRes.reason);
         }
 
-        // Filter J+M vehicle results by canonical category (best-effort)
-        const filteredJmVehicle = category
-          ? jmFromVehicle.filter((p) => {
-              const c = (p.category || "").toLowerCase();
-              const cat = category.toLowerCase();
-              return !c || c.includes(cat) || cat.includes(c);
-            })
-          : jmFromVehicle;
+        const filteredJmVehicle = jmFromVehicle.filter((p) => partMatchesNode(p, category));
 
         setItems(oemItems);
         setTotal(oemTotal);
@@ -281,7 +282,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [brand, model, engine, category, page]);
+  }, [brand, model, engine, selectedVehicleId, category, page]);
 
   useEffect(() => {
     setPage(0);
