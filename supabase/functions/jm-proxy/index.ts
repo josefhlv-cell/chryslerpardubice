@@ -752,6 +752,8 @@ Deno.serve(async (req) => {
         };
         break;
       }
+
+      case 'priceAndStock': {
         const codes: string[] = Array.isArray(payload.codes) ? payload.codes.slice(0, 50) : [];
         if (!codes.length) { result = { items: [] }; break; }
         const enrich = await enrichPricesIntoDb(adminClient, codes).catch(() => ({ enriched: 0, items: [] }));
