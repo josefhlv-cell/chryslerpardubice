@@ -169,7 +169,7 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
   let q = supabase
       .from("parts_new_public")
     .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
+        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
       { count: "exact" }
     )
     .in("catalog_source", ALLOWED_SOURCES as unknown as string[]);
@@ -735,7 +735,7 @@ export async function globalOemSearch(query: string): Promise<{
 
   // Dedup: hide J+M lines whose normalized OEM already exists as local OEM with same price
   const localOems = new Set(oem.map((p) => normalizeOem(p.oem_number)));
-  const jmFiltered = jm.filter((p) => !localOems.has(normalizeOem(p.oem_number)) || p.price_with_vat > 0);
+  const jmFiltered = jm.filter((p) => !localOems.has(normalizeOem(p.oem_number)) || (p.price_with_vat ?? 0) > 0);
 
   return { oem, jm: jmFiltered, merged: [...oem, ...jmFiltered].sort((a, b) => a.rank - b.rank) };
 }
