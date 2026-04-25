@@ -18,9 +18,9 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
-  fetchCategoriesForVehicle, listPartsForVehicle,
+  fetchNextisVehicles, fetchJmCategoryTree, listPartsForVehicle,
   fetchJmByCodes, fetchJmForVehicle, mergeWithJm,
-  type CatalogPart, type CategoryTile,
+  type CatalogPart, type CatalogCategoryNode, type NextisVehicle,
 } from "@/api/catalogV2API";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
@@ -49,6 +49,19 @@ const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>>
 };
 
 type Step = "brand" | "model" | "engine" | "category" | "parts";
+
+function flattenCategoryTree(nodes: CatalogCategoryNode[]): CatalogCategoryNode[] {
+  return nodes.flatMap((node) => [node, ...flattenCategoryTree(node.children || [])]);
+}
+
+function getCategoryLevel(nodes: CatalogCategoryNode[], path: string[]): CatalogCategoryNode[] {
+  let level = nodes;
+  for (const id of path) {
+    const found = level.find((node) => node.id === id);
+    level = found?.children || [];
+  }
+  return level;
+}
 
 const Catalog = () => {
   const navigate = useNavigate();
