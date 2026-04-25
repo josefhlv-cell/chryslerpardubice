@@ -410,6 +410,53 @@ function rowMatchesCategory(row: any, canonicalCategory?: string, keywords: stri
   return normalizeCategory(row.category) === canonicalCategory;
 }
 
+function countTreeFromRows(nodes: CatalogCategoryNode[], rows: any[]): CatalogCategoryNode[] {
+  return nodes.map((node) => {
+    const children = node.children ? countTreeFromRows(node.children, rows) : undefined;
+    const ownCount = rows.filter((row) => rowMatchesCategory(row, node.label, node.keywords)).length;
+    const childCount = (children || []).reduce((sum, child) => sum + child.count, 0);
+    return { ...node, count: Math.max(ownCount, childCount), children };
+  });
+}
+
+function engineVariants(engine?: string): string[] {
+  if (!engine) return [];
+  const out = new Set<string>([engine]);
+  out.add(engine.replace(/^(\d+\.\d+)(\s)/, "$1L$2"));
+  out.add(engine.replace(/^(\d+\.\d+)L(\s)/, "$1$2"));
+  const displacement = engine.match(/^(\d+\.\d+)/)?.[1];
+  if (displacement) out.add(displacement);
+  return [...out].filter(Boolean);
+}
+
+async function fetchLocalVehicleRows(opts: { brand: string; model: string; engine?: string }, limit = 3000): Promise<any[]> {
+  const variants = engineVariants(opts.engine);
+  const attempts = variants.length ? variants : [null];
+  for (const variant of attempts) {
+    let q = supabase
+      .from("parts_new_public")
+      .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
+      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+      .ilike("compatible_vehicles", `%${opts.brand}%`)
+      .ilike("compatible_vehicles", `%${opts.model}%`)
+      .limit(limit);
+    if (variant) q = q.ilike("compatible_vehicles", `%${variant}%`);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    if (data?.length) return data;
+  }
+
+  const { data, error } = await supabase
+    .from("parts_new_public")
+    .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
+    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+    .ilike("compatible_vehicles", `%${opts.brand}%`)
+    .ilike("compatible_vehicles", `%${opts.model}%`)
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
 export async function fetchCategoriesForVehicle(brand: string, model: string, engine?: string): Promise<CategoryTile[]> {
   // Pull category column for matching parts
   let q = supabase
