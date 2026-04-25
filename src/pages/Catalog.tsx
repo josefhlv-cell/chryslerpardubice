@@ -464,6 +464,12 @@ const Catalog = () => {
               )}
             </div>
 
+            {jmWarning && !jmLoading && (
+              <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 text-[12px] text-amber-200/90">
+                ⚠️ {jmWarning}
+              </div>
+            )}
+
             <CatalogListing
               items={items}
               loading={listLoading && items.length === 0}
