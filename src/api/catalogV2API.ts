@@ -366,6 +366,35 @@ export type CatalogCategoryNode = {
   children?: CatalogCategoryNode[];
 };
 
+const DEFAULT_JM_CATEGORY_TREE: CatalogCategoryNode[] = [
+  {
+    id: "brakes", label: "Brzdové zařízení", level: 0, sectionId: null, path: ["Brzdové zařízení"],
+    keywords: ["brzd", "brake", "abs", "třmen", "trmen", "kotouč", "kotouc", "destičk", "destick"], count: 0,
+    children: [
+      {
+        id: "disc-brakes", label: "Kotoučové brzdy", level: 1, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy"],
+        keywords: ["brzd", "brake", "kotouč", "kotouc", "destičk", "destick", "třmen", "trmen"], count: 0,
+        children: [
+          { id: "brake-pads", label: "Brzdové destičky", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], keywords: ["destičk", "destick", "pad", "pads"], count: 0 },
+          { id: "brake-discs", label: "Brzdové kotouče", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové kotouče"], keywords: ["kotouč", "kotouc", "disc", "rotor"], count: 0 },
+          { id: "brake-calipers", label: "Brzdové třmeny", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové třmeny"], keywords: ["třmen", "trmen", "caliper"], count: 0 },
+        ],
+      },
+      { id: "brake-fluid", label: "Brzdová kapalina", level: 1, sectionId: null, path: ["Brzdové zařízení", "Brzdová kapalina"], keywords: ["brzdová kapalina", "brzdova kapalina", "brake fluid", "dot 3", "dot 4"], count: 0 },
+      { id: "abs", label: "ABS a snímače", level: 1, sectionId: null, path: ["Brzdové zařízení", "ABS a snímače"], keywords: ["abs", "snímač", "snimac", "sensor"], count: 0 },
+    ],
+  },
+  { id: "engine", label: "Motor", level: 0, sectionId: null, path: ["Motor"], keywords: ["motor", "engine", "rozvod", "svíčk", "svick", "těsnění", "tesneni"], count: 0 },
+  { id: "filters", label: "Filtry", level: 0, sectionId: null, path: ["Filtry"], keywords: ["filtr", "filter"], count: 0 },
+  { id: "cooling", label: "Chlazení", level: 0, sectionId: null, path: ["Chlazení"], keywords: ["chlad", "cool", "radiator", "termostat"], count: 0 },
+  { id: "suspension", label: "Odpružení a nápravy", level: 0, sectionId: null, path: ["Odpružení a nápravy"], keywords: ["odpruž", "odpruz", "tlumič", "tlumic", "náprav", "naprav", "rameno", "suspension"], count: 0 },
+  { id: "steering", label: "Řízení", level: 0, sectionId: null, path: ["Řízení"], keywords: ["řízení", "rizeni", "steer"], count: 0 },
+  { id: "transmission", label: "Převodovka", level: 0, sectionId: null, path: ["Převodovka"], keywords: ["převod", "prevod", "transmission", "gearbox"], count: 0 },
+  { id: "electrical", label: "Elektroinstalace", level: 0, sectionId: null, path: ["Elektroinstalace"], keywords: ["elektr", "alternátor", "alternator", "starter", "senzor"], count: 0 },
+  { id: "body", label: "Karoserie", level: 0, sectionId: null, path: ["Karoserie"], keywords: ["karoser", "body", "dveře", "dvere", "nárazník", "naraznik"], count: 0 },
+  { id: "hvac", label: "Klimatizace a topení", level: 0, sectionId: null, path: ["Klimatizace a topení"], keywords: ["klimat", "topen", "a/c", "hvac"], count: 0 },
+];
+
 function textKey(value: string | null | undefined): string {
   return String(value || "")
     .normalize("NFD")
