@@ -227,6 +227,8 @@ const Catalog = () => {
                 sectionId: category.sectionId,
                 category: category.label,
                 categoryKeywords: category.keywords,
+                parentKeywords:
+                  findNodeWithParent(categories, category.id)?.parent?.keywords || [],
               })
             : Promise.resolve({ items: [] as CatalogPart[], warning: undefined as string | undefined }),
         ]);
