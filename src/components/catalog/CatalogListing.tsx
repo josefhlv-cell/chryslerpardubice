@@ -16,13 +16,25 @@ interface Props {
 }
 
 const formatPrice = (n: number) =>
-  n > 0 ? new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n) : "Na objednávku";
+  n > 0 ? new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n) : "Cena na vyžádání";
+
+const SkeletonCard = () => (
+  <div className="flex gap-3 p-3 rounded-xl border border-border/30 bg-card animate-pulse">
+    <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/60" />
+    <div className="flex-1 space-y-2">
+      <div className="h-4 w-16 rounded bg-secondary/60" />
+      <div className="h-4 w-3/4 rounded bg-secondary/60" />
+      <div className="h-3 w-1/2 rounded bg-secondary/40" />
+      <div className="h-7 w-24 rounded bg-secondary/60 mt-3" />
+    </div>
+  </div>
+);
 
 const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
       </div>
     );
   }
