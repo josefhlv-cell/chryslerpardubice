@@ -11,10 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { globalOemSearch, type CatalogPart } from "@/api/catalogV2API";
 
-const formatPrice = (n: number) =>
-  n > 0
-    ? new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n)
-    : "Cena na vyžádání";
+const formatPrice = (n: number | null | undefined) =>
+  n === null || n === undefined
+    ? "Cena na vyžádání"
+    : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 interface Props {
   onOrder: (p: CatalogPart) => void;

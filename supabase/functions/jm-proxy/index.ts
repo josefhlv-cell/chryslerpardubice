@@ -160,7 +160,7 @@ const PRODUCT_CATEGORY_TREE: CategoryNode[] = [
         id: 'disc-brakes', label: 'Kotoučové brzdy', level: 1, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy'],
         keywords: ['brzd', 'brake', 'kotouč', 'kotouc', 'destičk', 'destick', 'třmen', 'trmen'], count: 0,
         children: [
-          { id: 'brake-pads', label: 'Brzdové destičky', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové destičky'], keywords: ['destičk', 'destick', 'pad', 'pads'], count: 0 },
+          { id: 'brake-pads', label: 'Brzdové destičky', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové destičky'], keywords: ['destičk', 'destick', 'brake pad', 'pads'], count: 0 },
           { id: 'brake-discs', label: 'Brzdové kotouče', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové kotouče'], keywords: ['kotouč', 'kotouc', 'disc', 'rotor'], count: 0 },
           { id: 'brake-calipers', label: 'Brzdové třmeny', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové třmeny'], keywords: ['třmen', 'trmen', 'caliper'], count: 0 },
         ],
@@ -870,14 +870,13 @@ Deno.serve(async (req) => {
           console.log('[searchByVehicle] Nextis byVehicle response: status=', raw?.status, 'items=', rawCount);
           let items = normalizeItems(raw)
             .filter((p) => isAllowedBrand(p.brand));
-          // Apply keyword filter only if it doesn't wipe everything out.
+          // Strict category enforcement: never widen to parent or vehicle-wide parts.
           if (categoryKeywords.length) {
             const kept = items.filter((p) => itemMatchesKeywords(p, categoryKeywords));
-            if (kept.length > 0) items = kept;
-            else if (parentKeywords.length) {
-              const keptParent = items.filter((p) => itemMatchesKeywords(p, parentKeywords));
-              if (keptParent.length > 0) items = keptParent;
+            if (kept.length === 0) {
+              console.warn('[searchByVehicle] strict category filter removed all engineID hits; returning empty category result');
             }
+            items = kept;
           }
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
@@ -925,28 +924,26 @@ Deno.serve(async (req) => {
           }
           const filtered = keywordsForFilter.length
             ? allRows.filter((r: any) => rowMatchesKeywords(r, keywordsForFilter))
-            : allRows;
+            : [];
           const codes = [...new Set(
             filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean),
           )];
+          console.log('[searchByVehicle] local OEM strict scope:', JSON.stringify({
+            selected_vehicle: nextisVehicleId,
+            selected_engine: engine,
+            selected_category: category,
+            useEngine,
+            keywordsForFilter,
+            rowsBeforeCategory: allRows.length,
+            rowsAfterCategory: filtered.length,
+          }));
           return { codes, matchedRows: filtered.length };
         };
 
-        // Cascading fallback ladder
+        // Strict category ladder: do not broaden to parent/no-engine/brand-model.
         const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
           { label: 'engine+subcat', useEngine: true,  keywords: categoryKeywords },
         ];
-        if (parentKeywords.length && parentKeywords !== categoryKeywords) {
-          ladder.push({ label: 'engine+parentcat', useEngine: true, keywords: parentKeywords });
-        }
-        if (engine) {
-          ladder.push({ label: 'no-engine+subcat', useEngine: false, keywords: categoryKeywords });
-          if (parentKeywords.length) {
-            ladder.push({ label: 'no-engine+parentcat', useEngine: false, keywords: parentKeywords });
-          }
-        }
-        // Last resort: just brand+model, no category filter (so user sees SOMETHING)
-        ladder.push({ label: 'brand-model-only', useEngine: false, keywords: [] });
 
         let oemCodes: string[] = [];
         let usedStep = 'none';
@@ -999,6 +996,7 @@ Deno.serve(async (req) => {
             let kept = 0;
             for (const it of items) {
               if (!it.oem_number) continue;
+              if (categoryKeywords.length && !itemMatchesKeywords(it, categoryKeywords)) continue;
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;

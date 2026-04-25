@@ -32,8 +32,8 @@ export type CatalogPart = {
   name: string;
   manufacturer: string | null;
   catalog_source: string; // 'mopar' | 'jm' | ...
-  price_without_vat: number;
-  price_with_vat: number;
+  price_without_vat: number | null;
+  price_with_vat: number | null;
   availability: string | null;
   image_urls: string[] | null;
   category: string | null;
@@ -99,8 +99,10 @@ function badgeFor(source: string | null | undefined): CatalogPart["badge_label"]
 function normalize(row: any): CatalogPart {
   const source = row.catalog_source || "mopar";
   const rank = rankFor(source);
-  const priceWithVat = Number(row.price_with_vat) || 0;
-  const priceWithoutVat = Number(row.price_without_vat) || (priceWithVat ? Math.round((priceWithVat / 1.21) * 100) / 100 : 0);
+  const priceWithVat = row.price_with_vat === null || row.price_with_vat === undefined ? null : Number(row.price_with_vat) || 0;
+  const priceWithoutVat = row.price_without_vat === null || row.price_without_vat === undefined
+    ? (priceWithVat && priceWithVat > 0 ? Math.round((priceWithVat / 1.21) * 100) / 100 : null)
+    : Number(row.price_without_vat) || 0;
   return {
     id: row.id,
     oem_number: row.oem_number,
@@ -167,7 +169,7 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
   let q = supabase
       .from("parts_new_public")
     .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
+        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
       { count: "exact" }
     )
     .in("catalog_source", ALLOWED_SOURCES as unknown as string[]);
@@ -375,7 +377,7 @@ const DEFAULT_JM_CATEGORY_TREE: CatalogCategoryNode[] = [
         id: "disc-brakes", label: "Kotoučové brzdy", level: 1, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy"],
         keywords: ["brzd", "brake", "kotouč", "kotouc", "destičk", "destick", "třmen", "trmen"], count: 0,
         children: [
-          { id: "brake-pads", label: "Brzdové destičky", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], keywords: ["destičk", "destick", "pad", "pads"], count: 0 },
+          { id: "brake-pads", label: "Brzdové destičky", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], keywords: ["destičk", "destick", "brake pad", "pads"], count: 0 },
           { id: "brake-discs", label: "Brzdové kotouče", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové kotouče"], keywords: ["kotouč", "kotouc", "disc", "rotor"], count: 0 },
           { id: "brake-calipers", label: "Brzdové třmeny", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové třmeny"], keywords: ["třmen", "trmen", "caliper"], count: 0 },
         ],
@@ -435,7 +437,7 @@ async function fetchLocalVehicleRows(opts: { brand: string; model: string; engin
   for (const variant of attempts) {
     let q = supabase
       .from("parts_new_public")
-      .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
+      .select("id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .ilike("compatible_vehicles", `%${opts.brand}%`)
       .ilike("compatible_vehicles", `%${opts.model}%`)
@@ -446,15 +448,8 @@ async function fetchLocalVehicleRows(opts: { brand: string; model: string; engin
     if (data?.length) return data;
   }
 
-  const { data, error } = await supabase
-    .from("parts_new_public")
-    .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
-    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
-    .ilike("compatible_vehicles", `%${opts.brand}%`)
-    .ilike("compatible_vehicles", `%${opts.model}%`)
-    .limit(limit);
-  if (error) throw new Error(error.message);
-  return data || [];
+  console.warn("[Catalog strict] no local rows for selected engine", opts);
+  return [];
 }
 
 export async function fetchCategoriesForVehicle(brand: string, model: string, engine?: string): Promise<CategoryTile[]> {
@@ -543,6 +538,15 @@ export async function listPartsForVehicle(opts: {
     );
     const slice = filtered.slice(from, to + 1);
     const items = slice.map(normalize).sort((a, b) => a.rank - b.rank);
+    console.log("[Catalog strict] OEM scoped result", {
+      selected_vehicle: opts.nextisVehicleId,
+      selected_engine: opts.engine,
+      selected_category: opts.canonicalCategory,
+      source: "OEM",
+      rowsBeforeCategory: rows.length,
+      rowsAfterCategory: filtered.length,
+      pricing: items.map((p) => ({ oem: p.oem_number, price_with_vat: p.price_with_vat, resolution: p.price_with_vat === null ? "null-price" : "db-value" })).slice(0, 10),
+    });
     return { items, total: filtered.length };
   }
 
@@ -568,9 +572,11 @@ type JmRawItem = {
 };
 
 function jmToCatalogPart(it: JmRawItem): CatalogPart {
-  const price_without_vat = Number(it.price_without_vat) || 0;
+  const price_without_vat = it.price_without_vat === null || it.price_without_vat === undefined ? null : Number(it.price_without_vat) || 0;
   const price_with_vat =
-    Number(it.price_with_vat) || Math.round(price_without_vat * 1.21 * 100) / 100;
+    it.price_with_vat === null || it.price_with_vat === undefined
+      ? (price_without_vat && price_without_vat > 0 ? Math.round(price_without_vat * 1.21 * 100) / 100 : null)
+      : Number(it.price_with_vat) || 0;
   return {
     id: `jm:${it.oem_number || crypto.randomUUID()}`,
     oem_number: String(it.oem_number || "").trim(),
@@ -677,7 +683,7 @@ export function mergeWithJm(base: CatalogPart[], jm: CatalogPart[]): CatalogPart
     if (seenJm.has(key)) return false;
     seenJm.add(key);
     // Show J+M with any positive price OR explicit availability
-    return p.price_with_vat > 0 || p.availability === "in_stock" || p.availability === "on_order";
+    return (p.price_with_vat ?? 0) > 0 || p.availability === "in_stock" || p.availability === "on_order";
   });
   return [...base, ...visibleJm].sort((a, b) => a.rank - b.rank);
 }
@@ -704,7 +710,7 @@ export async function globalOemSearch(query: string): Promise<{
     supabase
       .from("parts_new_public")
       .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description"
+        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description"
       )
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
@@ -729,7 +735,7 @@ export async function globalOemSearch(query: string): Promise<{
 
   // Dedup: hide J+M lines whose normalized OEM already exists as local OEM with same price
   const localOems = new Set(oem.map((p) => normalizeOem(p.oem_number)));
-  const jmFiltered = jm.filter((p) => !localOems.has(normalizeOem(p.oem_number)) || p.price_with_vat > 0);
+  const jmFiltered = jm.filter((p) => !localOems.has(normalizeOem(p.oem_number)) || (p.price_with_vat ?? 0) > 0);
 
   return { oem, jm: jmFiltered, merged: [...oem, ...jmFiltered].sort((a, b) => a.rank - b.rank) };
 }
