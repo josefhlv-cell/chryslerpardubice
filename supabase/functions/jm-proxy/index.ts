@@ -763,25 +763,27 @@ Deno.serve(async (req) => {
       case 'searchByVehicle': {
         // Strategy:
         // 1) If engineID is provided -> direct Nextis vehicle search.
-        // 2) Else fallback: pull all OEM codes from parts_new whose
-        //    compatible_vehicles matches brand/model/engine, then run
-        //    items-finding-by-code per code (small batch) to fetch the
-        //    actual J+M aftermarket parts for those OEMs.
-        // 3) If first OEM-fallback returns 0, retry without `engine` filter
-        //    (some local rows store generic compatibility text).
+        // 2) Else fallback: pull OEM codes from parts_new (brand+model fuzzy
+        //    engine match), then run items-finding-by-code per code with
+        //    searchTarget=CodeOE so Nextis searches OE catalog (not P-codes).
+        // 3) Cascading fallbacks: full keyword filter -> drop engine ->
+        //    drop subcategory keywords (use parent category) -> drop category.
         const engineID = Number(payload.engineID || 0);
         const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
         let brand = String(payload.brand || '').trim();
         let model = String(payload.model || '').trim();
         let engine = String(payload.engine || '').trim();
-        // Phase 1: category is accepted but used only for diagnostics / future
-        // section-id mapping. We do NOT filter by it yet.
         const category = String(payload.category || '').trim();
         const sectionId = Number(payload.sectionId || 0);
         const categoryKeywords: string[] = Array.isArray(payload.categoryKeywords)
           ? payload.categoryKeywords.map((k: unknown) => String(k).trim()).filter(Boolean)
           : [];
+        // Optional broader keywords (parent category) used as secondary fallback.
+        const parentKeywords: string[] = Array.isArray(payload.parentKeywords)
+          ? payload.parentKeywords.map((k: unknown) => String(k).trim()).filter(Boolean)
+          : [];
 
+        let resolvedExternalId: string | null = null;
         if (nextisVehicleId) {
           const { data: v } = await adminClient
             .from('nextis_vehicles')
@@ -792,26 +794,65 @@ Deno.serve(async (req) => {
             brand = String(v.brand || brand).trim();
             model = String(v.model || model).trim();
             engine = String(v.engine || engine).trim();
+            resolvedExternalId = v.external_id ? String(v.external_id).trim() : null;
           }
         }
 
-        console.log('[searchByVehicle] payload:', { engineID, nextisVehicleId, sectionId, brand, model, engine, category, categoryKeywords });
+        // Build engine variants to handle "3.6 V6" vs "3.6L V6" mismatch.
+        const engineVariants = (() => {
+          if (!engine) return [] as string[];
+          const out = new Set<string>([engine]);
+          // Add "3.6L V6" form (insert L after the displacement number)
+          out.add(engine.replace(/^(\d+\.\d+)(\s)/, '$1L$2'));
+          // Strip the L: "3.6L V6" -> "3.6 V6"
+          out.add(engine.replace(/^(\d+\.\d+)L(\s)/, '$1$2'));
+          // Just the displacement number ("3.6") as last resort
+          const m = engine.match(/^(\d+\.\d+)/);
+          if (m) out.add(m[1]);
+          return [...out].filter(Boolean);
+        })();
 
-        if (engineID > 0) {
-          const raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
-            engineID,
+        // Numeric Nextis engineID — prefer payload, fall back to external_id from DB.
+        const effectiveEngineID = engineID > 0
+          ? engineID
+          : (resolvedExternalId && /^\d+$/.test(resolvedExternalId) ? Number(resolvedExternalId) : 0);
+
+        console.log('[searchByVehicle] params:', JSON.stringify({
+          nextisVehicleId, sectionId, brand, model, engine, engineVariants,
+          payloadEngineID: engineID, resolvedExternalId, effectiveEngineID,
+          category, categoryKeywords, parentKeywords,
+        }));
+
+        if (effectiveEngineID > 0) {
+          const reqBody = {
+            engineID: effectiveEngineID,
             genArtID: sectionId > 0 ? sectionId : 0,
             getOECodes: true,
             target: 'P',
-          });
-          const items = normalizeItems(raw)
-            .filter((p) => isAllowedBrand(p.brand))
-            .filter((p) => itemMatchesKeywords(p, categoryKeywords));
+          };
+          console.log('[searchByVehicle] Nextis byVehicle request:', JSON.stringify(reqBody));
+          const raw = await nextisPost('/catalogs/items-finding-by-vehicle', reqBody);
+          const rawCount = (raw?.items || raw?.Items || []).length;
+          console.log('[searchByVehicle] Nextis byVehicle response: status=', raw?.status, 'items=', rawCount);
+          let items = normalizeItems(raw)
+            .filter((p) => isAllowedBrand(p.brand));
+          // Apply keyword filter only if it doesn't wipe everything out.
+          if (categoryKeywords.length) {
+            const kept = items.filter((p) => itemMatchesKeywords(p, categoryKeywords));
+            if (kept.length > 0) items = kept;
+            else if (parentKeywords.length) {
+              const keptParent = items.filter((p) => itemMatchesKeywords(p, parentKeywords));
+              if (keptParent.length > 0) items = keptParent;
+            }
+          }
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
             if (codes.length) await enrichPricesIntoDb(adminClient, codes);
           } catch (_) { /* non-blocking */ }
-          result = { items, mode: 'engineID', engineID, category, totalRawHits: items.length };
+          result = {
+            items, mode: 'engineID', engineID: effectiveEngineID,
+            sectionId: sectionId || 0, category, totalRawHits: rawCount,
+          };
           break;
         }
 
@@ -820,57 +861,106 @@ Deno.serve(async (req) => {
           break;
         }
 
-        // OEM-fallback helper: query local catalog for matching OEM codes
-        const queryLocalOemCodes = async (useEngine: boolean): Promise<string[]> => {
-          let q = adminClient
-            .from('parts_new')
-            .select('oem_number, name, category, description')
-            .ilike('compatible_vehicles', `%${brand}%`)
-            .ilike('compatible_vehicles', `%${model}%`)
-            .limit(200);
-          if (useEngine && engine) q = q.ilike('compatible_vehicles', `%${engine}%`);
-          const { data: rows, error } = await q;
-          if (error) {
-            console.warn('[searchByVehicle] oem lookup error:', error.message);
-            return [];
+        // OEM-fallback helper: query local catalog for matching OEM codes.
+        // Tries multiple engine variants ("3.6 V6" / "3.6L V6" / "3.6").
+        const queryLocalOemCodes = async (
+          useEngine: boolean,
+          keywordsForFilter: string[],
+        ): Promise<{ codes: string[]; matchedRows: number }> => {
+          const variantsToTry = useEngine && engineVariants.length
+            ? engineVariants
+            : [null];
+          const allRows: any[] = [];
+          for (const variant of variantsToTry) {
+            let q = adminClient
+              .from('parts_new')
+              .select('oem_number, name, category, description, compatible_vehicles')
+              .ilike('compatible_vehicles', `%${brand}%`)
+              .ilike('compatible_vehicles', `%${model}%`)
+              .limit(500);
+            if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
+            const { data: rows, error } = await q;
+            if (error) {
+              console.warn('[searchByVehicle] oem lookup error:', error.message);
+              continue;
+            }
+            if (rows?.length) {
+              allRows.push(...rows);
+              break; // first variant that returns data wins
+            }
           }
-          const filtered = (rows || []).filter((r: any) => rowMatchesKeywords(r, categoryKeywords));
-          return [...new Set(filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
+          const filtered = keywordsForFilter.length
+            ? allRows.filter((r: any) => rowMatchesKeywords(r, keywordsForFilter))
+            : allRows;
+          const codes = [...new Set(
+            filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean),
+          )];
+          return { codes, matchedRows: filtered.length };
         };
 
-        // First attempt: with engine filter
-        let oemCodes = await queryLocalOemCodes(true);
-        let usedEngineFilter = true;
+        // Cascading fallback ladder
+        const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
+          { label: 'engine+subcat', useEngine: true,  keywords: categoryKeywords },
+        ];
+        if (parentKeywords.length && parentKeywords !== categoryKeywords) {
+          ladder.push({ label: 'engine+parentcat', useEngine: true, keywords: parentKeywords });
+        }
+        if (engine) {
+          ladder.push({ label: 'no-engine+subcat', useEngine: false, keywords: categoryKeywords });
+          if (parentKeywords.length) {
+            ladder.push({ label: 'no-engine+parentcat', useEngine: false, keywords: parentKeywords });
+          }
+        }
+        // Last resort: just brand+model, no category filter (so user sees SOMETHING)
+        ladder.push({ label: 'brand-model-only', useEngine: false, keywords: [] });
 
-        // Second attempt: drop engine filter
-        if (oemCodes.length === 0 && engine) {
-          console.log('[searchByVehicle] retrying without engine filter');
-          oemCodes = await queryLocalOemCodes(false);
-          usedEngineFilter = false;
+        let oemCodes: string[] = [];
+        let usedStep = 'none';
+        for (const step of ladder) {
+          const { codes, matchedRows } = await queryLocalOemCodes(step.useEngine, step.keywords);
+          console.log(`[searchByVehicle] ladder=${step.label} matchedRows=${matchedRows} codes=${codes.length}`);
+          if (codes.length > 0) {
+            oemCodes = codes;
+            usedStep = step.label;
+            break;
+          }
         }
 
         oemCodes = oemCodes.slice(0, 40);
-        console.log(`[searchByVehicle] derived ${oemCodes.length} OEM codes for ${brand} ${model}${engine ? ' ' + engine : ''} (engineFilter=${usedEngineFilter})`);
+        console.log(`[searchByVehicle] derived ${oemCodes.length} OEM codes for ${brand} ${model}${engine ? ' ' + engine : ''} (step=${usedStep})`);
 
         if (oemCodes.length === 0) {
           result = {
             items: [],
             mode: 'oem-fallback',
             warning: `Žádné lokální OEM kódy pro ${brand} ${model}${engine ? ' ' + engine : ''}. Aftermarket dotaz na J+M přeskočen — chybí seed v parts_new.`,
-            triedBrand: brand, triedModel: model, triedEngine: engine, category,
+            triedBrand: brand, triedModel: model, triedEngine: engine, category, usedStep,
           };
           break;
         }
 
-        // Run items-finding-by-code per OEM (parallel, capped)
+        // Run items-finding-by-code per OEM. CRITICAL: searchTarget='CodeOE' so
+        // Nextis matches against OE codes (Mopar OEMs), not their internal
+        // product codes.
         const seen = new Set<string>();
         const collected: any[] = [];
+        const codeAttempts: Array<{ code: string; raw: number; kept: number }> = [];
         const batches: Promise<void>[] = oemCodes.map(async (code) => {
           try {
-            const raw = await nextisPost('/catalogs/items-finding-by-code', {
-              code, getOECodes: true,
-            });
+            const reqBody = {
+              code,
+              searchTarget: 'CodeOE',
+              trySearchWithoutManufacturer: true,
+              getOECodes: true,
+              getDeposits: false,
+              getServices: false,
+              getCashBack: false,
+              getEANCodes: false,
+            };
+            const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody);
+            const rawList = raw?.items || raw?.Items || [];
             const items = normalizeItems(raw);
+            let kept = 0;
             for (const it of items) {
               if (!it.oem_number) continue;
               const key = it.oem_number.toUpperCase();
@@ -878,12 +968,20 @@ Deno.serve(async (req) => {
               if (!isAllowedBrand(it.brand)) continue;
               seen.add(key);
               collected.push({ ...it, category: category || it.category });
+              kept++;
             }
+            codeAttempts.push({ code, raw: rawList.length, kept });
           } catch (e) {
             console.warn('[searchByVehicle] code search failed for', code, (e as Error).message);
+            codeAttempts.push({ code, raw: -1, kept: 0 });
           }
         });
         await Promise.all(batches);
+
+        // Log a summary of attempts (first 10 for brevity)
+        console.log('[searchByVehicle] code attempts (first 10):', JSON.stringify(codeAttempts.slice(0, 10)));
+        const totalRaw = codeAttempts.reduce((s, a) => s + Math.max(0, a.raw), 0);
+        console.log(`[searchByVehicle] result: codesQueried=${oemCodes.length} totalRaw=${totalRaw} kept=${collected.length}`);
 
         try {
           const codes = collected.map((i) => i.oem_number).filter(Boolean);
@@ -895,7 +993,8 @@ Deno.serve(async (req) => {
           mode: 'oem-fallback',
           codesQueried: oemCodes.length,
           totalRawHits: collected.length,
-          usedEngineFilter,
+          totalNextisHits: totalRaw,
+          usedStep,
           triedBrand: brand, triedModel: model, triedEngine: engine, category,
         };
         break;
