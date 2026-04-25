@@ -310,30 +310,45 @@ Deno.serve(async (req) => {
         break;
       }
       case 'searchByCode': {
-        // payload: { code: string }
-        const raw = await nextisCall('/api/v1/Catalogs/ItemFindingByCode', {
+        const candidates = [
+          '/common/itemFindingByCode',
+          '/catalog/itemFindingByCode',
+          '/api/v1/Catalogs/ItemFindingByCode',
+        ];
+        const r = await nextisTry(candidates, {
           Code: payload.code,
           CustomerNumber: Deno.env.get('JM_CUST_NO'),
         });
-        result = { items: normalizeItems(raw) };
+        if (!r) { result = { items: [], warning: 'No Nextis search endpoint reachable', tried: candidates }; break; }
+        result = { items: normalizeItems(r.data), endpoint: r.path };
         break;
       }
       case 'searchByVehicle': {
-        // payload: { vin?, brand?, model?, year? }
-        const raw = await nextisCall('/api/v1/Catalogs/ItemFindingByVehicle', {
+        const candidates = [
+          '/common/itemFindingByVehicle',
+          '/catalog/itemFindingByVehicle',
+          '/api/v1/Catalogs/ItemFindingByVehicle',
+        ];
+        const r = await nextisTry(candidates, {
           ...payload,
           CustomerNumber: Deno.env.get('JM_CUST_NO'),
         });
-        result = { items: normalizeItems(raw) };
+        if (!r) { result = { items: [], warning: 'No Nextis vehicle search endpoint reachable', tried: candidates }; break; }
+        result = { items: normalizeItems(r.data), endpoint: r.path };
         break;
       }
       case 'priceAndStock': {
-        // payload: { codes: string[] }
-        const raw = await nextisCall('/api/v1/Catalogs/GetItemPriceAndStock', {
+        const candidates = [
+          '/common/getItemPriceAndStock',
+          '/catalog/getItemPriceAndStock',
+          '/api/v1/Catalogs/GetItemPriceAndStock',
+        ];
+        const r = await nextisTry(candidates, {
           Codes: payload.codes,
           CustomerNumber: Deno.env.get('JM_CUST_NO'),
         });
-        result = { items: raw };
+        if (!r) { result = { items: [], warning: 'No Nextis price endpoint reachable', tried: candidates }; break; }
+        result = { items: r.data, endpoint: r.path };
         break;
       }
       default:
