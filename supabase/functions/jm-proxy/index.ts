@@ -983,6 +983,8 @@ Deno.serve(async (req) => {
           try {
             const reqBody = {
               code,
+              genArtID: sectionId > 0 ? sectionId : 0,
+              target: 'P',
               searchTarget: 'CodeOE',
               trySearchWithoutManufacturer: true,
               getOECodes: true,
@@ -1016,6 +1018,18 @@ Deno.serve(async (req) => {
         console.log('[searchByVehicle] code attempts (first 10):', JSON.stringify(codeAttempts.slice(0, 10)));
         const totalRaw = codeAttempts.reduce((s, a) => s + Math.max(0, a.raw), 0);
         console.log(`[searchByVehicle] result: codesQueried=${oemCodes.length} totalRaw=${totalRaw} kept=${collected.length}`);
+
+        if (collected.length === 0) {
+          const { codes, matchedRows } = await queryLocalOemCodes(false, categoryKeywords.length ? categoryKeywords : parentKeywords);
+          if (codes.length) {
+            const { data: fallbackRows } = await adminClient
+              .from('parts_new')
+              .select('oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, compatible_vehicles')
+              .in('oem_number', codes.slice(0, 30));
+            for (const row of fallbackRows || []) collected.push(localRowToUnifiedPart(row, category));
+            console.warn(`[searchByVehicle] Nextis returned 0; using local OEM visible fallback rows=${fallbackRows?.length || 0}, matchedRows=${matchedRows}`);
+          }
+        }
 
         try {
           const codes = collected.map((i) => i.oem_number).filter(Boolean);
