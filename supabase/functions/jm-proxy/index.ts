@@ -373,6 +373,15 @@ Deno.serve(async (req) => {
       }
 
       case 'syncCategories': {
+        // Restricted: cron (server key) OR authenticated admin
+        if (!isServerKey) {
+          const { data: isAdmin } = await adminClient.rpc('has_role', { _user_id: userId, _role: 'admin' });
+          if (!isAdmin) {
+            return new Response(JSON.stringify({ success: false, error: 'Admin role required' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
         const seed = await seedVehicleTree(adminClient);
         result = {
           synced: seed.insertedNodes,
