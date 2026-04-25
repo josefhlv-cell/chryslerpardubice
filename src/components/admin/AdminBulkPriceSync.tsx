@@ -99,12 +99,30 @@ const AdminBulkPriceSync = () => {
     let offset = 0;
     let hasMore = true;
     let consecutiveLockFails = 0;
+    let consecutive503s = 0;
 
     while (hasMore && !stopRef.current) {
       try {
         const { data, error } = await supabase.functions.invoke("price-sync", {
           body: { batchSize: BATCH_SIZE, offset, mode },
         });
+
+        // Detect transient runtime 503 (edge instance recycled / cold start / OOM)
+        const errMsg = error ? (error.message || String(error)) : "";
+        const is503 = errMsg.includes("503") || errMsg.includes("temporarily unavailable") || errMsg.includes("non-2xx") || errMsg.includes("Failed to send");
+        if (error && is503) {
+          consecutive503s++;
+          if (consecutive503s >= 5) {
+            toast({ title: "Edge funkce nedostupná", description: "Price-sync opakovaně selhává (503). Zkuste znovu za chvíli.", variant: "destructive" });
+            break;
+          }
+          // Exponential backoff: 3s, 6s, 12s, 24s, 48s
+          const wait = Math.min(48000, 3000 * Math.pow(2, consecutive503s - 1));
+          console.warn(`[price-sync] 503 transient, retrying in ${wait}ms (attempt ${consecutive503s}/5)`);
+          await new Promise(r => setTimeout(r, wait));
+          continue;
+        }
+        consecutive503s = 0;
 
         if (error) throw error;
 
