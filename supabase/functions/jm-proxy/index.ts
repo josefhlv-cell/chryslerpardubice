@@ -19,18 +19,39 @@ const corsHeaders = {
 
 const BASE_URL = 'https://api.jmautodily.nextis.cz';
 
-const US_BRANDS = [
+// Blacklist-first approach: any brand passes UNLESS it's explicitly banned.
+// Rationale: if a part matches the OEM code, it's relevant to the customer.
+const BLACKLISTED_BRANDS = [
+  'starline', // explicit business rule (low quality)
+];
+
+// Kept for reference / potential UI badges, but no longer used to filter out.
+const PREFERRED_BRANDS = [
+  // OEM / US
   'chrysler', 'dodge', 'jeep', 'ram', 'cadillac', 'chevrolet', 'chevy',
   'gmc', 'buick', 'ford', 'lincoln', 'mercury', 'pontiac', 'hummer',
   'tesla', 'oldsmobile', 'plymouth', 'saturn', 'mopar',
+  // Universal premium
+  'bosch', 'mann', 'mahle', 'denso', 'ngk', 'gates', 'febi', 'valeo',
+  'sachs', 'lemforder', 'trw', 'brembo', 'monroe', 'bilstein',
+  // Major aftermarket
+  'as-pl', 'as pl', 'aspl', 'blue print', 'blueprint', 'swag', 'meyle',
+  'hella', 'delphi', 'magneti marelli', 'marelli', 'filtron', 'champion',
+  // US specialists
+  'febest', 'moog', 'raybestos', 'cardone', 'standard motor products',
+  'standard', 'walker',
 ];
-const UNIVERSAL_BRANDS = ['bosch', 'mann', 'mahle', 'denso', 'ngk', 'gates', 'febi', 'valeo', 'sachs', 'lemforder', 'trw', 'brembo', 'monroe', 'bilstein'];
-const ALLOWED_BRANDS = ['chrysler', 'dodge', 'ram', 'cadillac', 'lancia'];
 
-function isUsBrand(producer: string | null | undefined): boolean {
-  if (!producer) return true;
+function isBlacklisted(producer: string | null | undefined): boolean {
+  if (!producer) return false;
   const p = producer.toLowerCase().trim();
-  return US_BRANDS.some((b) => p.includes(b)) || UNIVERSAL_BRANDS.some((b) => p.includes(b));
+  return BLACKLISTED_BRANDS.some((b) => p.includes(b));
+}
+
+// Backwards-compat name still used in a couple of call sites.
+// Returns TRUE = keep the part. We now keep everything except blacklisted brands.
+function isUsBrand(producer: string | null | undefined): boolean {
+  return !isBlacklisted(producer);
 }
 
 // ---------- token cache ----------
