@@ -543,6 +543,10 @@ export async function fetchJmForVehicle(opts: {
   engine?: string;
   year?: number;
   engineID?: number;
+  nextisVehicleId?: string;
+  sectionId?: number | null;
+  category?: string;
+  categoryKeywords?: string[];
 }): Promise<{ items: CatalogPart[]; warning?: string; mode?: string; codesQueried?: number }> {
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
@@ -554,6 +558,10 @@ export async function fetchJmForVehicle(opts: {
           engine: opts.engine,
           year: opts.year,
           engineID: opts.engineID,
+          nextisVehicleId: opts.nextisVehicleId,
+          sectionId: opts.sectionId,
+          category: opts.category,
+          categoryKeywords: opts.categoryKeywords,
         },
       },
     });
