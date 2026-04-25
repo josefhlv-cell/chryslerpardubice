@@ -271,32 +271,58 @@ function extractEngine(s: string, brand: string, model: string): string | null {
 }
 
 export async function fetchBrands(): Promise<string[]> {
-  return ALLOWED_BRANDS.slice() as string[];
+  // Source of truth: nextis_vehicles. Intersect with whitelist, fallback to whitelist if empty.
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("brand")
+    .in("brand", ALLOWED_BRANDS as unknown as string[]);
+  if (error) {
+    console.warn("[fetchBrands] nextis_vehicles error, falling back to whitelist:", error.message);
+    return ALLOWED_BRANDS.slice() as string[];
+  }
+  const present = new Set((data || []).map((r: any) => r.brand));
+  const ordered = (ALLOWED_BRANDS as readonly string[]).filter((b) => present.has(b));
+  return ordered.length > 0 ? ordered : (ALLOWED_BRANDS.slice() as string[]);
 }
 
 export async function fetchModelsForBrand(brand: string): Promise<string[]> {
-  const rows = await fetchAllCompatible({ brand });
+  // Clean source: nextis_vehicles only. No regex on free-text strings.
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("model")
+    .ilike("brand", brand)
+    .not("model", "is", null)
+    .order("model", { ascending: true });
+  if (error) {
+    console.error("[fetchModelsForBrand]", error.message);
+    return [];
+  }
   const set = new Set<string>();
-  const re = new RegExp(`^${brand}\\s+([A-Za-z0-9-]+(?:\\s+[A-Za-z0-9-]+)?)`, "i");
-  for (const s of rows) {
-    const m = s.match(re);
-    if (m) {
-      // Drop trailing engine token from model if present
-      const candidate = m[1].replace(ENGINE_RE, "").trim();
-      if (candidate) set.add(candidate);
-    }
+  for (const r of data || []) {
+    const m = (r as any).model?.toString().trim();
+    if (m) set.add(m);
   }
   return Array.from(set).sort();
 }
 
 export async function fetchEnginesForModel(brand: string, model: string): Promise<string[]> {
-  const rows = await fetchAllCompatible({ brand, model });
-  const set = new Set<string>();
-  for (const s of rows) {
-    const eng = extractEngine(s, brand, model);
-    if (eng) set.add(eng);
+  // Clean source: nextis_vehicles. Returns distinct engine strings for the brand+model.
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("engine")
+    .ilike("brand", brand)
+    .ilike("model", model)
+    .not("engine", "is", null)
+    .order("engine", { ascending: true });
+  if (error) {
+    console.error("[fetchEnginesForModel]", error.message);
+    return [];
   }
-  // Always include "Vše" implicitly via UI
+  const set = new Set<string>();
+  for (const r of data || []) {
+    const e = (r as any).engine?.toString().trim();
+    if (e) set.add(e);
+  }
   return Array.from(set).sort();
 }
 
