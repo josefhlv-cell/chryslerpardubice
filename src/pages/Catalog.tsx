@@ -339,7 +339,8 @@ const Catalog = () => {
   };
 
   const goBack = () => {
-    if (step === "parts") setCategory("");
+    if (step === "parts") setCategory(null);
+    else if (step === "category" && categoryPath.length > 0) setCategoryPath((path) => path.slice(0, -1));
     else if (step === "category") setEngine("");
     else if (step === "engine") setModel("");
     else if (step === "model") setBrand("");
@@ -349,10 +350,21 @@ const Catalog = () => {
     setBrand("");
     setModel("");
     setEngine("");
-    setCategory("");
+    setSelectedVehicleId("");
+    setCategory(null);
+    setCategoryPath([]);
+    setCategoryQuery("");
   };
 
-  const breadcrumb = [brand, model, engine, category].filter(Boolean);
+  const breadcrumb = [brand, model, engine, category?.label].filter(Boolean);
+  const visibleCategories = categoryQuery.trim()
+    ? flattenCategoryTree(categories).filter((node) =>
+        [node.label, ...node.path, ...node.keywords]
+          .join(" ")
+          .toLowerCase()
+          .includes(categoryQuery.trim().toLowerCase())
+      )
+    : getCategoryLevel(categories, categoryPath);
 
   return (
     <div className="min-h-screen pb-24 lg:pb-8 bg-background">
