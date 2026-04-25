@@ -148,12 +148,29 @@ const Catalog = () => {
 
   useEffect(() => {
     if (!brand || !model || !engine) {
+      setVehicles([]);
+      setSelectedVehicleId("");
       setCategories([]);
+      setCategoryPath([]);
       return;
     }
     setLoading(true);
-    fetchCategoriesForVehicle(brand, model, engine)
-      .then(setCategories)
+    fetchNextisVehicles(brand, model)
+      .then(async (rows) => {
+        setVehicles(rows);
+        const vehicle = rows.find((v) => v.engine === engine) || rows[0];
+        const vehicleId = vehicle?.id || "";
+        setSelectedVehicleId(vehicleId);
+        setCategoryPath([]);
+        setCategory(null);
+        setCategoryQuery("");
+        if (!vehicleId) {
+          setCategories([]);
+          return;
+        }
+        const tree = await fetchJmCategoryTree({ nextisVehicleId: vehicleId, brand, model, engine });
+        setCategories(tree);
+      })
       .catch((e) => toast.error("Nelze načíst kategorie: " + e.message))
       .finally(() => setLoading(false));
   }, [brand, model, engine]);
