@@ -266,8 +266,8 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           }
         }
 
-        // Merge both J+M streams (vehicle-search + by-codes)
-        const allJm = [...jmByCodes, ...filteredJmVehicle];
+        // Merge both J+M streams, but keep the selected category scope strict.
+        const allJm = [...jmByCodes.filter((p) => partMatchesNode(p, category)), ...filteredJmVehicle];
         if (cancelled) return;
         setJmCount(allJm.length);
         const merged = mergeWithJm(oemItems, allJm);
@@ -285,7 +285,13 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         }
 
         if (oemItems.length === 0 && allJm.length === 0) {
-          console.log("[Catalog] Empty: no OEM, no J+M for this category");
+          console.log("[Catalog strict] Empty scoped category result", {
+            selected_vehicle: selectedVehicleId,
+            selected_engine: engine,
+            selected_category: category.label,
+            jmStatus: jmVehiclePayload.warning || "ok-zero-results",
+            fallback_reason: "none-cross-category-fallback-disabled",
+          });
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -329,7 +335,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         part_id: isLiveJm ? null : p.id,
         order_type: "new" as const,
         quantity: 1,
-        unit_price: p.price_without_vat,
+        unit_price: p.price_without_vat ?? null,
         part_name: p.name,
         oem_number: p.oem_number,
         catalog_source: p.catalog_source,
