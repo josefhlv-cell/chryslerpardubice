@@ -502,3 +502,55 @@ export function mergeWithJm(base: CatalogPart[], jm: CatalogPart[]): CatalogPart
   });
   return [...base, ...visibleJm].sort((a, b) => a.rank - b.rank);
 }
+
+// ============================================================
+// Phase 5: GLOBAL OEM SEARCH
+// Hybrid: parallel local parts_new lookup + live J+M searchByCode.
+// OEM (rank 1) always pinned to top; J+M alternatives below with NÁHRADA badge.
+// ============================================================
+function normalizeOem(s: string): string {
+  return (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+}
+
+export async function globalOemSearch(query: string): Promise<{
+  oem: CatalogPart[];
+  jm: CatalogPart[];
+  merged: CatalogPart[];
+}> {
+  const q = query.trim();
+  if (!q) return { oem: [], jm: [], merged: [] };
+  const norm = normalizeOem(q);
+
+  const [localRes, jmRes] = await Promise.allSettled([
+    supabase
+      .from("parts_new")
+      .select(
+        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description"
+      )
+      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+      .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
+      .limit(40),
+    supabase.functions.invoke("jm-proxy", {
+      body: { action: "searchByCode", payload: { code: q } },
+    }),
+  ]);
+
+  const oem: CatalogPart[] =
+    localRes.status === "fulfilled" && localRes.value.data
+      ? (localRes.value.data as any[]).map(normalize).sort((a, b) => a.rank - b.rank)
+      : [];
+
+  const jmRaw =
+    jmRes.status === "fulfilled" && (jmRes.value as any)?.data?.success
+      ? ((jmRes.value as any).data.data?.items || [])
+      : [];
+  const jm: CatalogPart[] = (jmRaw as JmRawItem[])
+    .map(jmToCatalogPart)
+    .filter((p) => p.oem_number);
+
+  // Dedup: hide J+M lines whose normalized OEM already exists as local OEM with same price
+  const localOems = new Set(oem.map((p) => normalizeOem(p.oem_number)));
+  const jmFiltered = jm.filter((p) => !localOems.has(normalizeOem(p.oem_number)) || p.price_with_vat > 0);
+
+  return { oem, jm: jmFiltered, merged: [...oem, ...jmFiltered].sort((a, b) => a.rank - b.rank) };
+}

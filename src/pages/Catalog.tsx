@@ -23,6 +23,7 @@ import {
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
 import CatalogListing from "@/components/catalog/CatalogListing";
+import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
 
 const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
 
@@ -298,6 +299,8 @@ const Catalog = () => {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 py-8">
+        <GlobalOEMSearch onOrder={handleOrder} />
+
         <div className="mb-6">
           <h2 className="text-base md:text-lg font-semibold tracking-tight">{stepTitle[step]}</h2>
         </div>
