@@ -627,31 +627,97 @@ Deno.serve(async (req) => {
       }
 
       case 'searchByVehicle': {
-        // Nextis requires engineID (integer). We don't have one until the user
-        // picks an engine in the local tree, so we fall back to brand+model
-        // search via items-finding-by-code using the model name as a free hint.
+        // Strategy:
+        // 1) If engineID is provided -> direct Nextis vehicle search.
+        // 2) Else fallback: pull all OEM codes from parts_new whose
+        //    compatible_vehicles matches brand/model/engine, then run
+        //    items-finding-by-code per code (small batch) to fetch the
+        //    actual J+M aftermarket parts for those OEMs.
         const engineID = Number(payload.engineID || 0);
-        let raw: any;
+        const brand = String(payload.brand || '').trim();
+        const model = String(payload.model || '').trim();
+        const engine = String(payload.engine || '').trim();
+
+        console.log('[searchByVehicle] payload:', { engineID, brand, model, engine });
+
         if (engineID > 0) {
-          raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
+          const raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
             engineID,
             getOECodes: true,
           });
-        } else {
-          // Soft fallback: search by brand+model string against item-finding-by-code
-          const hint = [payload.brand, payload.model].filter(Boolean).join(' ').trim();
-          if (!hint) { result = { items: [], warning: 'engineID or brand+model required' }; break; }
-          raw = await nextisPost('/catalogs/items-finding-by-code', {
-            code: hint,
-            getOECodes: true,
-          });
+          const items = normalizeItems(raw).filter((p) => isUsBrand(p.brand));
+          try {
+            const codes = items.map((i) => i.oem_number).filter(Boolean);
+            if (codes.length) await enrichPricesIntoDb(adminClient, codes);
+          } catch (_) { /* non-blocking */ }
+          result = { items, mode: 'engineID', engineID, totalRawHits: items.length };
+          break;
         }
-        const items = normalizeItems(raw);
+
+        if (!brand || !model) {
+          result = { items: [], warning: 'brand+model required when engineID missing' };
+          break;
+        }
+
+        // Fallback: derive OEM codes from local catalog
+        let q = adminClient
+          .from('parts_new')
+          .select('oem_number')
+          .ilike('compatible_vehicles', `%${brand}%`)
+          .ilike('compatible_vehicles', `%${model}%`)
+          .limit(120);
+        if (engine) q = q.ilike('compatible_vehicles', `%${engine}%`);
+        const { data: oemRows, error: oemErr } = await q;
+        if (oemErr) console.warn('[searchByVehicle] oem lookup error:', oemErr.message);
+
+        const oemCodes = [...new Set((oemRows || []).map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))].slice(0, 40);
+        console.log(`[searchByVehicle] derived ${oemCodes.length} OEM codes for ${brand} ${model} ${engine}`);
+
+        if (oemCodes.length === 0) {
+          result = {
+            items: [],
+            mode: 'oem-fallback',
+            warning: `Žádné lokální OEM kódy pro ${brand} ${model}${engine ? ' ' + engine : ''}`,
+            triedBrand: brand, triedModel: model, triedEngine: engine,
+          };
+          break;
+        }
+
+        // Run items-finding-by-code per OEM (parallel, capped)
+        const seen = new Set<string>();
+        const collected: any[] = [];
+        const batches: Promise<void>[] = oemCodes.map(async (code) => {
+          try {
+            const raw = await nextisPost('/catalogs/items-finding-by-code', {
+              code, getOECodes: true,
+            });
+            const items = normalizeItems(raw);
+            for (const it of items) {
+              if (!it.oem_number) continue;
+              const key = it.oem_number.toUpperCase();
+              if (seen.has(key)) continue;
+              if (!isUsBrand(it.brand)) continue;
+              seen.add(key);
+              collected.push(it);
+            }
+          } catch (e) {
+            console.warn('[searchByVehicle] code search failed for', code, (e as Error).message);
+          }
+        });
+        await Promise.all(batches);
+
         try {
-          const codes = items.map((i) => i.oem_number).filter(Boolean);
+          const codes = collected.map((i) => i.oem_number).filter(Boolean);
           if (codes.length) await enrichPricesIntoDb(adminClient, codes);
         } catch (_) { /* non-blocking */ }
-        result = { items, status: raw?.status, statusText: raw?.statusText };
+
+        result = {
+          items: collected,
+          mode: 'oem-fallback',
+          codesQueried: oemCodes.length,
+          totalRawHits: collected.length,
+          triedBrand: brand, triedModel: model, triedEngine: engine,
+        };
         break;
       }
 
