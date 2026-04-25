@@ -416,6 +416,107 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'diagnose': {
+        // EMERGENCY DEBUG — prove the API can return ANY part.
+        const credCheck = {
+          hasLogin: !!Deno.env.get('JM_LOGIN'),
+          hasPass: !!Deno.env.get('JM_PASS'),
+          hasCustNo: !!Deno.env.get('JM_CUST_NO'),
+          loginLen: (Deno.env.get('JM_LOGIN') || '').length,
+          passLen: (Deno.env.get('JM_PASS') || '').length,
+        };
+
+        let token: string | null = null;
+        let authError: string | null = null;
+        try { token = await getToken(); } catch (e) { authError = (e as Error).message; }
+
+        const term = String(payload.term || 'BOSCH').trim();
+        const searchTarget = String(payload.searchTarget || 'CodeOE');
+        const target = payload.target as string | undefined; // 'P' or 'O' or undefined
+
+        // 1) Raw search by code (term) — log full body + raw response
+        const reqBodyByCode: Record<string, unknown> = {
+          code: term,
+          searchTarget,
+          trySearchWithoutManufacturer: true,
+          getOECodes: true,
+          getDeposits: false,
+          getServices: false,
+          getCashBack: false,
+          getEANCodes: false,
+        };
+        if (target) reqBodyByCode.target = target;
+
+        // 2) Try ItemsFindingByText (brand search) — different endpoint
+        const reqBodyByText: Record<string, unknown> = {
+          searchItemType: 'Brand',
+          searchItem: term,
+          searchTarget,
+          getOECodes: true,
+        };
+        if (target) reqBodyByText.target = target;
+
+        const log = (label: string, body: any) => {
+          console.log(`[DIAGNOSE ${label}] REQUEST:`, JSON.stringify({ ...body, token: token ? `${token.slice(0, 8)}…` : null }));
+        };
+
+        let byCodeRaw: any = null, byCodeErr: string | null = null;
+        try {
+          log('byCode', reqBodyByCode);
+          byCodeRaw = await nextisPost('/catalogs/items-finding-by-code', reqBodyByCode);
+          console.log('[DIAGNOSE byCode] RESPONSE:', JSON.stringify(byCodeRaw).slice(0, 1500));
+        } catch (e) { byCodeErr = (e as Error).message; }
+
+        let byTextRaw: any = null, byTextErr: string | null = null;
+        try {
+          log('byText', reqBodyByText);
+          byTextRaw = await nextisPost('/catalogs/items-finding-by-text', reqBodyByText);
+          console.log('[DIAGNOSE byText] RESPONSE:', JSON.stringify(byTextRaw).slice(0, 1500));
+        } catch (e) { byTextErr = (e as Error).message; }
+
+        // Try with target='P' explicitly if not already
+        let byCodePRaw: any = null, byCodePErr: string | null = null;
+        if (target !== 'P') {
+          try {
+            const bodyP = { ...reqBodyByCode, target: 'P' };
+            log('byCode+P', bodyP);
+            byCodePRaw = await nextisPost('/catalogs/items-finding-by-code', bodyP);
+            console.log('[DIAGNOSE byCode+P] RESPONSE:', JSON.stringify(byCodePRaw).slice(0, 1500));
+          } catch (e) { byCodePErr = (e as Error).message; }
+        }
+
+        const summarize = (raw: any) => {
+          if (!raw) return null;
+          const list = raw.items || raw.Items || [];
+          return {
+            status: raw.status,
+            statusText: raw.statusText,
+            itemCount: list.length,
+            firstItemSample: list[0] ? JSON.stringify(list[0]).slice(0, 600) : null,
+          };
+        };
+
+        result = {
+          credCheck,
+          authError,
+          tokenObtained: !!token,
+          term,
+          searchTarget,
+          target: target ?? null,
+          requestBodies: {
+            byCode: reqBodyByCode,
+            byText: reqBodyByText,
+            byCodeP: target !== 'P' ? { ...reqBodyByCode, target: 'P' } : null,
+          },
+          results: {
+            byCode: { error: byCodeErr, ...summarize(byCodeRaw) },
+            byText: { error: byTextErr, ...summarize(byTextRaw) },
+            byCodeP: target !== 'P' ? { error: byCodePErr, ...summarize(byCodePRaw) } : null,
+          },
+        };
+        break;
+      }
+
       case 'syncCategories': {
         // Restricted: cron (server key) OR authenticated admin
         if (!isServerKey) {
