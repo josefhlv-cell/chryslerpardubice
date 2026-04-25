@@ -87,7 +87,7 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
                   )}
                 >
                   {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                  {p.badge_label}
+                  {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
                 </Badge>
                 {p.manufacturer && (
                   <span className="text-[10px] text-muted-foreground truncate">{p.manufacturer}</span>
