@@ -356,7 +356,7 @@ const Catalog = () => {
     model: `Vyberte model — ${brand}`,
     engine: `Vyberte motorizaci — ${brand} ${model}`,
     category: `Vyberte kategorii — ${brand} ${model} · ${engine}`,
-    parts: `${brand} ${model} · ${engine} › ${category}`,
+    parts: `${brand} ${model} · ${engine} › ${category?.label || "Díly"}`,
   };
 
   const goBack = () => {
