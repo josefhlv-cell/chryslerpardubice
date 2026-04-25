@@ -474,30 +474,36 @@ export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
   return fetchJmByCodes([code]);
 }
 
-/** Live J+M stock/price lookup for visible OEM codes. */
+/** Live J+M stock/price lookup for visible OEM codes. Throws on failure for visibility. */
 export async function fetchJmByCodes(codes: string[]): Promise<CatalogPart[]> {
   const uniqueCodes = [...new Set(codes.map((c) => c.trim()).filter(Boolean))].slice(0, 50);
   if (uniqueCodes.length === 0) return [];
 
-  try {
-    const { data, error } = await supabase.functions.invoke("jm-proxy", {
-      body: { action: "priceAndStock", payload: { codes: uniqueCodes } },
-    });
-    if (error || !data?.success) return [];
-    const items: JmRawItem[] = data.data?.items || [];
-    return items.map(jmToCatalogPart).filter((p) => p.oem_number);
-  } catch {
-    return [];
+  const { data, error } = await supabase.functions.invoke("jm-proxy", {
+    body: { action: "priceAndStock", payload: { codes: uniqueCodes } },
+  });
+  if (error) {
+    console.error("[fetchJmByCodes] invoke error:", error);
+    throw new Error(`J+M API: ${error.message || "invoke failed"}`);
   }
+  if (!data?.success) {
+    console.error("[fetchJmByCodes] API error:", data);
+    throw new Error(`J+M API: ${data?.error || "request failed"}`);
+  }
+  const items: JmRawItem[] = data.data?.items || [];
+  console.log(`[fetchJmByCodes] received ${items.length} items, enrichedInDb=${data.data?.enrichedInDb}`);
+  return items.map(jmToCatalogPart).filter((p) => p.oem_number);
 }
 
-/** Merge OEM (Mopar/EPC) listing with live J+M results. Mopar always on top; J+M stays visible as supplier offer. */
+/** Merge OEM (Mopar/EPC) listing with live J+M results. Mopar always on top; J+M shown as NÁHRADA below. */
 export function mergeWithJm(base: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
+  // Dedup J+M by oem+manufacturer (avoid duplicate aftermarket lines)
   const seenJm = new Set<string>();
   const visibleJm = jm.filter((p) => {
-    const key = `${p.oem_number}:${p.manufacturer || ""}:${p.price_with_vat}`.toUpperCase().replace(/[^A-Z0-9:]/g, "");
+    const key = `${p.oem_number}:${p.manufacturer || ""}`.toUpperCase().replace(/[^A-Z0-9:]/g, "");
     if (seenJm.has(key)) return false;
     seenJm.add(key);
+    // Show J+M with any positive price OR explicit availability
     return p.price_with_vat > 0 || p.availability === "in_stock" || p.availability === "on_order";
   });
   return [...base, ...visibleJm].sort((a, b) => a.rank - b.rank);
