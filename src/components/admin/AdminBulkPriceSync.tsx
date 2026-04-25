@@ -31,6 +31,7 @@ const INTER_BATCH_DELAY = 800;
 const AdminBulkPriceSync = () => {
   const [running, setRunning] = useState(false);
   const [totalParts, setTotalParts] = useState(0);
+  const [missingPriceCount, setMissingPriceCount] = useState(0);
   const [processed, setProcessed] = useState(0);
   const [updated, setUpdated] = useState(0);
   const [errors, setErrors] = useState(0);
@@ -39,6 +40,7 @@ const AdminBulkPriceSync = () => {
   const [results, setResults] = useState<SyncResult[]>([]);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [cronWasPaused, setCronWasPaused] = useState(false);
+  const [syncMode, setSyncMode] = useState<"force" | "missing">("force");
   const stopRef = useRef(false);
 
   useEffect(() => {
@@ -46,10 +48,16 @@ const AdminBulkPriceSync = () => {
   }, []);
 
   const countParts = async () => {
-    const { count } = await supabase
-      .from("parts_new")
-      .select("id", { count: "exact", head: true });
-    setTotalParts(count || 0);
+    const [{ count: total }, { count: missing }] = await Promise.all([
+      supabase.from("parts_new").select("id", { count: "exact", head: true }),
+      supabase
+        .from("parts_new")
+        .select("id", { count: "exact", head: true })
+        .in("catalog_source", ["mopar", "mopar_oem", "7zap", "epc-ai", "ai-epc", "epc-link"])
+        .eq("price_with_vat", 0),
+    ]);
+    setTotalParts(total || 0);
+    setMissingPriceCount(missing || 0);
   };
 
   const controlCron = useCallback(async (action: "pause" | "resume" | "status") => {
@@ -65,8 +73,9 @@ const AdminBulkPriceSync = () => {
     }
   }, []);
 
-  const startSync = async () => {
+  const startSync = async (mode: "force" | "missing" = "force") => {
     stopRef.current = false;
+    setSyncMode(mode);
     setRunning(true);
     setProcessed(0);
     setUpdated(0);
@@ -94,7 +103,7 @@ const AdminBulkPriceSync = () => {
     while (hasMore && !stopRef.current) {
       try {
         const { data, error } = await supabase.functions.invoke("price-sync", {
-          body: { batchSize: BATCH_SIZE, offset, mode: "force" },
+          body: { batchSize: BATCH_SIZE, offset, mode },
         });
 
         if (error) throw error;
@@ -192,26 +201,37 @@ const AdminBulkPriceSync = () => {
     <div className="space-y-4">
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h3 className="font-semibold text-sm">Hromadná synchronizace cen</h3>
               <p className="text-xs text-muted-foreground">
                 Celkem dílů v databázi: <strong>{totalParts}</strong>
-                {totalParts > 0 && (
-                  <span className="ml-2">
-                    (~{Math.ceil(totalParts / BATCH_SIZE)} dávek po {BATCH_SIZE})
+                {missingPriceCount > 0 && (
+                  <span className="ml-2 text-amber-500">
+                    · Chybí cena: <strong>{missingPriceCount}</strong>
                   </span>
                 )}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {!running ? (
-                <Button onClick={startSync} disabled={totalParts === 0} size="sm" className="gap-1">
-                  <Play className="w-4 h-4" /> Spustit sync
-                </Button>
+                <>
+                  <Button onClick={() => startSync("force")} disabled={totalParts === 0} size="sm" className="gap-1">
+                    <Play className="w-4 h-4" /> Sync všech
+                  </Button>
+                  <Button
+                    onClick={() => startSync("missing")}
+                    disabled={missingPriceCount === 0}
+                    size="sm"
+                    variant="secondary"
+                    className="gap-1"
+                  >
+                    <Play className="w-4 h-4" /> Sync chybějících ({missingPriceCount})
+                  </Button>
+                </>
               ) : (
                 <Button onClick={stopSync} variant="destructive" size="sm" className="gap-1">
-                  <Square className="w-4 h-4" /> Zastavit
+                  <Square className="w-4 h-4" /> Zastavit ({syncMode === "missing" ? "missing" : "all"})
                 </Button>
               )}
               <Button onClick={countParts} variant="outline" size="icon" className="h-8 w-8" disabled={running}>
