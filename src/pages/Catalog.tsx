@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
   fetchCategoriesForVehicle, listPartsForVehicle,
-  fetchJmForVehicle, mergeWithJm,
+  fetchJmByCodes, mergeWithJm,
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
 import CatalogListing from "@/components/catalog/CatalogListing";
