@@ -437,7 +437,7 @@ async function fetchLocalVehicleRows(opts: { brand: string; model: string; engin
   for (const variant of attempts) {
     let q = supabase
       .from("parts_new_public")
-      .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
+      .select("id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .ilike("compatible_vehicles", `%${opts.brand}%`)
       .ilike("compatible_vehicles", `%${opts.model}%`)
@@ -538,6 +538,15 @@ export async function listPartsForVehicle(opts: {
     );
     const slice = filtered.slice(from, to + 1);
     const items = slice.map(normalize).sort((a, b) => a.rank - b.rank);
+    console.log("[Catalog strict] OEM scoped result", {
+      selected_vehicle: opts.nextisVehicleId,
+      selected_engine: opts.engine,
+      selected_category: opts.canonicalCategory,
+      source: "OEM",
+      rowsBeforeCategory: rows.length,
+      rowsAfterCategory: filtered.length,
+      pricing: items.map((p) => ({ oem: p.oem_number, price_with_vat: p.price_with_vat, resolution: p.price_with_vat === null ? "null-price" : "db-value" })).slice(0, 10),
+    });
     return { items, total: filtered.length };
   }
 
@@ -563,9 +572,11 @@ type JmRawItem = {
 };
 
 function jmToCatalogPart(it: JmRawItem): CatalogPart {
-  const price_without_vat = Number(it.price_without_vat) || 0;
+  const price_without_vat = it.price_without_vat === null || it.price_without_vat === undefined ? null : Number(it.price_without_vat) || 0;
   const price_with_vat =
-    Number(it.price_with_vat) || Math.round(price_without_vat * 1.21 * 100) / 100;
+    it.price_with_vat === null || it.price_with_vat === undefined
+      ? (price_without_vat && price_without_vat > 0 ? Math.round(price_without_vat * 1.21 * 100) / 100 : null)
+      : Number(it.price_with_vat) || 0;
   return {
     id: `jm:${it.oem_number || crypto.randomUUID()}`,
     oem_number: String(it.oem_number || "").trim(),
