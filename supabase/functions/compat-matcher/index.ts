@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
 
     return json({ error: "unknown action" }, 400);
   } catch (e) {
-    return json({ error: String(e?.message || e) }, 500);
+    const err = e as { message?: string };
+    return json({ error: String(err?.message || e) }, 500);
   }
 
   function json(b: unknown, status = 200) {
