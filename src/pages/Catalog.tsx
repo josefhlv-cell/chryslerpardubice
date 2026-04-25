@@ -23,6 +23,7 @@ import {
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
 import CatalogListing from "@/components/catalog/CatalogListing";
+import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
 
 const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
 
