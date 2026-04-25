@@ -767,21 +767,43 @@ Deno.serve(async (req) => {
         // 3) If first OEM-fallback returns 0, retry without `engine` filter
         //    (some local rows store generic compatibility text).
         const engineID = Number(payload.engineID || 0);
-        const brand = String(payload.brand || '').trim();
-        const model = String(payload.model || '').trim();
-        const engine = String(payload.engine || '').trim();
+        const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        let brand = String(payload.brand || '').trim();
+        let model = String(payload.model || '').trim();
+        let engine = String(payload.engine || '').trim();
         // Phase 1: category is accepted but used only for diagnostics / future
         // section-id mapping. We do NOT filter by it yet.
         const category = String(payload.category || '').trim();
+        const sectionId = Number(payload.sectionId || 0);
+        const categoryKeywords: string[] = Array.isArray(payload.categoryKeywords)
+          ? payload.categoryKeywords.map((k: unknown) => String(k).trim()).filter(Boolean)
+          : [];
 
-        console.log('[searchByVehicle] payload:', { engineID, brand, model, engine, category });
+        if (nextisVehicleId) {
+          const { data: v } = await adminClient
+            .from('nextis_vehicles')
+            .select('brand, model, engine, external_id')
+            .eq('id', nextisVehicleId)
+            .maybeSingle();
+          if (v) {
+            brand = String(v.brand || brand).trim();
+            model = String(v.model || model).trim();
+            engine = String(v.engine || engine).trim();
+          }
+        }
+
+        console.log('[searchByVehicle] payload:', { engineID, nextisVehicleId, sectionId, brand, model, engine, category, categoryKeywords });
 
         if (engineID > 0) {
           const raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
             engineID,
+            ...(sectionId > 0 ? { genArtID: sectionId } : {}),
             getOECodes: true,
+            target: 'P',
           });
-          const items = normalizeItems(raw).filter((p) => isAllowedBrand(p.brand));
+          const items = normalizeItems(raw)
+            .filter((p) => isAllowedBrand(p.brand))
+            .filter((p) => itemMatchesKeywords(p, categoryKeywords));
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
             if (codes.length) await enrichPricesIntoDb(adminClient, codes);
@@ -799,7 +821,7 @@ Deno.serve(async (req) => {
         const queryLocalOemCodes = async (useEngine: boolean): Promise<string[]> => {
           let q = adminClient
             .from('parts_new')
-            .select('oem_number')
+            .select('oem_number, name, category, description')
             .ilike('compatible_vehicles', `%${brand}%`)
             .ilike('compatible_vehicles', `%${model}%`)
             .limit(200);
@@ -809,7 +831,8 @@ Deno.serve(async (req) => {
             console.warn('[searchByVehicle] oem lookup error:', error.message);
             return [];
           }
-          return [...new Set((rows || []).map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
+          const filtered = (rows || []).filter((r: any) => rowMatchesKeywords(r, categoryKeywords));
+          return [...new Set(filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
         };
 
         // First attempt: with engine filter
