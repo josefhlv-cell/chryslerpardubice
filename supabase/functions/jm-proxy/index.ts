@@ -876,9 +876,8 @@ Deno.serve(async (req) => {
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
-              if (!itemMatchesKeywords(it, categoryKeywords)) continue;
               seen.add(key);
-              collected.push(it);
+              collected.push({ ...it, category: category || it.category });
             }
           } catch (e) {
             console.warn('[searchByVehicle] code search failed for', code, (e as Error).message);
