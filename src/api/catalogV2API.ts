@@ -491,11 +491,14 @@ export async function fetchJmByCodes(codes: string[]): Promise<CatalogPart[]> {
   }
 }
 
-/** Merge OEM (Mopar/EPC) listing with live J+M results. Mopar always on top. */
+/** Merge OEM (Mopar/EPC) listing with live J+M results. Mopar always on top; J+M stays visible as supplier offer. */
 export function mergeWithJm(base: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
-  const seen = new Set(base.map((p) => p.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, "")));
-  const extra = jm.filter(
-    (p) => !seen.has(p.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, "")),
-  );
-  return [...base, ...extra].sort((a, b) => a.rank - b.rank);
+  const seenJm = new Set<string>();
+  const visibleJm = jm.filter((p) => {
+    const key = `${p.oem_number}:${p.manufacturer || ""}:${p.price_with_vat}`.toUpperCase().replace(/[^A-Z0-9:]/g, "");
+    if (seenJm.has(key)) return false;
+    seenJm.add(key);
+    return p.price_with_vat > 0 || p.availability === "in_stock" || p.availability === "on_order";
+  });
+  return [...base, ...visibleJm].sort((a, b) => a.rank - b.rank);
 }
