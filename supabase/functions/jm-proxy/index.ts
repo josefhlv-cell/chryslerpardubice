@@ -870,14 +870,13 @@ Deno.serve(async (req) => {
           console.log('[searchByVehicle] Nextis byVehicle response: status=', raw?.status, 'items=', rawCount);
           let items = normalizeItems(raw)
             .filter((p) => isAllowedBrand(p.brand));
-          // Apply keyword filter only if it doesn't wipe everything out.
+          // Strict category enforcement: never widen to parent or vehicle-wide parts.
           if (categoryKeywords.length) {
             const kept = items.filter((p) => itemMatchesKeywords(p, categoryKeywords));
-            if (kept.length > 0) items = kept;
-            else if (parentKeywords.length) {
-              const keptParent = items.filter((p) => itemMatchesKeywords(p, parentKeywords));
-              if (keptParent.length > 0) items = keptParent;
+            if (kept.length === 0) {
+              console.warn('[searchByVehicle] strict category filter removed all engineID hits; returning empty category result');
             }
+            items = kept;
           }
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
@@ -932,21 +931,10 @@ Deno.serve(async (req) => {
           return { codes, matchedRows: filtered.length };
         };
 
-        // Cascading fallback ladder
+        // Strict category ladder: do not broaden to parent/no-engine/brand-model.
         const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
           { label: 'engine+subcat', useEngine: true,  keywords: categoryKeywords },
         ];
-        if (parentKeywords.length && parentKeywords !== categoryKeywords) {
-          ladder.push({ label: 'engine+parentcat', useEngine: true, keywords: parentKeywords });
-        }
-        if (engine) {
-          ladder.push({ label: 'no-engine+subcat', useEngine: false, keywords: categoryKeywords });
-          if (parentKeywords.length) {
-            ladder.push({ label: 'no-engine+parentcat', useEngine: false, keywords: parentKeywords });
-          }
-        }
-        // Last resort: just brand+model, no category filter (so user sees SOMETHING)
-        ladder.push({ label: 'brand-model-only', useEngine: false, keywords: [] });
 
         let oemCodes: string[] = [];
         let usedStep = 'none';
