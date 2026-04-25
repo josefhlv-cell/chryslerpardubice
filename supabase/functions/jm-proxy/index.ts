@@ -388,23 +388,31 @@ Deno.serve(async (req) => {
       case 'searchByCode': {
         const code = String(payload.code || '').trim();
         if (!code) { result = { items: [] }; break; }
-        const raw = await nextisPost('/catalogs/items-finding-by-code', {
-          code,
-          getOECodes: true,
-          getDeposits: false,
-          getServices: false,
-          getCashBack: false,
-          getEANCodes: false,
-        });
+        // Try OE code first (Mopar OEM numbers), then fall back to main/internal
+        const targets = ['CodeOE', 'CodeMain', 'CodeEAN'];
+        let raw: any = null;
+        let usedTarget = '';
+        for (const target of targets) {
+          raw = await nextisPost('/catalogs/items-finding-by-code', {
+            code,
+            target,
+            getOECodes: true,
+            getDeposits: false,
+            getServices: false,
+            getCashBack: false,
+            getEANCodes: false,
+          });
+          const found = (raw?.items || raw?.Items || []).length;
+          if (found > 0) { usedTarget = target; break; }
+        }
         const items = normalizeItems(raw);
 
-        // Best-effort price enrichment in parts_new for matched OEMs
         try {
           const codes = items.map((i) => i.oem_number).filter(Boolean);
           if (codes.length) await enrichPricesIntoDb(adminClient, codes);
         } catch (_) { /* non-blocking */ }
 
-        result = { items, status: raw?.status, statusText: raw?.statusText };
+        result = { items, target: usedTarget, status: raw?.status, statusText: raw?.statusText };
         break;
       }
 
