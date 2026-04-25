@@ -30,6 +30,9 @@ import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
 const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
 
 const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  "Brzdové zařízení": Disc,
+  "Kotoučové brzdy": Disc,
+  "Brzdové destičky": Disc,
   Brzdy: Disc,
   Motor: Cog,
   Chlazení: Snowflake,
@@ -61,6 +64,17 @@ function getCategoryLevel(nodes: CatalogCategoryNode[], path: string[]): Catalog
     level = found?.children || [];
   }
   return level;
+}
+
+function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
+  if (!node || node.keywords.length === 0) return true;
+  const haystack = `${part.name} ${part.category || ""} ${part.description || ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return node.keywords.some((keyword) =>
+    haystack.includes(keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+  );
 }
 
 const Catalog = () => {
