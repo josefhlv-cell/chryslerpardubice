@@ -996,6 +996,7 @@ Deno.serve(async (req) => {
             let kept = 0;
             for (const it of items) {
               if (!it.oem_number) continue;
+              if (categoryKeywords.length && !itemMatchesKeywords(it, categoryKeywords)) continue;
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
