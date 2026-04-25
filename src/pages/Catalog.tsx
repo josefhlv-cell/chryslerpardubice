@@ -204,6 +204,16 @@ const Catalog = () => {
         setItems(merged);
         setTotal(oemTotal + allJm.length);
 
+        // Surface diagnostic when J+M returned 0 for this vehicle
+        if (allJm.length === 0 && page === 0) {
+          setJmWarning(
+            jmVehiclePayload.warning ||
+              `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst aftermarket díly z J+M.`
+          );
+        } else {
+          setJmWarning(null);
+        }
+
         if (oemItems.length === 0 && allJm.length === 0) {
           console.log("[Catalog] Empty: no OEM, no J+M for this category");
         }
