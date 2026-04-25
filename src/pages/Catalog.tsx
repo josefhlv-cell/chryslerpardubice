@@ -455,6 +455,19 @@ const Catalog = () => {
               emptyHint="V této kategorii zatím nejsou žádné díly."
             />
 
+            {/* UI Fallback — when nothing found, offer direct OEM search */}
+            {!listLoading && !jmLoading && items.length === 0 && (
+              <div className="mt-6 p-6 rounded-2xl border border-dashed border-border/60 bg-card/40 text-center">
+                <Search className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
+                <p className="text-sm text-muted-foreground mb-4">
+                  Nenašli jsme specifické díly pro tento motor, zkuste hledat podle OEM kódu.
+                </p>
+                <p className="text-[11px] text-muted-foreground/70">
+                  Použijte vyhledávání OEM kódu výše ↑
+                </p>
+              </div>
+            )}
+
             {total > 30 && (
               <div className="flex items-center justify-center gap-2 mt-6">
                 <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
