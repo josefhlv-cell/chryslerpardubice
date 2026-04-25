@@ -710,7 +710,7 @@ export async function globalOemSearch(query: string): Promise<{
     supabase
       .from("parts_new_public")
       .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description"
+        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description"
       )
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
