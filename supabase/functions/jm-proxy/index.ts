@@ -215,6 +215,9 @@ Deno.serve(async (req) => {
         // Pull Nextis vehicle/category tree and persist allowed brands into catalog_categories.
         // Tries known Nextis catalog endpoints; gracefully falls back if shape differs.
         const endpoints = [
+          '/common/getVehicleTree',
+          '/common/getBrands',
+          '/catalog/getVehicleTree',
           '/api/v1/Catalogs/GetVehicleTree',
           '/api/v1/Catalogs/VehicleHierarchy',
           '/api/v1/Catalogs/GetBrands',
