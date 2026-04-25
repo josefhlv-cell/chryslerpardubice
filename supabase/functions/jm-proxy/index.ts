@@ -224,6 +224,24 @@ function normalizeItems(raw: any): UnifiedPart[] {
     .filter((p) => p.oem_number && isUsBrand(p.brand));
 }
 
+function localRowToUnifiedPart(row: any, category = ''): UnifiedPart {
+  const priceWithVat = Number(row.price_with_vat) || 0;
+  const priceWithoutVat = Number(row.price_without_vat) || (priceWithVat ? Math.round((priceWithVat / 1.21) * 100) / 100 : 0);
+  return {
+    supplier: 'jm',
+    oem_number: String(row.oem_number || '').trim(),
+    brand: String(row.manufacturer || row.catalog_source || 'OEM').trim(),
+    name: String(row.name || row.oem_number || '').trim(),
+    price_without_vat: priceWithoutVat,
+    price_with_vat: priceWithVat,
+    stock: priceWithVat > 0 ? 1 : 0,
+    availability: String(row.availability || (priceWithVat > 0 ? 'available' : 'on_order')),
+    image: Array.isArray(row.image_urls) ? String(row.image_urls[0] || '') : '',
+    category: category || String(row.category || ''),
+    compatible_vehicles: row.compatible_vehicles ? [String(row.compatible_vehicles)] : [],
+  };
+}
+
 function normalizeText(value: string | null | undefined): string {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
@@ -248,7 +266,7 @@ function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
       const childCount = (children || []).reduce((sum, child) => sum + child.count, 0);
       return { ...node, count: Math.max(ownCount, childCount), children };
     })
-    .filter((node) => node.count > 0 || node.id === 'brakes');
+    .filter((node) => node.count > 0 || node.children?.length || node.id === 'brakes');
 }
 
 // ---------- Vehicle tree seed (no API endpoint exists) ----------
