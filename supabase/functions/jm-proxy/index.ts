@@ -729,26 +729,42 @@ Deno.serve(async (req) => {
           break;
         }
 
-        let q = adminClient
-          .from('parts_new')
-          .select('oem_number, name, category, description, compatible_vehicles')
-          .ilike('compatible_vehicles', `%${vBrand}%`)
-          .ilike('compatible_vehicles', `%${vModel}%`)
-          .limit(3000);
-        if (vEngine) q = q.ilike('compatible_vehicles', `%${vEngine}%`);
+        // Build engine variants ("3.6 V6" vs "3.6L V6")
+        const engineVariants = (() => {
+          if (!vEngine) return [] as string[];
+          const out = new Set<string>([vEngine]);
+          out.add(vEngine.replace(/^(\d+\.\d+)(\s)/, '$1L$2'));
+          out.add(vEngine.replace(/^(\d+\.\d+)L(\s)/, '$1$2'));
+          const m = vEngine.match(/^(\d+\.\d+)/);
+          if (m) out.add(m[1]);
+          return [...out].filter(Boolean);
+        })();
 
-        let { data: rows, error } = await q;
-        if (error) throw error;
-        if ((!rows || rows.length === 0) && vEngine) {
-          const retry = await adminClient
+        let rows: any[] | null = null;
+        for (const variant of (engineVariants.length ? engineVariants : [null])) {
+          let q = adminClient
             .from('parts_new')
             .select('oem_number, name, category, description, compatible_vehicles')
             .ilike('compatible_vehicles', `%${vBrand}%`)
             .ilike('compatible_vehicles', `%${vModel}%`)
             .limit(3000);
-          if (retry.error) throw retry.error;
-          rows = retry.data;
+          if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
+          const { data, error } = await q;
+          if (error) throw error;
+          if (data && data.length > 0) { rows = data; break; }
         }
+        // Final fallback: brand+model only
+        if (!rows || rows.length === 0) {
+          const fallback = await adminClient
+            .from('parts_new')
+            .select('oem_number, name, category, description, compatible_vehicles')
+            .ilike('compatible_vehicles', `%${vBrand}%`)
+            .ilike('compatible_vehicles', `%${vModel}%`)
+            .limit(3000);
+          if (fallback.error) throw fallback.error;
+          rows = fallback.data;
+        }
+        console.log(`[vehicleCategories] ${vBrand} ${vModel} ${vEngine} -> ${rows?.length || 0} rows`);
 
         result = {
           nextisVehicleId,
