@@ -18,17 +18,14 @@ export interface UnifiedPart {
   compatible_vehicles: string[];
 }
 
-// Phase 1 strict whitelist (Jeep + Hummer removed per scope decision)
-const ALLOWED_BRANDS = [
-  "chrysler", "dodge", "ram", "cadillac", "lancia",
-];
-
-const UNIVERSAL_BRANDS = ["bosch", "mann", "mahle", "denso", "ngk", "gates", "febi", "valeo"];
+// Blacklist-first: keep all brands except explicitly banned ones.
+// If the part matches by OEM code, it's relevant to the customer.
+const BLACKLISTED_BRANDS = ["starline"];
 
 function isAllowedBrand(producer: string | null | undefined): boolean {
   if (!producer) return true;
   const p = producer.toLowerCase().trim();
-  return ALLOWED_BRANDS.some((b) => p.includes(b)) || UNIVERSAL_BRANDS.some((b) => p.includes(b));
+  return !BLACKLISTED_BRANDS.some((b) => p.includes(b));
 }
 
 async function callProxy<T>(action: string, payload: unknown): Promise<T> {
