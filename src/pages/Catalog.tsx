@@ -70,6 +70,7 @@ const Catalog = () => {
   const [listLoading, setListLoading] = useState(false);
   const [jmLoading, setJmLoading] = useState(false);
   const [jmCount, setJmCount] = useState(0);
+  const [jmWarning, setJmWarning] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   useEffect(() => {
