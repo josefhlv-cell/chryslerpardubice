@@ -924,10 +924,19 @@ Deno.serve(async (req) => {
           }
           const filtered = keywordsForFilter.length
             ? allRows.filter((r: any) => rowMatchesKeywords(r, keywordsForFilter))
-            : allRows;
+            : [];
           const codes = [...new Set(
             filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean),
           )];
+          console.log('[searchByVehicle] local OEM strict scope:', JSON.stringify({
+            selected_vehicle: nextisVehicleId,
+            selected_engine: engine,
+            selected_category: category,
+            useEngine,
+            keywordsForFilter,
+            rowsBeforeCategory: allRows.length,
+            rowsAfterCategory: filtered.length,
+          }));
           return { codes, matchedRows: filtered.length };
         };
 
