@@ -702,6 +702,61 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'vehicleCategories': {
+        const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        const brand = String(payload.brand || '').trim();
+        const model = String(payload.model || '').trim();
+        const engine = String(payload.engine || '').trim();
+
+        let vehicle = null;
+        if (nextisVehicleId) {
+          const { data } = await adminClient
+            .from('nextis_vehicles')
+            .select('id, brand, model, engine, external_id')
+            .eq('id', nextisVehicleId)
+            .maybeSingle();
+          vehicle = data;
+        }
+
+        const vBrand = vehicle?.brand || brand;
+        const vModel = vehicle?.model || model;
+        const vEngine = vehicle?.engine || engine;
+        if (!vBrand || !vModel) {
+          result = { categories: [], warning: 'nextis_vehicle_id or brand+model required' };
+          break;
+        }
+
+        let q = adminClient
+          .from('parts_new')
+          .select('oem_number, name, category, description, compatible_vehicles')
+          .ilike('compatible_vehicles', `%${vBrand}%`)
+          .ilike('compatible_vehicles', `%${vModel}%`)
+          .limit(3000);
+        if (vEngine) q = q.ilike('compatible_vehicles', `%${vEngine}%`);
+
+        let { data: rows, error } = await q;
+        if (error) throw error;
+        if ((!rows || rows.length === 0) && vEngine) {
+          const retry = await adminClient
+            .from('parts_new')
+            .select('oem_number, name, category, description, compatible_vehicles')
+            .ilike('compatible_vehicles', `%${vBrand}%`)
+            .ilike('compatible_vehicles', `%${vModel}%`)
+            .limit(3000);
+          if (retry.error) throw retry.error;
+          rows = retry.data;
+        }
+
+        result = {
+          nextisVehicleId,
+          vehicle: { brand: vBrand, model: vModel, engine: vEngine, external_id: vehicle?.external_id || null },
+          categories: countCategoryTree(PRODUCT_CATEGORY_TREE, rows || []),
+          localRows: rows?.length || 0,
+          source: 'jm-compatible-tree-oem-fallback',
+        };
+        break;
+      }
+
       case 'searchByVehicle': {
         // Strategy:
         // 1) If engineID is provided -> direct Nextis vehicle search.
