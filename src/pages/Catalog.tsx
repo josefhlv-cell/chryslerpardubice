@@ -361,18 +361,18 @@ const Catalog = () => {
               Pro značku <strong>{brand}</strong> nejsou v katalogu žádné modely.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
               {models.map((m) => (
                 <button
                   key={m}
                   onClick={() => setModel(m)}
-                  className="group relative flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card hover:border-primary/60 transition-all text-left"
+                  className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
                 >
-                  <div>
-                    <h3 className="font-semibold text-sm">{m}</h3>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{brand}</p>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Car className="w-4 h-4 text-primary/70 shrink-0" />
+                    <span className="text-sm font-medium truncate">{m}</span>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                 </button>
               ))}
             </div>
@@ -385,18 +385,18 @@ const Catalog = () => {
               Pro <strong>{brand} {model}</strong> nejsou definovány motorizace.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
               {engines.map((e) => (
                 <button
                   key={e}
                   onClick={() => setEngine(e)}
-                  className="group relative flex items-center justify-between p-4 rounded-xl border border-border/40 bg-card hover:border-primary/60 transition-all text-left"
+                  className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <Cog className="w-5 h-5 text-primary flex-shrink-0" />
-                    <h3 className="font-semibold text-sm truncate">{e}</h3>
+                    <Cog className="w-4 h-4 text-primary/70 shrink-0" />
+                    <span className="text-sm font-medium truncate">{e}</span>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary transition-all" />
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                 </button>
               ))}
             </div>
@@ -409,21 +409,21 @@ const Catalog = () => {
               Pro toto vozidlo zatím nejsou v katalogu žádné díly.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
               {categories.map((c) => {
                 const Icon = CATEGORY_ICON[c.canonical] || Package;
                 return (
                   <button
                     key={c.canonical}
                     onClick={() => setCategory(c.canonical)}
-                    className="group relative flex flex-col items-start p-5 rounded-xl border border-border/40 bg-card hover:border-primary/60 hover:shadow-[0_0_30px_-10px_hsl(var(--primary)/0.4)] transition-all text-left"
+                    className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
                   >
-                    <div className="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                      <Icon className="w-6 h-6" />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon className="w-4 h-4 text-primary/70 shrink-0" />
+                      <span className="text-sm font-medium truncate">{c.canonical}</span>
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{c.count}</Badge>
                     </div>
-                    <h3 className="font-semibold text-sm mb-1">{c.canonical}</h3>
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1.5">{c.count} dílů</Badge>
-                    <ChevronRight className="absolute top-5 right-5 w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                    <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
                 );
               })}
