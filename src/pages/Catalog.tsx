@@ -70,6 +70,7 @@ const Catalog = () => {
   const [listLoading, setListLoading] = useState(false);
   const [jmLoading, setJmLoading] = useState(false);
   const [jmCount, setJmCount] = useState(0);
+  const [jmWarning, setJmWarning] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -150,14 +151,19 @@ const Catalog = () => {
             canonicalCategory: category,
             page, pageSize: 30,
           }),
-          page === 0 ? fetchJmForVehicle({ brand, model }) : Promise.resolve([]),
+          page === 0
+            ? fetchJmForVehicle({ brand, model, engine })
+            : Promise.resolve({ items: [] as CatalogPart[], warning: undefined as string | undefined }),
         ]);
         if (cancelled) return;
 
         const { items: oemItems, total: oemTotal } =
           oemRes.status === "fulfilled" ? oemRes.value : { items: [], total: 0 };
-        const jmFromVehicle =
-          jmVehicleRes.status === "fulfilled" ? jmVehicleRes.value : [];
+        const jmVehiclePayload =
+          jmVehicleRes.status === "fulfilled"
+            ? jmVehicleRes.value
+            : { items: [] as CatalogPart[], warning: "J+M dotaz selhal" };
+        const jmFromVehicle = jmVehiclePayload.items || [];
 
         if (oemRes.status === "rejected") {
           console.error("[Catalog] OEM fetch failed:", oemRes.reason);
@@ -197,6 +203,16 @@ const Catalog = () => {
         const merged = mergeWithJm(oemItems, allJm);
         setItems(merged);
         setTotal(oemTotal + allJm.length);
+
+        // Surface diagnostic when J+M returned 0 for this vehicle
+        if (allJm.length === 0 && page === 0) {
+          setJmWarning(
+            jmVehiclePayload.warning ||
+              `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst aftermarket díly z J+M.`
+          );
+        } else {
+          setJmWarning(null);
+        }
 
         if (oemItems.length === 0 && allJm.length === 0) {
           console.log("[Catalog] Empty: no OEM, no J+M for this category");
@@ -447,6 +463,12 @@ const Catalog = () => {
                 </span>
               )}
             </div>
+
+            {jmWarning && !jmLoading && (
+              <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 text-[12px] text-amber-200/90">
+                ⚠️ {jmWarning}
+              </div>
+            )}
 
             <CatalogListing
               items={items}

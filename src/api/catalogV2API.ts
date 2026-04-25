@@ -448,24 +448,46 @@ function jmToCatalogPart(it: JmRawItem): CatalogPart {
   };
 }
 
-/** Live search of J+M offer for a specific vehicle. Returns [] on any failure. */
+/** Live search of J+M offer for a specific vehicle. Returns items + diagnostic info. */
 export async function fetchJmForVehicle(opts: {
   brand: string;
   model: string;
+  engine?: string;
   year?: number;
-}): Promise<CatalogPart[]> {
+  engineID?: number;
+}): Promise<{ items: CatalogPart[]; warning?: string; mode?: string; codesQueried?: number }> {
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
       body: {
         action: "searchByVehicle",
-        payload: { brand: opts.brand, model: opts.model, year: opts.year },
+        payload: {
+          brand: opts.brand,
+          model: opts.model,
+          engine: opts.engine,
+          year: opts.year,
+          engineID: opts.engineID,
+        },
       },
     });
-    if (error || !data?.success) return [];
-    const items: JmRawItem[] = data.data?.items || [];
-    return items.map(jmToCatalogPart).filter((p) => p.oem_number);
-  } catch {
-    return [];
+    if (error) {
+      console.warn("[fetchJmForVehicle] invoke error:", error);
+      return { items: [], warning: `J+M proxy error: ${error.message}` };
+    }
+    if (!data?.success) {
+      return { items: [], warning: data?.error || "J+M proxy returned no success" };
+    }
+    const payload = data.data || {};
+    const items: JmRawItem[] = payload.items || [];
+    console.log(`[fetchJmForVehicle] mode=${payload.mode} hits=${items.length} codesQueried=${payload.codesQueried || 0}`);
+    return {
+      items: items.map(jmToCatalogPart).filter((p) => p.oem_number),
+      warning: payload.warning,
+      mode: payload.mode,
+      codesQueried: payload.codesQueried,
+    };
+  } catch (e: any) {
+    console.error("[fetchJmForVehicle] threw:", e);
+    return { items: [], warning: e?.message || "J+M unreachable" };
   }
 }
 
