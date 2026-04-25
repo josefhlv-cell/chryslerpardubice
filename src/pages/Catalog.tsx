@@ -4,7 +4,7 @@
  *
  * Single entry point. No tabs, no logos, no sidebars.
  */
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, ChevronLeft, Loader2, Car, Wrench, Cog, Package,
@@ -96,7 +96,7 @@ function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): b
   );
 }
 
-const Catalog = () => {
+const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
   const { user, canPlaceOrder } = useAuth();
 
@@ -388,7 +388,7 @@ const Catalog = () => {
     : getCategoryLevel(categories, categoryPath);
 
   return (
-    <div className="min-h-screen pb-24 lg:pb-8 bg-background">
+    <div ref={ref} className="min-h-screen pb-24 lg:pb-8 bg-background">
       <div className="border-b border-border/30 bg-background/95 backdrop-blur-2xl sticky top-14 z-30">
         <div className="max-w-[1400px] mx-auto px-4 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -610,6 +610,8 @@ const Catalog = () => {
       </div>
     </div>
   );
-};
+});
+
+Catalog.displayName = "Catalog";
 
 export default Catalog;
