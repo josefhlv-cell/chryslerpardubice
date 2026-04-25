@@ -32,8 +32,8 @@ export type CatalogPart = {
   name: string;
   manufacturer: string | null;
   catalog_source: string; // 'mopar' | 'jm' | ...
-  price_without_vat: number;
-  price_with_vat: number;
+  price_without_vat: number | null;
+  price_with_vat: number | null;
   availability: string | null;
   image_urls: string[] | null;
   category: string | null;
@@ -99,8 +99,10 @@ function badgeFor(source: string | null | undefined): CatalogPart["badge_label"]
 function normalize(row: any): CatalogPart {
   const source = row.catalog_source || "mopar";
   const rank = rankFor(source);
-  const priceWithVat = Number(row.price_with_vat) || 0;
-  const priceWithoutVat = Number(row.price_without_vat) || (priceWithVat ? Math.round((priceWithVat / 1.21) * 100) / 100 : 0);
+  const priceWithVat = row.price_with_vat === null || row.price_with_vat === undefined ? null : Number(row.price_with_vat) || 0;
+  const priceWithoutVat = row.price_without_vat === null || row.price_without_vat === undefined
+    ? (priceWithVat && priceWithVat > 0 ? Math.round((priceWithVat / 1.21) * 100) / 100 : null)
+    : Number(row.price_without_vat) || 0;
   return {
     id: row.id,
     oem_number: row.oem_number,
