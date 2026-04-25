@@ -31,6 +31,7 @@ const INTER_BATCH_DELAY = 800;
 const AdminBulkPriceSync = () => {
   const [running, setRunning] = useState(false);
   const [totalParts, setTotalParts] = useState(0);
+  const [missingPriceCount, setMissingPriceCount] = useState(0);
   const [processed, setProcessed] = useState(0);
   const [updated, setUpdated] = useState(0);
   const [errors, setErrors] = useState(0);
@@ -39,6 +40,7 @@ const AdminBulkPriceSync = () => {
   const [results, setResults] = useState<SyncResult[]>([]);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [cronWasPaused, setCronWasPaused] = useState(false);
+  const [syncMode, setSyncMode] = useState<"force" | "missing">("force");
   const stopRef = useRef(false);
 
   useEffect(() => {
@@ -46,10 +48,16 @@ const AdminBulkPriceSync = () => {
   }, []);
 
   const countParts = async () => {
-    const { count } = await supabase
-      .from("parts_new")
-      .select("id", { count: "exact", head: true });
-    setTotalParts(count || 0);
+    const [{ count: total }, { count: missing }] = await Promise.all([
+      supabase.from("parts_new").select("id", { count: "exact", head: true }),
+      supabase
+        .from("parts_new")
+        .select("id", { count: "exact", head: true })
+        .in("catalog_source", ["mopar", "mopar_oem", "7zap", "epc-ai", "ai-epc", "epc-link"])
+        .eq("price_with_vat", 0),
+    ]);
+    setTotalParts(total || 0);
+    setMissingPriceCount(missing || 0);
   };
 
   const controlCron = useCallback(async (action: "pause" | "resume" | "status") => {
@@ -65,8 +73,9 @@ const AdminBulkPriceSync = () => {
     }
   }, []);
 
-  const startSync = async () => {
+  const startSync = async (mode: "force" | "missing" = "force") => {
     stopRef.current = false;
+    setSyncMode(mode);
     setRunning(true);
     setProcessed(0);
     setUpdated(0);
@@ -94,7 +103,7 @@ const AdminBulkPriceSync = () => {
     while (hasMore && !stopRef.current) {
       try {
         const { data, error } = await supabase.functions.invoke("price-sync", {
-          body: { batchSize: BATCH_SIZE, offset, mode: "force" },
+          body: { batchSize: BATCH_SIZE, offset, mode },
         });
 
         if (error) throw error;
