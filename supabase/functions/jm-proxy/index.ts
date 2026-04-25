@@ -62,9 +62,9 @@ async function getToken(): Promise<string> {
   return token;
 }
 
-async function nextisCall(path: string, body: unknown): Promise<unknown> {
+async function nextisCallRaw(path: string, body: unknown): Promise<Response> {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  let res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ async function nextisCall(path: string, body: unknown): Promise<unknown> {
   if (res.status === 401) {
     cachedToken = null;
     const t2 = await getToken();
-    const res2 = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -85,11 +85,26 @@ async function nextisCall(path: string, body: unknown): Promise<unknown> {
       },
       body: JSON.stringify(body),
     });
-    if (!res2.ok) throw new Error(`Nextis ${path}: ${res2.status}`);
-    return await res2.json();
   }
-  if (!res.ok) throw new Error(`Nextis ${path}: ${res.status} ${await res.text()}`);
+  return res;
+}
+
+async function nextisCall(path: string, body: unknown): Promise<unknown> {
+  const res = await nextisCallRaw(path, body);
+  if (!res.ok) throw new Error(`Nextis ${path}: ${res.status} ${await res.text().catch(() => '')}`);
   return await res.json();
+}
+
+// Try a list of candidate endpoints and return the first 2xx JSON response.
+async function nextisTry(paths: string[], body: unknown): Promise<{ data: unknown; path: string } | null> {
+  for (const p of paths) {
+    try {
+      const res = await nextisCallRaw(p, body);
+      if (res.ok) return { data: await res.json(), path: p };
+      await res.text().catch(() => '');
+    } catch (_) { /* try next */ }
+  }
+  return null;
 }
 
 interface UnifiedPart {
