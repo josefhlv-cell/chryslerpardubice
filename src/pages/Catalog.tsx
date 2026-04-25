@@ -149,28 +149,28 @@ const Catalog = () => {
         setItems(oemItems);
         setTotal(oemTotal);
 
-        // 2) Live J+M overlay — look up real stock/prices for visible OEM codes.
-        if (page === 0) {
+        // 2) Live J+M overlay — fetch live aftermarket alternatives (NÁHRADA)
+        // for every visible OEM code. J+M items appear as separate rows below
+        // their matching OEM, never overwriting OEM prices.
+        if (page === 0 && oemItems.length > 0) {
           setJmLoading(true);
-          const jm = await fetchJmByCodes(oemItems.map((p) => p.oem_number));
-          if (cancelled) return;
-          const jmByOem = new Map(
-            jm.map((p) => [p.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, ""), p])
-          );
-          const enrichedItems = oemItems.map((part) => {
-            const jmMatch = jmByOem.get(part.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, ""));
-            return jmMatch && jmMatch.price_with_vat > 0
-              ? {
-                  ...part,
-                  price_without_vat: jmMatch.price_without_vat,
-                  price_with_vat: jmMatch.price_with_vat,
-                  availability: jmMatch.availability,
-                }
-              : part;
-          });
-          setJmCount(jm.length);
-          setItems(mergeWithJm(enrichedItems, jm));
-          setTotal(oemTotal + jm.length);
+          const codes = oemItems.map((p) => p.oem_number).filter(Boolean);
+          console.log(`[Catalog] Querying J+M for ${codes.length} OEM codes`);
+          try {
+            const jm = await fetchJmByCodes(codes);
+            if (cancelled) return;
+            console.log(`[Catalog] J+M returned ${jm.length} alternatives`);
+            setJmCount(jm.length);
+            setItems(mergeWithJm(oemItems, jm));
+            setTotal(oemTotal + jm.length);
+            if (jm.length === 0 && codes.length > 0) {
+              toast.info("J+M: pro tuto stránku nejsou aftermarket alternativy.");
+            }
+          } catch (jmErr: any) {
+            console.error("[Catalog] J+M fetch failed:", jmErr);
+            toast.warning("J+M nedostupné: " + (jmErr?.message || "neznámá chyba"));
+            setJmCount(0);
+          }
         } else {
           setJmCount(0);
         }
