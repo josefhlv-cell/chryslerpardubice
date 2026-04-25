@@ -797,7 +797,7 @@ Deno.serve(async (req) => {
         if (engineID > 0) {
           const raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
             engineID,
-            ...(sectionId > 0 ? { genArtID: sectionId } : {}),
+            genArtID: sectionId > 0 ? sectionId : 0,
             getOECodes: true,
             target: 'P',
           });
@@ -873,6 +873,7 @@ Deno.serve(async (req) => {
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
+              if (!itemMatchesKeywords(it, categoryKeywords)) continue;
               seen.add(key);
               collected.push(it);
             }
