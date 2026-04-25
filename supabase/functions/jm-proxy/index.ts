@@ -224,6 +224,33 @@ function normalizeItems(raw: any): UnifiedPart[] {
     .filter((p) => p.oem_number && isUsBrand(p.brand));
 }
 
+function normalizeText(value: string | null | undefined): string {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function rowMatchesKeywords(row: any, keywords: string[] = []): boolean {
+  if (!keywords.length) return true;
+  const haystack = normalizeText(`${row.name || ''} ${row.category || ''} ${row.description || ''} ${row.oem_number || ''}`);
+  return keywords.some((keyword) => haystack.includes(normalizeText(keyword)));
+}
+
+function itemMatchesKeywords(item: UnifiedPart, keywords: string[] = []): boolean {
+  if (!keywords.length) return true;
+  const haystack = normalizeText(`${item.name} ${item.category} ${item.oem_number}`);
+  return keywords.some((keyword) => haystack.includes(normalizeText(keyword)));
+}
+
+function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
+  return nodes
+    .map((node) => {
+      const children = node.children ? countCategoryTree(node.children, rows) : undefined;
+      const ownCount = rows.filter((row) => rowMatchesKeywords(row, node.keywords)).length;
+      const childCount = (children || []).reduce((sum, child) => sum + child.count, 0);
+      return { ...node, count: Math.max(ownCount, childCount), children };
+    })
+    .filter((node) => node.count > 0 || node.id === 'brakes');
+}
+
 // ---------- Vehicle tree seed (no API endpoint exists) ----------
 const VEHICLE_TREE_SEED: Record<string, Array<{ model: string; engines: string[]; year_from?: number; year_to?: number }>> = {
   Chrysler: [
