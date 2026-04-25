@@ -99,14 +99,16 @@ function badgeFor(source: string | null | undefined): CatalogPart["badge_label"]
 function normalize(row: any): CatalogPart {
   const source = row.catalog_source || "mopar";
   const rank = rankFor(source);
+  const priceWithVat = Number(row.price_with_vat) || 0;
+  const priceWithoutVat = Number(row.price_without_vat) || (priceWithVat ? Math.round((priceWithVat / 1.21) * 100) / 100 : 0);
   return {
     id: row.id,
     oem_number: row.oem_number,
     name: row.name,
     manufacturer: row.manufacturer,
     catalog_source: source,
-    price_without_vat: Number(row.price_without_vat) || 0,
-    price_with_vat: Number(row.price_with_vat) || 0,
+    price_without_vat: priceWithoutVat,
+    price_with_vat: priceWithVat,
     availability: row.availability,
     image_urls: row.image_urls,
     category: row.category,
@@ -163,9 +165,9 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
   }
 
   let q = supabase
-    .from("parts_new")
+      .from("parts_new_public")
     .select(
-      "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
       { count: "exact" }
     )
     .in("catalog_source", ALLOWED_SOURCES as unknown as string[]);
@@ -452,11 +454,11 @@ export async function listPartsForVehicle(opts: {
   const to = from + pageSize - 1;
 
   const selectFields =
-    "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles";
+    "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles";
 
   const fetchRows = async (useEngine: boolean, range: [number, number]) => {
     let q = supabase
-      .from("parts_new")
+      .from("parts_new_public")
       .select(selectFields, { count: "exact" })
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .ilike("compatible_vehicles", `%${opts.brand}%`)
@@ -647,9 +649,9 @@ export async function globalOemSearch(query: string): Promise<{
 
   const [localRes, jmRes] = await Promise.allSettled([
     supabase
-      .from("parts_new")
+      .from("parts_new_public")
       .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description"
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description"
       )
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
