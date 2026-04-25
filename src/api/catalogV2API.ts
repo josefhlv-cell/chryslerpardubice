@@ -1,27 +1,38 @@
 /**
- * CATALOG V3 — CLEAN PRODUCTION VERSION (LOVABLE READY)
+ * CATALOG V4 — Production-grade engine.
  * -----------------------------------------------------
- * OEM-first autoservis katalog
  * Sources:
- * - OEM: mopar / EPC / 7zap / jm OEM feed
- * - Aftermarket: J+M (via supabase function)
- * - Pricing: CSV sync (vernostsevyplaci - NO API)
+ *   • OEM (rank 1): mopar / epc / 7zap (parts_new_public)
+ *   • Aftermarket (rank 5): J+M via jm-proxy edge function
+ *   • Pricing: CSV-only (vernostsevyplaci) — never an API
+ *
+ * Vehicle filtering: nextis_vehicles is the single source of truth
+ * for Brand → Model → Engine. compatible_vehicles is only used as a
+ * downstream text fallback when joining parts to vehicles.
+ *
+ * Design rules:
+ *   • Never crash on null prices, never return null lists.
+ *   • OEM always sorts before aftermarket (rank ASC).
+ *   • Strict category scoping — no cross-category fallbacks.
+ *   • All public functions return a safe, typed value.
  */
 
 import { supabase } from "@/integrations/supabase/client";
 
-// ======================================================
+// =============================================================
 // CONFIG
-// ======================================================
+// =============================================================
 
-const ALLOWED_SOURCES = ["mopar", "epc-ai", "7zap", "epc-link", "ai-epc", "jm"] as const;
-export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
+export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia", "Jeep"] as const;
 
-const PAGE = 1000;
+const ALLOWED_OEM_SOURCES = ["mopar", "mopar_oem", "epc-ai", "7zap", "epc-link", "ai-epc", "csv"] as const;
 
-// ======================================================
+const PAGE_SIZE_MAX = 100;
+const VEHICLE_LIST_LIMIT = 500;
+
+// =============================================================
 // TYPES
-// ======================================================
+// =============================================================
 
 export type CatalogPart = {
   id: string;
@@ -40,59 +51,677 @@ export type CatalogPart = {
   rank: number;
 };
 
-// ======================================================
-// HELPERS
-// ======================================================
+export type NextisVehicle = {
+  id: string;
+  brand: string;
+  model: string;
+  engine: string | null;
+  year_from: number | null;
+  year_to: number | null;
+  external_id?: string | null;
+};
 
-function rank(source?: string): number {
+/** Used by the legacy CatalogTree sidebar (catalog_categories rows). */
+export type CategoryNode = {
+  id: string;
+  name_cs: string;
+  name_en?: string | null;
+  node_type: "brand" | "model" | "engine" | "category" | "global";
+  vehicle_brand?: string | null;
+  vehicle_model?: string | null;
+  vehicle_engine?: string | null;
+  parent_id?: string | null;
+  children?: CategoryNode[];
+};
+
+/** Used by Catalog.tsx drill-down (in-memory category tree). */
+export type CatalogCategoryNode = {
+  id: string;
+  label: string;
+  path: string[];
+  keywords: string[];
+  count: number;
+  /** Optional Nextis section id (when known). */
+  sectionId?: number | null;
+  children: CatalogCategoryNode[];
+};
+
+// =============================================================
+// CATEGORY TREE (CS) — keyword-driven, deterministic
+// =============================================================
+
+type SeedCategory = {
+  id: string;
+  label: string;
+  keywords: string[];
+  sectionId?: number;
+  children?: SeedCategory[];
+};
+
+/**
+ * Single source of truth for the in-app category tree.
+ * Keywords are normalised (lower-case, no diacritics) at runtime.
+ */
+const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
+  {
+    id: "brakes",
+    label: "Brzdové zařízení",
+    keywords: ["brake", "brzd"],
+    children: [
+      {
+        id: "brake-pads",
+        label: "Brzdové destičky",
+        keywords: ["brake pad", "pads", "brzdov\u00e1 desti", "brzdove desti", "destic"],
+      },
+      {
+        id: "brake-discs",
+        label: "Brzdové kotouče",
+        keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc"],
+      },
+      {
+        id: "brake-hoses",
+        label: "Brzdové hadice",
+        keywords: ["brake hose", "brzdov\u00e1 hadice", "hadice brzd"],
+      },
+      {
+        id: "brake-calipers",
+        label: "Brzdové třmeny",
+        keywords: ["caliper", "tr\u017emen", "trmen"],
+      },
+    ],
+  },
+  {
+    id: "engine",
+    label: "Motor",
+    keywords: ["engine", "motor"],
+    children: [
+      { id: "engine-oil", label: "Motorový olej", keywords: ["engine oil", "motorov\u00fd olej", "motorovy olej"] },
+      { id: "spark-plugs", label: "Zapalovací svíčky", keywords: ["spark plug", "zapalovac\u00ed sv\u00ed\u010dka", "zapalovaci svicka"] },
+      { id: "timing-belt", label: "Rozvodový řemen", keywords: ["timing belt", "rozvodov\u00fd \u0159emen", "rozvodovy remen"] },
+      { id: "water-pump", label: "Vodní čerpadlo", keywords: ["water pump", "vodn\u00ed \u010derpadlo", "vodni cerpadlo"] },
+    ],
+  },
+  {
+    id: "filters",
+    label: "Filtry",
+    keywords: ["filter", "filtr"],
+    children: [
+      { id: "oil-filter", label: "Olejový filtr", keywords: ["oil filter", "olejov\u00fd filtr", "olejovy filtr"] },
+      { id: "air-filter", label: "Vzduchový filtr", keywords: ["air filter", "vzduchov\u00fd filtr", "vzduchovy filtr"] },
+      { id: "cabin-filter", label: "Kabinový filtr", keywords: ["cabin filter", "pollen filter", "kabinov\u00fd filtr", "kabinovy filtr"] },
+      { id: "fuel-filter", label: "Palivový filtr", keywords: ["fuel filter", "palivov\u00fd filtr", "palivovy filtr"] },
+    ],
+  },
+  {
+    id: "suspension",
+    label: "Odpružení",
+    keywords: ["suspension", "odpru\u017een", "odpruzen", "tlumi\u010d", "tlumic"],
+    children: [
+      { id: "shock-absorbers", label: "Tlumiče", keywords: ["shock absorber", "tlumi\u010d", "tlumic"] },
+      { id: "control-arms", label: "Ramena nápravy", keywords: ["control arm", "rameno n\u00e1pravy", "rameno napravy"] },
+      { id: "bushings", label: "Silentbloky", keywords: ["bushing", "silentblok"] },
+    ],
+  },
+  {
+    id: "steering",
+    label: "Řízení",
+    keywords: ["steering", "\u0159\u00edzen", "rizeni"],
+    children: [
+      { id: "tie-rods", label: "Spojovací tyče", keywords: ["tie rod", "spojovac\u00ed ty\u010d", "spojovaci tyc"] },
+      { id: "ball-joints", label: "Kulové čepy", keywords: ["ball joint", "kulov\u00fd \u010dep", "kulovy cep"] },
+    ],
+  },
+  {
+    id: "electrical",
+    label: "Elektroinstalace",
+    keywords: ["electric", "elektri", "battery", "baterie"],
+    children: [
+      { id: "battery", label: "Baterie", keywords: ["battery", "baterie", "akumul\u00e1tor", "akumulator"] },
+      { id: "alternator", label: "Alternátor", keywords: ["alternator", "altern\u00e1tor"] },
+      { id: "starter", label: "Startér", keywords: ["starter motor", "start\u00e9r", "starter"] },
+    ],
+  },
+  {
+    id: "cooling",
+    label: "Chlazení",
+    keywords: ["cooling", "radiator", "chlazen", "chladi\u010d", "chladic"],
+    children: [
+      { id: "radiator", label: "Chladič", keywords: ["radiator", "chladi\u010d", "chladic"] },
+      { id: "thermostat", label: "Termostat", keywords: ["thermostat", "termostat"] },
+    ],
+  },
+  {
+    id: "exhaust",
+    label: "Výfuk",
+    keywords: ["exhaust", "v\u00fdfuk", "vyfuk"],
+  },
+  {
+    id: "transmission",
+    label: "Převodovka",
+    keywords: ["transmission", "p\u0159evodovk", "prevodovk", "gearbox"],
+  },
+  {
+    id: "ac",
+    label: "Klimatizace",
+    keywords: ["air conditioning", "klimatiza", "a/c "],
+  },
+  {
+    id: "body",
+    label: "Karoserie",
+    keywords: ["body", "karoseri", "fender", "bumper", "n\u00e1raz", "naraz"],
+  },
+  {
+    id: "interior",
+    label: "Interiér",
+    keywords: ["interior", "interi\u00e9r", "interier", "seat", "sedadlo"],
+  },
+  {
+    id: "fluids",
+    label: "Kapaliny a oleje",
+    keywords: ["fluid", "oil", "olej", "kapalina"],
+  },
+];
+
+// =============================================================
+// HELPERS
+// =============================================================
+
+const normalize = (s: string): string =>
+  (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const normalizeOem = (s: string): string =>
+  (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+
+function rank(source?: string | null): number {
   const s = (source || "").toLowerCase();
-  if (s === "mopar") return 1;
-  if (["epc-ai", "7zap", "epc-link", "ai-epc"].includes(s)) return 2;
+  if (s === "mopar" || s === "mopar_oem") return 1;
+  if (["epc-ai", "7zap", "epc-link", "ai-epc", "csv"].includes(s)) return 2;
   if (s === "jm") return 5;
   return 9;
 }
 
-function badge(source?: string): CatalogPart["badge_label"] {
+function badge(source?: string | null): CatalogPart["badge_label"] {
   const r = rank(source);
   if (r <= 2) return "ORIGINÁL";
   if (r === 5) return "NÁHRADA";
   return "NEZNÁMÝ";
 }
 
-function normalize(row: any): CatalogPart {
-  const source = row.catalog_source || "mopar";
+function safeNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
 
-  const priceWithVat =
-    row.price_with_vat != null ? Number(row.price_with_vat) : null;
+function normalizeRow(row: any): CatalogPart {
+  const source = row?.catalog_source || "mopar";
 
-  const priceWithoutVat =
-    row.price_without_vat != null
-      ? Number(row.price_without_vat)
-      : priceWithVat
-        ? Math.round(priceWithVat / 1.21 * 100) / 100
-        : null;
+  const priceWithVat = safeNumber(row?.price_with_vat);
+  let priceWithoutVat = safeNumber(row?.price_without_vat);
+  if (priceWithoutVat === null && priceWithVat !== null) {
+    priceWithoutVat = Math.round((priceWithVat / 1.21) * 100) / 100;
+  }
+
+  // Treat price = 0 as "no price" (matches business rule).
+  const finalWithVat = priceWithVat && priceWithVat > 0 ? priceWithVat : null;
+  const finalWithoutVat =
+    priceWithoutVat && priceWithoutVat > 0 ? priceWithoutVat : null;
 
   return {
-    id: row.id,
-    oem_number: row.oem_number,
-    name: row.name,
-    manufacturer: row.manufacturer,
+    id: String(row?.id ?? `tmp:${row?.oem_number || Math.random()}`),
+    oem_number: String(row?.oem_number || ""),
+    name: String(row?.name || row?.oem_number || "—"),
+    manufacturer: row?.manufacturer ?? null,
     catalog_source: source,
-    price_without_vat: priceWithoutVat,
-    price_with_vat: priceWithVat,
-    availability: row.availability,
-    image_urls: row.image_urls,
-    category: row.category,
-    description: row.description,
+    price_without_vat: finalWithoutVat,
+    price_with_vat: finalWithVat,
+    availability: row?.availability ?? null,
+    image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
+    category: row?.category ?? null,
+    description: row?.description ?? null,
     is_oem: rank(source) <= 2,
     badge_label: badge(source),
     rank: rank(source),
   };
 }
 
-// ======================================================
-// LISTING CORE
-// ======================================================
+function buildKeywordHaystack(part: { name: string; category: string | null; description: string | null }): string {
+  return normalize(`${part.name} ${part.category || ""} ${part.description || ""}`);
+}
+
+function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
+  if (!keywords || keywords.length === 0) return true;
+  const haystack = buildKeywordHaystack(part);
+  const normKw = keywords.map(normalize).filter(Boolean);
+  return normKw.some((kw) => haystack.includes(kw));
+}
+
+function dedupeByOem(parts: CatalogPart[]): CatalogPart[] {
+  const seen = new Set<string>();
+  const out: CatalogPart[] = [];
+  for (const p of parts) {
+    const key = normalizeOem(p.oem_number) || p.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+// =============================================================
+// VEHICLE TREE — nextis_vehicles is the source of truth
+// =============================================================
+
+export async function fetchBrands(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("brand")
+    .in("brand", ALLOWED_BRANDS as unknown as string[])
+    .limit(VEHICLE_LIST_LIMIT);
+
+  if (error) {
+    console.error("[catalogV2API] fetchBrands failed:", error.message);
+    return [];
+  }
+  const set = new Set<string>();
+  (data || []).forEach((r: any) => r?.brand && set.add(r.brand));
+  return ALLOWED_BRANDS.filter((b) => set.has(b));
+}
+
+export async function fetchModelsForBrand(brand: string): Promise<string[]> {
+  if (!brand) return [];
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("model")
+    .eq("brand", brand)
+    .limit(VEHICLE_LIST_LIMIT);
+
+  if (error) {
+    console.error("[catalogV2API] fetchModelsForBrand failed:", error.message);
+    return [];
+  }
+  const set = new Set<string>();
+  (data || []).forEach((r: any) => r?.model && set.add(r.model));
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+export async function fetchEnginesForModel(brand: string, model: string): Promise<string[]> {
+  if (!brand || !model) return [];
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("engine")
+    .eq("brand", brand)
+    .eq("model", model)
+    .limit(VEHICLE_LIST_LIMIT);
+
+  if (error) {
+    console.error("[catalogV2API] fetchEnginesForModel failed:", error.message);
+    return [];
+  }
+  const set = new Set<string>();
+  (data || []).forEach((r: any) => r?.engine && set.add(r.engine));
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+export async function fetchNextisVehicles(brand: string, model: string): Promise<NextisVehicle[]> {
+  if (!brand || !model) return [];
+  const { data, error } = await supabase
+    .from("nextis_vehicles")
+    .select("id, brand, model, engine, year_from, year_to, external_id")
+    .eq("brand", brand)
+    .eq("model", model)
+    .limit(VEHICLE_LIST_LIMIT);
+
+  if (error) {
+    console.error("[catalogV2API] fetchNextisVehicles failed:", error.message);
+    return [];
+  }
+  return (data || []) as NextisVehicle[];
+}
+
+// =============================================================
+// PARTS LISTING (LOCAL OEM)
+// =============================================================
+
+/** Generate engine variants ("3.6 V6" ↔ "3.6L V6" ↔ "3.6"). */
+function engineVariants(engine: string | null | undefined): string[] {
+  if (!engine) return [];
+  const out = new Set<string>([engine]);
+  out.add(engine.replace(/^(\d+\.\d+)(\s)/, "$1L$2"));
+  out.add(engine.replace(/^(\d+\.\d+)L(\s)/, "$1$2"));
+  const m = engine.match(/^(\d+\.\d+)/);
+  if (m) out.add(m[1]);
+  return [...out].filter(Boolean);
+}
+
+async function fetchLocalRowsForVehicle(opts: {
+  brand: string;
+  model: string;
+  engine?: string | null;
+  limit?: number;
+}): Promise<any[]> {
+  const limit = Math.min(opts.limit ?? 1000, 3000);
+  const variants = engineVariants(opts.engine);
+  const candidates = variants.length ? variants : [null];
+
+  for (const variant of candidates) {
+    let q = supabase
+      .from("parts_new_public")
+      .select(
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description, compatible_vehicles"
+      )
+      .ilike("compatible_vehicles", `%${opts.brand}%`)
+      .ilike("compatible_vehicles", `%${opts.model}%`)
+      .limit(limit);
+    if (variant) q = q.ilike("compatible_vehicles", `%${variant}%`);
+
+    const { data, error } = await q;
+    if (error) {
+      console.error("[catalogV2API] fetchLocalRowsForVehicle failed:", error.message);
+      return [];
+    }
+    if (data && data.length > 0) return data;
+  }
+  return [];
+}
+
+export async function listPartsForVehicle(opts: {
+  brand: string;
+  model: string;
+  engine?: string | null;
+  nextisVehicleId?: string;
+  canonicalCategory?: string;
+  categoryKeywords?: string[];
+  page?: number;
+  pageSize?: number;
+}): Promise<{ items: CatalogPart[]; total: number }> {
+  const page = Math.max(0, opts.page ?? 0);
+  const pageSize = Math.min(opts.pageSize ?? 30, PAGE_SIZE_MAX);
+
+  console.log("[catalogV2API] listPartsForVehicle", {
+    brand: opts.brand,
+    model: opts.model,
+    engine: opts.engine,
+    category: opts.canonicalCategory,
+    keywords: opts.categoryKeywords?.length ?? 0,
+  });
+
+  const rows = await fetchLocalRowsForVehicle({
+    brand: opts.brand,
+    model: opts.model,
+    engine: opts.engine,
+    limit: 2000,
+  });
+
+  let parts = rows
+    .map(normalizeRow)
+    .filter((p) =>
+      ALLOWED_OEM_SOURCES.includes(p.catalog_source as (typeof ALLOWED_OEM_SOURCES)[number])
+    );
+
+  // Strict category filter — never broaden across categories.
+  if (opts.categoryKeywords && opts.categoryKeywords.length > 0) {
+    parts = parts.filter((p) => partMatchesKeywords(p, opts.categoryKeywords!));
+  }
+
+  parts = dedupeByOem(parts).sort((a, b) => a.rank - b.rank);
+
+  const total = parts.length;
+  const sliced = parts.slice(page * pageSize, page * pageSize + pageSize);
+  return { items: sliced, total };
+}
+
+// =============================================================
+// CATEGORY TREE — counts based on local parts inventory
+// =============================================================
+
+function countSeedTree(seed: SeedCategory[], parts: CatalogPart[], path: string[] = []): CatalogCategoryNode[] {
+  return seed.map((node) => {
+    const nodePath = [...path, node.label];
+    const matches = parts.filter((p) => partMatchesKeywords(p, node.keywords));
+    const children = node.children
+      ? countSeedTree(node.children, matches, nodePath)
+      : [];
+    return {
+      id: node.id,
+      label: node.label,
+      path: nodePath,
+      keywords: node.keywords,
+      sectionId: node.sectionId ?? null,
+      count: matches.length,
+      children,
+    };
+  });
+}
+
+export async function fetchJmCategoryTree(opts: {
+  nextisVehicleId?: string;
+  brand: string;
+  model: string;
+  engine?: string | null;
+}): Promise<CatalogCategoryNode[]> {
+  // Build the local tree from parts inventory — fast, deterministic, never crashes.
+  const rows = await fetchLocalRowsForVehicle({
+    brand: opts.brand,
+    model: opts.model,
+    engine: opts.engine,
+    limit: 3000,
+  });
+  const parts = rows
+    .map(normalizeRow)
+    .filter((p) =>
+      ALLOWED_OEM_SOURCES.includes(p.catalog_source as (typeof ALLOWED_OEM_SOURCES)[number])
+    );
+
+  const localTree = countSeedTree(DEFAULT_CATEGORY_TREE, parts);
+
+  // Best-effort enrichment from jm-proxy. If it fails, we keep the local tree.
+  try {
+    const { data, error } = await supabase.functions.invoke("jm-proxy", {
+      body: {
+        action: "vehicleCategories",
+        payload: {
+          nextisVehicleId: opts.nextisVehicleId,
+          brand: opts.brand,
+          model: opts.model,
+          engine: opts.engine || "",
+        },
+      },
+    });
+    if (!error && data?.success && Array.isArray(data?.data?.categories) && data.data.categories.length > 0) {
+      // Proxy already returns CatalogCategoryNode-compatible shape.
+      return data.data.categories as CatalogCategoryNode[];
+    }
+  } catch (e) {
+    console.warn("[catalogV2API] jm-proxy vehicleCategories failed (using local tree):", e);
+  }
+
+  return localTree;
+}
+
+// =============================================================
+// J+M (aftermarket) — strict category scoping
+// =============================================================
+
+type JmRaw = {
+  oem_number?: string;
+  name?: string;
+  brand?: string;
+  manufacturer?: string;
+  price_with_vat?: number | null;
+  price_without_vat?: number | null;
+  stock?: number;
+  availability?: string;
+  image_urls?: string[];
+  category?: string;
+  description?: string;
+};
+
+function jmNormalize(it: JmRaw): CatalogPart {
+  const pw = safeNumber(it.price_with_vat);
+  const pwoVat =
+    safeNumber(it.price_without_vat) ?? (pw !== null ? Math.round((pw / 1.21) * 100) / 100 : null);
+
+  return {
+    id: `jm:${it.oem_number || Math.random()}`,
+    oem_number: String(it.oem_number || ""),
+    name: String(it.name || it.oem_number || "—"),
+    manufacturer: it.manufacturer || it.brand || "J+M",
+    catalog_source: "jm",
+    price_without_vat: pwoVat && pwoVat > 0 ? pwoVat : null,
+    price_with_vat: pw && pw > 0 ? pw : null,
+    availability: it.availability || (it.stock && it.stock > 0 ? "in_stock" : "unknown"),
+    image_urls: Array.isArray(it.image_urls) ? it.image_urls : null,
+    category: it.category ?? null,
+    description: it.description ?? null,
+    is_oem: false,
+    badge_label: "NÁHRADA",
+    rank: 5,
+  };
+}
+
+export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
+  if (!code) return [];
+  try {
+    const { data, error } = await supabase.functions.invoke("jm-proxy", {
+      body: { action: "searchByCode", payload: { code } },
+    });
+    if (error || !data?.success) return [];
+    const items = Array.isArray(data?.data?.items) ? data.data.items : [];
+    return items.map(jmNormalize);
+  } catch (e) {
+    console.warn("[catalogV2API] fetchJmByCode failed:", e);
+    return [];
+  }
+}
+
+export async function fetchJmByCodes(codes: string[]): Promise<CatalogPart[]> {
+  const unique = [...new Set((codes || []).filter(Boolean))].slice(0, 30);
+  if (unique.length === 0) return [];
+  const results = await Promise.allSettled(unique.map((c) => fetchJmByCode(c)));
+  const out: CatalogPart[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") out.push(...r.value);
+  }
+  return dedupeByOem(out);
+}
+
+export async function fetchJmForVehicle(opts: {
+  brand: string;
+  model: string;
+  engine?: string | null;
+  nextisVehicleId?: string;
+  sectionId?: number | null;
+  category?: string;
+  categoryKeywords?: string[];
+  parentKeywords?: string[];
+}): Promise<{ items: CatalogPart[]; warning?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("jm-proxy", {
+      body: {
+        action: "searchByVehicle",
+        payload: {
+          nextisVehicleId: opts.nextisVehicleId,
+          brand: opts.brand,
+          model: opts.model,
+          engine: opts.engine || "",
+          sectionId: opts.sectionId ?? null,
+          category: opts.category,
+          categoryKeywords: opts.categoryKeywords || [],
+          parentKeywords: opts.parentKeywords || [],
+        },
+      },
+    });
+    if (error) {
+      console.warn("[catalogV2API] jm-proxy searchByVehicle error:", error.message);
+      return { items: [], warning: error.message };
+    }
+    if (!data?.success) {
+      return { items: [], warning: data?.error || "J+M nevrátilo data" };
+    }
+    const raw = Array.isArray(data?.data?.items) ? data.data.items : [];
+    let items = raw.map(jmNormalize).filter((p: CatalogPart) => p.oem_number);
+
+    // Strict scope filter (defense in depth — proxy should already filter).
+    if (opts.categoryKeywords && opts.categoryKeywords.length > 0) {
+      items = items.filter((p: CatalogPart) => partMatchesKeywords(p, opts.categoryKeywords!));
+    }
+
+    // Hide pure noise — keep only items with stock or price.
+    items = items.filter(
+      (p: CatalogPart) =>
+        (p.price_with_vat !== null && p.price_with_vat > 0) || p.availability === "in_stock"
+    );
+
+    return { items: dedupeByOem(items) };
+  } catch (e) {
+    const err = e as { message?: string };
+    console.error("[catalogV2API] fetchJmForVehicle threw:", err?.message || e);
+    return { items: [], warning: err?.message || "J+M dotaz selhal" };
+  }
+}
+
+// =============================================================
+// MERGE: OEM-first, J+M never overrides existing OEM
+// =============================================================
+
+export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
+  const oemKeys = new Set(oem.map((p) => normalizeOem(p.oem_number)).filter(Boolean));
+  const filteredJm = jm.filter((p) => {
+    const k = normalizeOem(p.oem_number);
+    return k && !oemKeys.has(k);
+  });
+  return [...oem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
+}
+
+/** Legacy alias kept for older callers. */
+export const mergeParts = mergeWithJm;
+
+// =============================================================
+// GLOBAL OEM SEARCH — header search bar
+// =============================================================
+
+export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart[]; jm: CatalogPart[] }> {
+  const term = (query || "").trim();
+  if (term.length < 2) return { oem: [], jm: [] };
+
+  const [localRes, jmRes] = await Promise.allSettled([
+    supabase
+      .from("parts_new_public")
+      .select(
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description"
+      )
+      .or(`oem_number.ilike.%${term}%,name.ilike.%${term}%`)
+      .limit(50),
+    fetchJmByCode(term),
+  ]);
+
+  const oem: CatalogPart[] =
+    localRes.status === "fulfilled" && localRes.value.data
+      ? (localRes.value.data as any[])
+          .map(normalizeRow)
+          .filter((p) =>
+            ALLOWED_OEM_SOURCES.includes(p.catalog_source as (typeof ALLOWED_OEM_SOURCES)[number])
+          )
+          .sort((a, b) => a.rank - b.rank)
+      : [];
+
+  const jm: CatalogPart[] = jmRes.status === "fulfilled" ? jmRes.value : [];
+
+  // Hide JM duplicates of OEM hits.
+  const oemKeys = new Set(oem.map((p) => normalizeOem(p.oem_number)));
+  const cleanJm = jm.filter((p) => !oemKeys.has(normalizeOem(p.oem_number)));
+
+  return { oem: dedupeByOem(oem), jm: dedupeByOem(cleanJm) };
+}
+
+// =============================================================
+// LEGACY listParts — kept for callers expecting the old API
+// =============================================================
 
 export async function listParts(filter: {
   brand?: string;
@@ -101,141 +730,62 @@ export async function listParts(filter: {
   search?: string;
   page?: number;
   pageSize?: number;
-}) {
-  const page = filter.page ?? 0;
-  const pageSize = filter.pageSize ?? 30;
-
+}): Promise<{ items: CatalogPart[]; total: number }> {
+  const page = Math.max(0, filter.page ?? 0);
+  const pageSize = Math.min(filter.pageSize ?? 30, PAGE_SIZE_MAX);
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
   let q = supabase
     .from("parts_new_public")
-    .select("*", { count: "exact" })
-    .in("catalog_source", ALLOWED_SOURCES as unknown as string[]);
+    .select(
+      "id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description, compatible_vehicles",
+      { count: "exact" }
+    )
+    .in("catalog_source", ALLOWED_OEM_SOURCES as unknown as string[]);
 
   if (filter.brand) q = q.ilike("compatible_vehicles", `%${filter.brand}%`);
   if (filter.model) q = q.ilike("compatible_vehicles", `%${filter.model}%`);
   if (filter.engine) q = q.ilike("compatible_vehicles", `%${filter.engine}%`);
-
   if (filter.search) {
     const t = filter.search.trim();
     q = q.or(`oem_number.ilike.%${t}%,name.ilike.%${t}%`);
   }
-
   q = q.range(from, to);
 
   const { data, error, count } = await q;
-  if (error) throw new Error(error.message);
-
-  const items = (data || []).map(normalize);
-
-  // OEM FIRST
-  items.sort((a, b) => a.rank - b.rank);
-
-  return {
-    items,
-    total: count || 0,
-  };
-}
-
-// ======================================================
-// J+M API (via Supabase Function)
-// ======================================================
-
-type JmRaw = {
-  oem_number?: string;
-  name?: string;
-  brand?: string;
-  price_with_vat?: number;
-  price_without_vat?: number;
-  stock?: number;
-  availability?: string;
-};
-
-function jmNormalize(it: JmRaw): CatalogPart {
-  const pw = it.price_with_vat ?? null;
-
-  return {
-    id: `jm:${it.oem_number}`,
-    oem_number: it.oem_number || "",
-    name: it.name || it.oem_number || "—",
-    manufacturer: it.brand || "J+M",
-    catalog_source: "jm",
-    price_without_vat: it.price_without_vat ?? (pw ? pw / 1.21 : null),
-    price_with_vat: pw,
-    availability: it.availability || (it.stock ? "in_stock" : "unknown"),
-    image_urls: null,
-    category: null,
-    description: null,
-    is_oem: false,
-    badge_label: "NÁHRADA",
-    rank: 5,
-  };
-}
-
-export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
-  const { data, error } = await supabase.functions.invoke("jm-proxy", {
-    body: {
-      action: "searchByCode",
-      payload: { code },
-    },
-  });
-
-  if (error || !data?.success) return [];
-
-  return (data.data?.items || []).map(jmNormalize);
-}
-
-// ======================================================
-// MERGE OEM + J+M
-// ======================================================
-
-export function mergeParts(oem: CatalogPart[], jm: CatalogPart[]) {
-  const seen = new Set<string>();
-
-  const filteredJm = jm.filter((p) => {
-    const key = p.oem_number;
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  return [...oem, ...filteredJm].sort((a, b) => a.rank - b.rank);
-}
-
-// ======================================================
-// VĚRNOSTSEVYPLACÍ (CSV SYNC - NO API)
-// ======================================================
-// ⚠️ tohle není API – jen placeholder pro import CSV dat
-
-export async function syncPricesFromCsv(rows: any[]) {
-  // rows = CSV parsed data
-  const updates = rows.map((r) => ({
-    oem_number: r.oem,
-    price_with_vat: Number(r.price),
-  }));
-
-  for (const u of updates) {
-    await supabase
-      .from("parts_new_public")
-      .update({ price_with_vat: u.price_with_vat })
-      .eq("oem_number", u.oem_number);
+  if (error) {
+    console.error("[catalogV2API] listParts failed:", error.message);
+    return { items: [], total: 0 };
   }
 
-  return { updated: updates.length };
+  const items = (data || []).map(normalizeRow).sort((a, b) => a.rank - b.rank);
+  return { items, total: count || 0 };
 }
 
-// ======================================================
-// BRANDS
-// ======================================================
+// =============================================================
+// CSV PRICING SYNC (vernostsevyplaci) — NO API
+// =============================================================
 
-export async function fetchBrands(): Promise<string[]> {
-  const { data } = await supabase
-    .from("nextis_vehicles")
-    .select("brand")
-    .in("brand", ALLOWED_BRANDS as any);
-
-  const set = new Set((data || []).map((r: any) => r.brand));
-
-  return ALLOWED_BRANDS.filter((b) => set.has(b));
+export async function syncPricesFromCsv(rows: Array<{ oem: string; price: number | string }>): Promise<{ updated: number; skipped: number }> {
+  let updated = 0;
+  let skipped = 0;
+  for (const r of rows || []) {
+    const oem = String(r?.oem || "").trim();
+    const price = Number(r?.price);
+    if (!oem || !Number.isFinite(price) || price <= 0 || price > 1_000_000) {
+      skipped++;
+      continue;
+    }
+    const { error } = await supabase
+      .from("parts_new")
+      .update({ price_with_vat: price })
+      .eq("oem_number", oem);
+    if (error) {
+      skipped++;
+      continue;
+    }
+    updated++;
+  }
+  return { updated, skipped };
 }
