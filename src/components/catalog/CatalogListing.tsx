@@ -15,8 +15,10 @@ interface Props {
   emptyHint?: string;
 }
 
-const formatPrice = (n: number) =>
-  n > 0 ? new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n) : "Cena na vyžádání";
+const formatPrice = (n: number | null | undefined) =>
+  n === null || n === undefined
+    ? "Cena na vyžádání"
+    : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 const SkeletonCard = () => (
   <div className="flex gap-3 p-3 rounded-xl border border-border/30 bg-card animate-pulse">
@@ -102,7 +104,7 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
                   <div className={cn("text-sm font-bold", isOem ? "text-primary" : "text-foreground")}>
                     {formatPrice(p.price_with_vat)}
                   </div>
-                  {p.price_with_vat > 0 && (
+                  {p.price_without_vat !== null && p.price_without_vat !== undefined && (
                     <div className="text-[10px] text-muted-foreground">
                       {formatPrice(p.price_without_vat)} bez DPH
                     </div>
