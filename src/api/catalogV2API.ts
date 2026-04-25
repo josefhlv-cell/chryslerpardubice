@@ -371,13 +371,13 @@ export type CatalogCategoryNode = {
 const DEFAULT_JM_CATEGORY_TREE: CatalogCategoryNode[] = [
   {
     id: "brakes", label: "Brzdové zařízení", level: 0, sectionId: null, path: ["Brzdové zařízení"],
-    keywords: ["brzd", "brake", "abs", "třmen", "trmen", "kotouč", "kotouc", "destičk", "destick"], count: 0,
+    keywords: ["brzd", "brake", "abs", "třmen", "trmen", "kotouč", "kotouc", "destičk", "destick", "obložen", "oblozen"], count: 0,
     children: [
       {
         id: "disc-brakes", label: "Kotoučové brzdy", level: 1, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy"],
-        keywords: ["brzd", "brake", "kotouč", "kotouc", "destičk", "destick", "třmen", "trmen"], count: 0,
+        keywords: ["brzd", "brake", "kotouč", "kotouc", "destičk", "destick", "obložen", "oblozen", "třmen", "trmen"], count: 0,
         children: [
-          { id: "brake-pads", label: "Brzdové destičky", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], keywords: ["destičk", "destick", "pad", "pads"], count: 0 },
+          { id: "brake-pads", label: "Brzdové destičky", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], keywords: ["destičk", "destick", "obložen", "oblozen", "pad", "pads"], count: 0 },
           { id: "brake-discs", label: "Brzdové kotouče", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové kotouče"], keywords: ["kotouč", "kotouc", "disc", "rotor"], count: 0 },
           { id: "brake-calipers", label: "Brzdové třmeny", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové třmeny"], keywords: ["třmen", "trmen", "caliper"], count: 0 },
         ],
@@ -448,15 +448,8 @@ async function fetchLocalVehicleRows(opts: { brand: string; model: string; engin
     if (data?.length) return data;
   }
 
-  const { data, error } = await supabase
-    .from("parts_new_public")
-    .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
-    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
-    .ilike("compatible_vehicles", `%${opts.brand}%`)
-    .ilike("compatible_vehicles", `%${opts.model}%`)
-    .limit(limit);
-  if (error) throw new Error(error.message);
-  return data || [];
+  console.warn("[Catalog strict] no local rows for selected engine", opts);
+  return [];
 }
 
 export async function fetchCategoriesForVehicle(brand: string, model: string, engine?: string): Promise<CategoryTile[]> {
