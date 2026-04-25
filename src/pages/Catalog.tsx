@@ -70,12 +70,16 @@ const Catalog = () => {
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [engines, setEngines] = useState<string[]>([]);
-  const [categories, setCategories] = useState<CategoryTile[]>([]);
+  const [vehicles, setVehicles] = useState<NextisVehicle[]>([]);
+  const [categories, setCategories] = useState<CatalogCategoryNode[]>([]);
+  const [categoryPath, setCategoryPath] = useState<string[]>([]);
+  const [categoryQuery, setCategoryQuery] = useState("");
 
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [engine, setEngine] = useState("");
-  const [category, setCategory] = useState("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [category, setCategory] = useState<CatalogCategoryNode | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<CatalogPart[]>([]);
