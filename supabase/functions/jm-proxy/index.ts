@@ -438,34 +438,69 @@ Deno.serve(async (req) => {
       }
 
       case 'searchByCode': {
-        const code = String(payload.code || '').trim();
-        if (!code) { result = { items: [] }; break; }
-        // TecDoc target P = Passenger Car (most US brands), O = Off-road/Truck (Ram, Jeep)
+        const rawCode = String(payload.code || '').trim();
+        if (!rawCode) { result = { items: [] }; break; }
+        const skipBrandFilter = payload.skipBrandFilter === true || payload.debug === true;
+
+        // Try variants in parallel: with K prefix, without K prefix, raw as-is.
+        const stripped = rawCode.replace(/^K/i, '');
+        const variants = Array.from(new Set([
+          rawCode,
+          stripped,
+          `K${stripped}`,
+        ].filter(Boolean)));
         const targets: Array<string | undefined> = [undefined, 'P', 'O'];
-        let raw: any = null;
-        let usedTarget = '(default)';
-        for (const target of targets) {
-          const reqBody: Record<string, unknown> = {
-            code,
-            getOECodes: true,
-            getDeposits: false,
-            getServices: false,
-            getCashBack: false,
-            getEANCodes: false,
-          };
-          if (target) reqBody.target = target;
-          raw = await nextisPost('/catalogs/items-finding-by-code', reqBody);
-          const found = (raw?.items || raw?.Items || []).length;
-          if (found > 0) { usedTarget = target || '(default)'; break; }
+
+        const attempts: Array<{ code: string; target?: string; raw: any; count: number }> = [];
+        const all: any[] = [];
+
+        for (const variant of variants) {
+          for (const target of targets) {
+            const reqBody: Record<string, unknown> = {
+              code: variant,
+              searchTarget: 'CodeOE',
+              trySearchWithoutManufacturer: true,
+              getOECodes: true,
+              getDeposits: false,
+              getServices: false,
+              getCashBack: false,
+              getEANCodes: false,
+            };
+            if (target) reqBody.target = target;
+            const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody).catch((e) => ({ _error: String(e) }));
+            const list = (raw?.items || raw?.Items || []);
+            attempts.push({ code: variant, target, raw: { status: raw?.status, statusText: raw?.statusText, error: raw?._error }, count: list.length });
+            if (list.length) {
+              all.push(...list);
+              break; // got hits for this variant, move to next variant
+            }
+          }
         }
-        const items = normalizeItems(raw);
+
+        // Deduplicate by oem_number
+        const seen = new Set<string>();
+        const merged = extractItems({ items: all })
+          .map(normalizeCatalogItem)
+          .filter((p) => {
+            if (!p.oem_number) return false;
+            const key = p.oem_number.toUpperCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return skipBrandFilter ? true : isUsBrand(p.brand);
+          });
 
         try {
-          const codes = items.map((i) => i.oem_number).filter(Boolean);
+          const codes = merged.map((i) => i.oem_number).filter(Boolean);
           if (codes.length) await enrichPricesIntoDb(adminClient, codes);
         } catch (_) { /* non-blocking */ }
 
-        result = { items, target: usedTarget, status: raw?.status, statusText: raw?.statusText };
+        result = {
+          items: merged,
+          variantsTried: variants,
+          attempts,
+          skipBrandFilter,
+          totalRawHits: all.length,
+        };
         break;
       }
 
