@@ -452,6 +452,7 @@ Deno.serve(async (req) => {
         const raw = await nextisPost('/catalogs/items-checking', {
           items: codes.map((c) => ({ code: c })),
           trySearchWithoutManufacturer: true,
+          searchTarget: 'CodeOE',
         });
         const items = normalizeItems(raw);
         const enrich = await enrichPricesIntoDb(adminClient, codes).catch(() => ({ enriched: 0 }));
