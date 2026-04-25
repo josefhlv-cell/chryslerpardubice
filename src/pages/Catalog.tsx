@@ -19,9 +19,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
   fetchCategoriesForVehicle, listPartsForVehicle,
-  fetchJmByCodes, mergeWithJm,
+  fetchJmByCodes, fetchJmForVehicle, mergeWithJm,
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
 import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
 
@@ -136,43 +138,68 @@ const Catalog = () => {
     (async () => {
       try {
         setListLoading(true);
-        // 1) Local OEM/Mopar listing first — paints fast.
-        const { items: oemItems, total: oemTotal } = await listPartsForVehicle({
-          brand,
-          model,
-          engine,
-          canonicalCategory: category,
-          page,
-          pageSize: 30,
-        });
+        setJmLoading(true);
+
+        // PARALLEL: fetch OEM (local) AND J+M (vehicle search) simultaneously.
+        // J+M runs INDEPENDENTLY of local results — even if 0 OEM parts found,
+        // J+M aftermarket parts must show up.
+        console.log(`[Catalog] Parallel fetch: OEM(local) + J+M(vehicle) for ${brand} ${model} ${engine}`);
+        const [oemRes, jmVehicleRes] = await Promise.allSettled([
+          listPartsForVehicle({
+            brand, model, engine,
+            canonicalCategory: category,
+            page, pageSize: 30,
+          }),
+          page === 0 ? fetchJmForVehicle({ brand, model }) : Promise.resolve([]),
+        ]);
         if (cancelled) return;
+
+        const { items: oemItems, total: oemTotal } =
+          oemRes.status === "fulfilled" ? oemRes.value : { items: [], total: 0 };
+        const jmFromVehicle =
+          jmVehicleRes.status === "fulfilled" ? jmVehicleRes.value : [];
+
+        if (oemRes.status === "rejected") {
+          console.error("[Catalog] OEM fetch failed:", oemRes.reason);
+        }
+        if (jmVehicleRes.status === "rejected") {
+          console.warn("[Catalog] J+M vehicle search failed:", jmVehicleRes.reason);
+        }
+
+        // Filter J+M vehicle results by canonical category (best-effort)
+        const filteredJmVehicle = category
+          ? jmFromVehicle.filter((p) => {
+              const c = (p.category || "").toLowerCase();
+              const cat = category.toLowerCase();
+              return !c || c.includes(cat) || cat.includes(c);
+            })
+          : jmFromVehicle;
+
         setItems(oemItems);
         setTotal(oemTotal);
 
-        // 2) Live J+M overlay — fetch live aftermarket alternatives (NÁHRADA)
-        // for every visible OEM code. J+M items appear as separate rows below
-        // their matching OEM, never overwriting OEM prices.
+        // Also enrich with J+M lookups for visible OEM codes (price+stock)
+        let jmByCodes: CatalogPart[] = [];
         if (page === 0 && oemItems.length > 0) {
-          setJmLoading(true);
           const codes = oemItems.map((p) => p.oem_number).filter(Boolean);
-          console.log(`[Catalog] Querying J+M for ${codes.length} OEM codes`);
           try {
-            const jm = await fetchJmByCodes(codes);
-            if (cancelled) return;
-            console.log(`[Catalog] J+M returned ${jm.length} alternatives`);
-            setJmCount(jm.length);
-            setItems(mergeWithJm(oemItems, jm));
-            setTotal(oemTotal + jm.length);
-            if (jm.length === 0 && codes.length > 0) {
-              toast.info("J+M: pro tuto stránku nejsou aftermarket alternativy.");
-            }
+            jmByCodes = await fetchJmByCodes(codes);
+            console.log(`[Catalog] J+M by codes: ${jmByCodes.length}`);
           } catch (jmErr: any) {
-            console.error("[Catalog] J+M fetch failed:", jmErr);
-            toast.warning("J+M nedostupné: " + (jmErr?.message || "neznámá chyba"));
-            setJmCount(0);
+            console.error("[Catalog] J+M by codes failed:", jmErr);
           }
-        } else {
-          setJmCount(0);
+        }
+
+        // Merge both J+M streams (vehicle-search + by-codes)
+        const allJm = [...jmByCodes, ...filteredJmVehicle];
+        if (cancelled) return;
+        setJmCount(allJm.length);
+        const merged = mergeWithJm(oemItems, allJm);
+        setItems(merged);
+        setTotal(oemTotal + allJm.length);
+
+        if (oemItems.length === 0 && allJm.length === 0) {
+          console.log("[Catalog] Empty: no OEM, no J+M for this category");
         }
       } catch (err: any) {
         if (!cancelled) {
