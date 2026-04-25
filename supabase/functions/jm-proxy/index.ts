@@ -1,5 +1,15 @@
 // J+M Autodíly / Nextis API Proxy
-// Secure server-side proxy that handles auth + caches Bearer token in memory.
+// Verified against the official Nextis swagger:
+//   https://api.jmautodily.nextis.cz/swagger/v1/swagger.json
+//
+// Real endpoints (POST, kebab-case, token goes in BODY, not header):
+//   /common/authentication            -> { login, password } -> { token, tokenValidTo, ... }
+//   /catalogs/items-finding-by-code   -> { token, code, ... }
+//   /catalogs/items-finding-by-vehicle-> { token, engineID, ... }
+//   /catalogs/items-checking          -> { token, items: [{prefix?, code, brand?}] } -> price + stock
+//
+// Nextis does NOT expose any vehicle-tree endpoint, so syncCategories seeds
+// the local catalog_categories tree from a curated whitelist instead.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,104 +19,79 @@ const corsHeaders = {
 
 const BASE_URL = 'https://api.jmautodily.nextis.cz';
 
-// Allowed US brands (normalized lowercase, partial match)
 const US_BRANDS = [
   'chrysler', 'dodge', 'jeep', 'ram', 'cadillac', 'chevrolet', 'chevy',
   'gmc', 'buick', 'ford', 'lincoln', 'mercury', 'pontiac', 'hummer',
   'tesla', 'oldsmobile', 'plymouth', 'saturn', 'mopar',
 ];
-
-// Universal/generic brands always allowed (oils, filters, batteries etc.)
-const UNIVERSAL_BRANDS = ['bosch', 'mann', 'mahle', 'denso', 'ngk', 'gates', 'febi', 'valeo'];
+const UNIVERSAL_BRANDS = ['bosch', 'mann', 'mahle', 'denso', 'ngk', 'gates', 'febi', 'valeo', 'sachs', 'lemforder', 'trw', 'brembo', 'monroe', 'bilstein'];
+const ALLOWED_BRANDS = ['chrysler', 'dodge', 'ram', 'cadillac', 'lancia'];
 
 function isUsBrand(producer: string | null | undefined): boolean {
-  if (!producer) return true; // unknown -> let it pass, frontend may filter further
+  if (!producer) return true;
   const p = producer.toLowerCase().trim();
   return US_BRANDS.some((b) => p.includes(b)) || UNIVERSAL_BRANDS.some((b) => p.includes(b));
 }
 
-// In-memory token cache (per warm instance)
+// ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) {
-    return cachedToken.token;
-  }
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) return cachedToken.token;
+
   const login = Deno.env.get('JM_LOGIN');
   const password = Deno.env.get('JM_PASS');
-  const customerNo = Deno.env.get('JM_CUST_NO');
+  if (!login || !password) throw new Error('Missing JM_LOGIN / JM_PASS');
 
-  if (!login || !password || !customerNo) {
-    throw new Error('Missing JM credentials in secrets');
-  }
-
-  // Nextis auth: POST /common/authentication with { login, password }
-  const url = `${BASE_URL}/common/authentication`;
-  const res = await fetch(url, {
+  const res = await fetch(`${BASE_URL}/common/authentication`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ login, password }),
   });
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Nextis auth failed: ${url} -> ${res.status} ${text.slice(0, 200)}`);
+    const t = await res.text().catch(() => '');
+    throw new Error(`Nextis auth ${res.status}: ${t.slice(0, 200)}`);
   }
   const data = await res.json();
   const token = data.token || data.Token;
-  if (!token) {
-    throw new Error(`Nextis auth: no token in response (status=${data.status ?? '?'} ${data.statusText ?? ''})`);
-  }
-  // tokenValidTo (ISO date) controls real expiry; default ~120 min. Cache slightly less.
-  const validTo = data.tokenValidTo ? new Date(data.tokenValidTo).getTime() : Date.now() + 110 * 60 * 1000;
+  if (!token) throw new Error(`Nextis auth: no token (status=${data.status ?? '?'} ${data.statusText ?? ''})`);
+
+  const validTo = data.tokenValidTo
+    ? new Date(data.tokenValidTo).getTime()
+    : Date.now() + 110 * 60 * 1000;
   cachedToken = { token, expiresAt: validTo };
   return token;
 }
 
-async function nextisCallRaw(path: string, body: unknown): Promise<Response> {
+// ---------- Nextis low-level call ----------
+async function nextisPost(path: string, body: Record<string, unknown>): Promise<any> {
   const token = await getToken();
+  const payload = { token, language: 'cs', ...body };
+
   let res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
   });
+
   if (res.status === 401) {
     cachedToken = null;
-    const t2 = await getToken();
+    const fresh = await getToken();
     res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${t2}`,
-      },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ ...payload, token: fresh }),
     });
   }
-  return res;
-}
 
-async function nextisCall(path: string, body: unknown): Promise<unknown> {
-  const res = await nextisCallRaw(path, body);
-  if (!res.ok) throw new Error(`Nextis ${path}: ${res.status} ${await res.text().catch(() => '')}`);
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Nextis ${path} ${res.status}: ${t.slice(0, 300)}`);
+  }
   return await res.json();
 }
 
-// Try a list of candidate endpoints and return the first 2xx JSON response.
-async function nextisTry(paths: string[], body: unknown): Promise<{ data: unknown; path: string } | null> {
-  for (const p of paths) {
-    try {
-      const res = await nextisCallRaw(p, body);
-      if (res.ok) return { data: await res.json(), path: p };
-      await res.text().catch(() => '');
-    } catch (_) { /* try next */ }
-  }
-  return null;
-}
-
+// ---------- normalisation ----------
 interface UnifiedPart {
   supplier: 'jm';
   oem_number: string;
@@ -121,39 +106,224 @@ interface UnifiedPart {
   compatible_vehicles: string[];
 }
 
-function normalizeItems(raw: any): UnifiedPart[] {
-  const items: any[] = Array.isArray(raw) ? raw : raw?.Items || raw?.items || raw?.Data || raw?.Result || [];
-  return items
-    .map((it): UnifiedPart => {
-      const code = it.Code || it.OemNumber || it.ItemCode || it.code || '';
-      const producer = it.Producer || it.Brand || it.Manufacturer || it.producer || '';
-      const name = it.Name || it.Description || it.name || '';
-      const price = Number(it.Price || it.PriceWithoutVat || it.UnitPrice || 0);
-      const stock = Number(it.Stock || it.StockQuantity || it.Available || 0);
-      return {
-        supplier: 'jm',
-        oem_number: String(code),
-        brand: String(producer),
-        name: String(name),
-        price_without_vat: price,
-        price_with_vat: Math.round(price * 1.21 * 100) / 100,
-        stock,
-        availability: stock > 0 ? 'in_stock' : 'on_order',
-        image: it.ImageUrl || it.Image || '',
-        category: it.Category || it.CategoryName || '',
-        compatible_vehicles: it.CompatibleVehicles || [],
-      };
-    })
-    .filter((p) => isUsBrand(p.brand));
+function normalizeCatalogItem(it: any): UnifiedPart {
+  // Real Nextis CatalogItem shape
+  const code = it.productCode || it.ProductCode || '';
+  const prefix = it.productPrefix || it.ProductPrefix || '';
+  const brand = it.productBrand || it.ProductBrand || '';
+  const name = it.productName || it.ProductName || it.productDescription || '';
+  const price = it.price || it.Price || {};
+  const priceNoVat = Number(price.unitPrice ?? price.UnitPrice ?? 0);
+  const priceVat = Number(price.unitPriceIncVAT ?? price.UnitPriceIncVAT ?? priceNoVat * 1.21);
+  const stock = Number(it.qtyAvailableMain ?? it.QtyAvailableMain ?? 0)
+              + Number(it.qtyAvailableSupplier ?? it.QtyAvailableSupplier ?? 0);
+
+  return {
+    supplier: 'jm',
+    oem_number: String(prefix ? `${prefix}${code}` : code).trim(),
+    brand: String(brand).trim(),
+    name: String(name).trim(),
+    price_without_vat: Math.round(priceNoVat * 100) / 100,
+    price_with_vat: Math.round(priceVat * 100) / 100,
+    stock,
+    availability: stock > 0 ? 'in_stock' : 'on_order',
+    image: '',
+    category: '',
+    compatible_vehicles: [],
+  };
 }
 
+function extractItems(raw: any): any[] {
+  const list = raw?.items || raw?.Items || [];
+  // ResponseItem wraps actual CatalogItem under .responseItem
+  return list
+    .map((row: any) => row.responseItem || row.ResponseItem || row)
+    .filter(Boolean);
+}
+
+function normalizeItems(raw: any): UnifiedPart[] {
+  return extractItems(raw)
+    .map(normalizeCatalogItem)
+    .filter((p) => p.oem_number && isUsBrand(p.brand));
+}
+
+// ---------- Vehicle tree seed (no API endpoint exists) ----------
+const VEHICLE_TREE_SEED: Record<string, Array<{ model: string; engines: string[]; year_from?: number; year_to?: number }>> = {
+  Chrysler: [
+    { model: 'Voyager',         engines: ['2.5 CRD', '2.8 CRD', '3.3 V6', '3.8 V6'], year_from: 1996, year_to: 2007 },
+    { model: 'Grand Voyager',   engines: ['2.8 CRD', '3.3 V6', '3.8 V6', '3.6 V6'],  year_from: 2008, year_to: 2020 },
+    { model: 'Town & Country',  engines: ['3.3 V6', '3.8 V6', '4.0 V6', '3.6 V6'],   year_from: 2008, year_to: 2016 },
+    { model: 'Pacifica',        engines: ['3.6 V6', '3.6 V6 Hybrid'],                year_from: 2017 },
+    { model: '300C',            engines: ['3.0 CRD', '3.5 V6', '5.7 HEMI', '6.1 SRT8'], year_from: 2005 },
+    { model: '300M',            engines: ['3.5 V6'], year_from: 1999, year_to: 2004 },
+    { model: 'PT Cruiser',      engines: ['1.6', '2.0', '2.4', '2.2 CRD'], year_from: 2000, year_to: 2010 },
+    { model: 'Crossfire',       engines: ['3.2 V6', '3.2 SRT-6'], year_from: 2003, year_to: 2008 },
+    { model: 'Sebring',         engines: ['2.0', '2.4', '2.7 V6', '3.5 V6'], year_from: 2007, year_to: 2010 },
+  ],
+  Dodge: [
+    { model: 'Caravan',         engines: ['2.5 CRD', '3.3 V6', '3.8 V6'], year_from: 1996, year_to: 2007 },
+    { model: 'Grand Caravan',   engines: ['3.3 V6', '3.8 V6', '4.0 V6', '3.6 V6'], year_from: 2008, year_to: 2020 },
+    { model: 'Journey',         engines: ['2.0 CRD', '2.4', '2.7 V6', '3.5 V6', '3.6 V6'], year_from: 2008 },
+    { model: 'Nitro',           engines: ['2.8 CRD', '3.7 V6', '4.0 V6'], year_from: 2007, year_to: 2012 },
+    { model: 'Charger',         engines: ['2.7 V6', '3.5 V6', '3.6 V6', '5.7 HEMI', '6.1 SRT8', '6.4 SRT'], year_from: 2006 },
+    { model: 'Challenger',      engines: ['3.6 V6', '5.7 HEMI', '6.1 SRT8', '6.4 SRT'], year_from: 2008 },
+    { model: 'Magnum',          engines: ['2.7 V6', '3.5 V6', '5.7 HEMI'], year_from: 2004, year_to: 2008 },
+    { model: 'Ram 1500',        engines: ['3.6 V6', '5.7 HEMI', '3.0 EcoDiesel'], year_from: 2009 },
+    { model: 'Durango',         engines: ['3.6 V6', '5.7 HEMI', '6.4 SRT'], year_from: 2011 },
+    { model: 'Avenger',         engines: ['2.0', '2.4', '2.7 V6'], year_from: 2008, year_to: 2014 },
+  ],
+  Ram: [
+    { model: '1500',            engines: ['3.6 V6', '5.7 HEMI', '3.0 EcoDiesel'], year_from: 2011 },
+    { model: '2500',            engines: ['5.7 HEMI', '6.4 HEMI', '6.7 Cummins'], year_from: 2011 },
+    { model: '3500',            engines: ['6.4 HEMI', '6.7 Cummins'], year_from: 2011 },
+    { model: 'ProMaster',       engines: ['3.0 CRD', '3.6 V6'], year_from: 2014 },
+  ],
+  Cadillac: [
+    { model: 'Escalade',        engines: ['5.3 V8', '6.0 V8', '6.2 V8'], year_from: 2002 },
+    { model: 'CTS',             engines: ['2.8 V6', '3.6 V6', '6.2 V8'], year_from: 2003 },
+    { model: 'SRX',             engines: ['3.6 V6', '4.6 V8'], year_from: 2004, year_to: 2016 },
+    { model: 'XT5',             engines: ['3.6 V6', '2.0T'], year_from: 2017 },
+  ],
+  Lancia: [
+    { model: 'Voyager',         engines: ['2.8 CRD', '3.6 V6'], year_from: 2011, year_to: 2015 },
+    { model: 'Thema',           engines: ['3.0 V6 CRD', '3.6 V6', '5.7 HEMI'], year_from: 2011, year_to: 2014 },
+  ],
+};
+
+const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+
+async function seedVehicleTree(adminClient: any) {
+  let insertedVehicles = 0;
+  let insertedNodes = 0;
+
+  // Lookup or create brand roots
+  const { data: existingBrandRoots } = await adminClient
+    .from('catalog_categories')
+    .select('id, vehicle_brand')
+    .eq('node_type', 'brand');
+  const brandRootByName: Record<string, string> = {};
+  for (const r of existingBrandRoots || []) {
+    if (r.vehicle_brand) brandRootByName[r.vehicle_brand.toLowerCase()] = r.id;
+  }
+
+  for (const [brand, models] of Object.entries(VEHICLE_TREE_SEED)) {
+    if (!ALLOWED_BRANDS.includes(brand.toLowerCase())) continue;
+
+    // Ensure brand root exists
+    let brandId = brandRootByName[brand.toLowerCase()];
+    if (!brandId) {
+      const { data: br } = await adminClient
+        .from('catalog_categories')
+        .upsert({
+          slug: slugify(brand),
+          name_cs: brand,
+          name_en: brand,
+          node_type: 'brand',
+          vehicle_brand: brand,
+          source: 'jm',
+        }, { onConflict: 'parent_id,slug' })
+        .select('id')
+        .single();
+      brandId = br?.id;
+      if (brandId) brandRootByName[brand.toLowerCase()] = brandId;
+    }
+    if (!brandId) continue;
+
+    for (const m of models) {
+      const modelSlug = slugify(m.model);
+      const { data: modelRow, error: modelErr } = await adminClient
+        .from('catalog_categories')
+        .upsert({
+          parent_id: brandId,
+          slug: modelSlug,
+          name_cs: m.model,
+          name_en: m.model,
+          node_type: 'model',
+          vehicle_brand: brand,
+          vehicle_model: m.model,
+          year_from: m.year_from ?? null,
+          year_to: m.year_to ?? null,
+          source: 'jm',
+        }, { onConflict: 'parent_id,slug' })
+        .select('id')
+        .single();
+      if (modelErr || !modelRow) continue;
+      insertedNodes++;
+
+      for (const eng of m.engines) {
+        const engSlug = slugify(eng);
+        await adminClient
+          .from('catalog_categories')
+          .upsert({
+            parent_id: modelRow.id,
+            slug: engSlug,
+            name_cs: eng,
+            name_en: eng,
+            node_type: 'engine',
+            vehicle_brand: brand,
+            vehicle_model: m.model,
+            vehicle_engine: eng,
+            year_from: m.year_from ?? null,
+            year_to: m.year_to ?? null,
+            source: 'jm',
+          }, { onConflict: 'parent_id,slug' });
+        insertedNodes++;
+
+        // Mirror into nextis_vehicles for compatibility lookups
+        await adminClient.rpc('find_or_create_nextis_vehicle', {
+          _brand: brand,
+          _model: m.model,
+          _engine: eng,
+          _year_from: m.year_from ?? null,
+          _year_to: m.year_to ?? null,
+          _external_id: null,
+        });
+        insertedVehicles++;
+      }
+    }
+  }
+
+  return { insertedNodes, insertedVehicles };
+}
+
+// ---------- price enrichment helper (writes to parts_new) ----------
+async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
+  if (!codes.length) return { enriched: 0, attempted: 0 };
+  const items = codes.slice(0, 50).map((c) => ({ code: c }));
+  const raw = await nextisPost('/catalogs/items-checking', {
+    items,
+    trySearchWithoutManufacturer: true,
+    searchTarget: 'CodeOE',
+    getOECodes: false,
+  });
+  const list = (raw?.items || raw?.Items || []) as any[];
+  let enriched = 0;
+  for (const row of list) {
+    const ri = row.responseItem || row.ResponseItem;
+    if (!ri || !ri.valid) continue;
+    const oem = (ri.productPrefix ? `${ri.productPrefix}${ri.productCode}` : ri.productCode) || '';
+    const priceNoVat = Number(ri.price?.unitPrice ?? 0);
+    const priceVat = Number(ri.price?.unitPriceIncVAT ?? priceNoVat * 1.21);
+    if (!oem || priceNoVat <= 0) continue;
+    const { error: updErr } = await adminClient
+      .from('parts_new')
+      .update({
+        price_without_vat: Math.round(priceNoVat * 100) / 100,
+        price_with_vat: Math.round(priceVat * 100) / 100,
+        last_price_update: new Date().toISOString(),
+      })
+      .eq('oem_number', oem)
+      .eq('price_locked', false);
+    if (!updErr) enriched++;
+  }
+  return { enriched, attempted: codes.length };
+}
+
+// ---------- HTTP entry ----------
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    // Auth strategy:
-    //   - syncCategories: server-to-server (pg_cron). Allowed with valid anon/service bearer, no user required.
-    //   - all other actions: require an authenticated user (via JWT claims).
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -167,16 +337,17 @@ Deno.serve(async (req) => {
     const isServerKey = bearer === anonKey || bearer === serviceKey;
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-
     const body = await req.json();
-    const { action, payload } = body;
+    const { action, payload = {} } = body;
 
-    // For everything except syncCategories, require an authenticated user
-    if (action !== 'syncCategories') {
+    // Auth: server keys (cron) always allowed; otherwise validate user JWT.
+    // For syncCategories / enrichPrices, additionally require admin role.
+    let userId: string | null = null;
+    if (!isServerKey) {
       const authClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
         anonKey,
-        { global: { headers: { Authorization: authHeader } } }
+        { global: { headers: { Authorization: authHeader } } },
       );
       const { data: claims, error: claimsErr } = await authClient.auth.getClaims(bearer);
       if (claimsErr || !claims?.claims?.sub) {
@@ -185,175 +356,133 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-    } else if (!isServerKey) {
-      // syncCategories called with something other than anon/service key -> reject
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      userId = claims.claims.sub as string;
     }
 
-    // Admin client (service role) for writes to catalog_categories
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Allowed vehicle brands (Phase 1: strict whitelist)
-    const ALLOWED_BRANDS = ['chrysler', 'dodge', 'ram', 'cadillac', 'lancia'];
-    const isAllowedBrand = (b: string) =>
-      ALLOWED_BRANDS.some((a) => (b || '').toLowerCase().includes(a));
-
     let result: unknown;
     switch (action) {
       case 'ping': {
-        const token = await getToken();
-        result = { ok: true, hasToken: !!token };
+        const t = await getToken();
+        result = { ok: true, hasToken: !!t };
         break;
       }
+
       case 'syncCategories': {
-        // Pull Nextis vehicle/category tree and persist allowed brands into catalog_categories.
-        // Tries known Nextis catalog endpoints; gracefully falls back if shape differs.
-        const endpoints = [
-          '/common/getVehicleTree',
-          '/common/getBrands',
-          '/catalog/getVehicleTree',
-          '/api/v1/Catalogs/GetVehicleTree',
-          '/api/v1/Catalogs/VehicleHierarchy',
-          '/api/v1/Catalogs/GetBrands',
-        ];
-        let raw: any = null;
-        let usedEndpoint = '';
-        for (const ep of endpoints) {
-          try {
-            raw = await nextisCall(ep, { CustomerNumber: Deno.env.get('JM_CUST_NO') });
-            usedEndpoint = ep;
-            break;
-          } catch (_) { /* try next */ }
-        }
-        if (!raw) {
-          result = { synced: 0, error: 'No Nextis vehicle endpoint reachable', endpoints };
-          break;
-        }
-
-        const brands: any[] =
-          raw?.Brands || raw?.brands || raw?.Items || raw?.Data || (Array.isArray(raw) ? raw : []);
-
-        // Lookup existing brand roots so we can attach models under them
-        const { data: existingBrands } = await adminClient
-          .from('catalog_categories')
-          .select('id, vehicle_brand, slug')
-          .eq('node_type', 'brand');
-        const brandIdByName: Record<string, string> = {};
-        for (const b of existingBrands || []) {
-          if (b.vehicle_brand) brandIdByName[b.vehicle_brand.toLowerCase()] = b.id;
-        }
-
-        let inserted = 0;
-        let skipped = 0;
-
-        for (const br of brands) {
-          const brandName: string = br.Name || br.BrandName || br.name || '';
-          if (!brandName || !isAllowedBrand(brandName)) { skipped++; continue; }
-          const brandKey = ALLOWED_BRANDS.find((a) => brandName.toLowerCase().includes(a))!;
-          const parentId = brandIdByName[brandKey];
-          if (!parentId) { skipped++; continue; }
-
-          const models: any[] = br.Models || br.models || br.Items || [];
-          for (const m of models) {
-            const modelName: string = m.Name || m.ModelName || m.name || '';
-            if (!modelName) continue;
-            const slug = modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
-
-            const { data: modelRow, error: modelErr } = await adminClient
-              .from('catalog_categories')
-              .upsert({
-                parent_id: parentId,
-                slug,
-                name_cs: modelName,
-                name_en: modelName,
-                node_type: 'model',
-                vehicle_brand: brandKey.charAt(0).toUpperCase() + brandKey.slice(1),
-                vehicle_model: modelName,
-                source: 'jm',
-                external_id: String(m.Id || m.id || ''),
-              }, { onConflict: 'parent_id,slug' })
-              .select('id')
-              .single();
-            if (modelErr) continue;
-            inserted++;
-
-            // Optional: engines under model
-            const engines: any[] = m.Engines || m.engines || m.Types || [];
-            for (const e of engines) {
-              const engineName: string = e.Name || e.EngineName || e.name || '';
-              if (!engineName) continue;
-              const eSlug = engineName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60);
-              await adminClient
-                .from('catalog_categories')
-                .upsert({
-                  parent_id: modelRow.id,
-                  slug: eSlug,
-                  name_cs: engineName,
-                  name_en: engineName,
-                  node_type: 'engine',
-                  vehicle_brand: brandKey.charAt(0).toUpperCase() + brandKey.slice(1),
-                  vehicle_model: modelName,
-                  vehicle_engine: engineName,
-                  source: 'jm',
-                  external_id: String(e.Id || e.id || ''),
-                  year_from: e.YearFrom || e.year_from || null,
-                  year_to: e.YearTo || e.year_to || null,
-                }, { onConflict: 'parent_id,slug' });
-              inserted++;
-            }
+        // Restricted: cron (server key) OR authenticated admin
+        if (!isServerKey) {
+          const { data: isAdmin } = await adminClient.rpc('has_role', { _user_id: userId, _role: 'admin' });
+          if (!isAdmin) {
+            return new Response(JSON.stringify({ success: false, error: 'Admin role required' }), {
+              status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
           }
         }
-        result = { synced: inserted, skipped, endpoint: usedEndpoint, allowedBrands: ALLOWED_BRANDS };
+        const seed = await seedVehicleTree(adminClient);
+        result = {
+          synced: seed.insertedNodes,
+          vehicles: seed.insertedVehicles,
+          source: 'curated-seed',
+          note: 'Nextis API does not expose a vehicle tree; using curated whitelist.',
+          allowedBrands: ALLOWED_BRANDS,
+        };
         break;
       }
+
       case 'searchByCode': {
-        const candidates = [
-          '/common/itemFindingByCode',
-          '/catalog/itemFindingByCode',
-          '/api/v1/Catalogs/ItemFindingByCode',
-        ];
-        const r = await nextisTry(candidates, {
-          Code: payload.code,
-          CustomerNumber: Deno.env.get('JM_CUST_NO'),
-        });
-        if (!r) { result = { items: [], warning: 'No Nextis search endpoint reachable', tried: candidates }; break; }
-        result = { items: normalizeItems(r.data), endpoint: r.path };
+        const code = String(payload.code || '').trim();
+        if (!code) { result = { items: [] }; break; }
+        // TecDoc target P = Passenger Car (most US brands), O = Off-road/Truck (Ram, Jeep)
+        const targets: Array<string | undefined> = [undefined, 'P', 'O'];
+        let raw: any = null;
+        let usedTarget = '(default)';
+        for (const target of targets) {
+          const reqBody: Record<string, unknown> = {
+            code,
+            getOECodes: true,
+            getDeposits: false,
+            getServices: false,
+            getCashBack: false,
+            getEANCodes: false,
+          };
+          if (target) reqBody.target = target;
+          raw = await nextisPost('/catalogs/items-finding-by-code', reqBody);
+          const found = (raw?.items || raw?.Items || []).length;
+          if (found > 0) { usedTarget = target || '(default)'; break; }
+        }
+        const items = normalizeItems(raw);
+
+        try {
+          const codes = items.map((i) => i.oem_number).filter(Boolean);
+          if (codes.length) await enrichPricesIntoDb(adminClient, codes);
+        } catch (_) { /* non-blocking */ }
+
+        result = { items, target: usedTarget, status: raw?.status, statusText: raw?.statusText };
         break;
       }
+
       case 'searchByVehicle': {
-        const candidates = [
-          '/common/itemFindingByVehicle',
-          '/catalog/itemFindingByVehicle',
-          '/api/v1/Catalogs/ItemFindingByVehicle',
-        ];
-        const r = await nextisTry(candidates, {
-          ...payload,
-          CustomerNumber: Deno.env.get('JM_CUST_NO'),
-        });
-        if (!r) { result = { items: [], warning: 'No Nextis vehicle search endpoint reachable', tried: candidates }; break; }
-        result = { items: normalizeItems(r.data), endpoint: r.path };
+        // Nextis requires engineID (integer). We don't have one until the user
+        // picks an engine in the local tree, so we fall back to brand+model
+        // search via items-finding-by-code using the model name as a free hint.
+        const engineID = Number(payload.engineID || 0);
+        let raw: any;
+        if (engineID > 0) {
+          raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
+            engineID,
+            getOECodes: true,
+          });
+        } else {
+          // Soft fallback: search by brand+model string against item-finding-by-code
+          const hint = [payload.brand, payload.model].filter(Boolean).join(' ').trim();
+          if (!hint) { result = { items: [], warning: 'engineID or brand+model required' }; break; }
+          raw = await nextisPost('/catalogs/items-finding-by-code', {
+            code: hint,
+            getOECodes: true,
+          });
+        }
+        const items = normalizeItems(raw);
+        try {
+          const codes = items.map((i) => i.oem_number).filter(Boolean);
+          if (codes.length) await enrichPricesIntoDb(adminClient, codes);
+        } catch (_) { /* non-blocking */ }
+        result = { items, status: raw?.status, statusText: raw?.statusText };
         break;
       }
+
       case 'priceAndStock': {
-        const candidates = [
-          '/common/getItemPriceAndStock',
-          '/catalog/getItemPriceAndStock',
-          '/api/v1/Catalogs/GetItemPriceAndStock',
-        ];
-        const r = await nextisTry(candidates, {
-          Codes: payload.codes,
-          CustomerNumber: Deno.env.get('JM_CUST_NO'),
+        const codes: string[] = Array.isArray(payload.codes) ? payload.codes.slice(0, 50) : [];
+        if (!codes.length) { result = { items: [] }; break; }
+        const raw = await nextisPost('/catalogs/items-checking', {
+          items: codes.map((c) => ({ code: c })),
+          trySearchWithoutManufacturer: true,
+          searchTarget: 'CodeOE',
         });
-        if (!r) { result = { items: [], warning: 'No Nextis price endpoint reachable', tried: candidates }; break; }
-        result = { items: r.data, endpoint: r.path };
+        const items = normalizeItems(raw);
+        const enrich = await enrichPricesIntoDb(adminClient, codes).catch(() => ({ enriched: 0 }));
+        result = { items, enrichedInDb: enrich.enriched };
         break;
       }
+
+      case 'enrichPrices': {
+        // Bulk: pull missing-price OEMs from parts_new and enrich them
+        const limit = Math.min(Number(payload.limit ?? 100), 500);
+        const { data: missing } = await adminClient
+          .from('parts_new')
+          .select('oem_number')
+          .or('price_with_vat.is.null,price_with_vat.eq.0')
+          .eq('price_locked', false)
+          .limit(limit);
+        const codes = (missing || []).map((r: any) => r.oem_number).filter(Boolean);
+        const out = await enrichPricesIntoDb(adminClient, codes);
+        result = out;
+        break;
+      }
+
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
@@ -368,7 +497,7 @@ Deno.serve(async (req) => {
     console.error('jm-proxy error:', e);
     return new Response(
       JSON.stringify({ success: false, error: (e as Error).message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }
 });
