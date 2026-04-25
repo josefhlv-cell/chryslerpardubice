@@ -66,6 +66,25 @@ function getCategoryLevel(nodes: CatalogCategoryNode[], path: string[]): Catalog
   return level;
 }
 
+/**
+ * Walk the tree to find the selected node + its parent (if any).
+ * Used to provide a wider keyword set when the strict subcategory yields zero hits.
+ */
+function findNodeWithParent(
+  nodes: CatalogCategoryNode[],
+  targetId: string,
+  parent: CatalogCategoryNode | null = null,
+): { node: CatalogCategoryNode; parent: CatalogCategoryNode | null } | null {
+  for (const node of nodes) {
+    if (node.id === targetId) return { node, parent };
+    if (node.children?.length) {
+      const found = findNodeWithParent(node.children, targetId, node);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
   if (!node || node.keywords.length === 0) return true;
   const haystack = `${part.name} ${part.category || ""} ${part.description || ""}`
