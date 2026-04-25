@@ -154,13 +154,13 @@ type CategoryNode = {
 const PRODUCT_CATEGORY_TREE: CategoryNode[] = [
   {
     id: 'brakes', label: 'Brzdové zařízení', level: 0, sectionId: null, path: ['Brzdové zařízení'],
-    keywords: ['brzd', 'brake', 'abs', 'třmen', 'trmen', 'kotouč', 'kotouc', 'destičk', 'destick'], count: 0,
+    keywords: ['brzd', 'brake', 'abs', 'třmen', 'trmen', 'kotouč', 'kotouc', 'destičk', 'destick', 'obložen', 'oblozen'], count: 0,
     children: [
       {
         id: 'disc-brakes', label: 'Kotoučové brzdy', level: 1, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy'],
-        keywords: ['brzd', 'brake', 'kotouč', 'kotouc', 'destičk', 'destick', 'třmen', 'trmen'], count: 0,
+        keywords: ['brzd', 'brake', 'kotouč', 'kotouc', 'destičk', 'destick', 'obložen', 'oblozen', 'třmen', 'trmen'], count: 0,
         children: [
-          { id: 'brake-pads', label: 'Brzdové destičky', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové destičky'], keywords: ['destičk', 'destick', 'pad', 'pads'], count: 0 },
+          { id: 'brake-pads', label: 'Brzdové destičky', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové destičky'], keywords: ['destičk', 'destick', 'obložen', 'oblozen', 'pad', 'pads'], count: 0 },
           { id: 'brake-discs', label: 'Brzdové kotouče', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové kotouče'], keywords: ['kotouč', 'kotouc', 'disc', 'rotor'], count: 0 },
           { id: 'brake-calipers', label: 'Brzdové třmeny', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové třmeny'], keywords: ['třmen', 'trmen', 'caliper'], count: 0 },
         ],
