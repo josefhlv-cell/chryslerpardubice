@@ -99,14 +99,16 @@ function badgeFor(source: string | null | undefined): CatalogPart["badge_label"]
 function normalize(row: any): CatalogPart {
   const source = row.catalog_source || "mopar";
   const rank = rankFor(source);
+  const priceWithVat = Number(row.price_with_vat) || 0;
+  const priceWithoutVat = Number(row.price_without_vat) || (priceWithVat ? Math.round((priceWithVat / 1.21) * 100) / 100 : 0);
   return {
     id: row.id,
     oem_number: row.oem_number,
     name: row.name,
     manufacturer: row.manufacturer,
     catalog_source: source,
-    price_without_vat: Number(row.price_without_vat) || 0,
-    price_with_vat: Number(row.price_with_vat) || 0,
+    price_without_vat: priceWithoutVat,
+    price_with_vat: priceWithVat,
     availability: row.availability,
     image_urls: row.image_urls,
     category: row.category,
@@ -163,9 +165,9 @@ export async function listParts(filter: ListingFilter): Promise<{ items: Catalog
   }
 
   let q = supabase
-    .from("parts_new")
+      .from("parts_new_public")
     .select(
-      "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
       { count: "exact" }
     )
     .in("catalog_source", ALLOWED_SOURCES as unknown as string[]);
@@ -353,6 +355,32 @@ export function normalizeCategory(raw: string | null | undefined): string {
 
 export type CategoryTile = { canonical: string; count: number; rawSamples: string[] };
 
+export type CatalogCategoryNode = {
+  id: string;
+  label: string;
+  level: number;
+  sectionId: number | null;
+  path: string[];
+  keywords: string[];
+  count: number;
+  children?: CatalogCategoryNode[];
+};
+
+function textKey(value: string | null | undefined): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function rowMatchesCategory(row: any, canonicalCategory?: string, keywords: string[] = []): boolean {
+  if (!canonicalCategory && keywords.length === 0) return true;
+  const haystack = textKey(`${row.name || ""} ${row.category || ""} ${row.description || ""}`);
+  const normalizedKeywords = keywords.map(textKey).filter(Boolean);
+  if (normalizedKeywords.length > 0) return normalizedKeywords.some((kw) => haystack.includes(kw));
+  return normalizeCategory(row.category) === canonicalCategory;
+}
+
 export async function fetchCategoriesForVehicle(brand: string, model: string, engine?: string): Promise<CategoryTile[]> {
   // Pull category column for matching parts
   let q = supabase
@@ -386,12 +414,36 @@ export async function fetchCategoriesForVehicle(brand: string, model: string, en
   return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }
 
+export async function fetchJmCategoryTree(opts: {
+  nextisVehicleId: string;
+  brand: string;
+  model: string;
+  engine?: string;
+}): Promise<CatalogCategoryNode[]> {
+  const { data, error } = await supabase.functions.invoke("jm-proxy", {
+    body: {
+      action: "vehicleCategories",
+      payload: {
+        nextisVehicleId: opts.nextisVehicleId,
+        brand: opts.brand,
+        model: opts.model,
+        engine: opts.engine,
+      },
+    },
+  });
+  if (error) throw new Error(error.message);
+  if (!data?.success) throw new Error(data?.error || "Nelze načíst strom kategorií");
+  return (data.data?.categories || []) as CatalogCategoryNode[];
+}
+
 // Listing parts by free-form vehicle text + canonical category
 export async function listPartsForVehicle(opts: {
   brand: string;
   model: string;
   engine?: string;
+  nextisVehicleId?: string;
   canonicalCategory?: string;
+  categoryKeywords?: string[];
   search?: string;
   page?: number;
   pageSize?: number;
@@ -401,36 +453,48 @@ export async function listPartsForVehicle(opts: {
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  let q = supabase
-    .from("parts_new")
-    .select(
-      "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
-      { count: "exact" }
-    )
-    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
-    .ilike("compatible_vehicles", `%${opts.brand}%`)
-    .ilike("compatible_vehicles", `%${opts.model}%`);
+  const selectFields =
+    "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles";
 
-  if (opts.engine) q = q.ilike("compatible_vehicles", `%${opts.engine}%`);
-  if (opts.search) {
-    const t = opts.search.trim();
-    q = q.or(`oem_number.ilike.%${t}%,name.ilike.%${t}%`);
-  }
+  const fetchRows = async (useEngine: boolean, range: [number, number]) => {
+    let q = supabase
+      .from("parts_new_public")
+      .select(selectFields, { count: "exact" })
+      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+      .ilike("compatible_vehicles", `%${opts.brand}%`)
+      .ilike("compatible_vehicles", `%${opts.model}%`);
+    if (useEngine && opts.engine) q = q.ilike("compatible_vehicles", `%${opts.engine}%`);
+    if (opts.search) {
+      const t = opts.search.trim();
+      q = q.or(`oem_number.ilike.%${t}%,name.ilike.%${t}%`);
+    }
+    return await q.range(range[0], range[1]);
+  };
 
-  // For canonical category, fetch wider then filter client-side (precise match)
-  if (opts.canonicalCategory) {
-    // Use a wider page to allow client filter
-    const { data, error, count } = await q.range(0, 999);
+  if (opts.canonicalCategory || (opts.categoryKeywords?.length ?? 0) > 0) {
+    let { data, error } = await fetchRows(true, [0, 1999]);
     if (error) throw new Error(error.message);
-    const filtered = (data || []).filter((r: any) => normalizeCategory(r.category) === opts.canonicalCategory);
+    if ((!data || data.length === 0) && opts.engine) {
+      const retry = await fetchRows(false, [0, 1999]);
+      if (retry.error) throw new Error(retry.error.message);
+      data = retry.data;
+    }
+    const filtered = (data || []).filter((r: any) =>
+      rowMatchesCategory(r, opts.canonicalCategory, opts.categoryKeywords || [])
+    );
     const slice = filtered.slice(from, to + 1);
     const items = slice.map(normalize).sort((a, b) => a.rank - b.rank);
     return { items, total: filtered.length };
   }
 
-  q = q.range(from, to);
-  const { data, error, count } = await q;
+  let { data, error, count } = await fetchRows(true, [from, to]);
   if (error) throw new Error(error.message);
+  if ((!data || data.length === 0) && opts.engine) {
+    const retry = await fetchRows(false, [from, to]);
+    if (retry.error) throw new Error(retry.error.message);
+    data = retry.data;
+    count = retry.count;
+  }
   const items = (data || []).map(normalize).sort((a, b) => a.rank - b.rank);
   return { items, total: count || 0 };
 }
@@ -481,6 +545,10 @@ export async function fetchJmForVehicle(opts: {
   engine?: string;
   year?: number;
   engineID?: number;
+  nextisVehicleId?: string;
+  sectionId?: number | null;
+  category?: string;
+  categoryKeywords?: string[];
 }): Promise<{ items: CatalogPart[]; warning?: string; mode?: string; codesQueried?: number }> {
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
@@ -492,6 +560,10 @@ export async function fetchJmForVehicle(opts: {
           engine: opts.engine,
           year: opts.year,
           engineID: opts.engineID,
+          nextisVehicleId: opts.nextisVehicleId,
+          sectionId: opts.sectionId,
+          category: opts.category,
+          categoryKeywords: opts.categoryKeywords,
         },
       },
     });
@@ -577,9 +649,9 @@ export async function globalOemSearch(query: string): Promise<{
 
   const [localRes, jmRes] = await Promise.allSettled([
     supabase
-      .from("parts_new")
+      .from("parts_new_public")
       .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_without_vat, price_with_vat, availability, image_urls, category, description"
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description"
       )
       .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)

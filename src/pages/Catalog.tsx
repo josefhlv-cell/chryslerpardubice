@@ -18,9 +18,9 @@ import { useAuth } from "@/contexts/AuthContext";
 
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
-  fetchCategoriesForVehicle, listPartsForVehicle,
+  fetchNextisVehicles, fetchJmCategoryTree, listPartsForVehicle,
   fetchJmByCodes, fetchJmForVehicle, mergeWithJm,
-  type CatalogPart, type CategoryTile,
+  type CatalogPart, type CatalogCategoryNode, type NextisVehicle,
 } from "@/api/catalogV2API";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
@@ -30,6 +30,9 @@ import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
 const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
 
 const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  "Brzdové zařízení": Disc,
+  "Kotoučové brzdy": Disc,
+  "Brzdové destičky": Disc,
   Brzdy: Disc,
   Motor: Cog,
   Chlazení: Snowflake,
@@ -50,6 +53,30 @@ const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>>
 
 type Step = "brand" | "model" | "engine" | "category" | "parts";
 
+function flattenCategoryTree(nodes: CatalogCategoryNode[]): CatalogCategoryNode[] {
+  return nodes.flatMap((node) => [node, ...flattenCategoryTree(node.children || [])]);
+}
+
+function getCategoryLevel(nodes: CatalogCategoryNode[], path: string[]): CatalogCategoryNode[] {
+  let level = nodes;
+  for (const id of path) {
+    const found = level.find((node) => node.id === id);
+    level = found?.children || [];
+  }
+  return level;
+}
+
+function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
+  if (!node || node.keywords.length === 0) return true;
+  const haystack = `${part.name} ${part.category || ""} ${part.description || ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return node.keywords.some((keyword) =>
+    haystack.includes(keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+  );
+}
+
 const Catalog = () => {
   const navigate = useNavigate();
   const { user, canPlaceOrder } = useAuth();
@@ -57,12 +84,16 @@ const Catalog = () => {
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [engines, setEngines] = useState<string[]>([]);
-  const [categories, setCategories] = useState<CategoryTile[]>([]);
+  const [vehicles, setVehicles] = useState<NextisVehicle[]>([]);
+  const [categories, setCategories] = useState<CatalogCategoryNode[]>([]);
+  const [categoryPath, setCategoryPath] = useState<string[]>([]);
+  const [categoryQuery, setCategoryQuery] = useState("");
 
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
   const [engine, setEngine] = useState("");
-  const [category, setCategory] = useState("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const [category, setCategory] = useState<CatalogCategoryNode | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<CatalogPart[]>([]);
@@ -117,12 +148,29 @@ const Catalog = () => {
 
   useEffect(() => {
     if (!brand || !model || !engine) {
+      setVehicles([]);
+      setSelectedVehicleId("");
       setCategories([]);
+      setCategoryPath([]);
       return;
     }
     setLoading(true);
-    fetchCategoriesForVehicle(brand, model, engine)
-      .then(setCategories)
+    fetchNextisVehicles(brand, model)
+      .then(async (rows) => {
+        setVehicles(rows);
+        const vehicle = rows.find((v) => v.engine === engine) || rows[0];
+        const vehicleId = vehicle?.id || "";
+        setSelectedVehicleId(vehicleId);
+        setCategoryPath([]);
+        setCategory(null);
+        setCategoryQuery("");
+        if (!vehicleId) {
+          setCategories([]);
+          return;
+        }
+        const tree = await fetchJmCategoryTree({ nextisVehicleId: vehicleId, brand, model, engine });
+        setCategories(tree);
+      })
       .catch((e) => toast.error("Nelze načíst kategorie: " + e.message))
       .finally(() => setLoading(false));
   }, [brand, model, engine]);
@@ -148,11 +196,19 @@ const Catalog = () => {
         const [oemRes, jmVehicleRes] = await Promise.allSettled([
           listPartsForVehicle({
             brand, model, engine,
-            canonicalCategory: category,
+            nextisVehicleId: selectedVehicleId,
+            canonicalCategory: category.label,
+            categoryKeywords: category.keywords,
             page, pageSize: 30,
           }),
           page === 0
-            ? fetchJmForVehicle({ brand, model, engine })
+            ? fetchJmForVehicle({
+                brand, model, engine,
+                nextisVehicleId: selectedVehicleId,
+                sectionId: category.sectionId,
+                category: category.label,
+                categoryKeywords: category.keywords,
+              })
             : Promise.resolve({ items: [] as CatalogPart[], warning: undefined as string | undefined }),
         ]);
         if (cancelled) return;
@@ -172,14 +228,7 @@ const Catalog = () => {
           console.warn("[Catalog] J+M vehicle search failed:", jmVehicleRes.reason);
         }
 
-        // Filter J+M vehicle results by canonical category (best-effort)
-        const filteredJmVehicle = category
-          ? jmFromVehicle.filter((p) => {
-              const c = (p.category || "").toLowerCase();
-              const cat = category.toLowerCase();
-              return !c || c.includes(cat) || cat.includes(c);
-            })
-          : jmFromVehicle;
+        const filteredJmVehicle = jmFromVehicle.filter((p) => partMatchesNode(p, category));
 
         setItems(oemItems);
         setTotal(oemTotal);
@@ -233,7 +282,7 @@ const Catalog = () => {
     return () => {
       cancelled = true;
     };
-  }, [brand, model, engine, category, page]);
+  }, [brand, model, engine, selectedVehicleId, category, page]);
 
   useEffect(() => {
     setPage(0);
@@ -290,7 +339,8 @@ const Catalog = () => {
   };
 
   const goBack = () => {
-    if (step === "parts") setCategory("");
+    if (step === "parts") setCategory(null);
+    else if (step === "category" && categoryPath.length > 0) setCategoryPath((path) => path.slice(0, -1));
     else if (step === "category") setEngine("");
     else if (step === "engine") setModel("");
     else if (step === "model") setBrand("");
@@ -300,10 +350,21 @@ const Catalog = () => {
     setBrand("");
     setModel("");
     setEngine("");
-    setCategory("");
+    setSelectedVehicleId("");
+    setCategory(null);
+    setCategoryPath([]);
+    setCategoryQuery("");
   };
 
-  const breadcrumb = [brand, model, engine, category].filter(Boolean);
+  const breadcrumb = [brand, model, engine, category?.label].filter(Boolean);
+  const visibleCategories = categoryQuery.trim()
+    ? flattenCategoryTree(categories).filter((node) =>
+        [node.label, ...node.path, ...node.keywords]
+          .join(" ")
+          .toLowerCase()
+          .includes(categoryQuery.trim().toLowerCase())
+      )
+    : getCategoryLevel(categories, categoryPath);
 
   return (
     <div className="min-h-screen pb-24 lg:pb-8 bg-background">
@@ -425,24 +486,44 @@ const Catalog = () => {
               Pro toto vozidlo zatím nejsou v katalogu žádné díly.
             </div>
           ) : (
-            <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
-              {categories.map((c) => {
-                const Icon = CATEGORY_ICON[c.canonical] || Package;
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={categoryQuery}
+                  onChange={(event) => setCategoryQuery(event.target.value)}
+                  placeholder="Hledat kategorii nebo díl…"
+                  className="pl-9 bg-card border-border/40"
+                />
+              </div>
+              {categoryPath.length > 0 && !categoryQuery && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setCategoryPath((path) => path.slice(0, -1))}>
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> O úroveň zpět
+                </Button>
+              )}
+              <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
+              {visibleCategories.map((c) => {
+                const Icon = CATEGORY_ICON[c.label] || Package;
+                const hasChildren = (c.children?.length || 0) > 0;
                 return (
                   <button
-                    key={c.canonical}
-                    onClick={() => setCategory(c.canonical)}
+                    key={c.id}
+                    onClick={() => {
+                      if (hasChildren && !categoryQuery) setCategoryPath((path) => [...path, c.id]);
+                      else setCategory(c);
+                    }}
                     className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className="w-4 h-4 text-primary/70 shrink-0" />
-                      <span className="text-sm font-medium truncate">{c.canonical}</span>
+                      <span className="text-sm font-medium truncate">{c.label}</span>
                       <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{c.count}</Badge>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
                 );
               })}
+              </div>
             </div>
           )
         )}

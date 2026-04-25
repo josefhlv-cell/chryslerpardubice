@@ -140,6 +140,46 @@ interface UnifiedPart {
   compatible_vehicles: string[];
 }
 
+type CategoryNode = {
+  id: string;
+  label: string;
+  level: number;
+  sectionId: number | null;
+  path: string[];
+  keywords: string[];
+  count: number;
+  children?: CategoryNode[];
+};
+
+const PRODUCT_CATEGORY_TREE: CategoryNode[] = [
+  {
+    id: 'brakes', label: 'Brzdové zařízení', level: 0, sectionId: null, path: ['Brzdové zařízení'],
+    keywords: ['brzd', 'brake', 'abs', 'třmen', 'trmen', 'kotouč', 'kotouc', 'destičk', 'destick'], count: 0,
+    children: [
+      {
+        id: 'disc-brakes', label: 'Kotoučové brzdy', level: 1, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy'],
+        keywords: ['brzd', 'brake', 'kotouč', 'kotouc', 'destičk', 'destick', 'třmen', 'trmen'], count: 0,
+        children: [
+          { id: 'brake-pads', label: 'Brzdové destičky', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové destičky'], keywords: ['destičk', 'destick', 'pad', 'pads'], count: 0 },
+          { id: 'brake-discs', label: 'Brzdové kotouče', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové kotouče'], keywords: ['kotouč', 'kotouc', 'disc', 'rotor'], count: 0 },
+          { id: 'brake-calipers', label: 'Brzdové třmeny', level: 2, sectionId: null, path: ['Brzdové zařízení', 'Kotoučové brzdy', 'Brzdové třmeny'], keywords: ['třmen', 'trmen', 'caliper'], count: 0 },
+        ],
+      },
+      { id: 'brake-fluid', label: 'Brzdová kapalina', level: 1, sectionId: null, path: ['Brzdové zařízení', 'Brzdová kapalina'], keywords: ['brzdová kapalina', 'brzdova kapalina', 'brake fluid', 'dot 3', 'dot 4'], count: 0 },
+      { id: 'abs', label: 'ABS a snímače', level: 1, sectionId: null, path: ['Brzdové zařízení', 'ABS a snímače'], keywords: ['abs', 'snímač', 'snimac', 'sensor'], count: 0 },
+    ],
+  },
+  { id: 'engine', label: 'Motor', level: 0, sectionId: null, path: ['Motor'], keywords: ['motor', 'engine', 'rozvod', 'svíčk', 'svick', 'těsnění', 'tesneni'], count: 0 },
+  { id: 'filters', label: 'Filtry', level: 0, sectionId: null, path: ['Filtry'], keywords: ['filtr', 'filter'], count: 0 },
+  { id: 'cooling', label: 'Chlazení', level: 0, sectionId: null, path: ['Chlazení'], keywords: ['chlad', 'cool', 'radiator', 'termostat'], count: 0 },
+  { id: 'suspension', label: 'Odpružení a nápravy', level: 0, sectionId: null, path: ['Odpružení a nápravy'], keywords: ['odpruž', 'odpruz', 'tlumič', 'tlumic', 'náprav', 'naprav', 'rameno', 'suspension'], count: 0 },
+  { id: 'steering', label: 'Řízení', level: 0, sectionId: null, path: ['Řízení'], keywords: ['řízení', 'rizeni', 'steer'], count: 0 },
+  { id: 'transmission', label: 'Převodovka', level: 0, sectionId: null, path: ['Převodovka'], keywords: ['převod', 'prevod', 'transmission', 'gearbox'], count: 0 },
+  { id: 'electrical', label: 'Elektroinstalace', level: 0, sectionId: null, path: ['Elektroinstalace'], keywords: ['elektr', 'alternátor', 'alternator', 'starter', 'senzor'], count: 0 },
+  { id: 'body', label: 'Karoserie', level: 0, sectionId: null, path: ['Karoserie'], keywords: ['karoser', 'body', 'dveře', 'dvere', 'nárazník', 'naraznik'], count: 0 },
+  { id: 'hvac', label: 'Klimatizace a topení', level: 0, sectionId: null, path: ['Klimatizace a topení'], keywords: ['klimat', 'topen', 'a/c', 'hvac'], count: 0 },
+];
+
 function normalizeCatalogItem(it: any): UnifiedPart {
   // Real Nextis CatalogItem shape
   const code = it.productCode || it.ProductCode || '';
@@ -182,6 +222,33 @@ function normalizeItems(raw: any): UnifiedPart[] {
   return extractItems(raw)
     .map(normalizeCatalogItem)
     .filter((p) => p.oem_number && isUsBrand(p.brand));
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function rowMatchesKeywords(row: any, keywords: string[] = []): boolean {
+  if (!keywords.length) return true;
+  const haystack = normalizeText(`${row.name || ''} ${row.category || ''} ${row.description || ''} ${row.oem_number || ''}`);
+  return keywords.some((keyword) => haystack.includes(normalizeText(keyword)));
+}
+
+function itemMatchesKeywords(item: UnifiedPart, keywords: string[] = []): boolean {
+  if (!keywords.length) return true;
+  const haystack = normalizeText(`${item.name} ${item.category} ${item.oem_number}`);
+  return keywords.some((keyword) => haystack.includes(normalizeText(keyword)));
+}
+
+function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
+  return nodes
+    .map((node) => {
+      const children = node.children ? countCategoryTree(node.children, rows) : undefined;
+      const ownCount = rows.filter((row) => rowMatchesKeywords(row, node.keywords)).length;
+      const childCount = (children || []).reduce((sum, child) => sum + child.count, 0);
+      return { ...node, count: Math.max(ownCount, childCount), children };
+    })
+    .filter((node) => node.count > 0 || node.id === 'brakes');
 }
 
 // ---------- Vehicle tree seed (no API endpoint exists) ----------
@@ -406,9 +473,12 @@ Deno.serve(async (req) => {
       });
     }
     const bearer = authHeader.replace('Bearer ', '').trim();
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const apiKeyHeader = req.headers.get('apikey') || '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
+    const publishableKey = Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const isServerKey = bearer === anonKey || bearer === serviceKey;
+    const isProjectKey = (!!anonKey && bearer === anonKey) || (!!publishableKey && bearer === publishableKey) || (!!apiKeyHeader && bearer === apiKeyHeader);
+    const isServerKey = isProjectKey || bearer === serviceKey;
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const body = await req.json();
@@ -635,6 +705,61 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'vehicleCategories': {
+        const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        const brand = String(payload.brand || '').trim();
+        const model = String(payload.model || '').trim();
+        const engine = String(payload.engine || '').trim();
+
+        let vehicle = null;
+        if (nextisVehicleId) {
+          const { data } = await adminClient
+            .from('nextis_vehicles')
+            .select('id, brand, model, engine, external_id')
+            .eq('id', nextisVehicleId)
+            .maybeSingle();
+          vehicle = data;
+        }
+
+        const vBrand = vehicle?.brand || brand;
+        const vModel = vehicle?.model || model;
+        const vEngine = vehicle?.engine || engine;
+        if (!vBrand || !vModel) {
+          result = { categories: [], warning: 'nextis_vehicle_id or brand+model required' };
+          break;
+        }
+
+        let q = adminClient
+          .from('parts_new')
+          .select('oem_number, name, category, description, compatible_vehicles')
+          .ilike('compatible_vehicles', `%${vBrand}%`)
+          .ilike('compatible_vehicles', `%${vModel}%`)
+          .limit(3000);
+        if (vEngine) q = q.ilike('compatible_vehicles', `%${vEngine}%`);
+
+        let { data: rows, error } = await q;
+        if (error) throw error;
+        if ((!rows || rows.length === 0) && vEngine) {
+          const retry = await adminClient
+            .from('parts_new')
+            .select('oem_number, name, category, description, compatible_vehicles')
+            .ilike('compatible_vehicles', `%${vBrand}%`)
+            .ilike('compatible_vehicles', `%${vModel}%`)
+            .limit(3000);
+          if (retry.error) throw retry.error;
+          rows = retry.data;
+        }
+
+        result = {
+          nextisVehicleId,
+          vehicle: { brand: vBrand, model: vModel, engine: vEngine, external_id: vehicle?.external_id || null },
+          categories: countCategoryTree(PRODUCT_CATEGORY_TREE, rows || []),
+          localRows: rows?.length || 0,
+          source: 'jm-compatible-tree-oem-fallback',
+        };
+        break;
+      }
+
       case 'searchByVehicle': {
         // Strategy:
         // 1) If engineID is provided -> direct Nextis vehicle search.
@@ -645,21 +770,43 @@ Deno.serve(async (req) => {
         // 3) If first OEM-fallback returns 0, retry without `engine` filter
         //    (some local rows store generic compatibility text).
         const engineID = Number(payload.engineID || 0);
-        const brand = String(payload.brand || '').trim();
-        const model = String(payload.model || '').trim();
-        const engine = String(payload.engine || '').trim();
+        const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        let brand = String(payload.brand || '').trim();
+        let model = String(payload.model || '').trim();
+        let engine = String(payload.engine || '').trim();
         // Phase 1: category is accepted but used only for diagnostics / future
         // section-id mapping. We do NOT filter by it yet.
         const category = String(payload.category || '').trim();
+        const sectionId = Number(payload.sectionId || 0);
+        const categoryKeywords: string[] = Array.isArray(payload.categoryKeywords)
+          ? payload.categoryKeywords.map((k: unknown) => String(k).trim()).filter(Boolean)
+          : [];
 
-        console.log('[searchByVehicle] payload:', { engineID, brand, model, engine, category });
+        if (nextisVehicleId) {
+          const { data: v } = await adminClient
+            .from('nextis_vehicles')
+            .select('brand, model, engine, external_id')
+            .eq('id', nextisVehicleId)
+            .maybeSingle();
+          if (v) {
+            brand = String(v.brand || brand).trim();
+            model = String(v.model || model).trim();
+            engine = String(v.engine || engine).trim();
+          }
+        }
+
+        console.log('[searchByVehicle] payload:', { engineID, nextisVehicleId, sectionId, brand, model, engine, category, categoryKeywords });
 
         if (engineID > 0) {
           const raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
             engineID,
+            genArtID: sectionId > 0 ? sectionId : 0,
             getOECodes: true,
+            target: 'P',
           });
-          const items = normalizeItems(raw).filter((p) => isAllowedBrand(p.brand));
+          const items = normalizeItems(raw)
+            .filter((p) => isAllowedBrand(p.brand))
+            .filter((p) => itemMatchesKeywords(p, categoryKeywords));
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
             if (codes.length) await enrichPricesIntoDb(adminClient, codes);
@@ -677,7 +824,7 @@ Deno.serve(async (req) => {
         const queryLocalOemCodes = async (useEngine: boolean): Promise<string[]> => {
           let q = adminClient
             .from('parts_new')
-            .select('oem_number')
+            .select('oem_number, name, category, description')
             .ilike('compatible_vehicles', `%${brand}%`)
             .ilike('compatible_vehicles', `%${model}%`)
             .limit(200);
@@ -687,7 +834,8 @@ Deno.serve(async (req) => {
             console.warn('[searchByVehicle] oem lookup error:', error.message);
             return [];
           }
-          return [...new Set((rows || []).map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
+          const filtered = (rows || []).filter((r: any) => rowMatchesKeywords(r, categoryKeywords));
+          return [...new Set(filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
         };
 
         // First attempt: with engine filter
@@ -729,7 +877,7 @@ Deno.serve(async (req) => {
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
               seen.add(key);
-              collected.push(it);
+              collected.push({ ...it, category: category || it.category });
             }
           } catch (e) {
             console.warn('[searchByVehicle] code search failed for', code, (e as Error).message);
