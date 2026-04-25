@@ -62,9 +62,9 @@ async function getToken(): Promise<string> {
   return token;
 }
 
-async function nextisCall(path: string, body: unknown): Promise<unknown> {
+async function nextisCallRaw(path: string, body: unknown): Promise<Response> {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  let res = await fetch(`${BASE_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -76,7 +76,7 @@ async function nextisCall(path: string, body: unknown): Promise<unknown> {
   if (res.status === 401) {
     cachedToken = null;
     const t2 = await getToken();
-    const res2 = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${BASE_URL}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -85,11 +85,26 @@ async function nextisCall(path: string, body: unknown): Promise<unknown> {
       },
       body: JSON.stringify(body),
     });
-    if (!res2.ok) throw new Error(`Nextis ${path}: ${res2.status}`);
-    return await res2.json();
   }
-  if (!res.ok) throw new Error(`Nextis ${path}: ${res.status} ${await res.text()}`);
+  return res;
+}
+
+async function nextisCall(path: string, body: unknown): Promise<unknown> {
+  const res = await nextisCallRaw(path, body);
+  if (!res.ok) throw new Error(`Nextis ${path}: ${res.status} ${await res.text().catch(() => '')}`);
   return await res.json();
+}
+
+// Try a list of candidate endpoints and return the first 2xx JSON response.
+async function nextisTry(paths: string[], body: unknown): Promise<{ data: unknown; path: string } | null> {
+  for (const p of paths) {
+    try {
+      const res = await nextisCallRaw(p, body);
+      if (res.ok) return { data: await res.json(), path: p };
+      await res.text().catch(() => '');
+    } catch (_) { /* try next */ }
+  }
+  return null;
 }
 
 interface UnifiedPart {
@@ -200,6 +215,9 @@ Deno.serve(async (req) => {
         // Pull Nextis vehicle/category tree and persist allowed brands into catalog_categories.
         // Tries known Nextis catalog endpoints; gracefully falls back if shape differs.
         const endpoints = [
+          '/common/getVehicleTree',
+          '/common/getBrands',
+          '/catalog/getVehicleTree',
           '/api/v1/Catalogs/GetVehicleTree',
           '/api/v1/Catalogs/VehicleHierarchy',
           '/api/v1/Catalogs/GetBrands',
@@ -295,30 +313,45 @@ Deno.serve(async (req) => {
         break;
       }
       case 'searchByCode': {
-        // payload: { code: string }
-        const raw = await nextisCall('/api/v1/Catalogs/ItemFindingByCode', {
+        const candidates = [
+          '/common/itemFindingByCode',
+          '/catalog/itemFindingByCode',
+          '/api/v1/Catalogs/ItemFindingByCode',
+        ];
+        const r = await nextisTry(candidates, {
           Code: payload.code,
           CustomerNumber: Deno.env.get('JM_CUST_NO'),
         });
-        result = { items: normalizeItems(raw) };
+        if (!r) { result = { items: [], warning: 'No Nextis search endpoint reachable', tried: candidates }; break; }
+        result = { items: normalizeItems(r.data), endpoint: r.path };
         break;
       }
       case 'searchByVehicle': {
-        // payload: { vin?, brand?, model?, year? }
-        const raw = await nextisCall('/api/v1/Catalogs/ItemFindingByVehicle', {
+        const candidates = [
+          '/common/itemFindingByVehicle',
+          '/catalog/itemFindingByVehicle',
+          '/api/v1/Catalogs/ItemFindingByVehicle',
+        ];
+        const r = await nextisTry(candidates, {
           ...payload,
           CustomerNumber: Deno.env.get('JM_CUST_NO'),
         });
-        result = { items: normalizeItems(raw) };
+        if (!r) { result = { items: [], warning: 'No Nextis vehicle search endpoint reachable', tried: candidates }; break; }
+        result = { items: normalizeItems(r.data), endpoint: r.path };
         break;
       }
       case 'priceAndStock': {
-        // payload: { codes: string[] }
-        const raw = await nextisCall('/api/v1/Catalogs/GetItemPriceAndStock', {
+        const candidates = [
+          '/common/getItemPriceAndStock',
+          '/catalog/getItemPriceAndStock',
+          '/api/v1/Catalogs/GetItemPriceAndStock',
+        ];
+        const r = await nextisTry(candidates, {
           Codes: payload.codes,
           CustomerNumber: Deno.env.get('JM_CUST_NO'),
         });
-        result = { items: raw };
+        if (!r) { result = { items: [], warning: 'No Nextis price endpoint reachable', tried: candidates }; break; }
+        result = { items: r.data, endpoint: r.path };
         break;
       }
       default:
