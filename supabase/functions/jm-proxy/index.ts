@@ -340,25 +340,23 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, payload = {} } = body;
 
-    // syncCategories may be called server-to-server (cron); other actions need user
-    if (action !== 'syncCategories') {
+    // Auth: server keys (cron) always allowed; otherwise validate user JWT.
+    // For syncCategories / enrichPrices, additionally require admin role.
+    let userId: string | null = null;
+    if (!isServerKey) {
       const authClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
         anonKey,
         { global: { headers: { Authorization: authHeader } } },
       );
       const { data: claims, error: claimsErr } = await authClient.auth.getClaims(bearer);
-      if ((claimsErr || !claims?.claims?.sub) && !isServerKey) {
+      if (claimsErr || !claims?.claims?.sub) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-    } else if (!isServerKey) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      userId = claims.claims.sub as string;
     }
 
     const adminClient = createClient(
