@@ -48,10 +48,19 @@ function isBlacklisted(producer: string | null | undefined): boolean {
   return BLACKLISTED_BRANDS.some((b) => p.includes(b));
 }
 
-// Backwards-compat name still used in a couple of call sites.
-// Returns TRUE = keep the part. We now keep everything except blacklisted brands.
+// Phase 1 policy: keep ALL brands except (a) blacklisted, (b) no-name (empty/null brand).
+// No-name parts are typically low-quality unbranded items — drop them.
+function isAllowedBrand(producer: string | null | undefined): boolean {
+  if (!producer) return false; // no-name filter
+  const p = String(producer).trim();
+  if (p.length === 0) return false; // no-name filter
+  if (/^(no[\s-]?name|noname|n\/a|unknown|generic)$/i.test(p)) return false;
+  return !isBlacklisted(p);
+}
+
+// Backwards-compat alias still used in a couple of call sites.
 function isUsBrand(producer: string | null | undefined): boolean {
-  return !isBlacklisted(producer);
+  return isAllowedBrand(producer);
 }
 
 // ---------- token cache ----------
