@@ -366,6 +366,35 @@ export type CatalogCategoryNode = {
   children?: CatalogCategoryNode[];
 };
 
+const DEFAULT_JM_CATEGORY_TREE: CatalogCategoryNode[] = [
+  {
+    id: "brakes", label: "Brzdové zařízení", level: 0, sectionId: null, path: ["Brzdové zařízení"],
+    keywords: ["brzd", "brake", "abs", "třmen", "trmen", "kotouč", "kotouc", "destičk", "destick"], count: 0,
+    children: [
+      {
+        id: "disc-brakes", label: "Kotoučové brzdy", level: 1, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy"],
+        keywords: ["brzd", "brake", "kotouč", "kotouc", "destičk", "destick", "třmen", "trmen"], count: 0,
+        children: [
+          { id: "brake-pads", label: "Brzdové destičky", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], keywords: ["destičk", "destick", "pad", "pads"], count: 0 },
+          { id: "brake-discs", label: "Brzdové kotouče", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové kotouče"], keywords: ["kotouč", "kotouc", "disc", "rotor"], count: 0 },
+          { id: "brake-calipers", label: "Brzdové třmeny", level: 2, sectionId: null, path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové třmeny"], keywords: ["třmen", "trmen", "caliper"], count: 0 },
+        ],
+      },
+      { id: "brake-fluid", label: "Brzdová kapalina", level: 1, sectionId: null, path: ["Brzdové zařízení", "Brzdová kapalina"], keywords: ["brzdová kapalina", "brzdova kapalina", "brake fluid", "dot 3", "dot 4"], count: 0 },
+      { id: "abs", label: "ABS a snímače", level: 1, sectionId: null, path: ["Brzdové zařízení", "ABS a snímače"], keywords: ["abs", "snímač", "snimac", "sensor"], count: 0 },
+    ],
+  },
+  { id: "engine", label: "Motor", level: 0, sectionId: null, path: ["Motor"], keywords: ["motor", "engine", "rozvod", "svíčk", "svick", "těsnění", "tesneni"], count: 0 },
+  { id: "filters", label: "Filtry", level: 0, sectionId: null, path: ["Filtry"], keywords: ["filtr", "filter"], count: 0 },
+  { id: "cooling", label: "Chlazení", level: 0, sectionId: null, path: ["Chlazení"], keywords: ["chlad", "cool", "radiator", "termostat"], count: 0 },
+  { id: "suspension", label: "Odpružení a nápravy", level: 0, sectionId: null, path: ["Odpružení a nápravy"], keywords: ["odpruž", "odpruz", "tlumič", "tlumic", "náprav", "naprav", "rameno", "suspension"], count: 0 },
+  { id: "steering", label: "Řízení", level: 0, sectionId: null, path: ["Řízení"], keywords: ["řízení", "rizeni", "steer"], count: 0 },
+  { id: "transmission", label: "Převodovka", level: 0, sectionId: null, path: ["Převodovka"], keywords: ["převod", "prevod", "transmission", "gearbox"], count: 0 },
+  { id: "electrical", label: "Elektroinstalace", level: 0, sectionId: null, path: ["Elektroinstalace"], keywords: ["elektr", "alternátor", "alternator", "starter", "senzor"], count: 0 },
+  { id: "body", label: "Karoserie", level: 0, sectionId: null, path: ["Karoserie"], keywords: ["karoser", "body", "dveře", "dvere", "nárazník", "naraznik"], count: 0 },
+  { id: "hvac", label: "Klimatizace a topení", level: 0, sectionId: null, path: ["Klimatizace a topení"], keywords: ["klimat", "topen", "a/c", "hvac"], count: 0 },
+];
+
 function textKey(value: string | null | undefined): string {
   return String(value || "")
     .normalize("NFD")
@@ -379,6 +408,53 @@ function rowMatchesCategory(row: any, canonicalCategory?: string, keywords: stri
   const normalizedKeywords = keywords.map(textKey).filter(Boolean);
   if (normalizedKeywords.length > 0) return normalizedKeywords.some((kw) => haystack.includes(kw));
   return normalizeCategory(row.category) === canonicalCategory;
+}
+
+function countTreeFromRows(nodes: CatalogCategoryNode[], rows: any[]): CatalogCategoryNode[] {
+  return nodes.map((node) => {
+    const children = node.children ? countTreeFromRows(node.children, rows) : undefined;
+    const ownCount = rows.filter((row) => rowMatchesCategory(row, node.label, node.keywords)).length;
+    const childCount = (children || []).reduce((sum, child) => sum + child.count, 0);
+    return { ...node, count: Math.max(ownCount, childCount), children };
+  });
+}
+
+function engineVariants(engine?: string): string[] {
+  if (!engine) return [];
+  const out = new Set<string>([engine]);
+  out.add(engine.replace(/^(\d+\.\d+)(\s)/, "$1L$2"));
+  out.add(engine.replace(/^(\d+\.\d+)L(\s)/, "$1$2"));
+  const displacement = engine.match(/^(\d+\.\d+)/)?.[1];
+  if (displacement) out.add(displacement);
+  return [...out].filter(Boolean);
+}
+
+async function fetchLocalVehicleRows(opts: { brand: string; model: string; engine?: string }, limit = 3000): Promise<any[]> {
+  const variants = engineVariants(opts.engine);
+  const attempts = variants.length ? variants : [null];
+  for (const variant of attempts) {
+    let q = supabase
+      .from("parts_new_public")
+      .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
+      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+      .ilike("compatible_vehicles", `%${opts.brand}%`)
+      .ilike("compatible_vehicles", `%${opts.model}%`)
+      .limit(limit);
+    if (variant) q = q.ilike("compatible_vehicles", `%${variant}%`);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    if (data?.length) return data;
+  }
+
+  const { data, error } = await supabase
+    .from("parts_new_public")
+    .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles")
+    .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
+    .ilike("compatible_vehicles", `%${opts.brand}%`)
+    .ilike("compatible_vehicles", `%${opts.model}%`)
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
 export async function fetchCategoriesForVehicle(brand: string, model: string, engine?: string): Promise<CategoryTile[]> {
@@ -420,6 +496,7 @@ export async function fetchJmCategoryTree(opts: {
   model: string;
   engine?: string;
 }): Promise<CatalogCategoryNode[]> {
+  const localRows = await fetchLocalVehicleRows(opts);
   const { data, error } = await supabase.functions.invoke("jm-proxy", {
     body: {
       action: "vehicleCategories",
@@ -431,9 +508,10 @@ export async function fetchJmCategoryTree(opts: {
       },
     },
   });
-  if (error) throw new Error(error.message);
-  if (!data?.success) throw new Error(data?.error || "Nelze načíst strom kategorií");
-  return (data.data?.categories || []) as CatalogCategoryNode[];
+  const proxyTree = !error && data?.success ? (data.data?.categories || []) as CatalogCategoryNode[] : [];
+  const localTree = countTreeFromRows(DEFAULT_JM_CATEGORY_TREE, localRows);
+  const merged = proxyTree.length > 0 ? proxyTree : localTree;
+  return merged.length > 0 ? merged : DEFAULT_JM_CATEGORY_TREE;
 }
 
 // Listing parts by free-form vehicle text + canonical category
@@ -453,33 +531,14 @@ export async function listPartsForVehicle(opts: {
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  const selectFields =
-    "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles";
-
-  const fetchRows = async (useEngine: boolean, range: [number, number]) => {
-    let q = supabase
-      .from("parts_new_public")
-      .select(selectFields, { count: "exact" })
-      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
-      .ilike("compatible_vehicles", `%${opts.brand}%`)
-      .ilike("compatible_vehicles", `%${opts.model}%`);
-    if (useEngine && opts.engine) q = q.ilike("compatible_vehicles", `%${opts.engine}%`);
-    if (opts.search) {
-      const t = opts.search.trim();
-      q = q.or(`oem_number.ilike.%${t}%,name.ilike.%${t}%`);
-    }
-    return await q.range(range[0], range[1]);
-  };
+  let rows = await fetchLocalVehicleRows(opts);
+  if (opts.search) {
+    const term = textKey(opts.search);
+    rows = rows.filter((row) => textKey(`${row.oem_number || ""} ${row.name || ""}`).includes(term));
+  }
 
   if (opts.canonicalCategory || (opts.categoryKeywords?.length ?? 0) > 0) {
-    let { data, error } = await fetchRows(true, [0, 1999]);
-    if (error) throw new Error(error.message);
-    if ((!data || data.length === 0) && opts.engine) {
-      const retry = await fetchRows(false, [0, 1999]);
-      if (retry.error) throw new Error(retry.error.message);
-      data = retry.data;
-    }
-    const filtered = (data || []).filter((r: any) =>
+    const filtered = rows.filter((r: any) =>
       rowMatchesCategory(r, opts.canonicalCategory, opts.categoryKeywords || [])
     );
     const slice = filtered.slice(from, to + 1);
@@ -487,16 +546,8 @@ export async function listPartsForVehicle(opts: {
     return { items, total: filtered.length };
   }
 
-  let { data, error, count } = await fetchRows(true, [from, to]);
-  if (error) throw new Error(error.message);
-  if ((!data || data.length === 0) && opts.engine) {
-    const retry = await fetchRows(false, [from, to]);
-    if (retry.error) throw new Error(retry.error.message);
-    data = retry.data;
-    count = retry.count;
-  }
-  const items = (data || []).map(normalize).sort((a, b) => a.rank - b.rank);
-  return { items, total: count || 0 };
+  const items = rows.slice(from, to + 1).map(normalize).sort((a, b) => a.rank - b.rank);
+  return { items, total: rows.length };
 }
 
 // ============================================================
