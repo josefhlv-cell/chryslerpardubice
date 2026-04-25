@@ -153,7 +153,7 @@ const Catalog = () => {
           }),
           page === 0
             ? fetchJmForVehicle({ brand, model, engine })
-            : Promise.resolve({ items: [] as CatalogPart[] }),
+            : Promise.resolve({ items: [] as CatalogPart[], warning: undefined as string | undefined }),
         ]);
         if (cancelled) return;
 
