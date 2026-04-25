@@ -496,6 +496,7 @@ export async function fetchJmCategoryTree(opts: {
   model: string;
   engine?: string;
 }): Promise<CatalogCategoryNode[]> {
+  const localRows = await fetchLocalVehicleRows(opts);
   const { data, error } = await supabase.functions.invoke("jm-proxy", {
     body: {
       action: "vehicleCategories",
@@ -507,9 +508,10 @@ export async function fetchJmCategoryTree(opts: {
       },
     },
   });
-  if (error) throw new Error(error.message);
-  if (!data?.success) throw new Error(data?.error || "Nelze načíst strom kategorií");
-  return (data.data?.categories || []) as CatalogCategoryNode[];
+  const proxyTree = !error && data?.success ? (data.data?.categories || []) as CatalogCategoryNode[] : [];
+  const localTree = countTreeFromRows(DEFAULT_JM_CATEGORY_TREE, localRows);
+  const merged = proxyTree.length > 0 ? proxyTree : localTree;
+  return merged.length > 0 ? merged : DEFAULT_JM_CATEGORY_TREE;
 }
 
 // Listing parts by free-form vehicle text + canonical category
@@ -529,33 +531,14 @@ export async function listPartsForVehicle(opts: {
   const from = page * pageSize;
   const to = from + pageSize - 1;
 
-  const selectFields =
-    "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles";
-
-  const fetchRows = async (useEngine: boolean, range: [number, number]) => {
-    let q = supabase
-      .from("parts_new_public")
-      .select(selectFields, { count: "exact" })
-      .in("catalog_source", ALLOWED_SOURCES as unknown as string[])
-      .ilike("compatible_vehicles", `%${opts.brand}%`)
-      .ilike("compatible_vehicles", `%${opts.model}%`);
-    if (useEngine && opts.engine) q = q.ilike("compatible_vehicles", `%${opts.engine}%`);
-    if (opts.search) {
-      const t = opts.search.trim();
-      q = q.or(`oem_number.ilike.%${t}%,name.ilike.%${t}%`);
-    }
-    return await q.range(range[0], range[1]);
-  };
+  let rows = await fetchLocalVehicleRows(opts);
+  if (opts.search) {
+    const term = textKey(opts.search);
+    rows = rows.filter((row) => textKey(`${row.oem_number || ""} ${row.name || ""}`).includes(term));
+  }
 
   if (opts.canonicalCategory || (opts.categoryKeywords?.length ?? 0) > 0) {
-    let { data, error } = await fetchRows(true, [0, 1999]);
-    if (error) throw new Error(error.message);
-    if ((!data || data.length === 0) && opts.engine) {
-      const retry = await fetchRows(false, [0, 1999]);
-      if (retry.error) throw new Error(retry.error.message);
-      data = retry.data;
-    }
-    const filtered = (data || []).filter((r: any) =>
+    const filtered = rows.filter((r: any) =>
       rowMatchesCategory(r, opts.canonicalCategory, opts.categoryKeywords || [])
     );
     const slice = filtered.slice(from, to + 1);
@@ -563,16 +546,8 @@ export async function listPartsForVehicle(opts: {
     return { items, total: filtered.length };
   }
 
-  let { data, error, count } = await fetchRows(true, [from, to]);
-  if (error) throw new Error(error.message);
-  if ((!data || data.length === 0) && opts.engine) {
-    const retry = await fetchRows(false, [from, to]);
-    if (retry.error) throw new Error(retry.error.message);
-    data = retry.data;
-    count = retry.count;
-  }
-  const items = (data || []).map(normalize).sort((a, b) => a.rank - b.rank);
-  return { items, total: count || 0 };
+  const items = rows.slice(from, to + 1).map(normalize).sort((a, b) => a.rank - b.rank);
+  return { items, total: rows.length };
 }
 
 // ============================================================
