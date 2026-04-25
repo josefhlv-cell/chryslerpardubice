@@ -445,7 +445,13 @@ async function fetchLocalVehicleRows(opts: { brand: string; model: string; engin
     if (variant) q = q.ilike("compatible_vehicles", `%${variant}%`);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
-    if (data?.length) return data;
+    if (data?.length) {
+  const filtered = data.filter(r =>
+    normalizeCategory(r.category) === expectedCategory
+  );
+
+  if (filtered.length > 0) return filtered;
+}
   }
 
   console.warn("[Catalog strict] no local rows for selected engine", opts);
