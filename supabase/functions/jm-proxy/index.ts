@@ -48,10 +48,19 @@ function isBlacklisted(producer: string | null | undefined): boolean {
   return BLACKLISTED_BRANDS.some((b) => p.includes(b));
 }
 
-// Backwards-compat name still used in a couple of call sites.
-// Returns TRUE = keep the part. We now keep everything except blacklisted brands.
+// Phase 1 policy: keep ALL brands except (a) blacklisted, (b) no-name (empty/null brand).
+// No-name parts are typically low-quality unbranded items — drop them.
+function isAllowedBrand(producer: string | null | undefined): boolean {
+  if (!producer) return false; // no-name filter
+  const p = String(producer).trim();
+  if (p.length === 0) return false; // no-name filter
+  if (/^(no[\s-]?name|noname|n\/a|unknown|generic)$/i.test(p)) return false;
+  return !isBlacklisted(p);
+}
+
+// Backwards-compat alias still used in a couple of call sites.
 function isUsBrand(producer: string | null | undefined): boolean {
-  return !isBlacklisted(producer);
+  return isAllowedBrand(producer);
 }
 
 // ---------- token cache ----------
@@ -633,52 +642,74 @@ Deno.serve(async (req) => {
         //    compatible_vehicles matches brand/model/engine, then run
         //    items-finding-by-code per code (small batch) to fetch the
         //    actual J+M aftermarket parts for those OEMs.
+        // 3) If first OEM-fallback returns 0, retry without `engine` filter
+        //    (some local rows store generic compatibility text).
         const engineID = Number(payload.engineID || 0);
         const brand = String(payload.brand || '').trim();
         const model = String(payload.model || '').trim();
         const engine = String(payload.engine || '').trim();
+        // Phase 1: category is accepted but used only for diagnostics / future
+        // section-id mapping. We do NOT filter by it yet.
+        const category = String(payload.category || '').trim();
 
-        console.log('[searchByVehicle] payload:', { engineID, brand, model, engine });
+        console.log('[searchByVehicle] payload:', { engineID, brand, model, engine, category });
 
         if (engineID > 0) {
           const raw = await nextisPost('/catalogs/items-finding-by-vehicle', {
             engineID,
             getOECodes: true,
           });
-          const items = normalizeItems(raw).filter((p) => isUsBrand(p.brand));
+          const items = normalizeItems(raw).filter((p) => isAllowedBrand(p.brand));
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
             if (codes.length) await enrichPricesIntoDb(adminClient, codes);
           } catch (_) { /* non-blocking */ }
-          result = { items, mode: 'engineID', engineID, totalRawHits: items.length };
+          result = { items, mode: 'engineID', engineID, category, totalRawHits: items.length };
           break;
         }
 
         if (!brand || !model) {
-          result = { items: [], warning: 'brand+model required when engineID missing' };
+          result = { items: [], warning: 'brand+model required when engineID missing', category };
           break;
         }
 
-        // Fallback: derive OEM codes from local catalog
-        let q = adminClient
-          .from('parts_new')
-          .select('oem_number')
-          .ilike('compatible_vehicles', `%${brand}%`)
-          .ilike('compatible_vehicles', `%${model}%`)
-          .limit(120);
-        if (engine) q = q.ilike('compatible_vehicles', `%${engine}%`);
-        const { data: oemRows, error: oemErr } = await q;
-        if (oemErr) console.warn('[searchByVehicle] oem lookup error:', oemErr.message);
+        // OEM-fallback helper: query local catalog for matching OEM codes
+        const queryLocalOemCodes = async (useEngine: boolean): Promise<string[]> => {
+          let q = adminClient
+            .from('parts_new')
+            .select('oem_number')
+            .ilike('compatible_vehicles', `%${brand}%`)
+            .ilike('compatible_vehicles', `%${model}%`)
+            .limit(200);
+          if (useEngine && engine) q = q.ilike('compatible_vehicles', `%${engine}%`);
+          const { data: rows, error } = await q;
+          if (error) {
+            console.warn('[searchByVehicle] oem lookup error:', error.message);
+            return [];
+          }
+          return [...new Set((rows || []).map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
+        };
 
-        const oemCodes = [...new Set((oemRows || []).map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))].slice(0, 40);
-        console.log(`[searchByVehicle] derived ${oemCodes.length} OEM codes for ${brand} ${model} ${engine}`);
+        // First attempt: with engine filter
+        let oemCodes = await queryLocalOemCodes(true);
+        let usedEngineFilter = true;
+
+        // Second attempt: drop engine filter
+        if (oemCodes.length === 0 && engine) {
+          console.log('[searchByVehicle] retrying without engine filter');
+          oemCodes = await queryLocalOemCodes(false);
+          usedEngineFilter = false;
+        }
+
+        oemCodes = oemCodes.slice(0, 40);
+        console.log(`[searchByVehicle] derived ${oemCodes.length} OEM codes for ${brand} ${model}${engine ? ' ' + engine : ''} (engineFilter=${usedEngineFilter})`);
 
         if (oemCodes.length === 0) {
           result = {
             items: [],
             mode: 'oem-fallback',
-            warning: `Žádné lokální OEM kódy pro ${brand} ${model}${engine ? ' ' + engine : ''}`,
-            triedBrand: brand, triedModel: model, triedEngine: engine,
+            warning: `Žádné lokální OEM kódy pro ${brand} ${model}${engine ? ' ' + engine : ''}. Aftermarket dotaz na J+M přeskočen — chybí seed v parts_new.`,
+            triedBrand: brand, triedModel: model, triedEngine: engine, category,
           };
           break;
         }
@@ -696,7 +727,7 @@ Deno.serve(async (req) => {
               if (!it.oem_number) continue;
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
-              if (!isUsBrand(it.brand)) continue;
+              if (!isAllowedBrand(it.brand)) continue;
               seen.add(key);
               collected.push(it);
             }
@@ -716,7 +747,8 @@ Deno.serve(async (req) => {
           mode: 'oem-fallback',
           codesQueried: oemCodes.length,
           totalRawHits: collected.length,
-          triedBrand: brand, triedModel: model, triedEngine: engine,
+          usedEngineFilter,
+          triedBrand: brand, triedModel: model, triedEngine: engine, category,
         };
         break;
       }
