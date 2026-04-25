@@ -92,6 +92,10 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
 }
 
 // ---------- normalisation ----------
+// MANDATORY +30 % markup applied LIVE on every J+M (aftermarket) price.
+// Never persisted into parts_new — applied only on the response sent to the client.
+const JM_MARGIN = 1.30;
+
 interface UnifiedPart {
   supplier: 'jm';
   oem_number: string;
@@ -113,8 +117,11 @@ function normalizeCatalogItem(it: any): UnifiedPart {
   const brand = it.productBrand || it.ProductBrand || '';
   const name = it.productName || it.ProductName || it.productDescription || '';
   const price = it.price || it.Price || {};
-  const priceNoVat = Number(price.unitPrice ?? price.UnitPrice ?? 0);
-  const priceVat = Number(price.unitPriceIncVAT ?? price.UnitPriceIncVAT ?? priceNoVat * 1.21);
+  const purchaseNoVat = Number(price.unitPrice ?? price.UnitPrice ?? 0);
+  const purchaseVat = Number(price.unitPriceIncVAT ?? price.UnitPriceIncVAT ?? purchaseNoVat * 1.21);
+  // Apply mandatory +30 % markup (Phase 3A)
+  const priceNoVat = purchaseNoVat * JM_MARGIN;
+  const priceVat = purchaseVat * JM_MARGIN;
   const stock = Number(it.qtyAvailableMain ?? it.QtyAvailableMain ?? 0)
               + Number(it.qtyAvailableSupplier ?? it.QtyAvailableSupplier ?? 0);
 
