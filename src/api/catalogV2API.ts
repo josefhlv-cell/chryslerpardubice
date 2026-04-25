@@ -683,7 +683,7 @@ export function mergeWithJm(base: CatalogPart[], jm: CatalogPart[]): CatalogPart
     if (seenJm.has(key)) return false;
     seenJm.add(key);
     // Show J+M with any positive price OR explicit availability
-    return p.price_with_vat > 0 || p.availability === "in_stock" || p.availability === "on_order";
+    return (p.price_with_vat ?? 0) > 0 || p.availability === "in_stock" || p.availability === "on_order";
   });
   return [...base, ...visibleJm].sort((a, b) => a.rank - b.rank);
 }
