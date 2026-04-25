@@ -293,7 +293,10 @@ async function seedVehicleTree(adminClient: any) {
   return { insertedNodes, insertedVehicles };
 }
 
-// ---------- price enrichment helper (writes to parts_new) ----------
+// ---------- price enrichment helper ----------
+// Returns J+M items WITH +30 % markup (via normalizeCatalogItem) for the client.
+// Updates parts_new ONLY for non-OEM rows (J+M-sourced). Mopar/EPC/CSV rows are
+// pre-loaded OEM with strict 0% margin policy and must NOT be overwritten by J+M.
 async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
   if (!codes.length) return { enriched: 0, attempted: 0, items: [] as UnifiedPart[] };
   const requestedCodes = codes.slice(0, 50).map((c) => String(c).trim()).filter(Boolean);
@@ -311,17 +314,29 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
   let enriched = 0;
   const items: UnifiedPart[] = [];
 
+  // Pre-load which requested OEMs are local OEM-source rows (do not overwrite their price)
+  const { data: localOemRows } = await adminClient
+    .from('parts_new')
+    .select('oem_number, catalog_source')
+    .in('oem_number', requestedCodes);
+  const oemLocked = new Set<string>();
+  for (const r of (localOemRows || [])) {
+    const src = String(r.catalog_source || '').toLowerCase();
+    if (['mopar','mopar_oem','csv','epc-ai','7zap','epc-link','ai-epc'].includes(src)) {
+      oemLocked.add(String(r.oem_number).toUpperCase());
+    }
+  }
+
   for (const row of list) {
     const ri = row.responseItem || row.ResponseItem;
     const req = row.requestItem || row.RequestItem || {};
     const requestedOem = String(req.code || req.Code || '').trim();
     if (!ri || ri.valid === false || !requestedOem) continue;
 
-    const priceNoVat = Number(ri.price?.unitPrice ?? ri.Price?.UnitPrice ?? 0);
-    const priceVat = Number(ri.price?.unitPriceIncVAT ?? ri.Price?.UnitPriceIncVAT ?? priceNoVat * 1.21);
-    if (priceNoVat <= 0) continue;
-
+    // normalizeCatalogItem already applies +30 % markup
     const jmItem = normalizeCatalogItem(ri);
+    if (jmItem.price_with_vat <= 0) continue;
+
     const partForOem: UnifiedPart = {
       ...jmItem,
       oem_number: requestedOem,
@@ -330,11 +345,14 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
     };
     items.push(partForOem);
 
+    // Only update DB when this OEM is NOT a locked local OEM record.
+    if (oemLocked.has(requestedOem.toUpperCase())) continue;
+
     const { error: updErr } = await adminClient
       .from('parts_new')
       .update({
-        price_without_vat: Math.round(priceNoVat * 100) / 100,
-        price_with_vat: Math.round(priceVat * 100) / 100,
+        price_without_vat: partForOem.price_without_vat,
+        price_with_vat: partForOem.price_with_vat,
         availability: partForOem.availability,
         last_price_update: new Date().toISOString(),
       })
