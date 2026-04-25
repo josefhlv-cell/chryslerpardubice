@@ -396,22 +396,23 @@ Deno.serve(async (req) => {
       case 'searchByCode': {
         const code = String(payload.code || '').trim();
         if (!code) { result = { items: [] }; break; }
-        // Try OE code first (Mopar OEM numbers), then fall back to main/internal
-        const targets = ['CodeOE', 'CodeMain', 'CodeEAN'];
+        // TecDoc target P = Passenger Car (most US brands), O = Off-road/Truck (Ram, Jeep)
+        const targets: Array<string | undefined> = [undefined, 'P', 'O'];
         let raw: any = null;
-        let usedTarget = '';
+        let usedTarget = '(default)';
         for (const target of targets) {
-          raw = await nextisPost('/catalogs/items-finding-by-code', {
+          const reqBody: Record<string, unknown> = {
             code,
-            target,
             getOECodes: true,
             getDeposits: false,
             getServices: false,
             getCashBack: false,
             getEANCodes: false,
-          });
+          };
+          if (target) reqBody.target = target;
+          raw = await nextisPost('/catalogs/items-finding-by-code', reqBody);
           const found = (raw?.items || raw?.Items || []).length;
-          if (found > 0) { usedTarget = target; break; }
+          if (found > 0) { usedTarget = target || '(default)'; break; }
         }
         const items = normalizeItems(raw);
 
