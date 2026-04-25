@@ -293,6 +293,7 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
   const raw = await nextisPost('/catalogs/items-checking', {
     items,
     trySearchWithoutManufacturer: true,
+    searchTarget: 'CodeOE',
     getOECodes: false,
   });
   const list = (raw?.items || raw?.Items || []) as any[];
