@@ -486,24 +486,44 @@ const Catalog = () => {
               Pro toto vozidlo zatím nejsou v katalogu žádné díly.
             </div>
           ) : (
-            <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
-              {categories.map((c) => {
-                const Icon = CATEGORY_ICON[c.canonical] || Package;
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={categoryQuery}
+                  onChange={(event) => setCategoryQuery(event.target.value)}
+                  placeholder="Hledat kategorii nebo díl…"
+                  className="pl-9 bg-card border-border/40"
+                />
+              </div>
+              {categoryPath.length > 0 && !categoryQuery && (
+                <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setCategoryPath((path) => path.slice(0, -1))}>
+                  <ChevronLeft className="w-3.5 h-3.5 mr-1" /> O úroveň zpět
+                </Button>
+              )}
+              <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
+              {visibleCategories.map((c) => {
+                const Icon = CATEGORY_ICON[c.label] || Package;
+                const hasChildren = (c.children?.length || 0) > 0;
                 return (
                   <button
-                    key={c.canonical}
-                    onClick={() => setCategory(c.canonical)}
+                    key={c.id}
+                    onClick={() => {
+                      if (hasChildren && !categoryQuery) setCategoryPath((path) => [...path, c.id]);
+                      else setCategory(c);
+                    }}
                     className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon className="w-4 h-4 text-primary/70 shrink-0" />
-                      <span className="text-sm font-medium truncate">{c.canonical}</span>
+                      <span className="text-sm font-medium truncate">{c.label}</span>
                       <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{c.count}</Badge>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
                 );
               })}
+              </div>
             </div>
           )
         )}
