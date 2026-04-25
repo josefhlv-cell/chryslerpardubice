@@ -151,14 +151,19 @@ const Catalog = () => {
             canonicalCategory: category,
             page, pageSize: 30,
           }),
-          page === 0 ? fetchJmForVehicle({ brand, model }) : Promise.resolve([]),
+          page === 0
+            ? fetchJmForVehicle({ brand, model, engine })
+            : Promise.resolve({ items: [] as CatalogPart[] }),
         ]);
         if (cancelled) return;
 
         const { items: oemItems, total: oemTotal } =
           oemRes.status === "fulfilled" ? oemRes.value : { items: [], total: 0 };
-        const jmFromVehicle =
-          jmVehicleRes.status === "fulfilled" ? jmVehicleRes.value : [];
+        const jmVehiclePayload =
+          jmVehicleRes.status === "fulfilled"
+            ? jmVehicleRes.value
+            : { items: [] as CatalogPart[], warning: "J+M dotaz selhal" };
+        const jmFromVehicle = jmVehiclePayload.items || [];
 
         if (oemRes.status === "rejected") {
           console.error("[Catalog] OEM fetch failed:", oemRes.reason);
