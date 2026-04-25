@@ -471,9 +471,17 @@ export async function fetchJmForVehicle(opts: {
 
 /** Live search of J+M by OEM / item code. */
 export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
+  return fetchJmByCodes([code]);
+}
+
+/** Live J+M stock/price lookup for visible OEM codes. */
+export async function fetchJmByCodes(codes: string[]): Promise<CatalogPart[]> {
+  const uniqueCodes = [...new Set(codes.map((c) => c.trim()).filter(Boolean))].slice(0, 50);
+  if (uniqueCodes.length === 0) return [];
+
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
-      body: { action: "searchByCode", payload: { code } },
+      body: { action: "priceAndStock", payload: { codes: uniqueCodes } },
     });
     if (error || !data?.success) return [];
     const items: JmRawItem[] = data.data?.items || [];
