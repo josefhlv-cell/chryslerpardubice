@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
   fetchCategoriesForVehicle, listPartsForVehicle,
-  fetchJmForVehicle, mergeWithJm,
+  fetchJmByCodes, mergeWithJm,
   type CatalogPart, type CategoryTile,
 } from "@/api/catalogV2API";
 import CatalogListing from "@/components/catalog/CatalogListing";
@@ -148,23 +148,28 @@ const Catalog = () => {
         setItems(oemItems);
         setTotal(oemTotal);
 
-        // 2) Live J+M overlay — only on first page to keep it cheap.
+        // 2) Live J+M overlay — look up real stock/prices for visible OEM codes.
         if (page === 0) {
           setJmLoading(true);
-          const jm = await fetchJmForVehicle({ brand, model });
+          const jm = await fetchJmByCodes(oemItems.map((p) => p.oem_number));
           if (cancelled) return;
-          // Filter J+M items by the chosen canonical category when present.
-          const filteredJm = category
-            ? jm.filter((p) => {
-                const c = (p.category || "").toLowerCase();
-                return c.includes(category.toLowerCase()) || c === "";
-              })
-            : jm;
-          setJmCount(filteredJm.length);
-          if (filteredJm.length > 0) {
-            setItems((prev) => mergeWithJm(prev, filteredJm));
-            setTotal((t) => t + filteredJm.length);
-          }
+          const jmByOem = new Map(
+            jm.map((p) => [p.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, ""), p])
+          );
+          const enrichedItems = oemItems.map((part) => {
+            const jmMatch = jmByOem.get(part.oem_number.toUpperCase().replace(/[^A-Z0-9]/g, ""));
+            return jmMatch && jmMatch.price_with_vat > 0
+              ? {
+                  ...part,
+                  price_without_vat: jmMatch.price_without_vat,
+                  price_with_vat: jmMatch.price_with_vat,
+                  availability: jmMatch.availability,
+                }
+              : part;
+          });
+          setJmCount(jm.length);
+          setItems(mergeWithJm(enrichedItems, jm));
+          setTotal(oemTotal + jm.length);
         } else {
           setJmCount(0);
         }

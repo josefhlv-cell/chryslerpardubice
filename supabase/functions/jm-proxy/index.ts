@@ -288,35 +288,54 @@ async function seedVehicleTree(adminClient: any) {
 
 // ---------- price enrichment helper (writes to parts_new) ----------
 async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
-  if (!codes.length) return { enriched: 0, attempted: 0 };
-  const items = codes.slice(0, 50).map((c) => ({ code: c }));
+  if (!codes.length) return { enriched: 0, attempted: 0, items: [] as UnifiedPart[] };
+  const requestedCodes = codes.slice(0, 50).map((c) => String(c).trim()).filter(Boolean);
   const raw = await nextisPost('/catalogs/items-checking', {
-    items,
+    items: requestedCodes.map((code) => ({ code })),
     trySearchWithoutManufacturer: true,
     searchTarget: 'CodeOE',
-    getOECodes: false,
+    getOECodes: true,
+    getDeposits: false,
+    getServices: false,
+    getCashBack: false,
+    getEANCodes: false,
   });
   const list = (raw?.items || raw?.Items || []) as any[];
   let enriched = 0;
+  const items: UnifiedPart[] = [];
+
   for (const row of list) {
     const ri = row.responseItem || row.ResponseItem;
-    if (!ri || !ri.valid) continue;
-    const oem = (ri.productPrefix ? `${ri.productPrefix}${ri.productCode}` : ri.productCode) || '';
-    const priceNoVat = Number(ri.price?.unitPrice ?? 0);
-    const priceVat = Number(ri.price?.unitPriceIncVAT ?? priceNoVat * 1.21);
-    if (!oem || priceNoVat <= 0) continue;
+    const req = row.requestItem || row.RequestItem || {};
+    const requestedOem = String(req.code || req.Code || '').trim();
+    if (!ri || ri.valid === false || !requestedOem) continue;
+
+    const priceNoVat = Number(ri.price?.unitPrice ?? ri.Price?.UnitPrice ?? 0);
+    const priceVat = Number(ri.price?.unitPriceIncVAT ?? ri.Price?.UnitPriceIncVAT ?? priceNoVat * 1.21);
+    if (priceNoVat <= 0) continue;
+
+    const jmItem = normalizeCatalogItem(ri);
+    const partForOem: UnifiedPart = {
+      ...jmItem,
+      oem_number: requestedOem,
+      name: jmItem.name || requestedOem,
+      category: jmItem.category || 'J+M dostupnost',
+    };
+    items.push(partForOem);
+
     const { error: updErr } = await adminClient
       .from('parts_new')
       .update({
         price_without_vat: Math.round(priceNoVat * 100) / 100,
         price_with_vat: Math.round(priceVat * 100) / 100,
+        availability: partForOem.availability,
         last_price_update: new Date().toISOString(),
       })
-      .eq('oem_number', oem)
+      .eq('oem_number', requestedOem)
       .eq('price_locked', false);
     if (!updErr) enriched++;
   }
-  return { enriched, attempted: codes.length };
+  return { enriched, attempted: requestedCodes.length, items };
 }
 
 // ---------- HTTP entry ----------
@@ -457,14 +476,8 @@ Deno.serve(async (req) => {
       case 'priceAndStock': {
         const codes: string[] = Array.isArray(payload.codes) ? payload.codes.slice(0, 50) : [];
         if (!codes.length) { result = { items: [] }; break; }
-        const raw = await nextisPost('/catalogs/items-checking', {
-          items: codes.map((c) => ({ code: c })),
-          trySearchWithoutManufacturer: true,
-          searchTarget: 'CodeOE',
-        });
-        const items = normalizeItems(raw);
-        const enrich = await enrichPricesIntoDb(adminClient, codes).catch(() => ({ enriched: 0 }));
-        result = { items, enrichedInDb: enrich.enriched };
+        const enrich = await enrichPricesIntoDb(adminClient, codes).catch(() => ({ enriched: 0, items: [] }));
+        result = { items: enrich.items || [], enrichedInDb: enrich.enriched || 0 };
         break;
       }
 
