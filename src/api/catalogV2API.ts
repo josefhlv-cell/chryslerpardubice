@@ -102,32 +102,19 @@ type SeedCategory = {
  * Single source of truth for the in-app category tree.
  * Keywords are normalised (lower-case, no diacritics) at runtime.
  */
+// Nextis genArtID mapping (TecDoc IDs used by Nextis API)
+// Reference: TecDoc Generic Article master list.
 const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
   {
     id: "brakes",
     label: "Brzdové zařízení",
     keywords: ["brake", "brzd"],
+    sectionId: 100, // generic brake parent (not used directly — children carry IDs)
     children: [
-      {
-        id: "brake-pads",
-        label: "Brzdové destičky",
-        keywords: ["brake pad", "pads", "brzdov\u00e1 desti", "brzdove desti", "destic"],
-      },
-      {
-        id: "brake-discs",
-        label: "Brzdové kotouče",
-        keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc"],
-      },
-      {
-        id: "brake-hoses",
-        label: "Brzdové hadice",
-        keywords: ["brake hose", "brzdov\u00e1 hadice", "hadice brzd"],
-      },
-      {
-        id: "brake-calipers",
-        label: "Brzdové třmeny",
-        keywords: ["caliper", "tr\u017emen", "trmen"],
-      },
+      { id: "brake-pads",     label: "Brzdové destičky", sectionId: 402, keywords: ["brake pad", "pads", "brzdov\u00e1 desti", "brzdove desti", "destic"] },
+      { id: "brake-discs",    label: "Brzdové kotouče",  sectionId: 82,  keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc"] },
+      { id: "brake-hoses",    label: "Brzdové hadice",   sectionId: 95,  keywords: ["brake hose", "brzdov\u00e1 hadice", "hadice brzd"] },
+      { id: "brake-calipers", label: "Brzdové třmeny",   sectionId: 472, keywords: ["caliper", "tr\u017emen", "trmen"] },
     ],
   },
   {
@@ -135,10 +122,10 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     label: "Motor",
     keywords: ["engine", "motor"],
     children: [
-      { id: "engine-oil", label: "Motorový olej", keywords: ["engine oil", "motorov\u00fd olej", "motorovy olej"] },
-      { id: "spark-plugs", label: "Zapalovací svíčky", keywords: ["spark plug", "zapalovac\u00ed sv\u00ed\u010dka", "zapalovaci svicka"] },
-      { id: "timing-belt", label: "Rozvodový řemen", keywords: ["timing belt", "rozvodov\u00fd \u0159emen", "rozvodovy remen"] },
-      { id: "water-pump", label: "Vodní čerpadlo", keywords: ["water pump", "vodn\u00ed \u010derpadlo", "vodni cerpadlo"] },
+      { id: "engine-oil",  label: "Motorový olej",      sectionId: 7595, keywords: ["engine oil", "motorov\u00fd olej", "motorovy olej"] },
+      { id: "spark-plugs", label: "Zapalovací svíčky",  sectionId: 18,   keywords: ["spark plug", "zapalovac\u00ed sv\u00ed\u010dka", "zapalovaci svicka"] },
+      { id: "timing-belt", label: "Rozvodový řemen",    sectionId: 213,  keywords: ["timing belt", "rozvodov\u00fd \u0159emen", "rozvodovy remen"] },
+      { id: "water-pump",  label: "Vodní čerpadlo",     sectionId: 50,   keywords: ["water pump", "vodn\u00ed \u010derpadlo", "vodni cerpadlo"] },
     ],
   },
   {
@@ -146,10 +133,10 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     label: "Filtry",
     keywords: ["filter", "filtr"],
     children: [
-      { id: "oil-filter", label: "Olejový filtr", keywords: ["oil filter", "olejov\u00fd filtr", "olejovy filtr"] },
-      { id: "air-filter", label: "Vzduchový filtr", keywords: ["air filter", "vzduchov\u00fd filtr", "vzduchovy filtr"] },
-      { id: "cabin-filter", label: "Kabinový filtr", keywords: ["cabin filter", "pollen filter", "kabinov\u00fd filtr", "kabinovy filtr"] },
-      { id: "fuel-filter", label: "Palivový filtr", keywords: ["fuel filter", "palivov\u00fd filtr", "palivovy filtr"] },
+      { id: "oil-filter",   label: "Olejový filtr",   sectionId: 22,  keywords: ["oil filter", "olejov\u00fd filtr", "olejovy filtr"] },
+      { id: "air-filter",   label: "Vzduchový filtr", sectionId: 26,  keywords: ["air filter", "vzduchov\u00fd filtr", "vzduchovy filtr"] },
+      { id: "cabin-filter", label: "Kabinový filtr",  sectionId: 350, keywords: ["cabin filter", "pollen filter", "kabinov\u00fd filtr", "kabinovy filtr"] },
+      { id: "fuel-filter",  label: "Palivový filtr",  sectionId: 23,  keywords: ["fuel filter", "palivov\u00fd filtr", "palivovy filtr"] },
     ],
   },
   {
@@ -157,9 +144,9 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     label: "Odpružení",
     keywords: ["suspension", "odpru\u017een", "odpruzen", "tlumi\u010d", "tlumic"],
     children: [
-      { id: "shock-absorbers", label: "Tlumiče", keywords: ["shock absorber", "tlumi\u010d", "tlumic"] },
-      { id: "control-arms", label: "Ramena nápravy", keywords: ["control arm", "rameno n\u00e1pravy", "rameno napravy"] },
-      { id: "bushings", label: "Silentbloky", keywords: ["bushing", "silentblok"] },
+      { id: "shock-absorbers", label: "Tlumiče",        sectionId: 51,  keywords: ["shock absorber", "tlumi\u010d", "tlumic"] },
+      { id: "control-arms",    label: "Ramena nápravy", sectionId: 423, keywords: ["control arm", "rameno n\u00e1pravy", "rameno napravy"] },
+      { id: "bushings",        label: "Silentbloky",    sectionId: 459, keywords: ["bushing", "silentblok"] },
     ],
   },
   {
@@ -167,8 +154,8 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     label: "Řízení",
     keywords: ["steering", "\u0159\u00edzen", "rizeni"],
     children: [
-      { id: "tie-rods", label: "Spojovací tyče", keywords: ["tie rod", "spojovac\u00ed ty\u010d", "spojovaci tyc"] },
-      { id: "ball-joints", label: "Kulové čepy", keywords: ["ball joint", "kulov\u00fd \u010dep", "kulovy cep"] },
+      { id: "tie-rods",    label: "Spojovací tyče", sectionId: 433, keywords: ["tie rod", "spojovac\u00ed ty\u010d", "spojovaci tyc"] },
+      { id: "ball-joints", label: "Kulové čepy",    sectionId: 432, keywords: ["ball joint", "kulov\u00fd \u010dep", "kulovy cep"] },
     ],
   },
   {
@@ -176,9 +163,9 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     label: "Elektroinstalace",
     keywords: ["electric", "elektri", "battery", "baterie"],
     children: [
-      { id: "battery", label: "Baterie", keywords: ["battery", "baterie", "akumul\u00e1tor", "akumulator"] },
-      { id: "alternator", label: "Alternátor", keywords: ["alternator", "altern\u00e1tor"] },
-      { id: "starter", label: "Startér", keywords: ["starter motor", "start\u00e9r", "starter"] },
+      { id: "battery",    label: "Baterie",    sectionId: 213, keywords: ["battery", "baterie", "akumul\u00e1tor", "akumulator"] },
+      { id: "alternator", label: "Alternátor", sectionId: 71,  keywords: ["alternator", "altern\u00e1tor"] },
+      { id: "starter",    label: "Startér",    sectionId: 72,  keywords: ["starter motor", "start\u00e9r", "starter"] },
     ],
   },
   {
@@ -186,40 +173,16 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     label: "Chlazení",
     keywords: ["cooling", "radiator", "chlazen", "chladi\u010d", "chladic"],
     children: [
-      { id: "radiator", label: "Chladič", keywords: ["radiator", "chladi\u010d", "chladic"] },
-      { id: "thermostat", label: "Termostat", keywords: ["thermostat", "termostat"] },
+      { id: "radiator",   label: "Chladič",   sectionId: 31,  keywords: ["radiator", "chladi\u010d", "chladic"] },
+      { id: "thermostat", label: "Termostat", sectionId: 195, keywords: ["thermostat", "termostat"] },
     ],
   },
-  {
-    id: "exhaust",
-    label: "Výfuk",
-    keywords: ["exhaust", "v\u00fdfuk", "vyfuk"],
-  },
-  {
-    id: "transmission",
-    label: "Převodovka",
-    keywords: ["transmission", "p\u0159evodovk", "prevodovk", "gearbox"],
-  },
-  {
-    id: "ac",
-    label: "Klimatizace",
-    keywords: ["air conditioning", "klimatiza", "a/c "],
-  },
-  {
-    id: "body",
-    label: "Karoserie",
-    keywords: ["body", "karoseri", "fender", "bumper", "n\u00e1raz", "naraz"],
-  },
-  {
-    id: "interior",
-    label: "Interiér",
-    keywords: ["interior", "interi\u00e9r", "interier", "seat", "sedadlo"],
-  },
-  {
-    id: "fluids",
-    label: "Kapaliny a oleje",
-    keywords: ["fluid", "oil", "olej", "kapalina"],
-  },
+  { id: "exhaust",      label: "Výfuk",            sectionId: 64,  keywords: ["exhaust", "v\u00fdfuk", "vyfuk"] },
+  { id: "transmission", label: "Převodovka",       sectionId: 252, keywords: ["transmission", "p\u0159evodovk", "prevodovk", "gearbox"] },
+  { id: "ac",           label: "Klimatizace",      sectionId: 244, keywords: ["air conditioning", "klimatiza", "a/c "] },
+  { id: "body",         label: "Karoserie",        keywords: ["body", "karoseri", "fender", "bumper", "n\u00e1raz", "naraz"] },
+  { id: "interior",     label: "Interiér",         keywords: ["interior", "interi\u00e9r", "interier", "seat", "sedadlo"] },
+  { id: "fluids",       label: "Kapaliny a oleje", keywords: ["fluid", "oil", "olej", "kapalina"] },
 ];
 
 // =============================================================
