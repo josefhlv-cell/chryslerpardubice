@@ -313,6 +313,37 @@ function dedupeByOem(parts: CatalogPart[]): CatalogPart[] {
 }
 
 // =============================================================
+// IN-MEMORY CACHE (lightweight, per-tab)
+// =============================================================
+
+type CacheEntry<T> = { value: T; expires: number };
+const _cache = new Map<string, CacheEntry<unknown>>();
+
+function cacheGet<T>(key: string): T | null {
+  const e = _cache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expires) {
+    _cache.delete(key);
+    return null;
+  }
+  return e.value as T;
+}
+
+function cacheSet<T>(key: string, value: T, ttlMs: number): T {
+  _cache.set(key, { value, expires: Date.now() + ttlMs });
+  return value;
+}
+
+/** Public helper to wipe the cache (e.g. after CSV price sync). */
+export function clearCatalogCache(): void {
+  _cache.clear();
+}
+
+const TTL_VEHICLE_TREE = 5 * 60_000; // 5 min — brand/model/engine
+const TTL_PARTS_QUERY = 60_000;       // 1 min — local parts
+const TTL_JM_CODE = 5 * 60_000;       // 5 min — J+M code lookup
+
+// =============================================================
 // VEHICLE TREE — nextis_vehicles is the source of truth
 // =============================================================
 
