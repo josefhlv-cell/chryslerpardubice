@@ -645,13 +645,17 @@ function jmNormalize(it: JmRaw): CatalogPart {
 
 export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
   if (!code) return [];
+  const cacheKey = `jm:code:${normalizeOem(code)}`;
+  const cached = cacheGet<CatalogPart[]>(cacheKey);
+  if (cached) return cached;
+
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
       body: { action: "searchByCode", payload: { code } },
     });
-    if (error || !data?.success) return [];
+    if (error || !data?.success) return cacheSet(cacheKey, [], TTL_JM_CODE);
     const items = Array.isArray(data?.data?.items) ? data.data.items : [];
-    return items.map(jmNormalize);
+    return cacheSet(cacheKey, items.map(jmNormalize), TTL_JM_CODE);
   } catch (e) {
     console.warn("[catalogV2API] fetchJmByCode failed:", e);
     return [];
