@@ -226,6 +226,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 nextisVehicleId: selectedVehicleId,
                 sectionId: category.sectionId,
                 category: category.label,
+                categoryId: category.id,
                 categoryKeywords: category.keywords,
                 parentKeywords:
                   findNodeWithParent(categories, category.id)?.parent?.keywords || [],
@@ -559,8 +560,14 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           <>
             <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground gap-3 flex-wrap">
               <span>
-                {total > 0 ? `${total} dílů — Mopar / OEM první` : "Žádné výsledky"}
-                {jmCount > 0 && (
+                {total > 0
+                  ? jmCount > 0 && total === jmCount
+                    ? `${jmCount} dílů z J+M Autodíly (náhrady)`
+                    : `${total} dílů — Mopar / OEM první`
+                  : jmLoading
+                    ? "Hledám díly…"
+                    : "Žádné výsledky"}
+                {jmCount > 0 && total !== jmCount && (
                   <span className="ml-2 text-primary">+ {jmCount} z J+M Autodíly</span>
                 )}
               </span>
