@@ -261,6 +261,32 @@ function itemMatchesKeywords(item: UnifiedPart, keywords: string[] = []): boolea
   return keywords.some((keyword) => haystack.includes(normalizeText(keyword)));
 }
 
+const SECTION_ID_BY_CATEGORY_ID: Record<string, number> = {
+  'brake-pads': 402,
+  'brake-discs': 82,
+  'brake-hoses': 95,
+  'brake-calipers': 472,
+  'oil-filter': 22,
+  'air-filter': 26,
+  'cabin-filter': 350,
+  'fuel-filter': 23,
+  'spark-plugs': 18,
+  'timing-belt': 213,
+  'water-pump': 50,
+  'shock-absorbers': 51,
+  'control-arms': 423,
+  'bushings': 459,
+  'tie-rods': 433,
+  'ball-joints': 432,
+  'alternator': 71,
+  'starter': 72,
+  'radiator': 31,
+  'thermostat': 195,
+  'exhaust': 64,
+  'transmission': 252,
+  'ac': 244,
+};
+
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
   return nodes
     .map((node) => {
