@@ -226,6 +226,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 nextisVehicleId: selectedVehicleId,
                 sectionId: category.sectionId,
                 category: category.label,
+                categoryId: category.id,
                 categoryKeywords: category.keywords,
                 parentKeywords:
                   findNodeWithParent(categories, category.id)?.parent?.keywords || [],
