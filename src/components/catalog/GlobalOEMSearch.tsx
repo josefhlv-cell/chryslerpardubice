@@ -98,7 +98,8 @@ const GlobalOEMSearch = forwardRef<HTMLDivElement, Props>(({ onOrder }, ref) => 
       )}
     </div>
   );
-};
+});
+GlobalOEMSearch.displayName = "GlobalOEMSearch";
 
 const ResultRow = ({ p, onOrder }: { p: CatalogPart; onOrder: (p: CatalogPart) => void }) => {
   const isOem = p.is_oem;
