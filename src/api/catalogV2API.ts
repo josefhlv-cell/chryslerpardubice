@@ -816,9 +816,15 @@ export async function fetchJmForVehicle(opts: {
 
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
   const oemKeys = new Set(oem.map((p) => normalizeOem(p.oem_number)).filter(Boolean));
+  const oemBase8 = new Set(oem.map((p) => normalizeOem(p.oem_number).match(/^K?(\d{8})/)?.[1]).filter(Boolean));
   const filteredJm = jm.filter((p) => {
     const k = normalizeOem(p.oem_number);
-    return k && !oemKeys.has(k);
+    const related = normalizeOem(p.related_oem_number || "");
+    const relatedBase = related.match(/^K?(\d{8})/)?.[1];
+    if (!k) return false;
+    // Hide only exact OEM duplicates. Crossref aftermarket rows are allowed under
+    // the OEM part family even when they carry related_oem_number.
+    return !oemKeys.has(k) || (!!relatedBase && oemBase8.has(relatedBase));
   });
   return [...oem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
 }
