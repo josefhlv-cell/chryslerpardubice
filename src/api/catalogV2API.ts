@@ -185,6 +185,15 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
   { id: "fluids",       label: "Kapaliny a oleje", keywords: ["fluid", "oil", "olej", "kapalina"] },
 ];
 
+const SECTION_ID_BY_CATEGORY_ID = new Map<string, number>();
+const registerSectionIds = (nodes: SeedCategory[]) => {
+  nodes.forEach((node) => {
+    if (typeof node.sectionId === "number") SECTION_ID_BY_CATEGORY_ID.set(node.id, node.sectionId);
+    if (node.children?.length) registerSectionIds(node.children);
+  });
+};
+registerSectionIds(DEFAULT_CATEGORY_TREE);
+
 // =============================================================
 // HELPERS
 // =============================================================
@@ -718,13 +727,14 @@ export async function fetchJmForVehicle(opts: {
 }): Promise<{ items: CatalogPart[]; warning?: string }> {
   const expandedKeywords = expandCategoryKeywords(opts.categoryId, opts.categoryKeywords || []);
   const inputCategory = opts.category || opts.categoryId || null;
+  const resolvedSectionId = opts.sectionId ?? (opts.categoryId ? SECTION_ID_BY_CATEGORY_ID.get(opts.categoryId) ?? null : null);
 
   const basePayload = {
     nextisVehicleId: opts.nextisVehicleId,
     brand: opts.brand,
     model: opts.model,
     engine: opts.engine || "",
-    sectionId: opts.sectionId ?? null,
+    sectionId: resolvedSectionId,
     category: opts.category,
     parentKeywords: opts.parentKeywords || [],
   };
