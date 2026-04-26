@@ -943,9 +943,11 @@ Deno.serve(async (req) => {
           return { codes, matchedRows: filtered.length };
         };
 
-        // Strict category ladder: do not broaden to parent/no-engine/brand-model.
+        // Category seed ladder: strict subcategory first; when the frontend intentionally
+        // drops subcategory keywords, keep parent keywords so fallback stays in the same system.
+        const seedKeywords = categoryKeywords.length > 0 ? categoryKeywords : parentKeywords;
         const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
-          { label: 'engine+subcat', useEngine: true,  keywords: categoryKeywords },
+          { label: categoryKeywords.length > 0 ? 'engine+subcat' : 'engine+parent', useEngine: true, keywords: seedKeywords },
         ];
 
         let oemCodes: string[] = [];
