@@ -837,7 +837,8 @@ Deno.serve(async (req) => {
         let model = String(payload.model || '').trim();
         let engine = String(payload.engine || '').trim();
         const category = String(payload.category || '').trim();
-        const sectionId = Number(payload.sectionId || 0);
+        const categoryId = String(payload.categoryId || '').trim();
+        const sectionId = Number(payload.sectionId || SECTION_ID_BY_CATEGORY_ID[categoryId] || 0);
         const categoryKeywords: string[] = Array.isArray(payload.categoryKeywords)
           ? payload.categoryKeywords.map((k: unknown) => String(k).trim()).filter(Boolean)
           : [];
@@ -899,7 +900,7 @@ Deno.serve(async (req) => {
           console.log('[searchByVehicle] Nextis byVehicle response: status=', raw?.status, 'items=', rawCount);
           let items = normalizeItems(raw)
             .filter((p) => isAllowedBrand(p.brand));
-          if (categoryKeywords.length) {
+          if (categoryKeywords.length && sectionId <= 0) {
             const kept = items.filter((p) => itemMatchesKeywords(p, categoryKeywords));
             if (kept.length > 0) {
               items = kept;
@@ -1039,7 +1040,7 @@ Deno.serve(async (req) => {
             let kept = 0;
             for (const it of items) {
               if (!it.oem_number) continue;
-              if (categoryKeywords.length && !itemMatchesKeywords(it, categoryKeywords) && sectionId > 0) continue;
+              if (categoryKeywords.length && sectionId <= 0 && !itemMatchesKeywords(it, categoryKeywords)) continue;
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
