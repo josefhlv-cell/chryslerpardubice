@@ -830,9 +830,14 @@ export async function listParts(filter: {
 // CSV PRICING SYNC (vernostsevyplaci) — NO API
 // =============================================================
 
-export async function syncPricesFromCsv(rows: Array<{ oem: string; price: number | string }>): Promise<{ updated: number; skipped: number }> {
+export async function syncPricesFromCsv(
+  rows: Array<{ oem: string; price: number | string }>
+): Promise<{ updated: number; skipped: number }> {
   let updated = 0;
   let skipped = 0;
+
+  // Validate + dedupe by normalized OEM (last value wins).
+  const valid = new Map<string, { oem: string; price: number }>();
   for (const r of rows || []) {
     const oem = String(r?.oem || "").trim();
     const price = Number(r?.price);
@@ -840,15 +845,25 @@ export async function syncPricesFromCsv(rows: Array<{ oem: string; price: number
       skipped++;
       continue;
     }
-    const { error } = await supabase
-      .from("parts_new")
-      .update({ price_with_vat: price })
-      .eq("oem_number", oem);
-    if (error) {
-      skipped++;
-      continue;
-    }
-    updated++;
+    valid.set(normalizeOem(oem), { oem, price });
   }
+
+  // Chunked parallel updates for performance.
+  const entries = [...valid.values()];
+  const CHUNK = 20;
+  for (let i = 0; i < entries.length; i += CHUNK) {
+    const chunk = entries.slice(i, i + CHUNK);
+    const results = await Promise.allSettled(
+      chunk.map((e) =>
+        supabase.from("parts_new").update({ price_with_vat: e.price }).eq("oem_number", e.oem)
+      )
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled" && !r.value.error) updated++;
+      else skipped++;
+    }
+  }
+
+  if (updated > 0) clearCatalogCache();
   return { updated, skipped };
 }
