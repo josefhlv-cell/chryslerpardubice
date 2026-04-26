@@ -101,20 +101,21 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
   const token = await getToken();
   const payload = { token, language: 'cs', ...body };
 
-  let res = await fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  // 15s timeout — long enough for crossref ladder traversal, short enough to fail fast.
+  const doFetch = (tok: string) =>
+    fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ ...payload, token: tok }),
+      signal: AbortSignal.timeout(15000),
+    });
+
+  let res = await doFetch(token);
 
   if (res.status === 401) {
     cachedToken = null;
     const fresh = await getToken();
-    res = await fetch(`${BASE_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ ...payload, token: fresh }),
-    });
+    res = await doFetch(fresh);
   }
 
   if (!res.ok) {
