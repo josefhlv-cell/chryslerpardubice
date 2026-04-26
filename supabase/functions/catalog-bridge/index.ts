@@ -85,9 +85,9 @@ Deno.serve(async (req) => {
     let updated = 0;
     const errors: string[] = [];
     for (const [cat, ids] of byCat) {
-      const { error, count } = await sb.from('parts_new').update({ category: cat }).in('id', ids).select('id', { count: 'exact', head: true });
+      const { error } = await sb.from('parts_new').update({ category: cat }).in('id', ids);
       if (error) errors.push(`${cat}: ${error.message}`);
-      else updated += count || ids.length;
+      else updated += ids.length;
     }
     return json({ success: true, updated, categories: byCat.size, errors });
   }
@@ -147,8 +147,8 @@ Deno.serve(async (req) => {
       // Chunked insert (avoid huge payload)
       for (let i = 0; i < inserts.length; i += 500) {
         const chunk = inserts.slice(i, i + 500);
-        const { error, count } = await sb.from('catalog_vehicle_compatibility').insert(chunk).select('id', { count: 'exact', head: true });
-        if (!error) inserted += count || chunk.length;
+        const { error } = await sb.from('catalog_vehicle_compatibility').insert(chunk);
+        if (!error) inserted += chunk.length;
       }
     }
 
@@ -182,32 +182,44 @@ Deno.serve(async (req) => {
     const model = body.model || 'Pacifica';
 
     // Pick top OEMs without crossref for the given vehicle
+    // Limit compat lookup to avoid huge IN() lists that break PostgREST URL length
     const { data: compatRows, error: cErr } = await sb
       .from('catalog_vehicle_compatibility')
       .select('part_id')
       .ilike('brand', brand)
-      .ilike('model', `%${model}%`);
+      .ilike('model', `%${model}%`)
+      .limit(2000);
     if (cErr) return json({ error: `compat lookup: ${cErr.message}` }, 500);
 
-    const partIds = (compatRows || []).map((r: any) => r.part_id).filter(Boolean);
+    const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
     if (!partIds.length) {
       return json({ success: true, processed: 0, inserted: 0, message: `No parts linked to ${brand} ${model}` });
     }
 
-    const { data: parts, error: pErr } = await sb
-      .from('parts_new')
-      .select('oem_number, name, category')
-      .in('id', partIds)
-      .limit(500);
-    if (pErr) return json({ error: pErr.message }, 500);
-    if (!parts?.length) {
+    // Chunked .in() to avoid 414 URI Too Long
+    const parts: any[] = [];
+    for (let i = 0; i < partIds.length; i += 100) {
+      const chunkIds = partIds.slice(i, i + 100);
+      const { data: pc, error: pcErr } = await sb
+        .from('parts_new')
+        .select('oem_number, name, category')
+        .in('id', chunkIds);
+      if (pcErr) return json({ error: `parts lookup: ${pcErr.message}` }, 500);
+      if (pc) parts.push(...pc);
+      if (parts.length >= limit * 4) break; // enough candidates
+    }
+    if (!parts.length) {
       return json({ success: true, processed: 0, inserted: 0, message: 'No parts found' });
     }
 
-    // Filter out OEMs that already have crossref
+    // Filter out OEMs that already have crossref (also chunked)
     const oems = [...new Set(parts.map((p: any) => p.oem_number).filter(Boolean))];
-    const { data: existing } = await sb.from('part_crossref').select('oem_number').in('oem_number', oems);
-    const haveSet = new Set((existing || []).map((r: any) => r.oem_number));
+    const haveSet = new Set<string>();
+    for (let i = 0; i < oems.length; i += 100) {
+      const chunkOems = oems.slice(i, i + 100);
+      const { data: existing } = await sb.from('part_crossref').select('oem_number').in('oem_number', chunkOems);
+      for (const r of existing || []) haveSet.add((r as any).oem_number);
+    }
     const targets = parts.filter((p: any) => p.oem_number && !haveSet.has(p.oem_number)).slice(0, limit);
 
     if (!targets.length) return json({ success: true, processed: 0, inserted: 0, message: 'All have crossref' });
@@ -276,8 +288,8 @@ ${targets.map((p: any) => `${p.oem_number} | ${p.name}`).join('\n')}`;
       // Insert in chunks; ignore conflicts
       for (let i = 0; i < inserts.length; i += 200) {
         const chunk = inserts.slice(i, i + 200);
-        const { error, count } = await sb.from('part_crossref').insert(chunk).select('id', { count: 'exact', head: true });
-        if (!error) inserted += count || chunk.length;
+        const { error } = await sb.from('part_crossref').insert(chunk);
+        if (!error) inserted += chunk.length;
       }
     }
 
