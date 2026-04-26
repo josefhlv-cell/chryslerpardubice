@@ -44,24 +44,28 @@ Deno.serve(async (req) => {
   const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   if (!SUPABASE_URL || !SR) return json({ error: 'Missing secrets' }, 500);
 
-  // Auth: accept anon key OR authenticated admin. For maintenance script use, also accept x-admin-secret matching service role hash.
+  // Auth: allow anon-key calls (gateway-validated) OR authenticated admin user
   const authHeader = req.headers.get('Authorization') || '';
   const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
-  const adminSecret = req.headers.get('x-admin-secret') || '';
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
 
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const isAnonCall = !!ANON_KEY && token === ANON_KEY;
-  const isAdminSecret = !!SR && adminSecret === SR;
+  if (!token) return json({ error: 'Unauthorized', hint: 'no token' }, 401);
 
-  if (!isAnonCall && !isAdminSecret) {
-    if (!token) return json({ error: 'Unauthorized', hint: 'no token' }, 401);
-    const anon = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user } } = await anon.auth.getUser();
-    if (!user) return json({ error: 'Unauthorized', hint: 'invalid user' }, 401);
+  // Decode JWT payload (no verify — gateway already verifies)
+  let claims: any = {};
+  try {
+    const payload = token.split('.')[1];
+    claims = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {}
+  const role = claims.role || '';
+  const userId = claims.sub || '';
+
+  if (role !== 'anon' && role !== 'service_role') {
+    if (!userId) return json({ error: 'Unauthorized', hint: 'no sub' }, 401);
     const sbCheck = createClient(SUPABASE_URL, SR);
-    const { data: role } = await sbCheck.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
-    if (!role) return json({ error: 'Forbidden' }, 403);
+    const { data: adminRow } = await sbCheck.from('user_roles').select('role').eq('user_id', userId).eq('role', 'admin').maybeSingle();
+    if (!adminRow) return json({ error: 'Forbidden' }, 403);
   }
 
   const body = await req.json().catch(() => ({}));
