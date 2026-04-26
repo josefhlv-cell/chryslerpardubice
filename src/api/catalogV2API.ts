@@ -623,8 +623,12 @@ function jmNormalize(it: JmRaw): CatalogPart {
   const pwoVat =
     safeNumber(it.price_without_vat) ?? (pw !== null ? Math.round((pw / 1.21) * 100) / 100 : null);
 
+  const imageUrls = Array.isArray(it.image_urls)
+    ? it.image_urls.filter(Boolean)
+    : (it.image ? [String(it.image)] : null);
+
   return {
-    id: `jm:${it.oem_number || Math.random()}`,
+    id: `jm:${it.related_oem_number || it.searched_code || it.oem_number || Math.random()}:${it.oem_number || ""}`,
     oem_number: String(it.oem_number || ""),
     name: String(it.name || it.oem_number || "—"),
     manufacturer: it.manufacturer || it.brand || "J+M",
@@ -632,11 +636,13 @@ function jmNormalize(it: JmRaw): CatalogPart {
     price_without_vat: pwoVat && pwoVat > 0 ? pwoVat : null,
     price_with_vat: pw && pw > 0 ? pw : null,
     availability: it.availability || (it.stock && it.stock > 0 ? "in_stock" : "unknown"),
-    image_urls: Array.isArray(it.image_urls) ? it.image_urls : null,
+    image_urls: imageUrls,
     category: it.category ?? null,
     description: it.description ?? null,
     compatible_vehicles: (it as any).compatible_vehicles ?? null,
     technical_parameters: (it as any).technical_parameters ?? null,
+    related_oem_number: it.related_oem_number ?? null,
+    searched_code: it.searched_code ?? null,
     is_oem: false,
     badge_label: "NÁHRADA",
     rank: 5,
