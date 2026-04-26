@@ -111,8 +111,8 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
     keywords: ["brake", "brzd"],
     sectionId: 100, // generic brake parent (not used directly — children carry IDs)
     children: [
-      { id: "brake-pads",     label: "Brzdové destičky", sectionId: 402, keywords: ["brake pad", "pads", "brzdov\u00e1 desti", "brzdove desti", "destic"] },
-      { id: "brake-discs",    label: "Brzdové kotouče",  sectionId: 82,  keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc"] },
+      { id: "brake-pads",     label: "Brzdové destičky", sectionId: 402, keywords: ["brake pad", "pads", "destic", "brzdov\u00e1 desti", "brzdove desti", "p\u0159edn\u00ed brzd", "predni brzd", "zadn\u00ed brzd", "zadni brzd"] },
+      { id: "brake-discs",    label: "Brzdové kotouče",  sectionId: 82,  keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc", "brzdov\u00fd kotou", "brzdovy kotou"] },
       { id: "brake-hoses",    label: "Brzdové hadice",   sectionId: 95,  keywords: ["brake hose", "brzdov\u00e1 hadice", "hadice brzd"] },
       { id: "brake-calipers", label: "Brzdové třmeny",   sectionId: 472, keywords: ["caliper", "tr\u017emen", "trmen"] },
     ],
