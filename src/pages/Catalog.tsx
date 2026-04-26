@@ -276,8 +276,10 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setItems(merged);
         setTotal(oemTotal + allJm.length);
 
-        // Surface diagnostic when J+M returned 0 for this vehicle
-        if (allJm.length === 0 && page === 0) {
+        // Surface diagnostic ONLY when J+M returned 0 AND we have no local OEM
+        // cross-references either. If at least one OEM part is shown, the user
+        // already has a usable result — the orange warning is just noise.
+        if (allJm.length === 0 && oemItems.length === 0 && page === 0) {
           setJmWarning(
             jmVehiclePayload.warning ||
               `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst aftermarket díly z J+M.`
