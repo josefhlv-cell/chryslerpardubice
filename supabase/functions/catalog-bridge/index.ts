@@ -44,16 +44,21 @@ Deno.serve(async (req) => {
   const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   if (!SUPABASE_URL || !SR) return json({ error: 'Missing secrets' }, 500);
 
-  // Auth: anon key OR authenticated admin both allowed (admin-only ops)
+  // Auth: accept anon key OR authenticated admin. For maintenance script use, also accept x-admin-secret matching service role hash.
   const authHeader = req.headers.get('Authorization') || '';
   const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
+  const adminSecret = req.headers.get('x-admin-secret') || '';
   const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-  const isAnonCall = !!ANON_KEY && authHeader === `Bearer ${ANON_KEY}`;
-  if (!isAnonCall) {
-    if (!authHeader.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
+
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const isAnonCall = !!ANON_KEY && token === ANON_KEY;
+  const isAdminSecret = !!SR && adminSecret === SR;
+
+  if (!isAnonCall && !isAdminSecret) {
+    if (!token) return json({ error: 'Unauthorized', hint: 'no token' }, 401);
     const anon = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
     const { data: { user } } = await anon.auth.getUser();
-    if (!user) return json({ error: 'Unauthorized' }, 401);
+    if (!user) return json({ error: 'Unauthorized', hint: 'invalid user' }, 401);
     const sbCheck = createClient(SUPABASE_URL, SR);
     const { data: role } = await sbCheck.from('user_roles').select('role').eq('user_id', user.id).eq('role', 'admin').maybeSingle();
     if (!role) return json({ error: 'Forbidden' }, 403);
