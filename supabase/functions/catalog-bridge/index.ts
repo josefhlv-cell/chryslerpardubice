@@ -182,19 +182,27 @@ Deno.serve(async (req) => {
     const model = body.model || 'Pacifica';
 
     // Pick top OEMs without crossref for the given vehicle
+    const { data: compatRows, error: cErr } = await sb
+      .from('catalog_vehicle_compatibility')
+      .select('part_id')
+      .ilike('brand', brand)
+      .ilike('model', `%${model}%`);
+    if (cErr) return json({ error: `compat lookup: ${cErr.message}` }, 500);
+
+    const partIds = (compatRows || []).map((r: any) => r.part_id).filter(Boolean);
+    if (!partIds.length) {
+      return json({ success: true, processed: 0, inserted: 0, message: `No parts linked to ${brand} ${model}` });
+    }
+
     const { data: parts, error: pErr } = await sb
       .from('parts_new')
       .select('oem_number, name, category')
-      .in('id', (
-        await sb
-          .from('catalog_vehicle_compatibility')
-          .select('part_id')
-          .ilike('brand', brand)
-          .ilike('model', `%${model}%`)
-      ).data?.map((r: any) => r.part_id) || [])
+      .in('id', partIds)
       .limit(500);
     if (pErr) return json({ error: pErr.message }, 500);
-    if (!parts?.length) return json({ error: 'No parts for vehicle' }, 404);
+    if (!parts?.length) {
+      return json({ success: true, processed: 0, inserted: 0, message: 'No parts found' });
+    }
 
     // Filter out OEMs that already have crossref
     const oems = [...new Set(parts.map((p: any) => p.oem_number).filter(Boolean))];
