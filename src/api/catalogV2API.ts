@@ -431,6 +431,8 @@ async function fetchLocalRowsForVehicle(opts: {
   const candidates = variants.length ? variants : [null];
 
   const queries = [...candidates, null].filter((value, index, arr) => arr.indexOf(value) === index);
+  const merged: any[] = [];
+  const seen = new Set<string>();
 
   for (const variant of queries) {
     let q = supabase
@@ -448,9 +450,14 @@ async function fetchLocalRowsForVehicle(opts: {
       console.error("[catalogV2API] fetchLocalRowsForVehicle failed:", error.message);
       return [];
     }
-    if (data && data.length > 0) return cacheSet(cacheKey, data, TTL_PARTS_QUERY);
+    for (const row of data || []) {
+      const key = String(row?.id || row?.oem_number || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
   }
-  return cacheSet(cacheKey, [], TTL_PARTS_QUERY);
+  return cacheSet(cacheKey, merged, TTL_PARTS_QUERY);
 }
 
 export async function listPartsForVehicle(opts: {
@@ -487,9 +494,17 @@ export async function listPartsForVehicle(opts: {
       ALLOWED_OEM_SOURCES.includes(p.catalog_source as (typeof ALLOWED_OEM_SOURCES)[number])
     );
 
-  // Strict category filter — never broaden across categories.
+  // Strict category filter first; if it yields nothing, retry with a wider
+  // category label token so broad tree counts and listing never diverge.
   if (opts.categoryKeywords && opts.categoryKeywords.length > 0) {
-    parts = parts.filter((p) => partMatchesKeywords(p, opts.categoryKeywords!));
+    const strict = parts.filter((p) => partMatchesKeywords(p, opts.categoryKeywords!));
+    const labelKeywords = opts.canonicalCategory
+      ? normalize(opts.canonicalCategory).split(/\s+/).filter((k) => k.length >= 4)
+      : [];
+    const relaxed = strict.length === 0 && labelKeywords.length > 0
+      ? parts.filter((p) => partMatchesKeywords(p, labelKeywords))
+      : strict;
+    parts = relaxed;
   }
 
   parts = dedupeByOem(parts).sort((a, b) => a.rank - b.rank);
