@@ -943,16 +943,28 @@ Deno.serve(async (req) => {
           return { codes, matchedRows: filtered.length };
         };
 
-        // Category seed ladder: strict subcategory first; when the frontend intentionally
-        // drops subcategory keywords, keep parent keywords so fallback stays in the same system.
+        // RELAXATION LADDER (Phase 2 — Operation Redline 2.0):
+        // 1) strict subcategory + engine
+        // 2) parent keywords + engine (broader, same vehicle)
+        // 3) strict subcategory + brand+model only (ignore engine — covers 300C 3.0 CRD etc.)
+        // 4) parent keywords + brand+model only
+        // 5) brand+model only, NO keyword filter (last resort, gets ANY OEM seed)
         const seedKeywords = categoryKeywords.length > 0 ? categoryKeywords : parentKeywords;
+        const sameAsSeed = (kws: string[]) => JSON.stringify(kws) === JSON.stringify(seedKeywords);
         const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
-          { label: categoryKeywords.length > 0 ? 'engine+subcat' : 'engine+parent', useEngine: true, keywords: seedKeywords },
+          { label: 'engine+subcat', useEngine: true,  keywords: seedKeywords },
+          { label: 'engine+parent', useEngine: true,  keywords: parentKeywords },
+          { label: 'brand+subcat',  useEngine: false, keywords: seedKeywords },
+          { label: 'brand+parent',  useEngine: false, keywords: parentKeywords },
+          { label: 'brand-only',    useEngine: false, keywords: [] },
         ];
 
         let oemCodes: string[] = [];
         let usedStep = 'none';
         for (const step of ladder) {
+          // Skip rungs that are identical to a previously-tried one
+          if ((step.label === 'engine+parent' || step.label === 'brand+parent') &&
+              (parentKeywords.length === 0 || sameAsSeed(parentKeywords))) continue;
           const { codes, matchedRows } = await queryLocalOemCodes(step.useEngine, step.keywords);
           console.log(`[searchByVehicle] ladder=${step.label} matchedRows=${matchedRows} codes=${codes.length}`);
           if (codes.length > 0) {
@@ -969,7 +981,7 @@ Deno.serve(async (req) => {
           result = {
             items: [],
             mode: 'oem-fallback',
-            warning: `Žádné lokální OEM kódy pro ${brand} ${model}${engine ? ' ' + engine : ''}. Aftermarket dotaz na J+M přeskočen — chybí seed v parts_new.`,
+            warning: `Žádné lokální OEM kódy pro ${brand} ${model}. Pro tento vůz není v parts_new žádný díl.`,
             triedBrand: brand, triedModel: model, triedEngine: engine, category, usedStep,
           };
           break;
