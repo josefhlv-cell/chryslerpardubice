@@ -48,6 +48,8 @@ export type CatalogPart = {
   description: string | null;
   compatible_vehicles?: string | null;
   technical_parameters?: Record<string, string> | null;
+  related_oem_number?: string | null;
+  searched_code?: string | null;
   is_oem: boolean;
   badge_label: "ORIGINÁL" | "NÁHRADA" | "NEZNÁMÝ";
   rank: number;
