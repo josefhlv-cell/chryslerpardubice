@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      _dedup_winners: {
+        Row: {
+          catalog_source: string | null
+          description: string | null
+          id: string | null
+          image_urls: string[] | null
+          oem_number: string | null
+          price_with_vat: number | null
+          price_without_vat: number | null
+          rn: number | null
+        }
+        Insert: {
+          catalog_source?: string | null
+          description?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          oem_number?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          rn?: number | null
+        }
+        Update: {
+          catalog_source?: string | null
+          description?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          oem_number?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          rn?: number | null
+        }
+        Relationships: []
+      }
       admin_sessions: {
         Row: {
           created_at: string
