@@ -3,7 +3,7 @@
  * Hybrid lookup: parallel local OEM (parts_new) + live J+M searchByCode.
  * OEM rank=1 is always pinned to the top with "ORIGINÁL ⭐" badge.
  */
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { Search, Loader2, ShieldCheck, RefreshCw, ShoppingCart, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { forwardRef, useState, useEffect } from "react";
 import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const ThemeToggle = () => {
+const ThemeToggle = forwardRef<HTMLButtonElement>((_, ref) => {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof window !== "undefined") {
       return (localStorage.getItem("theme") as "dark" | "light") || "dark";
@@ -22,6 +22,7 @@ const ThemeToggle = () => {
 
   return (
     <Button
+      ref={ref}
       variant="ghost"
       size="icon"
       className="h-8 w-8"
@@ -31,6 +32,7 @@ const ThemeToggle = () => {
       {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
     </Button>
   );
-};
+});
+ThemeToggle.displayName = "ThemeToggle";
 
 export default ThemeToggle;
