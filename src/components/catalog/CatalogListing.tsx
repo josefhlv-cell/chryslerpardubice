@@ -266,9 +266,20 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
 
   const grouped = collapseSupersessions(items);
 
+  // Sort "with-price first" — items with a real price come on top, then OEM, then the rest.
+  const sorted = [...grouped].sort((a, b) => {
+    const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
+    const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
+    if (priceA !== priceB) return priceB - priceA;
+    const oemA = a.is_oem ? 1 : 0;
+    const oemB = b.is_oem ? 1 : 0;
+    if (oemA !== oemB) return oemB - oemA;
+    return 0;
+  });
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      {grouped.map((p) => (
+      {sorted.map((p) => (
         <PartRow key={p.id} p={p} onOrder={onOrder} supersededCount={(p as any).supersededCount} />
       ))}
     </div>
