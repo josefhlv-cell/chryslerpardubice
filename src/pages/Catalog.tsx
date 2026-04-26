@@ -250,8 +250,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           console.warn("[Catalog] J+M vehicle search failed:", jmVehicleRes.reason);
         }
 
-        const filteredJmVehicle = jmFromVehicle.filter((p) => partMatchesNode(p, category));
-
         setItems(oemItems);
         setTotal(oemTotal);
 
@@ -267,8 +265,9 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           }
         }
 
-        // Merge both J+M streams, but keep the selected category scope strict.
-        const allJm = [...jmByCodes.filter((p) => partMatchesNode(p, category)), ...filteredJmVehicle];
+        // J+M already applies strict→vehicle fallback in the API/proxy layer.
+        // Do not re-filter here, otherwise valid J+M-only results can disappear.
+        const allJm = [...jmByCodes.filter((p) => partMatchesNode(p, category)), ...jmFromVehicle];
         if (cancelled) return;
         setJmCount(allJm.length);
         const merged = mergeWithJm(oemItems, allJm);

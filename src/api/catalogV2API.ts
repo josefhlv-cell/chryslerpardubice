@@ -467,11 +467,13 @@ async function fetchLocalRowsForVehicle(opts: {
   const variants = engineVariants(opts.engine);
   const candidates = variants.length ? variants : [null];
 
-  for (const variant of candidates) {
+  const queries = [...candidates, null].filter((value, index, arr) => arr.indexOf(value) === index);
+
+  for (const variant of queries) {
     let q = supabase
       .from("parts_new_public")
       .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description, compatible_vehicles"
+        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles"
       )
       .ilike("compatible_vehicles", `%${opts.brand}%`)
       .ilike("compatible_vehicles", `%${opts.model}%`)
@@ -820,9 +822,7 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
   const [localRes, jmRes] = await Promise.allSettled([
     supabase
       .from("parts_new_public")
-      .select(
-        "id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description"
-      )
+      .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description")
       .or(`oem_number.ilike.%${term}%,name.ilike.%${term}%`)
       .limit(50),
     fetchJmByCode(term),
@@ -867,7 +867,7 @@ export async function listParts(filter: {
   let q = supabase
     .from("parts_new_public")
     .select(
-      "id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description, compatible_vehicles",
+      "id, oem_number, name, manufacturer, catalog_source, price_with_vat, availability, image_urls, category, description, compatible_vehicles",
       { count: "exact" }
     )
     .in("catalog_source", ALLOWED_OEM_SOURCES as unknown as string[]);
