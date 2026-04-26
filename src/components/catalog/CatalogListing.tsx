@@ -1,8 +1,10 @@
 /**
  * CatalogListing — unified OEM-first part list (Mopar + J+M only).
  * Each row shows badge ORIGINÁL (OEM, rank 1) or NÁHRADA (J+M, rank 5).
+ * Clicking the row expands to show description + technical_parameters.
  */
-import { ShieldCheck, RefreshCw, Package, ShoppingCart, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { ShieldCheck, RefreshCw, Package, ShoppingCart, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -32,6 +34,132 @@ const SkeletonCard = () => (
   </div>
 );
 
+const TechParams = ({ params }: { params: Record<string, string> }) => {
+  const entries = Object.entries(params).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== "");
+  if (entries.length === 0) return null;
+  return (
+    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] mt-2">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex justify-between gap-2 border-b border-border/20 pb-0.5">
+          <dt className="text-muted-foreground truncate">{k}</dt>
+          <dd className="font-medium text-foreground text-right truncate">{String(v)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+};
+
+const PartRow = ({ p, onOrder }: { p: CatalogPart; onOrder: (p: CatalogPart) => void }) => {
+  const [open, setOpen] = useState(false);
+  const isOem = p.is_oem;
+  const photo = p.image_urls?.[0];
+  const hasDetails =
+    !!p.description ||
+    (p.technical_parameters && Object.keys(p.technical_parameters).length > 0);
+
+  return (
+    <div
+      className={cn(
+        "relative flex flex-col gap-2 p-3 rounded-xl border bg-card transition-all",
+        isOem ? "border-primary/40 shadow-sm" : "border-border/40"
+      )}
+    >
+      {isOem && (
+        <div className="absolute -top-px left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+      )}
+
+      <div className="flex gap-3">
+        <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/40 overflow-hidden flex items-center justify-center">
+          {photo ? (
+            <img
+              src={photo}
+              alt={p.name}
+              className="w-full h-full object-contain"
+              loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          ) : (
+            <Package className="w-8 h-8 text-muted-foreground/40" />
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-start gap-2 mb-1">
+            <Badge
+              variant={isOem ? "default" : "secondary"}
+              className={cn(
+                "text-[10px] px-1.5 py-0 h-5 shrink-0",
+                isOem ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+              )}
+            >
+              {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+              {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
+            </Badge>
+            {p.manufacturer && (
+              <span className="text-[10px] text-muted-foreground truncate">{p.manufacturer}</span>
+            )}
+            {p.category && (
+              <span className="text-[10px] text-muted-foreground/70 truncate ml-auto">{p.category}</span>
+            )}
+          </div>
+
+          <h3 className="text-sm font-medium leading-snug line-clamp-2">{p.name}</h3>
+          <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{p.oem_number}</p>
+
+          <div className="flex items-end justify-between mt-auto pt-2 gap-2">
+            <div>
+              <div className={cn("text-sm font-bold", isOem ? "text-primary" : "text-foreground")}>
+                {formatPrice(p.price_with_vat)}
+              </div>
+              {p.price_without_vat !== null && p.price_without_vat !== undefined && (
+                <div className="text-[10px] text-muted-foreground">
+                  {formatPrice(p.price_without_vat)} bez DPH
+                </div>
+              )}
+            </div>
+            <Button size="sm" className="h-7 text-xs px-2" onClick={() => onOrder(p)}>
+              <ShoppingCart className="w-3 h-3 mr-1" />
+              Objednat
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {hasDetails && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors self-start"
+          >
+            <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
+            {open ? "Skrýt detaily" : "Zobrazit detaily"}
+          </button>
+          {open && (
+            <div className="border-t border-border/30 pt-2">
+              {p.description && (
+                <p className="text-[11px] text-foreground/90 leading-relaxed whitespace-pre-line">
+                  {p.description}
+                </p>
+              )}
+              {p.technical_parameters && Object.keys(p.technical_parameters).length > 0 && (
+                <TechParams params={p.technical_parameters} />
+              )}
+              {p.compatible_vehicles && (
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  <span className="font-medium">Kompatibilní:</span> {p.compatible_vehicles}
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
   if (loading) {
     return (
@@ -52,73 +180,9 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      {items.map((p) => {
-        const isOem = p.is_oem;
-        const photo = p.image_urls?.[0];
-
-        return (
-          <div
-            key={p.id}
-            className={cn(
-              "relative flex gap-3 p-3 rounded-xl border bg-card transition-all",
-              isOem ? "border-primary/40 shadow-sm" : "border-border/40"
-            )}
-          >
-            {/* OEM glow ribbon */}
-            {isOem && (
-              <div className="absolute -top-px left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
-            )}
-
-            {/* Photo */}
-            <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/40 overflow-hidden flex items-center justify-center">
-              {photo ? (
-                <img src={photo} alt={p.name} className="w-full h-full object-contain" loading="lazy" />
-              ) : (
-                <Package className="w-8 h-8 text-muted-foreground/40" />
-              )}
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 min-w-0 flex flex-col">
-              <div className="flex items-start gap-2 mb-1">
-                <Badge
-                  variant={isOem ? "default" : "secondary"}
-                  className={cn(
-                    "text-[10px] px-1.5 py-0 h-5 shrink-0",
-                    isOem ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-                  {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
-                </Badge>
-                {p.manufacturer && (
-                  <span className="text-[10px] text-muted-foreground truncate">{p.manufacturer}</span>
-                )}
-              </div>
-
-              <h3 className="text-sm font-medium leading-snug line-clamp-2">{p.name}</h3>
-              <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{p.oem_number}</p>
-
-              <div className="flex items-end justify-between mt-auto pt-2 gap-2">
-                <div>
-                  <div className={cn("text-sm font-bold", isOem ? "text-primary" : "text-foreground")}>
-                    {formatPrice(p.price_with_vat)}
-                  </div>
-                  {p.price_without_vat !== null && p.price_without_vat !== undefined && (
-                    <div className="text-[10px] text-muted-foreground">
-                      {formatPrice(p.price_without_vat)} bez DPH
-                    </div>
-                  )}
-                </div>
-                <Button size="sm" className="h-7 text-xs px-2" onClick={() => onOrder(p)}>
-                  <ShoppingCart className="w-3 h-3 mr-1" />
-                  Objednat
-                </Button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {items.map((p) => (
+        <PartRow key={p.id} p={p} onOrder={onOrder} />
+      ))}
     </div>
   );
 };

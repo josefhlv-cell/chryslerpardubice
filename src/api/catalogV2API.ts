@@ -46,6 +46,8 @@ export type CatalogPart = {
   image_urls: string[] | null;
   category: string | null;
   description: string | null;
+  compatible_vehicles?: string | null;
+  technical_parameters?: Record<string, string> | null;
   is_oem: boolean;
   badge_label: "ORIGINÁL" | "NÁHRADA" | "NEZNÁMÝ";
   rank: number;
@@ -255,6 +257,8 @@ function normalizeRow(row: any): CatalogPart {
     image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
     category: row?.category ?? null,
     description: row?.description ?? null,
+    compatible_vehicles: row?.compatible_vehicles ?? null,
+    technical_parameters: row?.technical_parameters ?? null,
     is_oem: rank(source) <= 2,
     badge_label: badge(source),
     rank: rank(source),
@@ -626,6 +630,8 @@ function jmNormalize(it: JmRaw): CatalogPart {
     image_urls: Array.isArray(it.image_urls) ? it.image_urls : null,
     category: it.category ?? null,
     description: it.description ?? null,
+    compatible_vehicles: (it as any).compatible_vehicles ?? null,
+    technical_parameters: (it as any).technical_parameters ?? null,
     is_oem: false,
     badge_label: "NÁHRADA",
     rank: 5,
