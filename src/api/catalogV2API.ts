@@ -460,6 +460,10 @@ async function fetchLocalRowsForVehicle(opts: {
   limit?: number;
 }): Promise<any[]> {
   const limit = Math.min(opts.limit ?? 1000, 3000);
+  const cacheKey = `local:${opts.brand}:${opts.model}:${opts.engine || ""}:${limit}`;
+  const cached = cacheGet<any[]>(cacheKey);
+  if (cached) return cached;
+
   const variants = engineVariants(opts.engine);
   const candidates = variants.length ? variants : [null];
 
@@ -479,9 +483,9 @@ async function fetchLocalRowsForVehicle(opts: {
       console.error("[catalogV2API] fetchLocalRowsForVehicle failed:", error.message);
       return [];
     }
-    if (data && data.length > 0) return data;
+    if (data && data.length > 0) return cacheSet(cacheKey, data, TTL_PARTS_QUERY);
   }
-  return [];
+  return cacheSet(cacheKey, [], TTL_PARTS_QUERY);
 }
 
 export async function listPartsForVehicle(opts: {
