@@ -27,6 +27,7 @@ import AdminVehicleOffers from "@/components/admin/AdminVehicleOffers";
 import AICatalogImport from "@/components/admin/AICatalogImport";
 import AdminEPCDiagrams from "@/components/admin/AdminEPCDiagrams";
 import AdminBulkPriceSync from "@/components/admin/AdminBulkPriceSync";
+import AdminBulkPriceSyncRuns from "@/components/admin/AdminBulkPriceSyncRuns";
 import AdminPriceSyncStats from "@/components/admin/AdminPriceSyncStats";
 import AdminFeatureSettings from "@/components/admin/AdminFeatureSettings";
 import AdminServiceOrders from "@/components/admin/AdminServiceOrders";
@@ -628,6 +629,7 @@ const Admin = () => {
             <TabsContent value="prices">
               <div className="mt-2 space-y-4">
                 <AdminPriceSyncStats />
+                <AdminBulkPriceSyncRuns />
                 <AdminBulkPriceSync />
                 <AdminPriceManagement />
               </div>
