@@ -19,12 +19,10 @@ type CatalogConfig = {
 
 const defaultCatalogs: CatalogConfig[] = [
   { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Dodge, RAM", flagKey: "catalog", enabled: true, ready: true },
-  { id: "sag", name: "SAG Connect", description: "Alternativní díly – SAG/QWP (+ 15% marže)", flagKey: "catalog_sag", enabled: true, ready: true },
-  { id: "autokelly", name: "AutoKelly", description: "Alternativní díly – AutoKelly (+ 15% marže)", flagKey: "catalog_autokelly", enabled: true, ready: true },
-  { id: "intercars", name: "InterCars", description: "Alternativní díly – vyžaduje API klíč", flagKey: "catalog_intercars", enabled: false, ready: false },
+  { id: "jm", name: "J+M Autodíly (Nextis)", description: "Aftermarket náhrady (Bosch, TRW, MANN…)", flagKey: "catalog_jm", enabled: true, ready: true },
 ];
 
-const alternativeFlagKeys = ["catalog_sag", "catalog_autokelly"] as const;
+const alternativeFlagKeys = ["catalog_jm"] as const;
 
 type DiagResult = {
   mopar: { status: string; responseTime: number };
