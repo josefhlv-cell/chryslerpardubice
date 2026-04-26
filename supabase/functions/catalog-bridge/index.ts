@@ -85,9 +85,9 @@ Deno.serve(async (req) => {
     let updated = 0;
     const errors: string[] = [];
     for (const [cat, ids] of byCat) {
-      const { error, count } = await sb.from('parts_new').update({ category: cat }).in('id', ids).select('id', { count: 'exact', head: true });
+      const { error } = await sb.from('parts_new').update({ category: cat }).in('id', ids);
       if (error) errors.push(`${cat}: ${error.message}`);
-      else updated += count || ids.length;
+      else updated += ids.length;
     }
     return json({ success: true, updated, categories: byCat.size, errors });
   }
