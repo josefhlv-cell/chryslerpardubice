@@ -106,7 +106,14 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
           </div>
 
           <h3 className="text-sm font-medium leading-snug line-clamp-2">{p.name}</h3>
-          <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{p.oem_number}</p>
+          <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+            {p.oem_number}
+            {supersededCount && supersededCount > 0 ? (
+              <span className="ml-2 text-[10px] text-muted-foreground/70 font-sans">
+                (nejnovější revize, +{supersededCount} starších)
+              </span>
+            ) : null}
+          </p>
 
           <div className="flex items-end justify-between mt-auto pt-2 gap-2">
             <div>
