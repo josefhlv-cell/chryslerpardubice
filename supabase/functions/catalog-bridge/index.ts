@@ -288,8 +288,8 @@ ${targets.map((p: any) => `${p.oem_number} | ${p.name}`).join('\n')}`;
       // Insert in chunks; ignore conflicts
       for (let i = 0; i < inserts.length; i += 200) {
         const chunk = inserts.slice(i, i + 200);
-        const { error, count } = await sb.from('part_crossref').insert(chunk).select('id', { count: 'exact', head: true });
-        if (!error) inserted += count || chunk.length;
+        const { error } = await sb.from('part_crossref').insert(chunk);
+        if (!error) inserted += chunk.length;
       }
     }
 
