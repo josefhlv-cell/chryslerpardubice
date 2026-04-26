@@ -279,6 +279,122 @@ function normalizeItems(raw: any): UnifiedPart[] {
     .filter((p) => p.oem_number && isUsBrand(p.brand));
 }
 
+function normalizeOemCode(value: string | null | undefined): string {
+  return String(value || '').toUpperCase().replace(/[\s\-._/]/g, '').trim();
+}
+
+function baseEightDigits(value: string | null | undefined): string {
+  return normalizeOemCode(value).replace(/^K/, '').match(/^\d{8}/)?.[0] || '';
+}
+
+function dedupeUnifiedParts(parts: UnifiedPart[]): UnifiedPart[] {
+  const seen = new Set<string>();
+  const out: UnifiedPart[] = [];
+  for (const part of parts) {
+    const key = `${normalizeOemCode(part.brand)}::${normalizeOemCode(part.oem_number)}`;
+    if (!part.oem_number || seen.has(key)) continue;
+    seen.add(key);
+    out.push(part);
+  }
+  return out;
+}
+
+async function lookupCrossRefsForOem(adminClient: any, rawCode: string, limit = 50): Promise<Array<{ part_number: string; manufacturer: string }>> {
+  const normalized = normalizeOemCode(rawCode);
+  const stripped = normalized.replace(/^K/, '');
+  const baseNoSuffix = stripped.replace(/[A-Z]{1,3}$/i, '');
+  const base8 = baseEightDigits(stripped);
+  const directCodes = [...new Set([rawCode, normalized, stripped, `K${stripped}`, baseNoSuffix, baseNoSuffix ? `K${baseNoSuffix}` : ''].filter(Boolean))];
+
+  const collected = new Map<string, { part_number: string; manufacturer: string }>();
+  const addRows = (rows: any[] | null | undefined) => {
+    for (const x of rows || []) {
+      const pn = String(x.part_number || '').trim();
+      if (!pn) continue;
+      const key = normalizeOemCode(pn);
+      if (!collected.has(key)) collected.set(key, { part_number: pn, manufacturer: String(x.manufacturer || '').trim() });
+    }
+  };
+
+  const escapedDirect = directCodes.map((code) => `oem_number.eq.${code}`).join(',');
+  if (escapedDirect) {
+    const { data, error } = await adminClient
+      .from('part_crossref')
+      .select('part_number, manufacturer, oem_number')
+      .or(escapedDirect)
+      .limit(limit);
+    if (error) console.warn('[crossref] direct lookup failed:', error.message);
+    addRows(data);
+  }
+
+  if (base8) {
+    const { data, error } = await adminClient
+      .from('part_crossref')
+      .select('part_number, manufacturer, oem_number')
+      .or(`oem_number.ilike.${base8}%,oem_number.ilike.K${base8}%`)
+      .limit(limit);
+    if (error) console.warn('[crossref] base lookup failed:', error.message);
+    addRows(data);
+  }
+
+  return [...collected.values()].slice(0, limit);
+}
+
+async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'CodeProduct' = 'CodeProduct'): Promise<{ rawCount: number; items: UnifiedPart[] }> {
+  const targets: Array<string | undefined> = ['P', undefined, 'O'];
+  const collected: UnifiedPart[] = [];
+  let rawCount = 0;
+  for (const target of targets) {
+    const reqBody: Record<string, unknown> = {
+      code,
+      target,
+      searchTarget,
+      trySearchWithoutManufacturer: true,
+      getOECodes: true,
+      getDeposits: false,
+      getServices: false,
+      getCashBack: false,
+      getEANCodes: false,
+    };
+    if (!target) delete reqBody.target;
+    const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody).catch((e) => ({ _error: String(e) }));
+    const rawList = raw?.items || raw?.Items || [];
+    rawCount += rawList.length;
+    const items = normalizeItems(raw);
+    if (items.length > 0) {
+      collected.push(...items);
+      break;
+    }
+  }
+  return { rawCount, items: dedupeUnifiedParts(collected) };
+}
+
+async function fetchJmViaCrossRefs(adminClient: any, oeCode: string, category = ''): Promise<{ items: UnifiedPart[]; xrefsTried: string[]; rawHits: number }> {
+  const xrefs = await lookupCrossRefsForOem(adminClient, oeCode, 80);
+  const items: UnifiedPart[] = [];
+  const xrefsTried: string[] = [];
+  let rawHits = 0;
+
+  for (const x of xrefs) {
+    const partNumber = String(x.part_number || '').trim();
+    if (!partNumber) continue;
+    xrefsTried.push(partNumber);
+    console.log(`Found Cross-Ref ${partNumber} for OE ${oeCode}. Querying J+M again...`);
+    const result = await fetchJmForSpecificCode(partNumber, 'CodeProduct');
+    rawHits += result.rawCount;
+    for (const part of result.items) {
+      items.push({
+        ...part,
+        category: category || part.category,
+        related_oem_number: oeCode,
+        searched_code: partNumber,
+      });
+    }
+  }
+
+  return { items: dedupeUnifiedParts(items), xrefsTried, rawHits };
+}
+
 function localRowToUnifiedPart(row: any, category = ''): UnifiedPart {
   const priceWithVat = Number(row.price_with_vat) || 0;
   const priceWithoutVat = Number(row.price_without_vat) || (priceWithVat ? Math.round((priceWithVat / 1.21) * 100) / 100 : 0);
