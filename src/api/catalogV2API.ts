@@ -257,6 +257,8 @@ function normalizeRow(row: any): CatalogPart {
     image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
     category: row?.category ?? null,
     description: row?.description ?? null,
+    compatible_vehicles: row?.compatible_vehicles ?? null,
+    technical_parameters: row?.technical_parameters ?? null,
     is_oem: rank(source) <= 2,
     badge_label: badge(source),
     rank: rank(source),
