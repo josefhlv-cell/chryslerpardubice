@@ -630,6 +630,8 @@ function jmNormalize(it: JmRaw): CatalogPart {
     image_urls: Array.isArray(it.image_urls) ? it.image_urls : null,
     category: it.category ?? null,
     description: it.description ?? null,
+    compatible_vehicles: (it as any).compatible_vehicles ?? null,
+    technical_parameters: (it as any).technical_parameters ?? null,
     is_oem: false,
     badge_label: "NÁHRADA",
     rank: 5,
