@@ -863,78 +863,50 @@ Deno.serve(async (req) => {
         const skipBrandFilter = payload.skipBrandFilter === true || payload.debug === true;
         const enableCrossref = payload.enableCrossref !== false; // default ON
 
-        // OE PREFIX/SUFFIX LADDER: try original, K-prefix variants, AND
-        // suffix-stripped variants (e.g. 68211325AA -> 68211325).
-        // Mopar OE numbers often have 2-letter revision suffix (AA, AB, BA...).
-        const stripped = rawCode.replace(/^K/i, '');
+        // OE PREFIX/SUFFIX LADDER: try original, K-prefix variants, suffix-stripped,
+        // and base-8 variants before falling back to local crossrefs.
+        const normalized = normalizeOemCode(rawCode);
+        const stripped = normalized.replace(/^K/, '');
         const baseNoSuffix = stripped.replace(/[A-Z]{1,3}$/i, '');
+        const base8 = baseEightDigits(stripped);
         const variants = Array.from(new Set([
           rawCode,
+          normalized,
           stripped,
           `K${stripped}`,
           baseNoSuffix,
-          baseNoSuffix !== stripped ? `K${baseNoSuffix}` : '',
+          baseNoSuffix ? `K${baseNoSuffix}` : '',
+          base8,
+          base8 ? `K${base8}` : '',
         ].filter(Boolean)));
 
-        // CROSSREF BRIDGE: look up aftermarket equivalents (Bosch, TRW...) in
-        // local part_crossref table and add them to variants for J+M lookup.
-        if (enableCrossref) {
-          try {
-            const { data: xrefs } = await adminClient
-              .from('part_crossref')
-              .select('part_number, manufacturer')
-              .or(`oem_number.eq.${rawCode},oem_number.eq.${stripped},oem_number.eq.${baseNoSuffix}`)
-              .limit(20);
-            for (const x of xrefs || []) {
-              if (x.part_number && !variants.includes(x.part_number)) {
-                variants.push(String(x.part_number).trim());
-              }
-            }
-            console.log(`[searchByCode] crossref expanded ${variants.length} variants for ${rawCode}`);
-          } catch (e) {
-            console.warn('[searchByCode] crossref lookup failed:', (e as Error).message);
-          }
-        }
-
-        const targets: Array<string | undefined> = [undefined, 'P', 'O'];
-
-        const attempts: Array<{ code: string; target?: string; raw: any; count: number }> = [];
-        const all: any[] = [];
+        const attempts: Array<{ code: string; target?: string; raw: number; count: number; mode: string }> = [];
+        let merged: UnifiedPart[] = [];
+        let totalRawHits = 0;
 
         for (const variant of variants) {
-          for (const target of targets) {
-            const reqBody: Record<string, unknown> = {
-              code: variant,
-              searchTarget: 'CodeOE',
-              trySearchWithoutManufacturer: true,
-              getOECodes: true,
-              getDeposits: false,
-              getServices: false,
-              getCashBack: false,
-              getEANCodes: false,
-            };
-            if (target) reqBody.target = target;
-            const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody).catch((e) => ({ _error: String(e) }));
-            const list = (raw?.items || raw?.Items || []);
-            attempts.push({ code: variant, target, raw: { status: raw?.status, statusText: raw?.statusText, error: raw?._error }, count: list.length });
-            if (list.length) {
-              all.push(...list);
-              break; // got hits for this variant, move to next variant
-            }
-          }
+          const direct = await fetchJmForSpecificCode(variant, 'CodeOE');
+          totalRawHits += direct.rawCount;
+          attempts.push({ code: variant, raw: direct.rawCount, count: direct.items.length, mode: 'direct-oe' });
+          if (direct.items.length) merged.push(...direct.items);
         }
 
-        // Deduplicate by oem_number
+        if (enableCrossref) {
+          const cross = await fetchJmViaCrossRefs(adminClient, rawCode);
+          totalRawHits += cross.rawHits;
+          attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
+          merged.push(...cross.items);
+          console.log(`[searchByCode] crossref recursive lookup ${cross.xrefsTried.length} refs for ${rawCode}, items=${cross.items.length}`);
+        }
+
         const seen = new Set<string>();
-        const merged = extractItems({ items: all })
-          .map(normalizeCatalogItem)
-          .filter((p) => {
-            if (!p.oem_number) return false;
-            const key = p.oem_number.toUpperCase();
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return skipBrandFilter ? true : isUsBrand(p.brand);
-          });
+        merged = dedupeUnifiedParts(merged).filter((p) => {
+          if (!p.oem_number) return false;
+          const key = `${normalizeOemCode(p.brand)}::${normalizeOemCode(p.oem_number)}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return skipBrandFilter ? true : isUsBrand(p.brand);
+        });
 
         try {
           const codes = merged.map((i) => i.oem_number).filter(Boolean);
@@ -946,7 +918,7 @@ Deno.serve(async (req) => {
           variantsTried: variants,
           attempts,
           skipBrandFilter,
-          totalRawHits: all.length,
+          totalRawHits,
         };
         break;
       }
