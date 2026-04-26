@@ -873,13 +873,13 @@ Deno.serve(async (req) => {
           console.log('[searchByVehicle] Nextis byVehicle response: status=', raw?.status, 'items=', rawCount);
           let items = normalizeItems(raw)
             .filter((p) => isAllowedBrand(p.brand));
-          // Strict category enforcement: never widen to parent or vehicle-wide parts.
           if (categoryKeywords.length) {
             const kept = items.filter((p) => itemMatchesKeywords(p, categoryKeywords));
-            if (kept.length === 0) {
-              console.warn('[searchByVehicle] strict category filter removed all engineID hits; returning empty category result');
+            if (kept.length > 0) {
+              items = kept;
+            } else {
+              console.warn('[searchByVehicle] strict category filter removed all engineID hits; keeping vehicle-wide J+M hits for UI fallback');
             }
-            items = kept;
           }
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
@@ -927,7 +927,7 @@ Deno.serve(async (req) => {
           }
           const filtered = keywordsForFilter.length
             ? allRows.filter((r: any) => rowMatchesKeywords(r, keywordsForFilter))
-            : [];
+            : allRows;
           const codes = [...new Set(
             filtered.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean),
           )];
@@ -999,7 +999,7 @@ Deno.serve(async (req) => {
             let kept = 0;
             for (const it of items) {
               if (!it.oem_number) continue;
-              if (categoryKeywords.length && !itemMatchesKeywords(it, categoryKeywords)) continue;
+              if (categoryKeywords.length && !itemMatchesKeywords(it, categoryKeywords) && sectionId > 0) continue;
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
