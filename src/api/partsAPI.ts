@@ -57,16 +57,19 @@ export const PAGE_SIZE = 20;
 // ---- Source priority ----
 
 export const sourceLabel: Record<string, string> = {
-  mopar: "Zdroj 1",
-  "epc-ai": "Zdroj 1",
-  makro: "Zdroj 2",
-  sag: "Zdroj 3",
-  autokelly: "Zdroj 4",
-  intercars: "Zdroj 5",
-  csv: "Zdroj 6",
-  epc: "Zdroj 7",
-  "7zap": "Zdroj 8",
-  ai: "Zdroj 9",
+  mopar: "Originál",
+  "epc-ai": "Originál",
+  "epc-link": "Originál",
+  "ai-epc": "Originál",
+  jm: "Náhrada",
+  "7zap": "Originál",
+  csv: "Originál",
+  // legacy sources kept for backward-compat reads only
+  makro: "Náhrada",
+  sag: "Náhrada",
+  autokelly: "Náhrada",
+  intercars: "Náhrada",
+  ai: "Originál",
 };
 
 export const sourcePriority: Record<string, number> = {
