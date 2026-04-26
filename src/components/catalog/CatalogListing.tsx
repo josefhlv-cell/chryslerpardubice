@@ -160,6 +160,38 @@ const PartRow = ({ p, onOrder }: { p: CatalogPart; onOrder: (p: CatalogPart) => 
   );
 };
 
+/**
+ * Supersession grouping: Mopar OEM numbers use a revision suffix (AA, AB, AC…).
+ * `68079633AA`, `68079633AB`, `68079633AC` are the same physical part — only the
+ * latest revision is current. Group by base (strip trailing 1–3 letters), keep
+ * the highest suffix, and expose how many older revisions were collapsed.
+ * Non-OEM (J+M aftermarket) items are never grouped.
+ */
+const stripRevisionSuffix = (oem: string): string =>
+  oem.replace(/[A-Z]{1,3}$/i, "");
+
+const collapseSupersessions = (items: CatalogPart[]): Array<CatalogPart & { supersededCount?: number }> => {
+  const groups = new Map<string, CatalogPart[]>();
+  const order: string[] = [];
+  for (const p of items) {
+    const key = p.is_oem ? `OEM::${stripRevisionSuffix((p.oem_number || "").toUpperCase())}` : `JM::${p.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(p);
+  }
+  return order.map((key) => {
+    const group = groups.get(key)!;
+    if (group.length === 1) return group[0];
+    // Pick the variant with the highest OEM suffix (alphabetical max).
+    const latest = group.reduce((best, cur) =>
+      (cur.oem_number || "").toUpperCase() > (best.oem_number || "").toUpperCase() ? cur : best
+    );
+    return { ...latest, supersededCount: group.length - 1 };
+  });
+};
+
 const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
   if (loading) {
     return (
@@ -178,10 +210,12 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
     );
   }
 
+  const grouped = collapseSupersessions(items);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-      {items.map((p) => (
-        <PartRow key={p.id} p={p} onOrder={onOrder} />
+      {grouped.map((p) => (
+        <PartRow key={p.id} p={p} onOrder={onOrder} supersededCount={(p as any).supersededCount} />
       ))}
     </div>
   );
