@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Search, Wrench, Car, MessageCircle, ShoppingCart } from "lucide-react";
 
@@ -77,12 +77,12 @@ const OnboardingGuide = () => {
             <div key={i} className={`w-2 h-2 rounded-full transition-colors ${i === step ? "bg-primary" : "bg-muted"}`} />
           ))}
         </div>
-        <DialogFooter className="flex-row gap-2">
+        <div className="flex flex-row justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={handleClose}>Přeskočit</Button>
           <Button size="sm" onClick={handleNext}>
             {step < steps.length - 1 ? "Další" : "Začít"}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
