@@ -673,6 +673,58 @@ export async function fetchJmByCodes(codes: string[]): Promise<CatalogPart[]> {
   return dedupeByOem(out);
 }
 
+/**
+ * Synonym map: expands an in-app category id with extra keywords (CZ + EN).
+ * Used to maximise J+M hit-rate without changing the strict OEM filter.
+ */
+const JM_CATEGORY_SYNONYMS: Record<string, string[]> = {
+  "brake-pads": ["brake", "pads", "brake pad", "brzdove desticky", "brzdova deska", "destic"],
+  "brake-discs": ["discs", "rotor", "brake disc", "kotouce", "brzdovy kotouc"],
+  "brake-calipers": ["caliper", "trmen", "brake caliper", "brzdovy trmen"],
+  "brake-hoses": ["brake hose", "hadice brzd", "brzdova hadice"],
+  "oil-filter": ["oil filter", "olejovy filtr"],
+  "air-filter": ["air filter", "vzduchovy filtr"],
+  "cabin-filter": ["cabin filter", "pollen filter", "kabinovy filtr"],
+  "fuel-filter": ["fuel filter", "palivovy filtr"],
+  "spark-plugs": ["spark plug", "zapalovaci svicka"],
+  "timing-belt": ["timing belt", "rozvodovy remen"],
+  "water-pump": ["water pump", "vodni cerpadlo"],
+  "shock-absorbers": ["shock absorber", "tlumic"],
+  "control-arms": ["control arm", "rameno napravy"],
+  "tie-rods": ["tie rod", "spojovaci tyc"],
+  "ball-joints": ["ball joint", "kulovy cep"],
+  "battery": ["battery", "baterie", "akumulator"],
+  "alternator": ["alternator"],
+  "starter": ["starter motor", "starter"],
+  "radiator": ["radiator", "chladic"],
+  "thermostat": ["thermostat", "termostat"],
+};
+
+function expandCategoryKeywords(categoryId?: string | null, base: string[] = []): string[] {
+  const set = new Set<string>(base.filter(Boolean));
+  if (categoryId && JM_CATEGORY_SYNONYMS[categoryId]) {
+    JM_CATEGORY_SYNONYMS[categoryId].forEach((k) => set.add(k));
+  }
+  return [...set];
+}
+
+async function callJmSearchByVehicle(payload: Record<string, unknown>): Promise<{ items: CatalogPart[]; warning?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke("jm-proxy", {
+      body: { action: "searchByVehicle", payload },
+    });
+    if (error) return { items: [], warning: error.message };
+    if (!data?.success) return { items: [], warning: data?.error || "J+M nevrátilo data" };
+    const raw = Array.isArray(data?.data?.items) ? data.data.items : [];
+    // Only requirement: OEM number present. Do NOT drop items missing price/stock.
+    const items = raw.map(jmNormalize).filter((p: CatalogPart) => !!p.oem_number);
+    return { items: dedupeByOem(items) };
+  } catch (e) {
+    const err = e as { message?: string };
+    return { items: [], warning: err?.message || "J+M dotaz selhal" };
+  }
+}
+
 export async function fetchJmForVehicle(opts: {
   brand: string;
   model: string;
@@ -680,52 +732,65 @@ export async function fetchJmForVehicle(opts: {
   nextisVehicleId?: string;
   sectionId?: number | null;
   category?: string;
+  categoryId?: string | null;
   categoryKeywords?: string[];
   parentKeywords?: string[];
 }): Promise<{ items: CatalogPart[]; warning?: string }> {
-  try {
-    const { data, error } = await supabase.functions.invoke("jm-proxy", {
-      body: {
-        action: "searchByVehicle",
-        payload: {
-          nextisVehicleId: opts.nextisVehicleId,
-          brand: opts.brand,
-          model: opts.model,
-          engine: opts.engine || "",
-          sectionId: opts.sectionId ?? null,
-          category: opts.category,
-          categoryKeywords: opts.categoryKeywords || [],
-          parentKeywords: opts.parentKeywords || [],
-        },
-      },
-    });
-    if (error) {
-      console.warn("[catalogV2API] jm-proxy searchByVehicle error:", error.message);
-      return { items: [], warning: error.message };
-    }
-    if (!data?.success) {
-      return { items: [], warning: data?.error || "J+M nevrátilo data" };
-    }
-    const raw = Array.isArray(data?.data?.items) ? data.data.items : [];
-    let items = raw.map(jmNormalize).filter((p: CatalogPart) => p.oem_number);
+  const expandedKeywords = expandCategoryKeywords(opts.categoryId, opts.categoryKeywords || []);
+  const inputCategory = opts.category || opts.categoryId || null;
 
-    // Strict scope filter (defense in depth — proxy should already filter).
-    if (opts.categoryKeywords && opts.categoryKeywords.length > 0) {
-      items = items.filter((p: CatalogPart) => partMatchesKeywords(p, opts.categoryKeywords!));
-    }
+  const basePayload = {
+    nextisVehicleId: opts.nextisVehicleId,
+    brand: opts.brand,
+    model: opts.model,
+    engine: opts.engine || "",
+    sectionId: opts.sectionId ?? null,
+    category: opts.category,
+    parentKeywords: opts.parentKeywords || [],
+  };
 
-    // Hide pure noise — keep only items with stock or price.
-    items = items.filter(
-      (p: CatalogPart) =>
-        (p.price_with_vat !== null && p.price_with_vat > 0) || p.availability === "in_stock"
-    );
+  // STEP 1 — strict: vehicle + sectionId + categoryKeywords
+  const step1 = await callJmSearchByVehicle({
+    ...basePayload,
+    categoryKeywords: expandedKeywords,
+  });
 
-    return { items: dedupeByOem(items) };
-  } catch (e) {
-    const err = e as { message?: string };
-    console.error("[catalogV2API] fetchJmForVehicle threw:", err?.message || e);
-    return { items: [], warning: err?.message || "J+M dotaz selhal" };
+  let step1Items = step1.items;
+  // Defence-in-depth filter, but only when expandedKeywords is meaningful.
+  if (expandedKeywords.length > 0) {
+    const filtered = step1Items.filter((p) => partMatchesKeywords(p, expandedKeywords));
+    // If the local filter wipes everything but the proxy returned items, keep proxy items.
+    step1Items = filtered.length > 0 ? filtered : step1Items;
   }
+
+  let finalItems = step1Items;
+  let warning = step1.warning;
+  let step2Count = 0;
+
+  // STEP 2 — fallback: drop categoryKeywords, keep brand/model/engine (+ sectionId).
+  if (step1Items.length === 0) {
+    const step2 = await callJmSearchByVehicle({
+      ...basePayload,
+      categoryKeywords: [],
+    });
+    step2Count = step2.items.length;
+    if (step2.items.length > 0) {
+      finalItems = step2.items;
+      warning = undefined;
+    } else if (!warning) {
+      warning = step2.warning;
+    }
+  }
+
+  console.log("[JM DEBUG]", {
+    inputCategory,
+    expandedKeywords,
+    step1Count: step1Items.length,
+    step2Count,
+    finalCount: finalItems.length,
+  });
+
+  return { items: finalItems, warning: finalItems.length > 0 ? undefined : warning };
 }
 
 // =============================================================
