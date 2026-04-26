@@ -689,14 +689,41 @@ Deno.serve(async (req) => {
         const rawCode = String(payload.code || '').trim();
         if (!rawCode) { result = { items: [] }; break; }
         const skipBrandFilter = payload.skipBrandFilter === true || payload.debug === true;
+        const enableCrossref = payload.enableCrossref !== false; // default ON
 
-        // Try variants in parallel: with K prefix, without K prefix, raw as-is.
+        // OE PREFIX/SUFFIX LADDER: try original, K-prefix variants, AND
+        // suffix-stripped variants (e.g. 68211325AA -> 68211325).
+        // Mopar OE numbers often have 2-letter revision suffix (AA, AB, BA...).
         const stripped = rawCode.replace(/^K/i, '');
+        const baseNoSuffix = stripped.replace(/[A-Z]{1,3}$/i, '');
         const variants = Array.from(new Set([
           rawCode,
           stripped,
           `K${stripped}`,
+          baseNoSuffix,
+          baseNoSuffix !== stripped ? `K${baseNoSuffix}` : '',
         ].filter(Boolean)));
+
+        // CROSSREF BRIDGE: look up aftermarket equivalents (Bosch, TRW...) in
+        // local part_crossref table and add them to variants for J+M lookup.
+        if (enableCrossref) {
+          try {
+            const { data: xrefs } = await adminClient
+              .from('part_crossref')
+              .select('part_number, manufacturer')
+              .or(`oem_number.eq.${rawCode},oem_number.eq.${stripped},oem_number.eq.${baseNoSuffix}`)
+              .limit(20);
+            for (const x of xrefs || []) {
+              if (x.part_number && !variants.includes(x.part_number)) {
+                variants.push(String(x.part_number).trim());
+              }
+            }
+            console.log(`[searchByCode] crossref expanded ${variants.length} variants for ${rawCode}`);
+          } catch (e) {
+            console.warn('[searchByCode] crossref lookup failed:', (e as Error).message);
+          }
+        }
+
         const targets: Array<string | undefined> = [undefined, 'P', 'O'];
 
         const attempts: Array<{ code: string; target?: string; raw: any; count: number }> = [];
