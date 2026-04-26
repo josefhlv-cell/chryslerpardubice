@@ -265,9 +265,11 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           }
         }
 
-        // J+M already applies strict→vehicle fallback in the API/proxy layer.
-        // Do not re-filter here, otherwise valid J+M-only results can disappear.
-        const allJm = [...jmByCodes.filter((p) => partMatchesNode(p, category)), ...jmFromVehicle];
+        // PHASE 2 FIX: TRUST the proxy. J+M already applies strict→vehicle fallback
+        // in the proxy layer. Do NOT re-filter on the frontend — that destroys valid results.
+        // jmByCodes is OEM-cross-referenced (already category-correct).
+        // jmFromVehicle is proxy-validated for the requested category.
+        const allJm = [...jmByCodes, ...jmFromVehicle];
         if (cancelled) return;
         setJmCount(allJm.length);
         const merged = mergeWithJm(oemItems, allJm);
@@ -330,12 +332,16 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       // J+M items use a synthetic id `jm:OEM` and are not stored in parts_new,
       // so we must order them by name + OEM only (no part_id FK).
       const isLiveJm = p.id.startsWith("jm:") || p.catalog_source === "jm";
+      // PHASE 1: price_without_vat is computed (price_with_vat / 1.21) — never queried.
+      const unitPrice =
+        p.price_without_vat ??
+        (p.price_with_vat !== null ? Math.round((p.price_with_vat / 1.21) * 100) / 100 : null);
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
         part_id: isLiveJm ? null : p.id,
         order_type: "new" as const,
         quantity: 1,
-        unit_price: p.price_without_vat ?? null,
+        unit_price: unitPrice,
         part_name: p.name,
         oem_number: p.oem_number,
         catalog_source: p.catalog_source,
