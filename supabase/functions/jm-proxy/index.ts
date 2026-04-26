@@ -261,6 +261,32 @@ function itemMatchesKeywords(item: UnifiedPart, keywords: string[] = []): boolea
   return keywords.some((keyword) => haystack.includes(normalizeText(keyword)));
 }
 
+const SECTION_ID_BY_CATEGORY_ID: Record<string, number> = {
+  'brake-pads': 402,
+  'brake-discs': 82,
+  'brake-hoses': 95,
+  'brake-calipers': 472,
+  'oil-filter': 22,
+  'air-filter': 26,
+  'cabin-filter': 350,
+  'fuel-filter': 23,
+  'spark-plugs': 18,
+  'timing-belt': 213,
+  'water-pump': 50,
+  'shock-absorbers': 51,
+  'control-arms': 423,
+  'bushings': 459,
+  'tie-rods': 433,
+  'ball-joints': 432,
+  'alternator': 71,
+  'starter': 72,
+  'radiator': 31,
+  'thermostat': 195,
+  'exhaust': 64,
+  'transmission': 252,
+  'ac': 244,
+};
+
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
   return nodes
     .map((node) => {
@@ -811,7 +837,8 @@ Deno.serve(async (req) => {
         let model = String(payload.model || '').trim();
         let engine = String(payload.engine || '').trim();
         const category = String(payload.category || '').trim();
-        const sectionId = Number(payload.sectionId || 0);
+        const categoryId = String(payload.categoryId || '').trim();
+        const sectionId = Number(payload.sectionId || SECTION_ID_BY_CATEGORY_ID[categoryId] || 0);
         const categoryKeywords: string[] = Array.isArray(payload.categoryKeywords)
           ? payload.categoryKeywords.map((k: unknown) => String(k).trim()).filter(Boolean)
           : [];
@@ -873,7 +900,7 @@ Deno.serve(async (req) => {
           console.log('[searchByVehicle] Nextis byVehicle response: status=', raw?.status, 'items=', rawCount);
           let items = normalizeItems(raw)
             .filter((p) => isAllowedBrand(p.brand));
-          if (categoryKeywords.length) {
+          if (categoryKeywords.length && sectionId <= 0) {
             const kept = items.filter((p) => itemMatchesKeywords(p, categoryKeywords));
             if (kept.length > 0) {
               items = kept;
@@ -1013,7 +1040,7 @@ Deno.serve(async (req) => {
             let kept = 0;
             for (const it of items) {
               if (!it.oem_number) continue;
-              if (categoryKeywords.length && !itemMatchesKeywords(it, categoryKeywords) && sectionId > 0) continue;
+              if (categoryKeywords.length && sectionId <= 0 && !itemMatchesKeywords(it, categoryKeywords)) continue;
               const key = it.oem_number.toUpperCase();
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;

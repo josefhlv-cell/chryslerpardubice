@@ -185,6 +185,15 @@ const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
   { id: "fluids",       label: "Kapaliny a oleje", keywords: ["fluid", "oil", "olej", "kapalina"] },
 ];
 
+const SECTION_ID_BY_CATEGORY_ID = new Map<string, number>();
+const registerSectionIds = (nodes: SeedCategory[]) => {
+  nodes.forEach((node) => {
+    if (typeof node.sectionId === "number") SECTION_ID_BY_CATEGORY_ID.set(node.id, node.sectionId);
+    if (node.children?.length) registerSectionIds(node.children);
+  });
+};
+registerSectionIds(DEFAULT_CATEGORY_TREE);
+
 // =============================================================
 // HELPERS
 // =============================================================
@@ -431,6 +440,8 @@ async function fetchLocalRowsForVehicle(opts: {
   const candidates = variants.length ? variants : [null];
 
   const queries = [...candidates, null].filter((value, index, arr) => arr.indexOf(value) === index);
+  const merged: any[] = [];
+  const seen = new Set<string>();
 
   for (const variant of queries) {
     let q = supabase
@@ -448,9 +459,14 @@ async function fetchLocalRowsForVehicle(opts: {
       console.error("[catalogV2API] fetchLocalRowsForVehicle failed:", error.message);
       return [];
     }
-    if (data && data.length > 0) return cacheSet(cacheKey, data, TTL_PARTS_QUERY);
+    for (const row of data || []) {
+      const key = String(row?.id || row?.oem_number || "");
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
   }
-  return cacheSet(cacheKey, [], TTL_PARTS_QUERY);
+  return cacheSet(cacheKey, merged, TTL_PARTS_QUERY);
 }
 
 export async function listPartsForVehicle(opts: {
@@ -487,9 +503,17 @@ export async function listPartsForVehicle(opts: {
       ALLOWED_OEM_SOURCES.includes(p.catalog_source as (typeof ALLOWED_OEM_SOURCES)[number])
     );
 
-  // Strict category filter — never broaden across categories.
+  // Strict category filter first; if it yields nothing, retry with a wider
+  // category label token so broad tree counts and listing never diverge.
   if (opts.categoryKeywords && opts.categoryKeywords.length > 0) {
-    parts = parts.filter((p) => partMatchesKeywords(p, opts.categoryKeywords!));
+    const strict = parts.filter((p) => partMatchesKeywords(p, opts.categoryKeywords!));
+    const labelKeywords = opts.canonicalCategory
+      ? normalize(opts.canonicalCategory).split(/\s+/).filter((k) => k.length >= 4)
+      : [];
+    const relaxed = strict.length === 0 && labelKeywords.length > 0
+      ? parts.filter((p) => partMatchesKeywords(p, labelKeywords))
+      : strict;
+    parts = relaxed;
   }
 
   parts = dedupeByOem(parts).sort((a, b) => a.rank - b.rank);
@@ -681,6 +705,13 @@ async function callJmSearchByVehicle(payload: Record<string, unknown>): Promise<
     if (error) return { items: [], warning: error.message };
     if (!data?.success) return { items: [], warning: data?.error || "J+M nevrátilo data" };
     const raw = Array.isArray(data?.data?.items) ? data.data.items : [];
+    console.log("[catalogV2API] jm-proxy searchByVehicle", {
+      mode: data?.data?.mode,
+      usedStep: data?.data?.usedStep,
+      sectionId: data?.data?.sectionId,
+      raw: raw.length,
+      warning: data?.data?.warning,
+    });
     // Only requirement: OEM number present. Do NOT drop items missing price/stock.
     const items = raw.map(jmNormalize).filter((p: CatalogPart) => !!p.oem_number);
     return { items: dedupeByOem(items) };
@@ -703,14 +734,16 @@ export async function fetchJmForVehicle(opts: {
 }): Promise<{ items: CatalogPart[]; warning?: string }> {
   const expandedKeywords = expandCategoryKeywords(opts.categoryId, opts.categoryKeywords || []);
   const inputCategory = opts.category || opts.categoryId || null;
+  const resolvedSectionId = opts.sectionId ?? (opts.categoryId ? SECTION_ID_BY_CATEGORY_ID.get(opts.categoryId) ?? null : null);
 
   const basePayload = {
     nextisVehicleId: opts.nextisVehicleId,
     brand: opts.brand,
     model: opts.model,
     engine: opts.engine || "",
-    sectionId: opts.sectionId ?? null,
+    sectionId: resolvedSectionId,
     category: opts.category,
+    categoryId: opts.categoryId || null,
     parentKeywords: opts.parentKeywords || [],
   };
 
