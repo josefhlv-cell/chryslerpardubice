@@ -282,7 +282,9 @@ function dedupeByOem(parts: CatalogPart[]): CatalogPart[] {
   const seen = new Set<string>();
   const out: CatalogPart[] = [];
   for (const p of parts) {
-    const key = normalizeOem(p.oem_number) || p.id;
+    const key = p.catalog_source === "jm"
+      ? `${normalizeOem(p.related_oem_number || "") || "jm"}:${normalizeOem(p.manufacturer || "")}:${normalizeOem(p.oem_number) || p.id}`
+      : normalizeOem(p.oem_number) || p.id;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(p);
