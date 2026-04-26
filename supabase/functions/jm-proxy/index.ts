@@ -187,6 +187,52 @@ const PRODUCT_CATEGORY_TREE: CategoryNode[] = [
   { id: 'hvac', label: 'Klimatizace a topení', level: 0, sectionId: null, path: ['Klimatizace a topení'], keywords: ['klimat', 'topen', 'a/c', 'hvac'], count: 0 },
 ];
 
+function collectImageUrls(it: any): string[] {
+  const candidates = [
+    it.image,
+    it.Image,
+    it.imageUrl,
+    it.ImageUrl,
+    it.pictureUrl,
+    it.PictureUrl,
+    it.photoUrl,
+    it.PhotoUrl,
+    it.thumbnailUrl,
+    it.ThumbnailUrl,
+    it.documentUrl,
+    it.DocumentUrl,
+    it?.images,
+    it?.Images,
+    it?.pictures,
+    it?.Pictures,
+    it?.documents,
+    it?.Documents,
+  ];
+  const urls = new Set<string>();
+  const visit = (value: any) => {
+    if (!value) return;
+    if (typeof value === 'string') {
+      if (/^https?:\/\//i.test(value)) urls.add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === 'object') {
+      [
+        value.url, value.Url, value.URL,
+        value.imageUrl, value.ImageUrl,
+        value.pictureUrl, value.PictureUrl,
+        value.thumbnailUrl, value.ThumbnailUrl,
+        value.documentUrl, value.DocumentUrl,
+      ].forEach(visit);
+    }
+  };
+  candidates.forEach(visit);
+  return [...urls];
+}
+
 function normalizeCatalogItem(it: any): UnifiedPart {
   // Real Nextis CatalogItem shape
   const code = it.productCode || it.ProductCode || '';
@@ -201,6 +247,7 @@ function normalizeCatalogItem(it: any): UnifiedPart {
   const priceVat = purchaseVat * JM_MARGIN;
   const stock = Number(it.qtyAvailableMain ?? it.QtyAvailableMain ?? 0)
               + Number(it.qtyAvailableSupplier ?? it.QtyAvailableSupplier ?? 0);
+  const imageUrls = collectImageUrls(it);
 
   return {
     supplier: 'jm',
@@ -211,7 +258,8 @@ function normalizeCatalogItem(it: any): UnifiedPart {
     price_with_vat: Math.round(priceVat * 100) / 100,
     stock,
     availability: stock > 0 ? 'in_stock' : 'on_order',
-    image: '',
+    image: imageUrls[0] || '',
+    image_urls: imageUrls,
     category: '',
     compatible_vehicles: [],
   };
