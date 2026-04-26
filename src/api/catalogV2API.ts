@@ -817,6 +817,24 @@ export async function fetchJmForVehicle(opts: {
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
   const oemKeys = new Set(oem.map((p) => normalizeOem(p.oem_number)).filter(Boolean));
   const oemBase8 = new Set(oem.map((p) => normalizeOem(p.oem_number).match(/^K?(\d{8})/)?.[1]).filter(Boolean));
+  const imageByRelatedBase = new Map<string, string[]>();
+
+  for (const p of jm) {
+    const related = normalizeOem(p.related_oem_number || "");
+    const relatedBase = related.match(/^K?(\d{8})/)?.[1];
+    const images = p.image_urls?.filter(Boolean) || [];
+    if (relatedBase && images.length && !imageByRelatedBase.has(relatedBase)) {
+      imageByRelatedBase.set(relatedBase, images);
+    }
+  }
+
+  const enrichedOem = oem.map((p) => {
+    if (p.image_urls?.some(Boolean)) return p;
+    const base = normalizeOem(p.oem_number).match(/^K?(\d{8})/)?.[1];
+    const fallbackImages = base ? imageByRelatedBase.get(base) : undefined;
+    return fallbackImages?.length ? { ...p, image_urls: fallbackImages } : p;
+  });
+
   const filteredJm = jm.filter((p) => {
     const k = normalizeOem(p.oem_number);
     const related = normalizeOem(p.related_oem_number || "");
@@ -826,7 +844,7 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]): CatalogPart[
     // the OEM part family even when they carry related_oem_number.
     return !oemKeys.has(k) || (!!relatedBase && oemBase8.has(relatedBase));
   });
-  return [...oem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
+  return [...enrichedOem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
 }
 
 /** Legacy alias kept for older callers. */
