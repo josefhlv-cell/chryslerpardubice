@@ -269,12 +269,12 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         // in the proxy layer. Do NOT re-filter on the frontend — that destroys valid results.
         // jmByCodes is OEM-cross-referenced (already category-correct).
         // jmFromVehicle is proxy-validated for the requested category.
-        const allJm = [...jmByCodes, ...jmFromVehicle];
+        const allJm = [...jmByCodes, ...jmFromVehicle].filter((part) => partMatchesNode(part, category));
         if (cancelled) return;
         setJmCount(allJm.length);
         const merged = mergeWithJm(oemItems, allJm);
         setItems(merged);
-        setTotal(oemTotal + allJm.length);
+        setTotal(merged.length);
 
         // Surface diagnostic ONLY when J+M returned 0 AND we have no local OEM
         // cross-references either. If at least one OEM part is shown, the user
@@ -612,7 +612,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               </div>
             )}
 
-            {total > 30 && (
+            {false && total > 30 && (
               <div className="flex items-center justify-center gap-2 mt-6">
                 <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                   Předchozí
