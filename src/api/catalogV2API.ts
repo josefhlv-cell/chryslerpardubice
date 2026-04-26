@@ -48,6 +48,8 @@ export type CatalogPart = {
   description: string | null;
   compatible_vehicles?: string | null;
   technical_parameters?: Record<string, string> | null;
+  related_oem_number?: string | null;
+  searched_code?: string | null;
   is_oem: boolean;
   badge_label: "ORIGINÁL" | "NÁHRADA" | "NEZNÁMÝ";
   rank: number;
@@ -280,7 +282,9 @@ function dedupeByOem(parts: CatalogPart[]): CatalogPart[] {
   const seen = new Set<string>();
   const out: CatalogPart[] = [];
   for (const p of parts) {
-    const key = normalizeOem(p.oem_number) || p.id;
+    const key = p.catalog_source === "jm"
+      ? `${normalizeOem(p.related_oem_number || "") || "jm"}:${normalizeOem(p.manufacturer || "")}:${normalizeOem(p.oem_number) || p.id}`
+      : normalizeOem(p.oem_number) || p.id;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(p);
@@ -608,9 +612,12 @@ type JmRaw = {
   price_without_vat?: number | null;
   stock?: number;
   availability?: string;
+  image?: string;
   image_urls?: string[];
   category?: string;
   description?: string;
+  related_oem_number?: string;
+  searched_code?: string;
 };
 
 function jmNormalize(it: JmRaw): CatalogPart {
@@ -618,8 +625,12 @@ function jmNormalize(it: JmRaw): CatalogPart {
   const pwoVat =
     safeNumber(it.price_without_vat) ?? (pw !== null ? Math.round((pw / 1.21) * 100) / 100 : null);
 
+  const imageUrls = Array.isArray(it.image_urls)
+    ? it.image_urls.filter(Boolean)
+    : (it.image ? [String(it.image)] : null);
+
   return {
-    id: `jm:${it.oem_number || Math.random()}`,
+    id: `jm:${it.related_oem_number || it.searched_code || it.oem_number || Math.random()}:${it.oem_number || ""}`,
     oem_number: String(it.oem_number || ""),
     name: String(it.name || it.oem_number || "—"),
     manufacturer: it.manufacturer || it.brand || "J+M",
@@ -627,11 +638,13 @@ function jmNormalize(it: JmRaw): CatalogPart {
     price_without_vat: pwoVat && pwoVat > 0 ? pwoVat : null,
     price_with_vat: pw && pw > 0 ? pw : null,
     availability: it.availability || (it.stock && it.stock > 0 ? "in_stock" : "unknown"),
-    image_urls: Array.isArray(it.image_urls) ? it.image_urls : null,
+    image_urls: imageUrls,
     category: it.category ?? null,
     description: it.description ?? null,
     compatible_vehicles: (it as any).compatible_vehicles ?? null,
     technical_parameters: (it as any).technical_parameters ?? null,
+    related_oem_number: it.related_oem_number ?? null,
+    searched_code: it.searched_code ?? null,
     is_oem: false,
     badge_label: "NÁHRADA",
     rank: 5,
@@ -803,11 +816,35 @@ export async function fetchJmForVehicle(opts: {
 
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]): CatalogPart[] {
   const oemKeys = new Set(oem.map((p) => normalizeOem(p.oem_number)).filter(Boolean));
+  const oemBase8 = new Set(oem.map((p) => normalizeOem(p.oem_number).match(/^K?(\d{8})/)?.[1]).filter(Boolean));
+  const imageByRelatedBase = new Map<string, string[]>();
+
+  for (const p of jm) {
+    const related = normalizeOem(p.related_oem_number || "");
+    const relatedBase = related.match(/^K?(\d{8})/)?.[1];
+    const images = p.image_urls?.filter(Boolean) || [];
+    if (relatedBase && images.length && !imageByRelatedBase.has(relatedBase)) {
+      imageByRelatedBase.set(relatedBase, images);
+    }
+  }
+
+  const enrichedOem = oem.map((p) => {
+    if (p.image_urls?.some(Boolean)) return p;
+    const base = normalizeOem(p.oem_number).match(/^K?(\d{8})/)?.[1];
+    const fallbackImages = base ? imageByRelatedBase.get(base) : undefined;
+    return fallbackImages?.length ? { ...p, image_urls: fallbackImages } : p;
+  });
+
   const filteredJm = jm.filter((p) => {
     const k = normalizeOem(p.oem_number);
-    return k && !oemKeys.has(k);
+    const related = normalizeOem(p.related_oem_number || "");
+    const relatedBase = related.match(/^K?(\d{8})/)?.[1];
+    if (!k) return false;
+    // Hide only exact OEM duplicates. Crossref aftermarket rows are allowed under
+    // the OEM part family even when they carry related_oem_number.
+    return !oemKeys.has(k) || (!!relatedBase && oemBase8.has(relatedBase));
   });
-  return [...oem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
+  return [...enrichedOem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
 }
 
 /** Legacy alias kept for older callers. */
