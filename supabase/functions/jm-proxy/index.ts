@@ -140,8 +140,11 @@ interface UnifiedPart {
   stock: number;
   availability: string;
   image: string;
+  image_urls?: string[];
   category: string;
   compatible_vehicles: string[];
+  related_oem_number?: string;
+  searched_code?: string;
 }
 
 type CategoryNode = {
