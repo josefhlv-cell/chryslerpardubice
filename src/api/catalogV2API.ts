@@ -313,10 +313,44 @@ function dedupeByOem(parts: CatalogPart[]): CatalogPart[] {
 }
 
 // =============================================================
+// IN-MEMORY CACHE (lightweight, per-tab)
+// =============================================================
+
+type CacheEntry<T> = { value: T; expires: number };
+const _cache = new Map<string, CacheEntry<unknown>>();
+
+function cacheGet<T>(key: string): T | null {
+  const e = _cache.get(key);
+  if (!e) return null;
+  if (Date.now() > e.expires) {
+    _cache.delete(key);
+    return null;
+  }
+  return e.value as T;
+}
+
+function cacheSet<T>(key: string, value: T, ttlMs: number): T {
+  _cache.set(key, { value, expires: Date.now() + ttlMs });
+  return value;
+}
+
+/** Public helper to wipe the cache (e.g. after CSV price sync). */
+export function clearCatalogCache(): void {
+  _cache.clear();
+}
+
+const TTL_VEHICLE_TREE = 5 * 60_000; // 5 min — brand/model/engine
+const TTL_PARTS_QUERY = 60_000;       // 1 min — local parts
+const TTL_JM_CODE = 5 * 60_000;       // 5 min — J+M code lookup
+
+// =============================================================
 // VEHICLE TREE — nextis_vehicles is the source of truth
 // =============================================================
 
 export async function fetchBrands(): Promise<string[]> {
+  const cached = cacheGet<string[]>("brands");
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("brand")
@@ -329,11 +363,15 @@ export async function fetchBrands(): Promise<string[]> {
   }
   const set = new Set<string>();
   (data || []).forEach((r: any) => r?.brand && set.add(r.brand));
-  return ALLOWED_BRANDS.filter((b) => set.has(b));
+  return cacheSet("brands", ALLOWED_BRANDS.filter((b) => set.has(b)), TTL_VEHICLE_TREE);
 }
 
 export async function fetchModelsForBrand(brand: string): Promise<string[]> {
   if (!brand) return [];
+  const key = `models:${brand}`;
+  const cached = cacheGet<string[]>(key);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("model")
@@ -346,11 +384,15 @@ export async function fetchModelsForBrand(brand: string): Promise<string[]> {
   }
   const set = new Set<string>();
   (data || []).forEach((r: any) => r?.model && set.add(r.model));
-  return [...set].sort((a, b) => a.localeCompare(b));
+  return cacheSet(key, [...set].sort((a, b) => a.localeCompare(b)), TTL_VEHICLE_TREE);
 }
 
 export async function fetchEnginesForModel(brand: string, model: string): Promise<string[]> {
   if (!brand || !model) return [];
+  const key = `engines:${brand}:${model}`;
+  const cached = cacheGet<string[]>(key);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("engine")
@@ -364,11 +406,15 @@ export async function fetchEnginesForModel(brand: string, model: string): Promis
   }
   const set = new Set<string>();
   (data || []).forEach((r: any) => r?.engine && set.add(r.engine));
-  return [...set].sort((a, b) => a.localeCompare(b));
+  return cacheSet(key, [...set].sort((a, b) => a.localeCompare(b)), TTL_VEHICLE_TREE);
 }
 
 export async function fetchNextisVehicles(brand: string, model: string): Promise<NextisVehicle[]> {
   if (!brand || !model) return [];
+  const key = `nextis:${brand}:${model}`;
+  const cached = cacheGet<NextisVehicle[]>(key);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("id, brand, model, engine, year_from, year_to, external_id")
@@ -380,7 +426,16 @@ export async function fetchNextisVehicles(brand: string, model: string): Promise
     console.error("[catalogV2API] fetchNextisVehicles failed:", error.message);
     return [];
   }
-  return (data || []) as NextisVehicle[];
+  return cacheSet(key, (data || []) as NextisVehicle[], TTL_VEHICLE_TREE);
+}
+
+// =============================================================
+// VIN DECODING — placeholder for future AI-driven flow
+// =============================================================
+
+/** Reserved for upcoming VIN→vehicle resolution. Returns null today. */
+export async function resolveVehicleByVin(_vin: string): Promise<NextisVehicle | null> {
+  return null;
 }
 
 // =============================================================
@@ -405,6 +460,10 @@ async function fetchLocalRowsForVehicle(opts: {
   limit?: number;
 }): Promise<any[]> {
   const limit = Math.min(opts.limit ?? 1000, 3000);
+  const cacheKey = `local:${opts.brand}:${opts.model}:${opts.engine || ""}:${limit}`;
+  const cached = cacheGet<any[]>(cacheKey);
+  if (cached) return cached;
+
   const variants = engineVariants(opts.engine);
   const candidates = variants.length ? variants : [null];
 
@@ -424,9 +483,9 @@ async function fetchLocalRowsForVehicle(opts: {
       console.error("[catalogV2API] fetchLocalRowsForVehicle failed:", error.message);
       return [];
     }
-    if (data && data.length > 0) return data;
+    if (data && data.length > 0) return cacheSet(cacheKey, data, TTL_PARTS_QUERY);
   }
-  return [];
+  return cacheSet(cacheKey, [], TTL_PARTS_QUERY);
 }
 
 export async function listPartsForVehicle(opts: {
@@ -586,13 +645,17 @@ function jmNormalize(it: JmRaw): CatalogPart {
 
 export async function fetchJmByCode(code: string): Promise<CatalogPart[]> {
   if (!code) return [];
+  const cacheKey = `jm:code:${normalizeOem(code)}`;
+  const cached = cacheGet<CatalogPart[]>(cacheKey);
+  if (cached) return cached;
+
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
       body: { action: "searchByCode", payload: { code } },
     });
-    if (error || !data?.success) return [];
+    if (error || !data?.success) return cacheSet(cacheKey, [], TTL_JM_CODE);
     const items = Array.isArray(data?.data?.items) ? data.data.items : [];
-    return items.map(jmNormalize);
+    return cacheSet(cacheKey, items.map(jmNormalize), TTL_JM_CODE);
   } catch (e) {
     console.warn("[catalogV2API] fetchJmByCode failed:", e);
     return [];
@@ -767,9 +830,14 @@ export async function listParts(filter: {
 // CSV PRICING SYNC (vernostsevyplaci) — NO API
 // =============================================================
 
-export async function syncPricesFromCsv(rows: Array<{ oem: string; price: number | string }>): Promise<{ updated: number; skipped: number }> {
+export async function syncPricesFromCsv(
+  rows: Array<{ oem: string; price: number | string }>
+): Promise<{ updated: number; skipped: number }> {
   let updated = 0;
   let skipped = 0;
+
+  // Validate + dedupe by normalized OEM (last value wins).
+  const valid = new Map<string, { oem: string; price: number }>();
   for (const r of rows || []) {
     const oem = String(r?.oem || "").trim();
     const price = Number(r?.price);
@@ -777,15 +845,25 @@ export async function syncPricesFromCsv(rows: Array<{ oem: string; price: number
       skipped++;
       continue;
     }
-    const { error } = await supabase
-      .from("parts_new")
-      .update({ price_with_vat: price })
-      .eq("oem_number", oem);
-    if (error) {
-      skipped++;
-      continue;
-    }
-    updated++;
+    valid.set(normalizeOem(oem), { oem, price });
   }
+
+  // Chunked parallel updates for performance.
+  const entries = [...valid.values()];
+  const CHUNK = 20;
+  for (let i = 0; i < entries.length; i += CHUNK) {
+    const chunk = entries.slice(i, i + CHUNK);
+    const results = await Promise.allSettled(
+      chunk.map((e) =>
+        supabase.from("parts_new").update({ price_with_vat: e.price }).eq("oem_number", e.oem)
+      )
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled" && !r.value.error) updated++;
+      else skipped++;
+    }
+  }
+
+  if (updated > 0) clearCatalogCache();
   return { updated, skipped };
 }
