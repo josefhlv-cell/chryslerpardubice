@@ -1251,6 +1251,57 @@ export type Database = {
           },
         ]
       }
+      price_sync_runs: {
+        Row: {
+          created_at: string
+          error_count: number
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          mode: string
+          notified: boolean
+          processed: number
+          started_at: string
+          started_by: string | null
+          status: string
+          total_target: number
+          updated_at: string
+          updated_count: number
+        }
+        Insert: {
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          mode?: string
+          notified?: boolean
+          processed?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          total_target?: number
+          updated_at?: string
+          updated_count?: number
+        }
+        Update: {
+          created_at?: string
+          error_count?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          mode?: string
+          notified?: boolean
+          processed?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          total_target?: number
+          updated_at?: string
+          updated_count?: number
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           account_type: string
