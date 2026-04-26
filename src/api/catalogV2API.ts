@@ -348,6 +348,9 @@ const TTL_JM_CODE = 5 * 60_000;       // 5 min — J+M code lookup
 // =============================================================
 
 export async function fetchBrands(): Promise<string[]> {
+  const cached = cacheGet<string[]>("brands");
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("brand")
@@ -360,11 +363,15 @@ export async function fetchBrands(): Promise<string[]> {
   }
   const set = new Set<string>();
   (data || []).forEach((r: any) => r?.brand && set.add(r.brand));
-  return ALLOWED_BRANDS.filter((b) => set.has(b));
+  return cacheSet("brands", ALLOWED_BRANDS.filter((b) => set.has(b)), TTL_VEHICLE_TREE);
 }
 
 export async function fetchModelsForBrand(brand: string): Promise<string[]> {
   if (!brand) return [];
+  const key = `models:${brand}`;
+  const cached = cacheGet<string[]>(key);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("model")
@@ -377,11 +384,15 @@ export async function fetchModelsForBrand(brand: string): Promise<string[]> {
   }
   const set = new Set<string>();
   (data || []).forEach((r: any) => r?.model && set.add(r.model));
-  return [...set].sort((a, b) => a.localeCompare(b));
+  return cacheSet(key, [...set].sort((a, b) => a.localeCompare(b)), TTL_VEHICLE_TREE);
 }
 
 export async function fetchEnginesForModel(brand: string, model: string): Promise<string[]> {
   if (!brand || !model) return [];
+  const key = `engines:${brand}:${model}`;
+  const cached = cacheGet<string[]>(key);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("engine")
@@ -395,11 +406,15 @@ export async function fetchEnginesForModel(brand: string, model: string): Promis
   }
   const set = new Set<string>();
   (data || []).forEach((r: any) => r?.engine && set.add(r.engine));
-  return [...set].sort((a, b) => a.localeCompare(b));
+  return cacheSet(key, [...set].sort((a, b) => a.localeCompare(b)), TTL_VEHICLE_TREE);
 }
 
 export async function fetchNextisVehicles(brand: string, model: string): Promise<NextisVehicle[]> {
   if (!brand || !model) return [];
+  const key = `nextis:${brand}:${model}`;
+  const cached = cacheGet<NextisVehicle[]>(key);
+  if (cached) return cached;
+
   const { data, error } = await supabase
     .from("nextis_vehicles")
     .select("id, brand, model, engine, year_from, year_to, external_id")
@@ -411,7 +426,16 @@ export async function fetchNextisVehicles(brand: string, model: string): Promise
     console.error("[catalogV2API] fetchNextisVehicles failed:", error.message);
     return [];
   }
-  return (data || []) as NextisVehicle[];
+  return cacheSet(key, (data || []) as NextisVehicle[], TTL_VEHICLE_TREE);
+}
+
+// =============================================================
+// VIN DECODING — placeholder for future AI-driven flow
+// =============================================================
+
+/** Reserved for upcoming VIN→vehicle resolution. Returns null today. */
+export async function resolveVehicleByVin(_vin: string): Promise<NextisVehicle | null> {
+  return null;
 }
 
 // =============================================================
