@@ -147,8 +147,8 @@ Deno.serve(async (req) => {
       // Chunked insert (avoid huge payload)
       for (let i = 0; i < inserts.length; i += 500) {
         const chunk = inserts.slice(i, i + 500);
-        const { error, count } = await sb.from('catalog_vehicle_compatibility').insert(chunk).select('id', { count: 'exact', head: true });
-        if (!error) inserted += count || chunk.length;
+        const { error } = await sb.from('catalog_vehicle_compatibility').insert(chunk);
+        if (!error) inserted += chunk.length;
       }
     }
 
