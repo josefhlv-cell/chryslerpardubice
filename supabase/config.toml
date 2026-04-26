@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.scrape-makro]
 verify_jwt = false
+
+[functions.catalog-bridge]
+verify_jwt = false
