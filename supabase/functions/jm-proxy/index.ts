@@ -1185,12 +1185,12 @@ Deno.serve(async (req) => {
           break;
         }
 
-        // Run items-finding-by-code per OEM. CRITICAL: searchTarget='CodeOE' so
-        // Nextis matches against OE codes (Mopar OEMs), not their internal
-        // product codes.
+        // Run items-finding-by-code per OEM first. If J+M returns nothing for the
+        // Mopar OE number, recursively bridge through local part_crossref numbers
+        // (Bosch/TRW/Brembo/etc.) and query J+M again by aftermarket product code.
         const seen = new Set<string>();
-        const collected: any[] = [];
-        const codeAttempts: Array<{ code: string; raw: number; kept: number }> = [];
+        const collected: UnifiedPart[] = [];
+        const codeAttempts: Array<{ code: string; raw: number; kept: number; crossrefs?: number; crossrefRaw?: number }> = [];
         const batches: Promise<void>[] = oemCodes.map(async (code) => {
           try {
             const reqBody = {
@@ -1207,19 +1207,33 @@ Deno.serve(async (req) => {
             };
             const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody);
             const rawList = raw?.items || raw?.Items || [];
-            const items = normalizeItems(raw);
+            const directItems = normalizeItems(raw);
             let kept = 0;
-            for (const it of items) {
+            for (const it of directItems) {
               if (!it.oem_number) continue;
               if (categoryKeywords.length && sectionId <= 0 && !itemMatchesKeywords(it, categoryKeywords)) continue;
-              const key = it.oem_number.toUpperCase();
+              const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
               if (seen.has(key)) continue;
               if (!isAllowedBrand(it.brand)) continue;
               seen.add(key);
-              collected.push({ ...it, category: category || it.category });
+              collected.push({ ...it, category: category || it.category, related_oem_number: code });
               kept++;
             }
-            codeAttempts.push({ code, raw: rawList.length, kept });
+
+            const cross = await fetchJmViaCrossRefs(adminClient, code, category);
+            let crossKept = 0;
+            for (const it of cross.items) {
+              if (!it.oem_number) continue;
+              if (categoryKeywords.length && sectionId <= 0 && !itemMatchesKeywords(it, categoryKeywords)) continue;
+              const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+              if (seen.has(key)) continue;
+              if (!isAllowedBrand(it.brand)) continue;
+              seen.add(key);
+              collected.push(it);
+              crossKept++;
+            }
+
+            codeAttempts.push({ code, raw: rawList.length, kept: kept + crossKept, crossrefs: cross.xrefsTried.length, crossrefRaw: cross.rawHits });
           } catch (e) {
             console.warn('[searchByVehicle] code search failed for', code, (e as Error).message);
             codeAttempts.push({ code, raw: -1, kept: 0 });
