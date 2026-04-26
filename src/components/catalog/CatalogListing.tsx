@@ -49,7 +49,7 @@ const TechParams = ({ params }: { params: Record<string, string> }) => {
   );
 };
 
-const PartRow = ({ p, onOrder }: { p: CatalogPart; onOrder: (p: CatalogPart) => void }) => {
+const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p: CatalogPart) => void; supersededCount?: number }) => {
   const [open, setOpen] = useState(false);
   const isOem = p.is_oem;
   const photo = p.image_urls?.[0];
