@@ -743,6 +743,7 @@ export async function fetchJmForVehicle(opts: {
     engine: opts.engine || "",
     sectionId: resolvedSectionId,
     category: opts.category,
+    categoryId: opts.categoryId || null,
     parentKeywords: opts.parentKeywords || [],
   };
 
