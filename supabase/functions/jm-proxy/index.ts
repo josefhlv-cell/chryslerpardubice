@@ -380,7 +380,11 @@ async function fetchJmViaCrossRefs(adminClient: any, oeCode: string, category = 
     if (!partNumber) continue;
     xrefsTried.push(partNumber);
     console.log(`Found Cross-Ref ${partNumber} for OE ${oeCode}. Querying J+M again...`);
-    const result = await fetchJmForSpecificCode(partNumber, 'CodeProduct');
+    let result = await fetchJmForSpecificCode(partNumber, 'CodeProduct');
+    if (result.items.length === 0) {
+      const oeResult = await fetchJmForSpecificCode(partNumber, 'CodeOE');
+      result = { rawCount: result.rawCount + oeResult.rawCount, items: oeResult.items };
+    }
     rawHits += result.rawCount;
     for (const part of result.items) {
       items.push({
