@@ -705,6 +705,13 @@ async function callJmSearchByVehicle(payload: Record<string, unknown>): Promise<
     if (error) return { items: [], warning: error.message };
     if (!data?.success) return { items: [], warning: data?.error || "J+M nevrátilo data" };
     const raw = Array.isArray(data?.data?.items) ? data.data.items : [];
+    console.log("[catalogV2API] jm-proxy searchByVehicle", {
+      mode: data?.data?.mode,
+      usedStep: data?.data?.usedStep,
+      sectionId: data?.data?.sectionId,
+      raw: raw.length,
+      warning: data?.data?.warning,
+    });
     // Only requirement: OEM number present. Do NOT drop items missing price/stock.
     const items = raw.map(jmNormalize).filter((p: CatalogPart) => !!p.oem_number);
     return { items: dedupeByOem(items) };
