@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
     const oems = [...new Set(parts.map((p: any) => p.oem_number).filter(Boolean))];
     const { data: existing } = await sb.from('part_crossref').select('oem_number').in('oem_number', oems);
     const haveSet = new Set((existing || []).map((r: any) => r.oem_number));
-    const targets = parts.filter((p: any) => !haveSet.has(p.oem_number)).slice(0, limit);
+    const targets = parts.filter((p: any) => p.oem_number && !haveSet.has(p.oem_number)).slice(0, limit);
 
     if (!targets.length) return json({ success: true, processed: 0, inserted: 0, message: 'All have crossref' });
 
