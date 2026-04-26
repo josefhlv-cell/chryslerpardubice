@@ -78,7 +78,7 @@ const AdminCatalogHub = () => {
 
   const load = async () => {
     setLoading(true);
-    const [pn, withPrice, withImage, partCats, crossref, compat, vehicles, cats, bySource] = await Promise.all([
+    const [pn, withPrice, withImage, partCats, crossref, compat, vehicles, cats] = await Promise.all([
       supabase.from("parts_new").select("id", { count: "exact", head: true }),
       supabase.from("parts_new").select("id", { count: "exact", head: true }).gt("price_with_vat", 0),
       supabase.from("parts_new").select("id", { count: "exact", head: true }).not("image_urls", "is", null),
@@ -87,7 +87,6 @@ const AdminCatalogHub = () => {
       supabase.from("catalog_vehicle_compatibility").select("id", { count: "exact", head: true }),
       supabase.from("nextis_vehicles").select("id", { count: "exact", head: true }),
       supabase.from("catalog_categories").select("id", { count: "exact", head: true }),
-      supabase.rpc("execute_sql" as any, { sql: "" }).then(() => null).catch(() => null),
     ]);
 
     // Source breakdown via direct query
