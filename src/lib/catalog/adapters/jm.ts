@@ -28,11 +28,26 @@ function isAllowedBrand(producer: string | null | undefined): boolean {
   return !BLACKLISTED_BRANDS.some((b) => p.includes(b));
 }
 
-async function callProxy<T>(action: string, payload: unknown): Promise<T> {
+async function callProxy<T>(action: string, payload: unknown, attempt = 0): Promise<T> {
   const { data, error } = await supabase.functions.invoke("jm-proxy", {
     body: { action, payload },
   });
-  if (error) throw new Error(error.message);
+
+  // Retry once on cold-start / 503 / transient network errors
+  if (error) {
+    const msg = error.message || "";
+    const transient =
+      msg.includes("503") ||
+      msg.includes("temporarily unavailable") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("SUPABASE_EDGE_RUNTIME_ERROR");
+    if (transient && attempt < 2) {
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      return callProxy<T>(action, payload, attempt + 1);
+    }
+    throw new Error(msg);
+  }
+
   if (!data?.success) throw new Error(data?.error || "jm-proxy failed");
   return data.data as T;
 }
