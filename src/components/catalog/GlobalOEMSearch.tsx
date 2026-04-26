@@ -3,7 +3,7 @@
  * Hybrid lookup: parallel local OEM (parts_new) + live J+M searchByCode.
  * OEM rank=1 is always pinned to the top with "ORIGINÁL ⭐" badge.
  */
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import { Search, Loader2, ShieldCheck, RefreshCw, ShoppingCart, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ interface Props {
   onOrder: (p: CatalogPart) => void;
 }
 
-const GlobalOEMSearch = ({ onOrder }: Props) => {
+const GlobalOEMSearch = forwardRef<HTMLDivElement, Props>(({ onOrder }, ref) => {
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [oemHits, setOemHits] = useState<CatalogPart[]>([]);
@@ -48,7 +48,7 @@ const GlobalOEMSearch = ({ onOrder }: Props) => {
   };
 
   return (
-    <div className="rounded-xl border border-border/40 bg-card/50 backdrop-blur-sm p-3 mb-6">
+    <div ref={ref} className="rounded-xl border border-border/40 bg-card/50 backdrop-blur-sm p-3 mb-6">
       <div className="flex items-center gap-2">
         <Search className="w-4 h-4 text-muted-foreground shrink-0" />
         <Input
@@ -98,7 +98,8 @@ const GlobalOEMSearch = ({ onOrder }: Props) => {
       )}
     </div>
   );
-};
+});
+GlobalOEMSearch.displayName = "GlobalOEMSearch";
 
 const ResultRow = ({ p, onOrder }: { p: CatalogPart; onOrder: (p: CatalogPart) => void }) => {
   const isOem = p.is_oem;
