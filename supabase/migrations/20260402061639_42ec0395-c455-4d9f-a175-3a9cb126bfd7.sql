@@ -1,28 +1,40 @@
+-- 1. FIXED: Recreate parts_new_public view WITH proper JOINs to category & vehicles
+DROP VIEW IF EXISTS public.parts_new_public CASCADE;
 
--- 1. Recreate parts_new_public view WITHOUT sensitive pricing columns
-DROP VIEW IF EXISTS public.parts_new_public;
 CREATE VIEW public.parts_new_public
 WITH (security_invoker = on) AS
 SELECT
-  id,
-  name,
-  oem_number,
-  price_with_vat,
-  availability,
-  catalog_source,
-  category,
-  manufacturer,
-  compatible_vehicles,
-  description,
-  image_urls,
-  internal_code,
-  last_price_update,
-  updated_at,
-  segment,
-  packaging,
-  currency,
-  family
-FROM parts_new;
+  p.id,
+  p.name,
+  p.oem_number,
+  p.price_with_vat,
+  p.availability,
+  p.catalog_source,
+  -- FIXED: Join to catalog_part_categories to get actual category names
+  COALESCE(STRING_AGG(DISTINCT cc.name_cs, ', ') FILTER (WHERE cc.name_cs IS NOT NULL), NULL) as category,
+  p.manufacturer,
+  -- FIXED: Join to catalog_vehicle_compatibility to build compatible_vehicles string
+  COALESCE(STRING_AGG(DISTINCT cvc.brand || ' ' || COALESCE(cvc.model, '') || ' ' || COALESCE(cvc.engine, ''), ' | ') 
+    FILTER (WHERE cvc.brand IS NOT NULL), NULL) as compatible_vehicles,
+  p.description,
+  p.image_urls,
+  p.internal_code,
+  p.last_price_update,
+  p.updated_at,
+  p.segment,
+  p.packaging,
+  p.currency,
+  p.family,
+  p.price_without_vat
+FROM parts_new p
+LEFT JOIN catalog_part_categories cpc ON cpc.part_id = p.id
+LEFT JOIN catalog_categories cc ON cc.id = cpc.category_id
+LEFT JOIN catalog_vehicle_compatibility cvc ON cvc.part_id = p.id
+GROUP BY 
+  p.id, p.name, p.oem_number, p.price_with_vat, p.price_without_vat,
+  p.availability, p.catalog_source, p.manufacturer, p.description,
+  p.image_urls, p.internal_code, p.last_price_update, p.updated_at,
+  p.segment, p.packaging, p.currency, p.family;
 
 -- 2. Storage RLS: Only owners can manage their uploads in service-photos
 CREATE POLICY "Authenticated users can upload service photos"
