@@ -22,7 +22,9 @@ import {
   Gauge,
   Settings,
   Box,
-} from "lucide-react";
+} 
+
+from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -42,7 +44,9 @@ import {
   type CatalogPart,
   type CatalogCategoryNode,
   type NextisVehicle,
-} from "@/api/catalogV2API";
+} 
+
+from "@/api/catalogV2API";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
