@@ -529,5 +529,4 @@ export async function listParts(filter: {
   if (error) return { items: [], total: 0 };
 
   return { items: (data || []).map(normalizeRow), total: count || 0 };
-
-}
+ }
