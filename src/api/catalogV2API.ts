@@ -467,7 +467,6 @@ function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
   }
 
   return normKw.some(kw => haystack.includes(kw));
-  // ✅ pouze jedna uzavírací závorka
 }
 
   
