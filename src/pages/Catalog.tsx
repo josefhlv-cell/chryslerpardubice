@@ -8,7 +8,7 @@ import {
   CatalogPart,
   CatalogCategoryNode
 } 
- from "@/lib/catalogV2API";
+  from "@/lib/catalogV2API";
 
   export default function Catalog() {
   const [brands, setBrands] = useState<string[]>([]);
