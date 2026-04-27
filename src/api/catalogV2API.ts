@@ -443,7 +443,7 @@ function buildKeywordHaystack(part: { name: string; category: string | null; des
 function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
   if (!keywords || keywords.length === 0) return true;
 
-  // ✅ backticky přidány
+
   const haystack = `${part.name} ${part.category || ""} ${part.description || ""}`
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -463,8 +463,8 @@ function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
     .filter(Boolean);
 
   if (normKw.some(kw => partCategory.includes(kw))) {
-    return true;
-  }
+  return true;
+}
 
   return normKw.some(kw => haystack.includes(kw));
 }
