@@ -126,9 +126,10 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
 }
 
 // ---------- normalisation ----------
-// MANDATORY +30 % markup applied LIVE on every J+M (aftermarket) price.
-// Never persisted into parts_new — applied only on the response sent to the client.
-const JM_MARGIN = 1.30;
+// MANDATORY +37 % markup applied LIVE on every J+M (aftermarket) price (per architect plan).
+// OEM (Mopar): 0 % margin (price_locked). Universal: handled via UNIVERSAL_MARGIN.
+const JM_MARGIN = 1.37;
+const UNIVERSAL_MARGIN = 1.20;
 
 interface UnifiedPart {
   supplier: 'jm';
