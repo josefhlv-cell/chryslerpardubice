@@ -64,7 +64,7 @@ function isUsBrand(producer: string | null | undefined): boolean {
 }
 
 // Whitelist of vehicle brands we expose via the curated catalog tree.
-const ALLOWED_BRANDS = ["chrysler", "dodge", "ram", "cadillac", "lancia", "jeep"] as const;
+const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "cadillac", "lancia"];
 
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -126,9 +126,10 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
 }
 
 // ---------- normalisation ----------
-// MANDATORY +30 % markup applied LIVE on every J+M (aftermarket) price.
-// Never persisted into parts_new — applied only on the response sent to the client.
-const JM_MARGIN = 1.30;
+// MANDATORY +37 % markup applied LIVE on every J+M (aftermarket) price (per architect plan).
+// OEM (Mopar): 0 % margin (price_locked). Universal: handled via UNIVERSAL_MARGIN.
+const JM_MARGIN = 1.37;
+const UNIVERSAL_MARGIN = 1.20;
 
 interface UnifiedPart {
   supplier: 'jm';
