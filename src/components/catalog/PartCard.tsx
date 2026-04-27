@@ -75,6 +75,11 @@ const PartCard = ({
       <div className="p-4">
         {/* Top badges */}
         <div className="flex items-center gap-1.5 mb-2">
+          {["mopar", "7zap", "epc-ai", "ai-epc", "epc-link"].includes(part.catalog_source) && (
+            <Badge className="text-[10px] bg-primary text-primary-foreground border-primary font-bold uppercase tracking-wide">
+              Originál
+            </Badge>
+          )}
           <SourceBadge source={part.catalog_source} />
           <AvailabilityDot availability={part.availability} />
           {part.superseded_by && (
