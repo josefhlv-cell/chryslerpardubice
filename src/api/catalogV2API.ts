@@ -377,7 +377,26 @@ function safeNumber(v: unknown): number | null {
   if (!Number.isFinite(n)) return null;
   return n;
 }
+function isDescriptionRelevantRaw(name: string, desc: string | null): boolean {
+  if (!desc) return false;
 
+  const n = name.toLowerCase();
+  const d = desc.toLowerCase();
+
+  const blacklist = [
+    "brzd", "kotouč", "destičk",
+    "čerpadlo", "pump",
+    "filtr"
+  ];
+
+  for (const w of blacklist) {
+    if (!n.includes(w) && d.includes(w)) {
+      return false;
+    }
+  }
+
+  return true;
+}
 function normalizeRow(row: any): CatalogPart {
   const source = row?.catalog_source || "mopar";
 
