@@ -442,9 +442,34 @@ function buildKeywordHaystack(part: { name: string; category: string | null; des
 
 function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
   if (!keywords || keywords.length === 0) return true;
-  const haystack = buildKeywordHaystack(part);
-  const normKw = keywords.map(normalize).filter(Boolean);
-  return normKw.some((kw) => haystack.includes(kw));
+
+  // 🔥 NORMALIZACE TEXTU
+  const haystack = ${part.name} ${part.category || ""} ${part.description || ""}
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const partCategory = (part.category || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+  const normKw = keywords
+    .map(k =>
+      k.normalize("NFD")
+       .replace(/[\u0300-\u036f]/g, "")
+       .toLowerCase()
+    )
+    .filter(Boolean);
+
+  // 🔥 PRIORITA: přesná shoda kategorie
+  if (normKw.some(kw => partCategory.includes(kw))) {
+    return true;
+  }
+
+  // 🔥 fallback: hledání v názvu + popisu
+  return normKw.some(kw => haystack.includes(kw));
+}
 }
 
 function dedupeByOem(parts: CatalogPart[]): CatalogPart[] {
