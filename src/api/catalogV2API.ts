@@ -106,85 +106,83 @@ type SeedCategory = {
  * Single source of truth for the in-app category tree.
  * Keywords are normalised (lower-case, no diacritics) at runtime.
  */
-// Nextis genArtID mapping (TecDoc IDs used by Nextis API)
-// Reference: TecDoc Generic Article master list.
 const DEFAULT_CATEGORY_TREE: SeedCategory[] = [
   {
     id: "brakes",
     label: "Brzdové zařízení",
-    keywords: ["brake", "brzd"],
-    sectionId: 100, // generic brake parent (not used directly — children carry IDs)
+    keywords: ["brake", "brzd", "bremsbelag", "bremsscheibe", "bremssattel", "bremsschlauch"],
+    sectionId: 100,
     children: [
-      { id: "brake-pads",     label: "Brzdové destičky", sectionId: 402, keywords: ["brake pad", "pads", "destic", "brzdov\u00e1 desti", "brzdove desti", "p\u0159edn\u00ed brzd", "predni brzd", "zadn\u00ed brzd", "zadni brzd"] },
-      { id: "brake-discs",    label: "Brzdové kotouče",  sectionId: 82,  keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc", "brzdov\u00fd kotou", "brzdovy kotou"] },
-      { id: "brake-hoses",    label: "Brzdové hadice",   sectionId: 95,  keywords: ["brake hose", "brzdov\u00e1 hadice", "hadice brzd"] },
-      { id: "brake-calipers", label: "Brzdové třmeny",   sectionId: 472, keywords: ["caliper", "tr\u017emen", "trmen"] },
+      { id: "brake-pads",     label: "Brzdové destičky", sectionId: 402, keywords: ["brake pad", "pads", "destic", "brzdov\u00e1 desti", "brzdove desti", "p\u0159edn\u00ed brzd", "predni brzd", "zadn\u00ed brzd", "zadni brzd", "bremsbelag"] },
+      { id: "brake-discs",    label: "Brzdové kotouče",  sectionId: 82,  keywords: ["brake disc", "rotor", "kotou\u010d", "kotouc", "brzdov\u00fd kotou", "brzdovy kotou", "bremsscheibe"] },
+      { id: "brake-hoses",    label: "Brzdové hadice",   sectionId: 95,  keywords: ["brake hose", "brzdov\u00e1 hadice", "hadice brzd", "bremsschlauch"] },
+      { id: "brake-calipers", label: "Brzdové třmeny",   sectionId: 472, keywords: ["caliper", "tr\u017emen", "trmen", "bremssattel"] },
     ],
   },
   {
     id: "engine",
     label: "Motor",
-    keywords: ["engine", "motor"],
+    keywords: ["engine", "motor", "zahnriemen", "wasserpumpe", "zuendkerze", "nockenwelle", "kurbelwelle", "kolben"],
     children: [
-      { id: "engine-oil",  label: "Motorový olej",      sectionId: 7595, keywords: ["engine oil", "motorov\u00fd olej", "motorovy olej"] },
-      { id: "spark-plugs", label: "Zapalovací svíčky",  sectionId: 18,   keywords: ["spark plug", "zapalovac\u00ed sv\u00ed\u010dka", "zapalovaci svicka"] },
-      { id: "timing-belt", label: "Rozvodový řemen",    sectionId: 213,  keywords: ["timing belt", "rozvodov\u00fd \u0159emen", "rozvodovy remen"] },
-      { id: "water-pump",  label: "Vodní čerpadlo",     sectionId: 50,   keywords: ["water pump", "vodn\u00ed \u010derpadlo", "vodni cerpadlo"] },
+      { id: "engine-oil",  label: "Motorový olej",      sectionId: 7595, keywords: ["engine oil", "motorov\u00fd olej", "motorovy olej", "oelfilter"] },
+      { id: "spark-plugs", label: "Zapalovací svíčky",  sectionId: 18,   keywords: ["spark plug", "zapalovac\u00ed sv\u00ed\u010dka", "zapalovaci svicka", "zuendkerze"] },
+      { id: "timing-belt", label: "Rozvodový řemen",    sectionId: 213,  keywords: ["timing belt", "rozvodov\u00fd \u0159emen", "rozvodovy remen", "zahnriemen"] },
+      { id: "water-pump",  label: "Vodní čerpadlo",     sectionId: 50,   keywords: ["water pump", "vodn\u00ed \u010derpadlo", "vodni cerpadlo", "wasserpumpe"] },
     ],
   },
   {
     id: "filters",
     label: "Filtry",
-    keywords: ["filter", "filtr"],
+    keywords: ["filter", "filtr", "oelfilter", "luftfilter", "kraftstoffilter"],
     children: [
-      { id: "oil-filter",   label: "Olejový filtr",   sectionId: 22,  keywords: ["oil filter", "olejov\u00fd filtr", "olejovy filtr"] },
-      { id: "air-filter",   label: "Vzduchový filtr", sectionId: 26,  keywords: ["air filter", "vzduchov\u00fd filtr", "vzduchovy filtr"] },
+      { id: "oil-filter",   label: "Olejový filtr",   sectionId: 22,  keywords: ["oil filter", "olejov\u00fd filtr", "olejovy filtr", "oelfilter"] },
+      { id: "air-filter",   label: "Vzduchový filtr", sectionId: 26,  keywords: ["air filter", "vzduchov\u00fd filtr", "vzduchovy filtr", "luftfilter"] },
       { id: "cabin-filter", label: "Kabinový filtr",  sectionId: 350, keywords: ["cabin filter", "pollen filter", "kabinov\u00fd filtr", "kabinovy filtr"] },
-      { id: "fuel-filter",  label: "Palivový filtr",  sectionId: 23,  keywords: ["fuel filter", "palivov\u00fd filtr", "palivovy filtr"] },
+      { id: "fuel-filter",  label: "Palivový filtr",  sectionId: 23,  keywords: ["fuel filter", "palivov\u00fd filtr", "palivovy filtr", "kraftstoffilter"] },
     ],
   },
   {
     id: "suspension",
     label: "Odpružení",
-    keywords: ["suspension", "odpru\u017een", "odpruzen", "tlumi\u010d", "tlumic"],
+    keywords: ["suspension", "odpru\u017een", "odpruzen", "tlumi\u010d", "tlumic", "stossdaempfer", "feder"],
     children: [
-      { id: "shock-absorbers", label: "Tlumiče",        sectionId: 51,  keywords: ["shock absorber", "tlumi\u010d", "tlumic"] },
+      { id: "shock-absorbers", label: "Tlumiče",        sectionId: 51,  keywords: ["shock absorber", "tlumi\u010d", "tlumic", "stossdaempfer"] },
       { id: "control-arms",    label: "Ramena nápravy", sectionId: 423, keywords: ["control arm", "rameno n\u00e1pravy", "rameno napravy"] },
-      { id: "bushings",        label: "Silentbloky",    sectionId: 459, keywords: ["bushing", "silentblok"] },
+      { id: "bushings",        label: "Silentbloky",    sectionId: 459, keywords: ["bushing", "silentblok", "lager"] },
     ],
   },
   {
     id: "steering",
     label: "Řízení",
-    keywords: ["steering", "\u0159\u00edzen", "rizeni"],
+    keywords: ["steering", "\u0159\u00edzen", "rizeni", "lenkstange", "kugelgelenk"],
     children: [
-      { id: "tie-rods",    label: "Spojovací tyče", sectionId: 433, keywords: ["tie rod", "spojovac\u00ed ty\u010d", "spojovaci tyc"] },
-      { id: "ball-joints", label: "Kulové čepy",    sectionId: 432, keywords: ["ball joint", "kulov\u00fd \u010dep", "kulovy cep"] },
+      { id: "tie-rods",    label: "Spojovací tyče", sectionId: 433, keywords: ["tie rod", "spojovac\u00ed ty\u010d", "spojovaci tyc", "lenkstange"] },
+      { id: "ball-joints", label: "Kulové čepy",    sectionId: 432, keywords: ["ball joint", "kulov\u00fd \u010dep", "kulovy cep", "kugelgelenk"] },
     ],
   },
   {
     id: "electrical",
     label: "Elektroinstalace",
-    keywords: ["electric", "elektri", "battery", "baterie"],
+    keywords: ["electric", "elektri", "battery", "baterie", "elektromotor", "anlasser", "alternator"],
     children: [
       { id: "battery",    label: "Baterie",    sectionId: 213, keywords: ["battery", "baterie", "akumul\u00e1tor", "akumulator"] },
       { id: "alternator", label: "Alternátor", sectionId: 71,  keywords: ["alternator", "altern\u00e1tor"] },
-      { id: "starter",    label: "Startér",    sectionId: 72,  keywords: ["starter motor", "start\u00e9r", "starter"] },
+      { id: "starter",    label: "Startér",    sectionId: 72,  keywords: ["starter motor", "start\u00e9r", "starter", "anlasser"] },
     ],
   },
   {
     id: "cooling",
     label: "Chlazení",
-    keywords: ["cooling", "radiator", "chlazen", "chladi\u010d", "chladic"],
+    keywords: ["cooling", "radiator", "chlazen", "chladi\u010d", "chladic", "kuehler", "thermostat"],
     children: [
-      { id: "radiator",   label: "Chladič",   sectionId: 31,  keywords: ["radiator", "chladi\u010d", "chladic"] },
+      { id: "radiator",   label: "Chladič",   sectionId: 31,  keywords: ["radiator", "chladi\u010d", "chladic", "kuehler"] },
       { id: "thermostat", label: "Termostat", sectionId: 195, keywords: ["thermostat", "termostat"] },
     ],
   },
-  { id: "exhaust",      label: "Výfuk",            sectionId: 64,  keywords: ["exhaust", "v\u00fdfuk", "vyfuk"] },
-  { id: "transmission", label: "Převodovka",       sectionId: 252, keywords: ["transmission", "p\u0159evodovk", "prevodovk", "gearbox"] },
-  { id: "ac",           label: "Klimatizace",      sectionId: 244, keywords: ["air conditioning", "klimatiza", "a/c "] },
-  { id: "body",         label: "Karoserie",        keywords: ["body", "karoseri", "fender", "bumper", "n\u00e1raz", "naraz"] },
+  { id: "exhaust",      label: "Výfuk",            sectionId: 64,  keywords: ["exhaust", "v\u00fdfuk", "vyfuk", "abgasdaempfer"] },
+  { id: "transmission", label: "Převodovka",       sectionId: 252, keywords: ["transmission", "p\u0159evodovk", "prevodovk", "gearbox", "getriebe"] },
+  { id: "ac",           label: "Klimatizace",      sectionId: 244, keywords: ["air conditioning", "klimatiza", "a/c ", "kompressor", "dehydrat"] },
+  { id: "body",         label: "Karoserie",        keywords: ["body", "karoseri", "fender", "bumper", "n\u00e1raz", "naraz", "rueckblickspiegel", "gehaeuse"] },
   { id: "interior",     label: "Interiér",         keywords: ["interior", "interi\u00e9r", "interier", "seat", "sedadlo"] },
   { id: "fluids",       label: "Kapaliny a oleje", keywords: ["fluid", "oil", "olej", "kapalina"] },
 ];
@@ -210,6 +208,127 @@ const normalize = (s: string): string =>
 
 const normalizeOem = (s: string): string =>
   (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+
+// =============================================================
+// NAME & CATEGORY SANITIZER — DE→CS + Sentence case
+// =============================================================
+
+/**
+ * German → Czech translation table for automotive part names.
+ * Order matters: longer/more specific phrases must come before shorter ones.
+ */
+const DE_TO_CS: [RegExp, string][] = [
+  // Multi-word first
+  [/\bBREMSBELAG SATZ\b/gi,       "Sada brzdových destiček"],
+  [/\bZAHNRIEMEN SATZ\b/gi,       "Sada rozvodového řemene"],
+  [/\bZAHNRIEMEN KIT\b/gi,        "Sada rozvodového řemene"],
+  [/\bKOPFDICHTUNG SATZ\b/gi,     "Sada těsnění hlavy válců"],
+  [/\bABGASDEMPFER\b/gi,          "Tlumič výfuku"],
+  [/\bSTOSSDAEMPFER\b/gi,         "Tlumič pérování"],
+  [/\bRUECKBLICKSPIEGEL\b/gi,    "Zpětné zrcátko"],
+  [/\bKRAFTSTOFFILTER\b/gi,       "Palivový filtr"],
+  [/\bKOPFDICHTUNG\b/gi,          "Těsnění hlavy válců"],
+  [/\bBREMSBELAG\b/gi,            "Brzdová destička"],
+  [/\bBREMSSCHEIBE\b/gi,          "Brzdový kotouč"],
+  [/\bBREMSSATTEL\b/gi,           "Brzdový třmen"],
+  [/\bBREMSSCHLAUCH\b/gi,        "Brzdová hadice"],
+  [/\bWASSERPUMPE\b/gi,           "Vodní čerpadlo"],
+  [/\bZAHNRIEMEN\b/gi,            "Rozvodový řemen"],
+  [/\bZUENDKERZE\b/gi,            "Zapalovací svíčka"],
+  [/\bELEKTROMOTOR\b/gi,          "Elektromotor"],
+  [/\bNOCKENWELLE\b/gi,           "Vačkový hřídel"],
+  [/\bKURBELWELLE\b/gi,           "Klikový hřídel"],
+  [/\bLUFTFILTER\b/gi,            "Vzduchový filtr"],
+  [/\bOELFILTER\b/gi,             "Olejový filtr"],
+  [/\bKOMPRESSOR\b/gi,            "Kompresor klimatizace"],
+  [/\bKUEHLER\b/gi,               "Chladič"],
+  [/\bGEBLAESE\b/gi,              "Ventilátor"],
+  [/\bGETRIEBE\b/gi,              "Převodovka"],
+  [/\bKUGELGELENK\b/gi,           "Kulový čep"],
+  [/\bLENKSTANGE\b/gi,            "Řídicí tyč"],
+  [/\bANLASSER\b/gi,              "Startér"],
+  [/\bGEHAEUSE\b/gi,              "Kryt"],
+  [/\bDICHTUNG\b/gi,              "Těsnění"],
+  [/\bSCHLAUCH\b/gi,              "Hadice"],
+  [/\bZYLINDER\b/gi,              "Válec"],
+  [/\bKOLBEN\b/gi,                "Píst"],
+  [/\bLAGER\b/gi,                 "Ložisko"],
+  [/\bPUMPE\b/gi,                 "Čerpadlo"],
+  [/\bVENTIL\b/gi,                "Ventil"],
+  [/\bSENSOR\b/gi,                "Senzor"],
+  [/\bFEDER\b/gi,                 "Pružina"],
+  [/\bROHR\b/gi,                  "Trubka"],
+  [/\bSATZ\b/gi,                  "Sada"],
+  // Czech typos / missing diacritics
+  [/\bSTYKAC\b/gi,                "Stykač"],
+  [/\bCISTIC OLEJE\b/gi,          "Čistič oleje"],
+  [/\bOBJIMKA ZAROVKY\b/gi,       "Objímka žárovky"],
+  [/\bDEHYDRAT\.?FILTR\.?\b/gi,  "Filtr klimatizace"],
+  [/\bELAST\.?PODLOZKA\b/gi,     "Elastická podložka"],
+  [/\bTYPOVY STITEK\b/gi,        "Typový štítek"],
+];
+
+/**
+ * Sanitize a part name:
+ * 1. Translate German terms to Czech.
+ * 2. Convert ALL-CAPS to Sentence case.
+ * 3. Trim whitespace.
+ */
+function sanitizeName(raw: string): string {
+  if (!raw || raw === "—") return raw;
+  let name = raw;
+
+  // Step 1: German → Czech
+  for (const [pattern, replacement] of DE_TO_CS) {
+    name = name.replace(pattern, replacement);
+  }
+
+  // Step 2: ALL-CAPS → Sentence case (only when entire string is caps)
+  const words = name.trim().split(/\s+/);
+  const allCaps = words.length > 0 && words.every((w) => w === w.toUpperCase() && /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/.test(w));
+  if (allCaps && name.length > 2) {
+    name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();
+  }
+
+  return name.trim();
+}
+
+/**
+ * Sanitize category field:
+ * - Normalise English → Czech labels.
+ * - Parts incorrectly tagged as "Karoserie" get null so keyword-matching
+ *   in countSeedTree() can reassign them to the correct category.
+ */
+function sanitizeCategory(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+
+  const CAT_MAP: Record<string, string> = {
+    "Brake System":        "Brzdové zařízení",
+    "Brzdový systém":      "Brzdové zařízení",
+    "Engine":              "Motor",
+    "Filters":             "Filtry",
+    "Suspension":          "Odpružení a nápravy",
+    "Steering":            "Řízení",
+    "Cooling":             "Chlazení",
+    "Exhaust":             "Výfuk",
+    "Transmission":        "Převodovka",
+    "Air Conditioning":    "Klimatizace",
+    "Body":                "Karoserie",
+    "Interior":            "Interiér",
+    "Fluids":              "Kapaliny a oleje",
+    "Electrical":          "Elektroinstalace",
+    "Other":               "Ostatní",
+  };
+
+  const mapped = CAT_MAP[raw] ?? raw;
+
+  // Parts tagged "Karoserie" that are clearly engine/drivetrain components
+  // get null so the keyword tree re-assigns them correctly.
+  // The UI will fall back to keyword matching.
+  if (mapped === "Karoserie") return null;
+
+  return mapped;
+}
 
 function rank(source?: string | null): number {
   const s = (source || "").toLowerCase();
@@ -242,22 +361,22 @@ function normalizeRow(row: any): CatalogPart {
     priceWithoutVat = Math.round((priceWithVat / 1.21) * 100) / 100;
   }
 
-  // Treat price = 0 as "no price" (matches business rule).
   const finalWithVat = priceWithVat && priceWithVat > 0 ? priceWithVat : null;
-  const finalWithoutVat =
-    priceWithoutVat && priceWithoutVat > 0 ? priceWithoutVat : null;
+  const finalWithoutVat = priceWithoutVat && priceWithoutVat > 0 ? priceWithoutVat : null;
 
   return {
     id: String(row?.id ?? `tmp:${row?.oem_number || Math.random()}`),
     oem_number: String(row?.oem_number || ""),
-    name: String(row?.name || row?.oem_number || "—"),
+    // ✅ Sanitize name: DE→CS + Sentence case
+    name: sanitizeName(String(row?.name || row?.oem_number || "—")),
     manufacturer: row?.manufacturer ?? null,
     catalog_source: source,
     price_without_vat: finalWithoutVat,
     price_with_vat: finalWithVat,
     availability: row?.availability ?? null,
     image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
-    category: row?.category ?? null,
+    // ✅ Sanitize category: EN→CS + fix wrong "Karoserie" assignments
+    category: sanitizeCategory(row?.category),
     description: row?.description ?? null,
     compatible_vehicles: row?.compatible_vehicles ?? null,
     technical_parameters: row?.technical_parameters ?? null,
@@ -319,9 +438,9 @@ export function clearCatalogCache(): void {
   _cache.clear();
 }
 
-const TTL_VEHICLE_TREE = 5 * 60_000; // 5 min — brand/model/engine
-const TTL_PARTS_QUERY = 60_000;       // 1 min — local parts
-const TTL_JM_CODE = 5 * 60_000;       // 5 min — J+M code lookup
+const TTL_VEHICLE_TREE = 5 * 60_000;
+const TTL_PARTS_QUERY = 60_000;
+const TTL_JM_CODE = 5 * 60_000;
 
 // =============================================================
 // VEHICLE TREE — nextis_vehicles is the source of truth
@@ -422,7 +541,6 @@ export async function resolveVehicleByVin(_vin: string): Promise<NextisVehicle |
 // PARTS LISTING (LOCAL OEM)
 // =============================================================
 
-/** Generate engine variants ("3.6 V6" ↔ "3.6L V6" ↔ "3.6"). */
 function engineVariants(engine: string | null | undefined): string[] {
   if (!engine) return [];
   const out = new Set<string>([engine]);
@@ -446,7 +564,6 @@ async function fetchLocalRowsForVehicle(opts: {
 
   const variants = engineVariants(opts.engine);
   const candidates = variants.length ? variants : [null];
-
   const queries = [...candidates, null].filter((value, index, arr) => arr.indexOf(value) === index);
   const merged: any[] = [];
   const seen = new Set<string>();
@@ -511,8 +628,6 @@ export async function listPartsForVehicle(opts: {
       ALLOWED_OEM_SOURCES.includes(p.catalog_source as (typeof ALLOWED_OEM_SOURCES)[number])
     );
 
-  // Strict category filter first; if it yields nothing, retry with a wider
-  // category label token so broad tree counts and listing never diverge.
   if (opts.categoryKeywords && opts.categoryKeywords.length > 0) {
     const strict = parts.filter((p) => partMatchesKeywords(p, opts.categoryKeywords!));
     const labelKeywords = opts.canonicalCategory
@@ -560,7 +675,6 @@ export async function fetchJmCategoryTree(opts: {
   model: string;
   engine?: string | null;
 }): Promise<CatalogCategoryNode[]> {
-  // Build the local tree from parts inventory — fast, deterministic, never crashes.
   const rows = await fetchLocalRowsForVehicle({
     brand: opts.brand,
     model: opts.model,
@@ -575,7 +689,6 @@ export async function fetchJmCategoryTree(opts: {
 
   const localTree = countSeedTree(DEFAULT_CATEGORY_TREE, parts);
 
-  // Best-effort enrichment from jm-proxy. If it fails, we keep the local tree.
   try {
     const { data, error } = await supabase.functions.invoke("jm-proxy", {
       body: {
@@ -589,7 +702,6 @@ export async function fetchJmCategoryTree(opts: {
       },
     });
     if (!error && data?.success && Array.isArray(data?.data?.categories) && data.data.categories.length > 0) {
-      // Proxy already returns CatalogCategoryNode-compatible shape.
       return data.data.categories as CatalogCategoryNode[];
     }
   } catch (e) {
@@ -632,14 +744,16 @@ function jmNormalize(it: JmRaw): CatalogPart {
   return {
     id: `jm:${it.related_oem_number || it.searched_code || it.oem_number || Math.random()}:${it.oem_number || ""}`,
     oem_number: String(it.oem_number || ""),
-    name: String(it.name || it.oem_number || "—"),
+    // ✅ Sanitize name
+    name: sanitizeName(String(it.name || it.oem_number || "—")),
     manufacturer: it.manufacturer || it.brand || "J+M",
     catalog_source: "jm",
     price_without_vat: pwoVat && pwoVat > 0 ? pwoVat : null,
     price_with_vat: pw && pw > 0 ? pw : null,
     availability: it.availability || (it.stock && it.stock > 0 ? "in_stock" : "unknown"),
     image_urls: imageUrls,
-    category: it.category ?? null,
+    // ✅ Sanitize category
+    category: sanitizeCategory(it.category),
     description: it.description ?? null,
     compatible_vehicles: (it as any).compatible_vehicles ?? null,
     technical_parameters: (it as any).technical_parameters ?? null,
@@ -681,31 +795,27 @@ export async function fetchJmByCodes(codes: string[]): Promise<CatalogPart[]> {
   return dedupeByOem(out);
 }
 
-/**
- * Synonym map: expands an in-app category id with extra keywords (CZ + EN).
- * Used to maximise J+M hit-rate without changing the strict OEM filter.
- */
 const JM_CATEGORY_SYNONYMS: Record<string, string[]> = {
-  "brake-pads": ["brake", "pads", "brake pad", "brzdove desticky", "brzdova deska", "destic"],
-  "brake-discs": ["discs", "rotor", "brake disc", "kotouce", "brzdovy kotouc"],
-  "brake-calipers": ["caliper", "trmen", "brake caliper", "brzdovy trmen"],
-  "brake-hoses": ["brake hose", "hadice brzd", "brzdova hadice"],
-  "oil-filter": ["oil filter", "olejovy filtr"],
-  "air-filter": ["air filter", "vzduchovy filtr"],
-  "cabin-filter": ["cabin filter", "pollen filter", "kabinovy filtr"],
-  "fuel-filter": ["fuel filter", "palivovy filtr"],
-  "spark-plugs": ["spark plug", "zapalovaci svicka"],
-  "timing-belt": ["timing belt", "rozvodovy remen"],
-  "water-pump": ["water pump", "vodni cerpadlo"],
-  "shock-absorbers": ["shock absorber", "tlumic"],
-  "control-arms": ["control arm", "rameno napravy"],
-  "tie-rods": ["tie rod", "spojovaci tyc"],
-  "ball-joints": ["ball joint", "kulovy cep"],
-  "battery": ["battery", "baterie", "akumulator"],
-  "alternator": ["alternator"],
-  "starter": ["starter motor", "starter"],
-  "radiator": ["radiator", "chladic"],
-  "thermostat": ["thermostat", "termostat"],
+  "brake-pads":     ["brake", "pads", "brake pad", "brzdove desticky", "brzdova deska", "destic", "bremsbelag"],
+  "brake-discs":    ["discs", "rotor", "brake disc", "kotouce", "brzdovy kotouc", "bremsscheibe"],
+  "brake-calipers": ["caliper", "trmen", "brake caliper", "brzdovy trmen", "bremssattel"],
+  "brake-hoses":    ["brake hose", "hadice brzd", "brzdova hadice", "bremsschlauch"],
+  "oil-filter":     ["oil filter", "olejovy filtr", "oelfilter"],
+  "air-filter":     ["air filter", "vzduchovy filtr", "luftfilter"],
+  "cabin-filter":   ["cabin filter", "pollen filter", "kabinovy filtr"],
+  "fuel-filter":    ["fuel filter", "palivovy filtr", "kraftstoffilter"],
+  "spark-plugs":    ["spark plug", "zapalovaci svicka", "zuendkerze"],
+  "timing-belt":    ["timing belt", "rozvodovy remen", "zahnriemen"],
+  "water-pump":     ["water pump", "vodni cerpadlo", "wasserpumpe"],
+  "shock-absorbers":["shock absorber", "tlumic", "stossdaempfer"],
+  "control-arms":   ["control arm", "rameno napravy"],
+  "tie-rods":       ["tie rod", "spojovaci tyc", "lenkstange"],
+  "ball-joints":    ["ball joint", "kulovy cep", "kugelgelenk"],
+  "battery":        ["battery", "baterie", "akumulator"],
+  "alternator":     ["alternator"],
+  "starter":        ["starter motor", "starter", "anlasser"],
+  "radiator":       ["radiator", "chladic", "kuehler"],
+  "thermostat":     ["thermostat", "termostat"],
 };
 
 function expandCategoryKeywords(categoryId?: string | null, base: string[] = []): string[] {
@@ -731,7 +841,6 @@ async function callJmSearchByVehicle(payload: Record<string, unknown>): Promise<
       raw: raw.length,
       warning: data?.data?.warning,
     });
-    // Only requirement: OEM number present. Do NOT drop items missing price/stock.
     const items = raw.map(jmNormalize).filter((p: CatalogPart) => !!p.oem_number);
     return { items: dedupeByOem(items) };
   } catch (e) {
@@ -766,17 +875,14 @@ export async function fetchJmForVehicle(opts: {
     parentKeywords: opts.parentKeywords || [],
   };
 
-  // STEP 1 — strict: vehicle + sectionId + categoryKeywords
   const step1 = await callJmSearchByVehicle({
     ...basePayload,
     categoryKeywords: expandedKeywords,
   });
 
   let step1Items = step1.items;
-  // Defence-in-depth filter, but only when expandedKeywords is meaningful.
   if (expandedKeywords.length > 0) {
     const filtered = step1Items.filter((p) => partMatchesKeywords(p, expandedKeywords));
-    // If the local filter wipes everything but the proxy returned items, keep proxy items.
     step1Items = filtered.length > 0 ? filtered : step1Items;
   }
 
@@ -784,7 +890,6 @@ export async function fetchJmForVehicle(opts: {
   let warning = step1.warning;
   let step2Count = 0;
 
-  // STEP 2 — fallback: drop categoryKeywords, keep brand/model/engine (+ sectionId).
   if (step1Items.length === 0) {
     const step2 = await callJmSearchByVehicle({
       ...basePayload,
@@ -840,8 +945,6 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]): CatalogPart[
     const related = normalizeOem(p.related_oem_number || "");
     const relatedBase = related.match(/^K?(\d{8})/)?.[1];
     if (!k) return false;
-    // Hide only exact OEM duplicates. Crossref aftermarket rows are allowed under
-    // the OEM part family even when they carry related_oem_number.
     return !oemKeys.has(k) || (!!relatedBase && oemBase8.has(relatedBase));
   });
   return [...enrichedOem, ...dedupeByOem(filteredJm)].sort((a, b) => a.rank - b.rank);
@@ -879,7 +982,6 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
 
   const jm: CatalogPart[] = jmRes.status === "fulfilled" ? jmRes.value : [];
 
-  // Hide JM duplicates of OEM hits.
   const oemKeys = new Set(oem.map((p) => normalizeOem(p.oem_number)));
   const cleanJm = jm.filter((p) => !oemKeys.has(normalizeOem(p.oem_number)));
 
@@ -940,7 +1042,6 @@ export async function syncPricesFromCsv(
   let updated = 0;
   let skipped = 0;
 
-  // Validate + dedupe by normalized OEM (last value wins).
   const valid = new Map<string, { oem: string; price: number }>();
   for (const r of rows || []) {
     const oem = String(r?.oem || "").trim();
@@ -952,7 +1053,6 @@ export async function syncPricesFromCsv(
     valid.set(normalizeOem(oem), { oem, price });
   }
 
-  // Chunked parallel updates for performance.
   const entries = [...valid.values()];
   const CHUNK = 20;
   for (let i = 0; i < entries.length; i += CHUNK) {
