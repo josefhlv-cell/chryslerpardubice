@@ -445,9 +445,9 @@ function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
 
   // 🔥 NORMALIZACE TEXTU
   const haystack = ${part.name} ${part.category || ""} ${part.description || ""}
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase();
   
   const partCategory = (part.category || "")
     .normalize("NFD")
