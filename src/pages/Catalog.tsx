@@ -8,9 +8,9 @@ import {
   CatalogPart,
   CatalogCategoryNode
 } 
-from "@/lib/catalogV2API";
+ from "@/lib/catalogV2API";
 
-export default function Catalog() {
+  export default function Catalog() {
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [engines, setEngines] = useState<string[]>([]);
