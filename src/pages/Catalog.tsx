@@ -1,278 +1,186 @@
-/**
- * Unified Catalog — FIXED VERSION
- * - OEM/Mopar vždy nahoře
- * - fallback description
- * - bezpečný filtr (nezmizí díly)
- * - stabilní total
- /
-
-import { forwardRef, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-  ChevronRight,
-  ChevronLeft,
-  Loader2,
-  Car,
-  Wrench,
-  Cog,
-  Package,
-  Snowflake,
-  Zap,
-  Filter as FilterIcon,
-  Droplet,
-  Disc,
-  Gauge,
-  Settings,
-  Box,
-} from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
-
+import { useEffect, useState } from "react";
 import {
   fetchBrands,
   fetchModelsForBrand,
   fetchEnginesForModel,
-  fetchNextisVehicles,
   fetchJmCategoryTree,
   listPartsForVehicle,
-  fetchJmByCodes,
-  fetchJmForVehicle,
-  mergeWithJm,
-  type CatalogPart,
-  type CatalogCategoryNode,
-  type NextisVehicle,
-} from "@/api/catalogV2API";
+  CatalogPart,
+  CatalogCategoryNode
+} from "@/lib/catalogV2API";
 
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
-import CatalogListing from "@/components/catalog/CatalogListing";
-import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
-
-const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
-
-type Step = "brand" | "model" | "engine" | "category" | "parts";
-
-const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
-  const navigate = useNavigate();
-  const { user, canPlaceOrder } = useAuth();
-
+export default function Catalog() {
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [engines, setEngines] = useState<string[]>([]);
-  const [vehicles, setVehicles] = useState<NextisVehicle[]>([]);
+
+  const [brand, setBrand] = useState<string>("");
+  const [model, setModel] = useState<string>("");
+  const [engine, setEngine] = useState<string>("");
 
   const [categories, setCategories] = useState<CatalogCategoryNode[]>([]);
-  const [category, setCategory] = useState<CatalogCategoryNode | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CatalogCategoryNode | null>(null);
 
-  const [brand, setBrand] = useState("");
-  const [model, setModel] = useState("");
-  const [engine, setEngine] = useState("");
-  const [selectedVehicleId, setSelectedVehicleId] = useState("");
-
-  const [items, setItems] = useState<CatalogPart[]>([]);
-  const [total, setTotal] = useState(0);
-
+  const [parts, setParts] = useState<CatalogPart[]>([]);
   const [loading, setLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
 
-  // ---------- LOAD BRANDS ----------
+  // =========================================================
+  // LOAD BRANDS
+  // =========================================================
   useEffect(() => {
-    fetchBrands().then((bs) => {
-      const sorted = [...bs].sort((a, b) => {
-        const ia = BRAND_ORDER.indexOf(a);
-        const ib = BRAND_ORDER.indexOf(b);
-        if (ia !== -1 && ib !== -1) return ia - ib;
-        if (ia !== -1) return -1;
-        if (ib !== -1) return 1;
-        return a.localeCompare(b);
-      });
-      setBrands(sorted);
-    });
+    fetchBrands().then(setBrands);
   }, []);
 
-  // ---------- LOAD MODELS ----------
+  // =========================================================
+  // LOAD MODELS
+  // =========================================================
   useEffect(() => {
-    if (!brand) return setModels([]);
+    if (!brand) return;
+    setModel("");
+    setEngine("");
     fetchModelsForBrand(brand).then(setModels);
   }, [brand]);
 
-  // ---------- LOAD ENGINES ----------
+  // =========================================================
+  // LOAD ENGINES
+  // =========================================================
   useEffect(() => {
-    if (!brand || !model) return setEngines([]);
+    if (!brand || !model) return;
+    setEngine("");
     fetchEnginesForModel(brand, model).then(setEngines);
-  }, [brand, model]);
+  }, [model]);
 
-  // ---------- LOAD VEHICLES + CATEGORIES ----------
+  // =========================================================
+  // LOAD CATEGORIES
+  // =========================================================
   useEffect(() => {
-    if (!brand || !model || !engine) return;
+    if (!brand || !model) return;
 
-    (async () => {
-      setLoading(true);
+    fetchJmCategoryTree({
+      brand,
+      model,
+      engine
+    }).then(setCategories);
+  }, [brand, model, engine]);
 
-      const rows = await fetchNextisVehicles(brand, model);
-      setVehicles(rows);
+  // =========================================================
+  // LOAD PARTS
+  // =========================================================
+  const loadParts = async (category?: CatalogCategoryNode) => {
+    if (!brand || !model) return;
 
-      const vehicle = rows.find((v) => v.engine === engine) || rows[0];
-      const vehicleId = vehicle?.id || "";
+    setLoading(true);
 
-      setSelectedVehicleId(vehicleId);
-
-      if (!vehicleId) return;
-
-      const tree = await fetchJmCategoryTree({
-        nextisVehicleId: vehicleId,
+    try {
+      const res = await listPartsForVehicle({
         brand,
         model,
         engine,
+        canonicalCategory: category?.label,
+        categoryKeywords: category?.keywords
       });
 
-      setCategories(tree);
-      setLoading(false);
-    })();
-  }, [brand, model, engine]);
+      console.log("[UI] Loaded parts:", res);
 
-  // ---------- LOAD PARTS ----------
-  useEffect(() => {
-    if (!brand || !model || !engine || !category) return;
-
-    (async () => {
-      setListLoading(true);
-
-      try {
-        const [oemRes, jmRes] = await Promise.allSettled([
-          listPartsForVehicle({
-            brand,
-            model,
-            engine,
-            nextisVehicleId: selectedVehicleId,
-            canonicalCategory: category.label,
-          }),
-          fetchJmForVehicle({
-            brand,
-            model,
-            engine,
-            nextisVehicleId: selectedVehicleId,
-            category: category.label,
-          }),
-        ]);
-
-        const oemItems =
-          oemRes.status === "fulfilled" ? oemRes.value.items : [];
-
-        const jmItems =
-          jmRes.status === "fulfilled" ? jmRes.value.items : [];
-
-        // ---------- MERGE ----------
-        let merged = mergeWithJm(oemItems, jmItems);
-
-        // ---------- SORT (OEM FIRST) ----------
-        merged = merged.sort((a, b) => {
-          const aOem =
-            a.catalog_source === "oem" || a.catalog_source === "mopar";
-          const bOem =
-            b.catalog_source === "oem" || b.catalog_source === "mopar";
-
-          if (aOem && !bOem) return -1;
-          if (!aOem && bOem) return 1;
-
-          return (a.price_with_vat || 0) - (b.price_with_vat || 0);
-        });
-
-        // ---------- DESCRIPTION FIX ----------
-        const enriched = merged.map((p) => ({
-          ...p,
-          description:
-            p.description ||
-            p.category ||
-            OEM ${p.oem_number || ""} ||
-            "Bez popisu",
-        }));
-
-        setItems(enriched);
-        setTotal(enriched.length);
-      } catch (err: any) {
-        toast.error(err.message);
-      } finally {
-        setListLoading(false);
-      }
-    })();
-  }, [brand, model, engine, category]);
-
-  // ---------- ORDER ----------
-  const handleOrder = async (p: CatalogPart) => {
-    if (!user) {
-      toast.error("Přihlaste se");
-      return;
+      setParts(res.items);
+    } catch (e) {
+      console.error("[UI] Load parts error", e);
+      setParts([]);
     }
 
-    await supabase.from("orders").insert({
-      user_id: user.id,
-      part_name: p.name,
-      oem_number: p.oem_number,
-    });
-
-    toast.success("Objednáno");
+    setLoading(false);
   };
 
-  // ---------- UI ----------
+  // =========================================================
+  // RENDER
+  // =========================================================
   return (
-    <div ref={ref} className="p-6">
-      <GlobalOEMSearch onOrder={handleOrder} />
+    <div style={{ padding: 20 }}>
 
-      {/ STEP */}
-      {!brand && (
-        <div className="grid grid-cols-3 gap-4">
-          {brands.map((b) => (
-            <button key={b} onClick={() => setBrand(b)}>
-              {b}
+      <h1>Katalog dílů</h1>
+
+      {/* ========================= /}
+      {/ SELECTORS /}
+      {/ ========================= /}
+      <div style={{ display: "flex", gap: 10 }}>
+
+        <select value={brand} onChange={(e) => setBrand(e.target.value)}>
+          <option value="">Značka</option>
+          {brands.map(b => (
+            <option key={b}>{b}</option>
+          ))}
+        </select>
+
+        <select value={model} onChange={(e) => setModel(e.target.value)}>
+          <option value="">Model</option>
+          {models.map(m => (
+            <option key={m}>{m}</option>
+          ))}
+        </select>
+
+        <select value={engine} onChange={(e) => setEngine(e.target.value)}>
+          <option value="">Motor</option>
+          {engines.map(e => (
+            <option key={e}>{e}</option>
+          ))}
+        </select>
+
+      </div>
+
+      {/ ========================= /}
+      {/ CATEGORIES /}
+      {/ ========================= /}
+      <div style={{ marginTop: 20 }}>
+        <h3>Kategorie</h3>
+
+        {categories.map(cat => (
+          <div key={cat.id} style={{ marginBottom: 10 }}>
+            <button
+              onClick={() => {
+                setSelectedCategory(cat);
+                loadParts(cat);
+              }}
+            >
+              {cat.label} ({cat.count})
             </button>
+          </div>
+        ))}
+      </div>
+
+      {/ ========================= /}
+      {/ PARTS /}
+      {/ ========================= */}
+      <div style={{ marginTop: 30 }}>
+        <h3>Díly</h3>
+
+        {loading && <p>Načítání...</p>}
+
+        {!loading && parts.length === 0 && (
+          <p>Žádné výsledky</p>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+          {parts.map(p => (
+            <div key={p.id} style={{ border: "1px solid #ccc", padding: 10 }}>
+
+              <strong>{p.name}</strong>
+
+              <p>{p.oem_number}</p>
+
+              <p>{p.badge_label}</p>
+
+              <p>
+                {p.price_with_vat
+                  ? ${p.price_with_vat} Kč
+                  : "Cena není dostupná"}
+              </p>
+
+            </div>
           ))}
         </div>
-      )}
 
-      {brand && !model && (
-        <div>
-          {models.map((m) => (
-            <button key={m} onClick={() => setModel(m)}>
-              {m}
-            </button>
-          ))}
-        </div>
-      )}
+      </div>
 
-      {model && !engine && (
-        <div>
-          {engines.map((e) => (
-            <button key={e} onClick={() => setEngine(e)}>
-              {e}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {engine && !category && (
-        <div>
-          {categories.map((c) => (
-            <button key={c.id} onClick={() => setCategory(c)}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {category && (
-        <CatalogListing
-          items={items}
-          loading={listLoading}
-          onOrder={handleOrder}
-        />
-      )}
     </div>
   );
-});
-
-export default Catalog;
+}
