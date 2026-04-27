@@ -97,7 +97,12 @@ function findNodeWithParent(
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
   if (!node || node.keywords.length === 0) return true;
   
-const haystack = `${part.name} ${part.category || ""}`
+const haystack = ${part.name} ${part.category || ""}
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase();
+
+const partCategory = (part.category || "")
   .normalize("NFD")
   .replace(/[\u0300-\u036f]/g, "")
   .toLowerCase();
