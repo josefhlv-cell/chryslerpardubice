@@ -444,10 +444,10 @@ function partMatchesKeywords(part: CatalogPart, keywords: string[]): boolean {
   if (!keywords || keywords.length === 0) return true;
 
   // 🔥 NORMALIZACE TEXTU
-  const haystack = ${part.name} ${part.category || ""} ${part.description || ""}
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+const haystack = ${part.name} ${part.category || ""} ${part.description || ""}
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase();
 
   const partCategory = (part.category || "")
     .normalize("NFD")
