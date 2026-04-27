@@ -85,12 +85,43 @@ function findNodeWithParent(
   return null;
 }
 
+/**
+ * STRICT J+M CATEGORY FILTER
+ * 
+ * J+M díly s nesprávnou kategorií v DB se filtrují pryč.
+ * Pokud má J+M díl např. category="Karoserie" ale kategorie je "Brzdové destičky",
+ * dijl se zfiltruje.
+ * 
+ * OEM díly procházejí keyword matching (jako dřív).
+ */
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
   if (!node || node.keywords.length === 0) return true;
+  
   const haystack = `${part.name} ${part.category || ""} ${part.description || ""}`
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+  
+  const partCategory = (part.category || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  
+  const nodeLabelNorm = node.label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  
+  // STRICT: Pokud má J+M díl kategorii v DB a NEODPOVÍDÁ výběru,
+  // tak ho filtruj pryč. Zamezí se zobrazení "Rameno nápravy" pod "Brzdové destičky"
+  if (part.catalog_source === "jm" && part.category) {
+    // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
+    if (partCategory !== nodeLabelNorm) {
+      return false;
+    }
+  }
+  
+  // OEM díly a J+M bez kategorie — keyword matching
   return node.keywords.some((keyword) =>
     haystack.includes(keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
   );
@@ -209,8 +240,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setJmLoading(true);
 
         // PARALLEL: fetch OEM (local) AND J+M (vehicle search) simultaneously.
-        // J+M runs INDEPENDENTLY of local results — even if 0 OEM parts found,
-        // J+M aftermarket parts must show up.
         console.log(`[Catalog] Parallel fetch: OEM(local) + J+M(vehicle) for ${brand} ${model} ${engine}`);
         const [oemRes, jmVehicleRes] = await Promise.allSettled([
           listPartsForVehicle({
@@ -265,10 +294,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           }
         }
 
-        // PHASE 2 FIX: TRUST the proxy. J+M already applies strict→vehicle fallback
-        // in the proxy layer. Do NOT re-filter on the frontend — that destroys valid results.
-        // jmByCodes is OEM-cross-referenced (already category-correct).
-        // jmFromVehicle is proxy-validated for the requested category.
+        // STRICT CATEGORY FILTER: J+M díly s nesprávnou kategorií se filtrují
         const allJm = [...jmByCodes, ...jmFromVehicle].filter((part) => partMatchesNode(part, category));
         if (cancelled) return;
         setJmCount(allJm.length);
@@ -276,9 +302,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setItems(merged);
         setTotal(merged.length);
 
-        // Surface diagnostic ONLY when J+M returned 0 AND we have no local OEM
-        // cross-references either. If at least one OEM part is shown, the user
-        // already has a usable result — the orange warning is just noise.
         if (allJm.length === 0 && oemItems.length === 0 && page === 0) {
           setJmWarning(
             jmVehiclePayload.warning ||
@@ -294,7 +317,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
             selected_engine: engine,
             selected_category: category.label,
             jmStatus: jmVehiclePayload.warning || "ok-zero-results",
-            fallback_reason: "none-cross-category-fallback-disabled",
+            fallback_reason: "strict-category-filter-active",
           });
         }
       } catch (err: any) {
@@ -331,10 +354,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     }
 
     try {
-      // J+M items use a synthetic id `jm:OEM` and are not stored in parts_new,
-      // so we must order them by name + OEM only (no part_id FK).
       const isLiveJm = p.id.startsWith("jm:") || p.catalog_source === "jm";
-      // PHASE 1: price_without_vat is computed (price_with_vat / 1.21) — never queried.
       const unitPrice =
         p.price_without_vat ??
         (p.price_with_vat !== null ? Math.round((p.price_with_vat / 1.21) * 100) / 100 : null);
@@ -599,7 +619,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               emptyHint="V této kategorii zatím nejsou žádné díly."
             />
 
-            {/* UI Fallback — when nothing found, offer direct OEM search */}
             {!listLoading && !jmLoading && items.length === 0 && (
               <div className="mt-6 p-6 rounded-2xl border border-dashed border-border/60 bg-card/40 text-center">
                 <Search className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
@@ -609,20 +628,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 <p className="text-[11px] text-muted-foreground/70">
                   Použijte vyhledávání OEM kódu výše ↑
                 </p>
-              </div>
-            )}
-
-            {false && total > 30 && (
-              <div className="flex items-center justify-center gap-2 mt-6">
-                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
-                  Předchozí
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  Strana {page + 1} / {Math.ceil(total / 30)}
-                </span>
-                <Button variant="outline" size="sm" disabled={(page + 1) * 30 >= total} onClick={() => setPage((p) => p + 1)}>
-                  Další
-                </Button>
               </div>
             )}
           </>
