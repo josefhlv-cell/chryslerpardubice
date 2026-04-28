@@ -107,10 +107,6 @@ const partCategory = (part.category || "")
   .replace(/[\u0300-\u036f]/g, "")
   .toLowerCase();
 
-const partCategory = (part.category || "")
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase();
   
   const nodeLabelNorm = node.label
     .normalize("NFD")
