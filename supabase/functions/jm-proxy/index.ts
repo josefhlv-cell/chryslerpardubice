@@ -11,6 +11,7 @@
 // Nextis does NOT expose any vehicle-tree endpoint, so syncCategories seeds
 // the local catalog_categories tree from a curated whitelist instead.
 
+console.log("JM PROXY HIT:", action);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
