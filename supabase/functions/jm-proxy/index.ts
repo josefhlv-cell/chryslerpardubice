@@ -1292,7 +1292,7 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ data: result }), {
           headers: { "Content-Type": "application/json" },
   
-}
+      }
       default:
         return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
           status: 400,
