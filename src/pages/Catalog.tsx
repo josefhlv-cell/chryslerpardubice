@@ -121,14 +121,18 @@ const partCategory = (part.category || "")
   // tak ho filtruj pryč. Zamezí se zobrazení "Rameno nápravy" pod "Brzdové destičky"
   // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
   if (partCategory !== nodeLabelNorm) {
-      return false;
-    }
-  }
-  
-  // OEM díly a J+M bez kategorie — keyword matching
-  return node.keywords.some((keyword) =>
-    haystack.includes(keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
-  );
+  return false;
+}
+
+// OEM díly a J+M bez kategorie — keyword matching
+return node.keywords.some((keyword) =>
+  haystack.includes(
+    keyword
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+  )
+);
 }
 
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
