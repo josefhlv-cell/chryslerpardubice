@@ -11,7 +11,6 @@
 // Nextis does NOT expose any vehicle-tree endpoint, so syncCategories seeds
 // the local catalog_categories tree from a curated whitelist instead.
 
-console.log("JM PROXY HIT:", action);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
@@ -645,97 +644,198 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
     }
   }
 
-  for (const row of list) {
-    const ri = row.responseItem || row.ResponseItem;
-    const req = row.requestItem || row.RequestItem || {};
-    const requestedOem = String(req.code || req.Code || '').trim();
-    if (!ri || ri.valid === false || !requestedOem) continue;
+// =====================
+// GLOBAL CONSTANTS
+// =====================
 
-    // normalizeCatalogItem already applies +30 % markup
-    const jmItem = normalizeCatalogItem(ri);
-    if (jmItem.price_with_vat <= 0) continue;
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
 
-    const partForOem: UnifiedPart = {
-      ...jmItem,
-      oem_number: requestedOem,
-      name: jmItem.name || requestedOem,
-      category: jmItem.category || 'J+M dostupnost',
-    };
-    items.push(partForOem);
+const BASE_URL = 'https://api.jmautodily.nextis.cz';
 
-    // Only update DB when this OEM is NOT a locked local OEM record.
-    if (oemLocked.has(requestedOem.toUpperCase())) continue;
+const BLACKLISTED_BRANDS = [
+  'starline',
+];
 
-    const { error: updErr } = await adminClient
-      .from('parts_new')
-      .update({
-        price_without_vat: partForOem.price_without_vat,
-        price_with_vat: partForOem.price_with_vat,
-        availability: partForOem.availability,
-        last_price_update: new Date().toISOString(),
-      })
-      .eq('oem_number', requestedOem)
-      .eq('price_locked', false);
-    if (!updErr) enriched++;
-  }
-  return { enriched, attempted: requestedCodes.length, items };
-}
+const PREFERRED_BRANDS = [];
 
-// ---------- HTTP entry ----------
+// =====================
+// HTTP ENTRY
+// =====================
+
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
+    // =====================
+    // AUTH HEADER CHECK
+    // =====================
     const authHeader = req.headers.get('Authorization');
+
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
     const bearer = authHeader.replace('Bearer ', '').trim();
     const apiKeyHeader = req.headers.get('apikey') || '';
-    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
+
+    const anonKey =
+      Deno.env.get('SUPABASE_ANON_KEY') ||
+      Deno.env.get('SUPABASE_PUBLISHABLE_KEY') ||
+      '';
+
     const publishableKey = Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const isProjectKey = (!!anonKey && bearer === anonKey) || (!!publishableKey && bearer === publishableKey) || (!!apiKeyHeader && bearer === apiKeyHeader);
+
+    const isProjectKey =
+      (!!anonKey && bearer === anonKey) ||
+      (!!publishableKey && bearer === publishableKey) ||
+      (!!apiKeyHeader && bearer === apiKeyHeader);
+
     const isServerKey = isProjectKey || bearer === serviceKey;
 
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    // =====================
+    // REQUEST BODY
+    // =====================
+    const { createClient } = await import(
+      'https://esm.sh/@supabase/supabase-js@2'
+    );
+
     const body = await req.json();
     const { action, payload = {} } = body;
 
-    // Auth: server keys (cron) always allowed; otherwise validate user JWT.
-    // For syncCategories / enrichPrices, additionally require admin role.
+    console.log('JM PROXY HIT:', action);
+
+    // =====================
+    // USER AUTH (if not server key)
+    // =====================
     let userId: string | null = null;
+
     if (!isServerKey) {
       const authClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
         anonKey,
-        { global: { headers: { Authorization: authHeader } } },
+        {
+          global: { headers: { Authorization: authHeader } },
+        },
       );
-      const { data: claims, error: claimsErr } = await authClient.auth.getClaims(bearer);
+
+      const { data: claims, error: claimsErr } =
+        await authClient.auth.getClaims(bearer);
+
       if (claimsErr || !claims?.claims?.sub) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+
       userId = claims.claims.sub as string;
     }
 
+    // =====================
+    // ADMIN CLIENT
+    // =====================
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
     let result: unknown;
+
+    // =====================
+    // ACTION ROUTER
+    // =====================
     switch (action) {
       case 'ping': {
         const t = await getToken();
         result = { ok: true, hasToken: !!t };
         break;
       }
+
+      case 'enrichPrices': {
+        const limit = Math.min(Number(payload.limit ?? 100), 500);
+
+        const { data: missing } = await adminClient
+          .from('parts_new')
+          .select('oem_number')
+          .or('price_with_vat.is.null,price_with_vat.eq.0')
+          .eq('price_locked', false)
+          .limit(limit);
+
+        const codes = (missing || [])
+          .map((r: any) => r.oem_number)
+          .filter(Boolean);
+
+        const out = await enrichPricesIntoDb(adminClient, codes);
+
+        result = out;
+        break;
+      }
+
+      case 'getCategoryTree': {
+        const data = await getCategoryTree(payload);
+
+        return new Response(
+          JSON.stringify({ data }),
+          {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+      }
+
+      default:
+        return new Response(
+          JSON.stringify({ error: `Unknown action: ${action}` }),
+          {
+            status: 400,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+    }
+
+    // =====================
+    // NORMAL RESPONSE
+    // =====================
+    return new Response(
+      JSON.stringify({ success: true, data: result }),
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+
+  } catch (e) {
+    console.error('jm-proxy error:', e);
+
+    return new Response(
+      JSON.stringify({ error: 'Server error' }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+  }
+});
 
       case 'diagnose': {
         // EMERGENCY DEBUG — prove the API can return ANY part.
