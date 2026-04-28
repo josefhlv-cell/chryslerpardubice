@@ -119,9 +119,8 @@ const partCategory = (part.category || "")
   
   // STRICT: Pokud má J+M díl kategorii v DB a NEODPOVÍDÁ výběru,
   // tak ho filtruj pryč. Zamezí se zobrazení "Rameno nápravy" pod "Brzdové destičky"
-  if (part.catalog_source === "jm" && part.category) {
-    // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
-    if (partCategory !== nodeLabelNorm) {
+  // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
+  if (partCategory !== nodeLabelNorm) {
       return false;
     }
   }
