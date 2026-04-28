@@ -1,11 +1,18 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
 
 const Index = () => {
+  const handleOrder = (part: any) => {
+    console.log("OBJEDNAT:", part);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen bg-background p-6">
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-2xl font-bold mb-4">
+          🔎 Vyhledávání dílů
+        </h1>
+
+        <GlobalOEMSearch onOrder={handleOrder} />
       </div>
     </div>
   );
