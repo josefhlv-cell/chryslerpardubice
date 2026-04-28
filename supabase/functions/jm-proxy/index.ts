@@ -1287,18 +1287,19 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case "getCategoryTree": {
-        const result = await getCategoryTree(payload); // nebo API call
-        return new Response(JSON.stringify({ data: result }), {
-          headers: { "Content-Type": "application/json" },
-  
-      }
-      default:
-        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+case "getCategoryTree": {
+  const data = await getCategoryTree(payload);
+
+  return new Response(
+    JSON.stringify({ data }),
+    {
+      headers: {
+        "Content-Type": "application/json",
+        ...corsHeaders,
+      },
     }
+  );
+}
 
     return new Response(JSON.stringify({ success: true, data: result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
