@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Play, CheckCircle, XCircle, Wand2 } from "lucide-react";
+import { Loader2, Play, CheckCircle, XCircle, Wand2, Undo2, Filter as FilterIcon } from "lucide-react";
 
 const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Lancia"] as const;
 
@@ -15,13 +15,15 @@ export default function AdminCompatibility() {
   return (
     <div className="container mx-auto p-4 max-w-6xl">
       <PageHeader title="Kompatibilita dílů" subtitle="Auto-matcher, hromadné připojování a fronta ke kontrole" />
-      <Tabs defaultValue="matcher" className="mt-4">
-        <TabsList>
+      <Tabs defaultValue="textmatch" className="mt-4">
+        <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="textmatch">Text-match shody</TabsTrigger>
           <TabsTrigger value="matcher">Auto-Matcher</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Attach</TabsTrigger>
           <TabsTrigger value="queue">Match Queue</TabsTrigger>
           <TabsTrigger value="stats">Statistiky</TabsTrigger>
         </TabsList>
+        <TabsContent value="textmatch"><TextMatchReviewTab /></TabsContent>
         <TabsContent value="matcher"><MatcherTab /></TabsContent>
         <TabsContent value="bulk"><BulkAttachTab /></TabsContent>
         <TabsContent value="queue"><MatchQueueTab /></TabsContent>
