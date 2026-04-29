@@ -31,8 +31,20 @@ export type CatalogCategoryNode = {
   children: CatalogCategoryNode[];
 };
 
-// Backwards-compat alias used by older components
-export type CategoryNode = CatalogCategoryNode;
+// Legacy DB-shape category node (used by older CatalogTree component)
+export type CategoryNode = {
+  id: string;
+  parent_id: string | null;
+  slug: string;
+  name_cs: string;
+  name_en: string | null;
+  node_type: string;
+  vehicle_brand: string | null;
+  vehicle_model: string | null;
+  vehicle_engine: string | null;
+  is_global: boolean;
+  sort_order: number;
+};
 
 export type NextisVehicle = {
   id: string;
