@@ -208,6 +208,177 @@ const Row = ({ label, value, mono }: { label: string; value: string; mono?: bool
   </div>
 );
 
+type CompatRow = {
+  brand: string;
+  model: string;
+  engine: string | null;
+  year_from: number | null;
+  year_to: number | null;
+  is_oem: boolean;
+};
+
+const CompatibleVehiclesSection = ({ part }: { part: PartResult }) => {
+  const [rows, setRows] = useState<CompatRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [brandFilter, setBrandFilter] = useState<string>("all");
+  const [modelQuery, setModelQuery] = useState("");
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      // Načti vazby + dotáhni názvy z nextis_vehicles
+      const { data, error } = await supabase
+        .from("catalog_vehicle_compatibility")
+        .select("brand, model, engine, year_from, year_to, is_oem, nextis_vehicle_id")
+        .eq("part_id", part.id)
+        .limit(500);
+      if (cancelled) return;
+      if (error || !data) {
+        setRows([]);
+        setLoading(false);
+        return;
+      }
+      // Doplň chybějící brand/model z nextis_vehicles, pokud je tam jen "manual-approved"
+      const ids = Array.from(
+        new Set(data.filter((r: any) => r.nextis_vehicle_id).map((r: any) => r.nextis_vehicle_id)),
+      );
+      let vehMap = new Map<string, any>();
+      if (ids.length) {
+        const { data: vehs } = await supabase
+          .from("nextis_vehicles")
+          .select("id, brand, model, engine, year_from, year_to")
+          .in("id", ids);
+        vehMap = new Map((vehs || []).map((v: any) => [v.id, v]));
+      }
+      const out: CompatRow[] = data.map((r: any) => {
+        const v = r.nextis_vehicle_id ? vehMap.get(r.nextis_vehicle_id) : null;
+        return {
+          brand: v?.brand || (r.brand && !r.brand.startsWith("manual") ? r.brand : "—"),
+          model: v?.model || (r.model && !r.model.startsWith("manual") ? r.model : "—"),
+          engine: v?.engine ?? r.engine ?? null,
+          year_from: v?.year_from ?? r.year_from ?? null,
+          year_to: v?.year_to ?? r.year_to ?? null,
+          is_oem: !!r.is_oem,
+        };
+      });
+      // Deduplikace
+      const seen = new Set<string>();
+      const dedup = out.filter((r) => {
+        const k = `${r.brand}|${r.model}|${r.engine || ""}|${r.year_from || ""}|${r.year_to || ""}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      setRows(dedup);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [part.id]);
+
+  const brands = useMemo(
+    () => Array.from(new Set((rows || []).map((r) => r.brand).filter((b) => b && b !== "—"))).sort(),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    if (!rows) return [];
+    return rows.filter((r) => {
+      if (brandFilter !== "all" && r.brand !== brandFilter) return false;
+      if (modelQuery.trim() && !r.model.toLowerCase().includes(modelQuery.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [rows, brandFilter, modelQuery]);
+
+  const visible = expanded ? filtered : filtered.slice(0, 8);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <Car className="w-3.5 h-3.5" /> Kompatibilní vozy
+        </p>
+        {rows && rows.length > 0 && <Badge variant="secondary" className="text-[10px]">{rows.length}</Badge>}
+      </div>
+
+      {loading && (
+        <div className="flex items-center gap-2 py-2">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+          <span className="text-xs text-muted-foreground">Načítám…</span>
+        </div>
+      )}
+
+      {!loading && rows && rows.length === 0 && (
+        <p className="text-xs text-muted-foreground italic">
+          {part.compatible_vehicles || "Žádná konkrétní vazba — díl je univerzální nebo bez specifikace vozu."}
+        </p>
+      )}
+
+      {!loading && rows && rows.length > 0 && (
+        <>
+          <div className="flex gap-1.5">
+            <select
+              value={brandFilter}
+              onChange={(e) => setBrandFilter(e.target.value)}
+              className="text-[11px] bg-secondary border border-border rounded px-2 py-1 flex-1 min-w-0"
+            >
+              <option value="all">Všechny značky</option>
+              {brands.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+            <Input
+              value={modelQuery}
+              onChange={(e) => setModelQuery(e.target.value)}
+              placeholder="Filtr modelu…"
+              className="text-[11px] h-7 flex-1 min-w-0"
+            />
+          </div>
+
+          <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+            {visible.map((r, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-2 text-[11px] bg-secondary/40 rounded px-2 py-1.5 border border-border/30"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium truncate">{r.brand} {r.model}</span>
+                    {r.is_oem && <Badge className="bg-primary/20 text-primary border-primary/30 text-[9px] h-4 px-1">OEM</Badge>}
+                  </div>
+                  <div className="text-muted-foreground text-[10px] truncate">
+                    {r.engine || "—"}
+                    {r.year_from && ` · ${r.year_from}–${r.year_to || "…"}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {filtered.length > 8 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-full text-[10px]"
+              onClick={() => setExpanded((x) => !x)}
+            >
+              {expanded ? "Sbalit" : `Zobrazit všech ${filtered.length}`}
+            </Button>
+          )}
+
+          {filtered.length === 0 && (
+            <p className="text-[11px] text-muted-foreground italic">Žádný vůz nevyhovuje filtru.</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+
 /** Desktop side panel */
 export const PartDetailPanel = (props: PartDetailModalProps) => {
   if (!props.part) return null;
