@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp, Trash2, Loader2, Database } from "lucide-react";
+import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp, Trash2, Loader2, Database, Search } from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
 import CatalogImport from "@/components/admin/CatalogImport";
 import EPCImport from "@/components/admin/EPCImport";
@@ -42,6 +42,7 @@ import AdminActivityLog from "@/components/admin/AdminActivityLog";
 import AdminReviews from "@/components/admin/AdminReviews";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import AdminBackups from "@/components/admin/AdminBackups";
+import AdminCatalogDiagnostic from "@/components/admin/AdminCatalogDiagnostic";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -364,6 +365,7 @@ const Admin = () => {
             {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-[11px] gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
             {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Katalog</TabsTrigger>}
             {isEnabled("catalog") && <TabsTrigger value="catalog-tools" className="text-[11px] gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Import</TabsTrigger>}
+            {isEnabled("catalog") && <TabsTrigger value="catalog-diag" className="text-[11px] gap-1 shrink-0"><Search className="w-3 h-3" />Diagnostika</TabsTrigger>}
             {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
             {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
             {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
@@ -607,6 +609,10 @@ const Admin = () => {
               <EPCImport />
               <AdminCatalogSettings />
             </div>
+          </TabsContent>
+
+          <TabsContent value="catalog-diag">
+            <div className="mt-2"><AdminCatalogDiagnostic /></div>
           </TabsContent>
 
           <TabsContent value="history">

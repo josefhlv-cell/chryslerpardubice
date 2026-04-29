@@ -214,6 +214,119 @@ export type Database = {
           },
         ]
       }
+      catalog_diagnostic_results: {
+        Row: {
+          brand: string
+          category: string | null
+          checked_at: string
+          duplicates_count: number
+          engine: string | null
+          id: string
+          issues: Json
+          missing_names_count: number
+          missing_prices_count: number
+          model: string
+          oem_unique_count: number
+          parts_count: number
+          run_id: string
+          sample_oems: Json
+          uncategorized_count: number
+          zero_price_count: number
+        }
+        Insert: {
+          brand: string
+          category?: string | null
+          checked_at?: string
+          duplicates_count?: number
+          engine?: string | null
+          id?: string
+          issues?: Json
+          missing_names_count?: number
+          missing_prices_count?: number
+          model: string
+          oem_unique_count?: number
+          parts_count?: number
+          run_id: string
+          sample_oems?: Json
+          uncategorized_count?: number
+          zero_price_count?: number
+        }
+        Update: {
+          brand?: string
+          category?: string | null
+          checked_at?: string
+          duplicates_count?: number
+          engine?: string | null
+          id?: string
+          issues?: Json
+          missing_names_count?: number
+          missing_prices_count?: number
+          model?: string
+          oem_unique_count?: number
+          parts_count?: number
+          run_id?: string
+          sample_oems?: Json
+          uncategorized_count?: number
+          zero_price_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_diagnostic_results_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_diagnostic_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      catalog_diagnostic_runs: {
+        Row: {
+          created_at: string
+          current_step: string | null
+          finished_at: string | null
+          id: string
+          issues_found: number
+          last_error: string | null
+          processed_combinations: number
+          started_at: string
+          started_by: string | null
+          status: string
+          total_combinations: number
+          total_parts_found: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_step?: string | null
+          finished_at?: string | null
+          id?: string
+          issues_found?: number
+          last_error?: string | null
+          processed_combinations?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          total_combinations?: number
+          total_parts_found?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_step?: string | null
+          finished_at?: string | null
+          id?: string
+          issues_found?: number
+          last_error?: string | null
+          processed_combinations?: number
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          total_combinations?: number
+          total_parts_found?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       catalog_part_categories: {
         Row: {
           category_id: string
