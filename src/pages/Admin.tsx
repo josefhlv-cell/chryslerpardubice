@@ -611,6 +611,10 @@ const Admin = () => {
             </div>
           </TabsContent>
 
+          <TabsContent value="catalog-diag">
+            <div className="mt-2"><AdminCatalogDiagnostic /></div>
+          </TabsContent>
+
           <TabsContent value="history">
             <div className="mt-2">
               <AdminServiceHistory />
