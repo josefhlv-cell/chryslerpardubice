@@ -307,30 +307,142 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
   return deduplicateParts(all);
 }
 
+/**
+ * Mapping from JM tree subcategory labels → canonical parts_new.category.
+ * The DB has 19 broad categories; the JM tree has hundreds of leaves.
+ * Without this map, drill-down to "Kotoučové brzdy" returns 0 rows.
+ */
+const SUBCATEGORY_TO_CANONICAL: Array<{ keywords: string[]; canonical: string }> = [
+  { keywords: ['brzd', 'kotouč', 'destič', 'třmen', 'abs', 'bubn'], canonical: 'Brzdové zařízení' },
+  { keywords: ['filtr'], canonical: 'Filtry' },
+  { keywords: ['motor', 'hlava válc', 'olejová van', 'vačk', 'klikov', 'pístn'], canonical: 'Motor' },
+  { keywords: ['chlad', 'termostat', 'vodní čerpadl', 'ventilátor'], canonical: 'Chlazení' },
+  { keywords: ['výfuk', 'katalyz', 'tlumič výf', 'lambd'], canonical: 'Výfuk' },
+  { keywords: ['převodov', 'spojk', 'kardan', 'diferenc'], canonical: 'Převodovka' },
+  { keywords: ['odpruž', 'tlumič náraz', 'pružin', 'rameno', 'silentbl', 'stabiliz'], canonical: 'Odpružení' },
+  { keywords: ['řízení', 'volant', 'řídicí'], canonical: 'Řízení' },
+  { keywords: ['osvětl', 'světlomet', 'reflektor', 'žárov', 'led'], canonical: 'Osvětlení' },
+  { keywords: ['elektr', 'baterie', 'alternátor', 'startér', 'svíčk', 'cívka', 'relé', 'pojistk'], canonical: 'Elektroinstalace' },
+  { keywords: ['klimat', 'topení', 'kompresor klima'], canonical: 'Klimatizace' },
+  { keywords: ['palivov', 'vstřikov', 'čerpadlo paliv'], canonical: 'Palivový systém' },
+  { keywords: ['karoser', 'nárazn', 'kapot', 'dveř', 'blatn', 'maska'], canonical: 'Karoserie' },
+  { keywords: ['interiér', 'sedadl', 'opěr', 'palubní deska', 'koberec'], canonical: 'Interiér' },
+  { keywords: ['olej', 'kapalin', 'mazi'], canonical: 'Kapaliny a oleje' },
+  { keywords: ['pneu', 'kolo', 'disk'], canonical: 'Pneumatiky' },
+  { keywords: ['údržb', 'servis'], canonical: 'Údržba' },
+];
+
+function resolveCanonicalCategory(label: string, keywords: string[] = []): string | null {
+  const lab = stripDiacritics(label || '');
+  const allText = stripDiacritics([label, ...(keywords || [])].join(' '));
+  // 1) Exact match on the 19 canonical labels
+  for (const m of SUBCATEGORY_TO_CANONICAL) {
+    const canNorm = stripDiacritics(m.canonical);
+    if (lab === canNorm) return m.canonical;
+  }
+  // 2) Heuristic: any keyword from the map appears in label or supplied keywords
+  for (const m of SUBCATEGORY_TO_CANONICAL) {
+    if (m.keywords.some((kw) => allText.includes(stripDiacritics(kw)))) return m.canonical;
+  }
+  return null;
+}
+
+function buildKeywordOr(keywords: string[]): string | null {
+  if (!keywords || keywords.length === 0) return null;
+  // Use the first 6 keywords for OR filter on name + category
+  const top = keywords.slice(0, 6).map((k) => k.replace(/[%,()]/g, '').trim()).filter(Boolean);
+  if (top.length === 0) return null;
+  const parts: string[] = [];
+  for (const kw of top) {
+    parts.push(`name.ilike.%${kw}%`);
+    parts.push(`category.ilike.%${kw}%`);
+  }
+  return parts.join(',');
+}
+
 export async function listPartsForVehicle(opts: any) {
   const page = Math.max(Number(opts.page || 0), 0);
   const pageSize = Math.min(Math.max(Number(opts.pageSize || 30), 1), 100);
   const from = page * pageSize;
   const to = from + pageSize - 1;
-  const category = String(opts.canonicalCategory || "").trim();
+  const rawLabel = String(opts.canonicalCategory || '').trim();
+  const keywords: string[] = Array.isArray(opts.categoryKeywords) ? opts.categoryKeywords : [];
+  const canonical = resolveCanonicalCategory(rawLabel, keywords);
+  const orFilter = buildKeywordOr(keywords.length ? keywords : [rawLabel]);
 
-  const fetchRows = async (useEngine: boolean) => {
-    let query = supabase
-      .from("parts_new_public")
-      .select("*")
-      .ilike("compatible_vehicles", `%${opts.brand}%`)
-      .ilike("compatible_vehicles", `%${opts.model}%`);
-    if (useEngine && opts.engine) query = query.ilike("compatible_vehicles", `%${opts.engine}%`);
-    if (category) query = query.eq("category", category);
-    return await query.order("price_with_vat", { ascending: true }).range(from, to);
+  // STRATEGY A: official mapping via catalog_vehicle_compatibility (most reliable)
+  const tryViaCompat = async (): Promise<{ rows: any[]; error: any }> => {
+    if (!opts.nextisVehicleId && !opts.brand) return { rows: [], error: null };
+
+    let compatQ = supabase
+      .from('catalog_vehicle_compatibility')
+      .select('part_id')
+      .limit(2000);
+
+    if (opts.nextisVehicleId) {
+      compatQ = compatQ.eq('nextis_vehicle_id', opts.nextisVehicleId);
+    } else {
+      compatQ = compatQ.ilike('brand', opts.brand);
+      if (opts.model) compatQ = compatQ.ilike('model', opts.model);
+    }
+    const { data: compatRows, error: compatErr } = await compatQ;
+    if (compatErr) return { rows: [], error: compatErr };
+    const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    if (partIds.length === 0) return { rows: [], error: null };
+
+    let q = supabase.from('parts_new_public').select('*').in('id', partIds);
+    if (canonical) q = q.eq('category', canonical);
+    else if (orFilter) q = q.or(orFilter);
+    const { data, error } = await q.order('price_with_vat', { ascending: true }).range(from, to);
+    return { rows: data || [], error };
   };
 
-  const strict = await fetchRows(true);
-  const fallback = strict.error || (strict.data || []).length === 0 ? await fetchRows(false) : strict;
-  if (fallback.error) throw fallback.error;
+  // STRATEGY B: legacy compatible_vehicles text match
+  const tryViaText = async (useEngine: boolean) => {
+    let query = supabase
+      .from('parts_new_public')
+      .select('*')
+      .ilike('compatible_vehicles', `%${opts.brand}%`);
+    if (opts.model) query = query.ilike('compatible_vehicles', `%${opts.model}%`);
+    if (useEngine && opts.engine) query = query.ilike('compatible_vehicles', `%${opts.engine}%`);
+    if (canonical) query = query.eq('category', canonical);
+    else if (orFilter) query = query.or(orFilter);
+    return await query.order('price_with_vat', { ascending: true }).range(from, to);
+  };
 
-  const all = (fallback.data || []).map((row) => normalizeRow(row));
-  return { items: deduplicateParts(all), total: all.length };
+  // Try in order: compat join → text strict → text without engine → category-only fallback
+  const a = await tryViaCompat();
+  if (!a.error && a.rows.length > 0) {
+    const all = a.rows.map((row) => normalizeRow(row));
+    return { items: deduplicateParts(all), total: all.length };
+  }
+
+  const b1 = await tryViaText(true);
+  if (!b1.error && (b1.data || []).length > 0) {
+    const all = (b1.data || []).map((row) => normalizeRow(row));
+    return { items: deduplicateParts(all), total: all.length };
+  }
+
+  const b2 = await tryViaText(false);
+  if (!b2.error && (b2.data || []).length > 0) {
+    const all = (b2.data || []).map((row) => normalizeRow(row));
+    return { items: deduplicateParts(all), total: all.length };
+  }
+
+  // Last resort: show category for the brand alone (any vehicle)
+  if (canonical) {
+    const { data } = await supabase
+      .from('parts_new_public')
+      .select('*')
+      .eq('category', canonical)
+      .ilike('compatible_vehicles', `%${opts.brand}%`)
+      .order('price_with_vat', { ascending: true })
+      .range(from, to);
+    const all = (data || []).map((row) => normalizeRow(row));
+    return { items: deduplicateParts(all), total: all.length };
+  }
+
+  return { items: [], total: 0 };
 }
 
 export async function searchCatalog(query: string): Promise<CatalogPart[]> {
