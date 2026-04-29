@@ -486,6 +486,27 @@ export async function listPartsForVehicle(opts: any) {
     return await query.order('price_with_vat', { ascending: true }).range(from, to);
   };
 
+  // STRATEGY 0: when flag ON and we have a category node id, use the explicit
+  // catalog_part_categories mapping (built by jm-classify-parts).
+  if (opts.categoryNodeId && (await isJmTreeFlagEnabled())) {
+    const { data: mapRows } = await supabase
+      .from('catalog_part_categories')
+      .select('part_id')
+      .eq('category_id', opts.categoryNodeId)
+      .limit(2000);
+    const partIds = [...new Set((mapRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    if (partIds.length > 0) {
+      const { data } = await supabase
+        .from('parts_new_public')
+        .select('*')
+        .in('id', partIds)
+        .order('price_with_vat', { ascending: true })
+        .range(from, to);
+      const all = (data || []).map((row) => normalizeRow(row));
+      if (all.length > 0) return { items: deduplicateParts(all), total: all.length };
+    }
+  }
+
   // Try in order: compat join → text strict → text without engine → category-only fallback
   const a = await tryViaCompat();
   if (!a.error && a.rows.length > 0) {
