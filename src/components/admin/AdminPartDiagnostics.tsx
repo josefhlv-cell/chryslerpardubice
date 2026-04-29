@@ -116,6 +116,7 @@ export default function AdminPartDiagnostics() {
         body: { action: "apply", diagnosticIds: pendingDiags.map((d) => d.id), userId: user?.id },
       });
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Oprava selhala");
       toast({
         title: "Opravy aplikovány",
         description: `${data?.applied} dílů opraveno • Záloha: ${data?.backupPath}`,

@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      const allowedBrands = ["Chrysler", "Dodge", "RAM", "Lancia"];
+      const allowedBrands = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
       const { data: vehicles } = await supabase.from("nextis_vehicles")
         .select("id, brand, model, engine, year_from, year_to")
         .in("brand", allowedBrands)
@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
       .update({ status: "failed", last_error: "Superseded", finished_at: new Date().toISOString() })
       .eq("status", "running");
 
-    const allowedBrands = ["Chrysler", "Dodge", "RAM", "Lancia"];
+    const allowedBrands = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
     const { count } = await supabase.from("nextis_vehicles")
       .select("*", { count: "exact", head: true }).in("brand", allowedBrands);
     const total = count || 0;

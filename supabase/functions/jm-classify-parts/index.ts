@@ -36,12 +36,44 @@ const CATEGORY_TO_GLOBAL: Record<string, string> = {
   "Ostatní": "Ostatní",
 };
 
+const NAME_RULES: Array<{ global: string; keywords: string[] }> = [
+  { global: "Brzdový systém", keywords: ["brzd", "brake", "brems", "desti", "kotou", "třmen", "trmen", "abs", "válec", "valec"] },
+  { global: "Filtry", keywords: ["filtr", "filter"] },
+  { global: "Chlazení", keywords: ["chlad", "chladi", "kuehl", "cool", "termostat", "vodní čerpad", "vodni cerpad", "wass"] },
+  { global: "Elektroinstalace", keywords: ["altern", "start", "bater", "svíčk", "svick", "kabel", "svazek", "senzor", "sensor", "relé", "rele", "licht", "anlass"] },
+  { global: "Výfuk", keywords: ["výfuk", "vyfuk", "exhaust", "katalyz", "lambda", "dpf"] },
+  { global: "Převodovka", keywords: ["převod", "prevod", "spojk", "clutch", "getriebe", "kardan", "diferenc", "poloos"] },
+  { global: "Odpružení", keywords: ["tlumi", "pruž", "pruz", "rameno", "silent", "stabil", "ložisk", "lozisk", "feder"] },
+  { global: "Řízení", keywords: ["řízení", "rizeni", "servo", "volant", "tyč řízení", "tyc rizeni", "lenk"] },
+  { global: "Osvětlení", keywords: ["svět", "svet", "lamp", "žárov", "zarov", "mlhov", "osvět", "osvet"] },
+  { global: "Klimatizace", keywords: ["klimat", "kompresor", "kondenz", "výpar", "vypar", "topení", "topeni", "a/c"] },
+  { global: "Palivový systém", keywords: ["paliv", "fuel", "vstřik", "vstrik", "injekt", "nádrž", "nadrz"] },
+  { global: "Karoserie", keywords: ["karoser", "náraz", "naraz", "kapot", "dveř", "dver", "blatn", "zrc", "sklo", "maska"] },
+  { global: "Interiér", keywords: ["sedadl", "interi", "palub", "airbag", "pás", "pas", "opěr", "oper"] },
+  { global: "Náplně a kapaliny", keywords: ["olej", "kapalin", "fluid", "maziv", "aditiv"] },
+  { global: "Pneumatiky a disky", keywords: ["pneu", "disk", "kolo", "tpms"] },
+  { global: "Příslušenství a nářadí", keywords: ["příslu", "prislu", "nosič", "nosic", "tažn", "tazn", "nářad", "narad"] },
+];
+
+function normalizeText(value: string) {
+  return (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function inferGlobalName(part: any): string {
+  const categoryTarget = CATEGORY_TO_GLOBAL[part.category || ""];
+  const hay = normalizeText(`${part.name || ""} ${part.category || ""} ${part.oem_number || ""}`);
+  for (const rule of NAME_RULES) {
+    if (rule.keywords.some((kw) => hay.includes(normalizeText(kw)))) return rule.global;
+  }
+  return categoryTarget || "Ostatní";
+}
+
 async function fetchAllParts(supabase: any) {
   const rows: any[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await supabase
       .from("parts_new")
-      .select("id, category")
+      .select("id, oem_number, name, category")
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     rows.push(...(data || []));
@@ -71,12 +103,7 @@ Deno.serve(async (req) => {
       .eq("scope", "classify");
 
     const parts = await fetchAllParts(supabase);
-    const { data: mappedRows } = await supabase
-      .from("catalog_part_categories")
-      .select("part_id")
-      .eq("is_primary", true);
-    const mapped = new Set((mappedRows || []).map((r: any) => r.part_id));
-    const toClassify = parts.filter((p) => !mapped.has(p.id));
+    const toClassify = parts;
 
     const { data: globals, error: globalsError } = await supabase
       .from("catalog_categories")
@@ -90,15 +117,15 @@ Deno.serve(async (req) => {
       status: "running",
       scope: "classify",
       vehicles_total: parts.length,
-      vehicles_done: Math.max(0, parts.length - toClassify.length),
-      current_step: "Bezpečné pravidlové mapování dílů…",
+      vehicles_done: 0,
+      current_step: "Bezpečné pravidlové přemapování všech dílů…",
     }).select("*").single();
     if (runError) throw runError;
 
     const inserts = toClassify
       .map((p: any) => ({
         part_id: p.id,
-        category_id: globalByName.get(CATEGORY_TO_GLOBAL[p.category || "Ostatní"] || "Ostatní") || fallbackId,
+        category_id: globalByName.get(inferGlobalName(p)) || fallbackId,
         is_primary: true,
       }))
       .filter((r: any) => !!r.category_id);
@@ -106,17 +133,20 @@ Deno.serve(async (req) => {
     let inserted = 0;
     for (let i = 0; i < inserts.length; i += PAGE_SIZE) {
       const batch = inserts.slice(i, i + PAGE_SIZE);
+      const ids = batch.map((r: any) => r.part_id);
+      const { error: deleteError } = await supabase.from("catalog_part_categories").delete().in("part_id", ids);
+      if (deleteError) throw deleteError;
       const { error } = await supabase.from("catalog_part_categories").upsert(batch, { onConflict: "part_id,category_id" });
       if (error) throw error;
       inserted += batch.length;
       await supabase.from("jm_tree_sync_runs").update({
-        vehicles_done: Math.min(parts.length, parts.length - toClassify.length + inserted),
-        parts_classified: parts.length - toClassify.length + inserted,
-        current_step: `${parts.length - toClassify.length + inserted}/${parts.length} dílů zařazeno`,
+        vehicles_done: Math.min(parts.length, inserted),
+        parts_classified: inserted,
+        current_step: `${inserted}/${parts.length} dílů přemapováno`,
       }).eq("id", run.id);
     }
 
-    const totalMapped = parts.length - toClassify.length + inserted;
+    const totalMapped = inserted;
     await supabase.from("jm_tree_sync_runs").update({
       status: "done",
       vehicles_done: parts.length,
