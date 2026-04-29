@@ -1287,11 +1287,35 @@ Deno.serve(async (req) => {
         break;
       }
 
-      default:
-        return new Response(JSON.stringify({ error: `Unknown action: ${action}` }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      case 'getCategoryTree':
+      case 'fetchCategoryTree':
+      case 'categoryTree': {
+        const { data, error } = await adminClient
+          .from('catalog_categories')
+          .select('id, parent_id, slug, name_cs, name_en, node_type, vehicle_brand, vehicle_model, vehicle_engine, is_global, sort_order')
+          .order('sort_order', { ascending: true })
+          .order('name_cs', { ascending: true });
+        if (error) throw new Error(error.message);
+        result = { items: data || [], count: (data || []).length };
+        break;
+      }
+
+      default: {
+        const known = [
+          'ping', 'diagnose', 'syncCategories', 'searchByCode', 'vehicleCategories',
+          'searchByVehicle', 'priceAndStock', 'enrichPrices',
+          'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
+        ];
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Unknown action',
+            action: action ?? null,
+            knownActions: known,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
     }
 
     return new Response(JSON.stringify({ success: true, data: result }), {
