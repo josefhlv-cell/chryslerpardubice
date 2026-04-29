@@ -888,6 +888,51 @@ export type Database = {
         }
         Relationships: []
       }
+      jm_tree_sync_runs: {
+        Row: {
+          categories_created: number
+          current_step: string | null
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          parts_classified: number
+          scope: string
+          started_at: string
+          started_by: string | null
+          status: string
+          vehicles_done: number
+          vehicles_total: number
+        }
+        Insert: {
+          categories_created?: number
+          current_step?: string | null
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          parts_classified?: number
+          scope?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          vehicles_done?: number
+          vehicles_total?: number
+        }
+        Update: {
+          categories_created?: number
+          current_step?: string | null
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          parts_classified?: number
+          scope?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+          vehicles_done?: number
+          vehicles_total?: number
+        }
+        Relationships: []
+      }
       mechanic_tasks: {
         Row: {
           completed_at: string | null
@@ -1246,6 +1291,63 @@ export type Database = {
           oem_number?: string
           part_number?: string
           source?: string | null
+        }
+        Relationships: []
+      }
+      part_diagnostics: {
+        Row: {
+          applied: boolean
+          applied_at: string | null
+          applied_by: string | null
+          backup_path: string | null
+          category_status: string
+          created_at: string
+          description_status: string
+          id: string
+          name_status: string
+          notes: string | null
+          oem_status: string
+          part_id: string
+          suggested_category: string | null
+          suggested_description: string | null
+          suggested_name: string | null
+          suggested_oem_matches: Json | null
+        }
+        Insert: {
+          applied?: boolean
+          applied_at?: string | null
+          applied_by?: string | null
+          backup_path?: string | null
+          category_status?: string
+          created_at?: string
+          description_status?: string
+          id?: string
+          name_status?: string
+          notes?: string | null
+          oem_status?: string
+          part_id: string
+          suggested_category?: string | null
+          suggested_description?: string | null
+          suggested_name?: string | null
+          suggested_oem_matches?: Json | null
+        }
+        Update: {
+          applied?: boolean
+          applied_at?: string | null
+          applied_by?: string | null
+          backup_path?: string | null
+          category_status?: string
+          created_at?: string
+          description_status?: string
+          id?: string
+          name_status?: string
+          notes?: string | null
+          oem_status?: string
+          part_id?: string
+          suggested_category?: string | null
+          suggested_description?: string | null
+          suggested_name?: string | null
+          suggested_oem_matches?: Json | null
         }
         Relationships: []
       }
