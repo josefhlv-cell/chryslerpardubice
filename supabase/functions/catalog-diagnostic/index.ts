@@ -280,7 +280,48 @@ async function priorityValidation(runId: string) {
     });
   }
 
-  // Seřadit podle priority
+  // 7) Chybějící / krátké názvy (autofill z OEM + manufacturer)
+  const { data: emptyNames, count: emptyNameCount } = await s
+    .from("parts_new")
+    .select("id, oem_number, manufacturer", { count: "exact" })
+    .or("name.is.null,name.eq.")
+    .limit(50);
+  summary.empty_names = emptyNameCount || 0;
+  if ((emptyNameCount || 0) > 0) {
+    critical.push({
+      severity: "medium",
+      code: "MISSING_NAMES",
+      title: `${emptyNameCount} dílů bez názvu`,
+      message: "Doplnit z OEM čísla a výrobce („Mopar 68XXXXXX").",
+      fixable: true,
+      fix_type: "fill_missing_names",
+      details: emptyNames?.slice(0, 10) || [],
+    });
+  }
+
+  // 8) Nekategorizované díly s rozpoznatelným názvem (heuristika)
+  const { data: uncatSample } = await s
+    .from("parts_new")
+    .select("id, oem_number, name")
+    .or("category.is.null,category.eq.")
+    .not("name", "is", null)
+    .limit(500);
+  const guessable = (uncatSample || [])
+    .map((p) => ({ id: p.id, oem: p.oem_number, name: p.name, guess: guessCategoryFromName(p.name || "") }))
+    .filter((p) => p.guess);
+  summary.guessable_categories = guessable.length;
+  if (guessable.length > 0) {
+    critical.push({
+      severity: "high",
+      code: "GUESSABLE_CATEGORIES",
+      title: `${guessable.length} dílů lze automaticky zařadit do kategorie podle názvu`,
+      message: "Heuristika dle klíčových slov v názvu (brzd, filtr, motor, …).",
+      fixable: true,
+      fix_type: "assign_categories_by_name",
+      details: guessable.slice(0, 15),
+    });
+  }
+
   const sevRank = (s: string) =>
     s === "critical" ? 0 : s === "high" ? 1 : s === "medium" ? 2 : 3;
   critical.sort((a, b) => sevRank(a.severity) - sevRank(b.severity));
