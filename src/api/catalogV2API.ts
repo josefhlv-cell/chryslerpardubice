@@ -19,7 +19,7 @@ export type CatalogPart = {
   rank: number;
   final_price: number | null;
   markup_percent: number;
-  technical_parameters?: Record<string, unknown> | null;
+  technical_parameters?: Record<string, string> | null;
   compatible_vehicles?: string[] | null;
 };
 
