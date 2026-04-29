@@ -134,8 +134,7 @@ async function buildVehicleTree(supabase: any, v: any, tree: any[]): Promise<num
 }
 
 async function processVehicle(supabase: any, v: any): Promise<number> {
-  const tree = await aiTreeForVehicle(v);
-  return buildVehicleTree(supabase, v, tree);
+  return buildVehicleTree(supabase, v, DEFAULT_TREE);
 }
 
 function selfInvoke(runId: string) {
@@ -187,7 +186,7 @@ Deno.serve(async (req) => {
       }
 
       const work = async () => {
-        // Run all vehicles in this chunk in PARALLEL
+        // Keep database writes bounded and deterministic; no AI calls, no rate limits.
         const results = await Promise.allSettled(list.map((v) => processVehicle(supabase, v)));
         let createdInChunk = 0;
         const errors: string[] = [];
@@ -201,7 +200,7 @@ Deno.serve(async (req) => {
         await supabase.from("jm_tree_sync_runs").update({
           vehicles_done: newDone,
           categories_created: newCreated,
-          current_step: `Vozidlo ${newDone}/${run.vehicles_total}`,
+          current_step: `Vozidlo ${newDone}/${run.vehicles_total} — bezpečné dávkování`,
           last_error: errors.length > 0 ? errors.join(" | ").slice(0, 500) : run.last_error,
         }).eq("id", runId);
 
@@ -238,7 +237,7 @@ Deno.serve(async (req) => {
       status: "running", scope: "all",
       vehicles_total: total, vehicles_done: 0,
       categories_created: existingCats || 0,
-      current_step: "Spouštím (paralelně, 5 vozidel naráz)…",
+      current_step: "Spouštím bezpečné dávkování bez AI čekání…",
     }).select("*").single();
 
     selfInvoke(run.id);
