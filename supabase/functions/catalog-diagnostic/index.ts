@@ -79,6 +79,37 @@ const CATEGORY_ALIASES: Record<string, string> = {
   "oils": "Náplně a maziva",
 };
 
+// ====== Heuristika kategorie podle klíčových slov v názvu ======
+const CATEGORY_KEYWORDS: { keywords: string[]; category: string }[] = [
+  { keywords: ["brzd", "brake", "bremse", "destič", "kotouč", "třmen", "destičky"], category: "Brzdové zařízení" },
+  { keywords: ["filtr", "filter", "olejov", "vzduchov", "kabin", "palivov filtr"], category: "Filtry" },
+  { keywords: ["motor", "engine", "písty", "ventil", "hlava válc", "kliková"], category: "Motor" },
+  { keywords: ["převodov", "transmission", "ozub", "synchron"], category: "Převodovka" },
+  { keywords: ["tlumič", "pružin", "shock", "absorber", "stossdaempfer"], category: "Tlumiče a pružiny" },
+  { keywords: ["alternát", "startér", "kabel", "wire", "harness", "elektro", "lichtmaschine", "anlasser"], category: "Elektroinstalace" },
+  { keywords: ["chladič", "cooling", "termosta", "vodní čerpadlo", "kuehler", "thermostat"], category: "Chlazení" },
+  { keywords: ["paliv", "fuel", "vstřik", "injektor", "kraftstoff"], category: "Palivový systém" },
+  { keywords: ["výfuk", "exhaust", "katalyz", "tlumič výfuk"], category: "Výfukový systém" },
+  { keywords: ["nárazník", "kapota", "dveře", "blatník", "body", "karoseri"], category: "Karoserie" },
+  { keywords: ["sedadl", "palubn", "interi", "obložen"], category: "Interiér" },
+  { keywords: ["světl", "light", "lamp", "žárovk", "led "], category: "Osvětlení" },
+  { keywords: ["klimatiz", "kondenzát", "evaporát", "a/c"], category: "Klimatizace" },
+  { keywords: ["rozvod", "timing", "řemen", "napín"], category: "Rozvody" },
+  { keywords: ["zapal", "svíčk", "ignition", "cívk", "zuendkerze"], category: "Zapalování" },
+  { keywords: ["spojk", "clutch", "vypínací"], category: "Spojka" },
+  { keywords: ["řízení", "steering", "tyč řízení", "kloub řízení"], category: "Řízení" },
+  { keywords: ["olej", "kapalin", "mazivo", "fluid", "antifreez", "nemrznou"], category: "Náplně a maziva" },
+  { keywords: ["ložisko", "uložení motoru", "rameno", "silentblok", "podvozek"], category: "Podvozek" },
+];
+
+function guessCategoryFromName(name: string): string | null {
+  const lower = (name || "").toLowerCase();
+  for (const rule of CATEGORY_KEYWORDS) {
+    if (rule.keywords.some((k) => lower.includes(k))) return rule.category;
+  }
+  return null;
+}
+
 // ====== Slovník překladů (pro fix translate_names) ======
 const NAME_TRANSLATIONS: Record<string, string> = {
   "BREMSBELAG SATZ": "Sada brzdových destiček",
@@ -249,7 +280,48 @@ async function priorityValidation(runId: string) {
     });
   }
 
-  // Seřadit podle priority
+  // 7) Chybějící / krátké názvy (autofill z OEM + manufacturer)
+  const { data: emptyNames, count: emptyNameCount } = await s
+    .from("parts_new")
+    .select("id, oem_number, manufacturer", { count: "exact" })
+    .or("name.is.null,name.eq.")
+    .limit(50);
+  summary.empty_names = emptyNameCount || 0;
+  if ((emptyNameCount || 0) > 0) {
+    critical.push({
+      severity: "medium",
+      code: "MISSING_NAMES",
+      title: `${emptyNameCount} dílů bez názvu`,
+      message: 'Doplnit z OEM čísla a výrobce (např. Mopar 68XXXXXX).',
+      fixable: true,
+      fix_type: "fill_missing_names",
+      details: emptyNames?.slice(0, 10) || [],
+    });
+  }
+
+  // 8) Nekategorizované díly s rozpoznatelným názvem (heuristika)
+  const { data: uncatSample } = await s
+    .from("parts_new")
+    .select("id, oem_number, name")
+    .or("category.is.null,category.eq.")
+    .not("name", "is", null)
+    .limit(500);
+  const guessable = (uncatSample || [])
+    .map((p) => ({ id: p.id, oem: p.oem_number, name: p.name, guess: guessCategoryFromName(p.name || "") }))
+    .filter((p) => p.guess);
+  summary.guessable_categories = guessable.length;
+  if (guessable.length > 0) {
+    critical.push({
+      severity: "high",
+      code: "GUESSABLE_CATEGORIES",
+      title: `${guessable.length} dílů lze automaticky zařadit do kategorie podle názvu`,
+      message: "Heuristika dle klíčových slov v názvu (brzd, filtr, motor, …).",
+      fixable: true,
+      fix_type: "assign_categories_by_name",
+      details: guessable.slice(0, 15),
+    });
+  }
+
   const sevRank = (s: string) =>
     s === "critical" ? 0 : s === "high" ? 1 : s === "medium" ? 2 : 3;
   critical.sort((a, b) => sevRank(a.severity) - sevRank(b.severity));
@@ -358,6 +430,42 @@ async function generateFixProposals(runId: string, critical: any[], summary: Rec
         payload: {},
       });
     }
+
+    if (issue.fix_type === "fill_missing_names") {
+      const previews = (issue.details || []).map((p: any) => ({
+        oem: p.oem_number,
+        before: "(prázdné)",
+        after: `${p.manufacturer || "Mopar"} ${p.oem_number || ""}`.trim(),
+      }));
+      await s.from("catalog_diagnostic_fixes").insert({
+        run_id: runId,
+        fix_type: "fill_missing_names",
+        severity: "medium",
+        title: `Doplnit ${summary.empty_names} chybějících názvů`,
+        description: 'Vygeneruje název ve formátu "VÝROBCE OEM" pro díly bez názvu.',
+        affected_count: summary.empty_names,
+        preview: previews,
+        payload: {},
+      });
+    }
+
+    if (issue.fix_type === "assign_categories_by_name") {
+      const previews = (issue.details || []).map((p: any) => ({
+        oem: p.oem,
+        name: p.name,
+        category: p.guess,
+      }));
+      await s.from("catalog_diagnostic_fixes").insert({
+        run_id: runId,
+        fix_type: "assign_categories_by_name",
+        severity: "high",
+        title: `Auto-zařadit ${summary.guessable_categories} dílů do kategorie podle názvu`,
+        description: "Heuristika klíčových slov v názvu (brzd → Brzdové zařízení, filtr → Filtry, …).",
+        affected_count: summary.guessable_categories,
+        preview: previews,
+        payload: {},
+      });
+    }
   }
 }
 
@@ -408,6 +516,37 @@ async function applyFix(fixId: string, userId: string | null) {
           await s.from("parts_new").update({ name: cs }).eq("id", m.id);
           appliedCount++;
         }
+      }
+    }
+
+    else if (fix.fix_type === "fill_missing_names") {
+      // Najít všechny prázdné názvy a doplnit "VÝROBCE OEM"
+      const { data: empties } = await s
+        .from("parts_new")
+        .select("id, oem_number, manufacturer")
+        .or("name.is.null,name.eq.")
+        .limit(5000);
+      for (const p of empties || []) {
+        const newName = `${p.manufacturer || "Mopar"} ${p.oem_number || ""}`.trim();
+        if (newName.length < 3) continue;
+        await s.from("parts_new").update({ name: newName }).eq("id", p.id);
+        appliedCount++;
+      }
+    }
+
+    else if (fix.fix_type === "assign_categories_by_name") {
+      // Iterovat všechny díly bez kategorie a heuristicky přiřadit
+      const { data: uncats } = await s
+        .from("parts_new")
+        .select("id, name")
+        .or("category.is.null,category.eq.")
+        .not("name", "is", null)
+        .limit(10000);
+      for (const p of uncats || []) {
+        const guess = guessCategoryFromName(p.name || "");
+        if (!guess) continue;
+        await s.from("parts_new").update({ category: guess }).eq("id", p.id);
+        appliedCount++;
       }
     }
 
