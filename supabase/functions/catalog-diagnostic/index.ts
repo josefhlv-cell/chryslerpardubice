@@ -517,7 +517,37 @@ async function applyFix(fixId: string, userId: string | null) {
       }
     }
 
-    else if (fix.fix_type === "rebuild_compatibility") {
+    else if (fix.fix_type === "fill_missing_names") {
+      // Najít všechny prázdné názvy a doplnit "VÝROBCE OEM"
+      const { data: empties } = await s
+        .from("parts_new")
+        .select("id, oem_number, manufacturer")
+        .or("name.is.null,name.eq.")
+        .limit(5000);
+      for (const p of empties || []) {
+        const newName = `${p.manufacturer || "Mopar"} ${p.oem_number || ""}`.trim();
+        if (newName.length < 3) continue;
+        await s.from("parts_new").update({ name: newName }).eq("id", p.id);
+        appliedCount++;
+      }
+    }
+
+    else if (fix.fix_type === "assign_categories_by_name") {
+      // Iterovat všechny díly bez kategorie a heuristicky přiřadit
+      const { data: uncats } = await s
+        .from("parts_new")
+        .select("id, name")
+        .or("category.is.null,category.eq.")
+        .not("name", "is", null)
+        .limit(10000);
+      for (const p of uncats || []) {
+        const guess = guessCategoryFromName(p.name || "");
+        if (!guess) continue;
+        await s.from("parts_new").update({ category: guess }).eq("id", p.id);
+        appliedCount++;
+      }
+    }
+
       // Zavoláme compat-matcher
       const url = `${SUPABASE_URL}/functions/v1/compat-matcher`;
       const resp = await fetch(url, {
