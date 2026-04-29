@@ -97,7 +97,7 @@ function findNodeWithParent(
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
   if (!node || node.keywords.length === 0) return true;
   
-const haystack = `${part.name} ${part.category || ""}`
+const haystack = ${part.name} ${part.category || ""}
   .normalize("NFD")
   .replace(/[\u0300-\u036f]/g, "")
   .toLowerCase();
@@ -107,6 +107,10 @@ const partCategory = (part.category || "")
   .replace(/[\u0300-\u036f]/g, "")
   .toLowerCase();
 
+const partCategory = (part.category || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase();
   
   const nodeLabelNorm = node.label
     .normalize("NFD")
@@ -115,20 +119,17 @@ const partCategory = (part.category || "")
   
   // STRICT: Pokud má J+M díl kategorii v DB a NEODPOVÍDÁ výběru,
   // tak ho filtruj pryč. Zamezí se zobrazení "Rameno nápravy" pod "Brzdové destičky"
-  // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
-  if (partCategory !== nodeLabelNorm) {
-  return false;
-}
-
-// OEM díly a J+M bez kategorie — keyword matching
-return node.keywords.some((keyword) =>
-  haystack.includes(
-    keyword
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-  )
-);
+  if (part.catalog_source === "jm" && part.category) {
+    // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
+    if (partCategory !== nodeLabelNorm) {
+      return false;
+    }
+  }
+  
+  // OEM díly a J+M bez kategorie — keyword matching
+  return node.keywords.some((keyword) =>
+    haystack.includes(keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
+  );
 }
 
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
