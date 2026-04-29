@@ -4,13 +4,15 @@
  * Includes OEM cross-references and aftermarket alternatives.
  */
 
-import { useState } from "react";
-import { Image as ImageIcon, X, ShoppingCart, Package, ArrowRight, Info, Loader2, RefreshCw, ArrowLeftRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Image as ImageIcon, X, ShoppingCart, Package, ArrowRight, Info, Loader2, RefreshCw, ArrowLeftRight, Car } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 import type { PartResult } from "@/api/partsAPI";
 import { sourceLabel, getOEMCrossReferences, type CrossRefResult } from "@/api/partsAPI";
 import Recommendations from "./Recommendations";
