@@ -236,6 +236,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         const [oemRes, jmVehicleRes] = await Promise.allSettled([
           listPartsForVehicle({
             brand, model, engine,
+            nextisVehicleId: selectedVehicleId,
             canonicalCategory: category.label,
             categoryKeywords: category.keywords,
             page, pageSize: 30,
