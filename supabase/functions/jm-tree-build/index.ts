@@ -1,7 +1,8 @@
 // jm-tree-build: Generates a TecDoc/J+M-style 5-level catalog tree using Lovable AI.
 // Tree levels:  Brand → Model (with code/years) → Engine → Category → Subcategory
 // Persists into public.catalog_categories using parent_id self-reference.
-// Idempotent: uses (parent_id, slug) unique key for upsert.
+// CHUNKED: each invocation processes CHUNK_SIZE vehicles, then self-invokes for the next chunk.
+// This avoids Edge Function CPU time limits (~150s wall-clock, ~10s CPU).
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -16,7 +17,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
-// ---------- helpers ----------
+const CHUNK_SIZE = 3; // vehicles per invocation — keep CPU usage low
+
 function slugify(s: string): string {
   return (s || "")
     .normalize("NFD")
@@ -37,8 +39,8 @@ async function aiTreeForVehicle(args: {
   const sys = `Jsi expert na náhradní díly amerických aut (Chrysler/Dodge/RAM/Lancia).
 Vrať TecDoc/J+M kompatibilní strom kategorií pro DANÝ MOTOR.
 - Hlavní kategorie: 12-18 reálných (Brzdové zařízení, Motor, Filtry, Chlazení, Odpružení, Řízení, Převodovka, Spojka, Elektroinstalace, Karoserie, Klimatizace, Palivový systém, Výfuk, Kola a pneumatiky, Interiér, Osvětlení, Kapaliny a oleje).
-- Pod každou: 2-6 subkategorií (např. Brzdové zařízení → Brzdové destičky / Brzdové kotouče / Brzdové třmeny / Brzdové válce / ABS).
-- Žádné položky bez relevance pro daný motor (např. nafta nemá benzínové vstřikovače).
+- Pod každou: 2-6 subkategorií.
+- Žádné položky bez relevance pro daný motor.
 - Názvy česky, formálně. Žádné duplicity.`;
 
   const usr = `Vozidlo: ${args.brand} ${args.model} ${args.engine ?? ""} ${
@@ -126,14 +128,9 @@ async function upsertNode(
     source: "jm" as const,
   };
 
-  // SELECT-then-INSERT to handle the (parent IS NULL) case which COALESCE index supports
-  const parentClause = args.parent_id === null ? "is.null" : `eq.${args.parent_id}`;
-  const { data: existing } = await supabase
-    .from("catalog_categories")
-    .select("id")
-    .eq("slug", slug)
-    .filter("parent_id", parentClause === "is.null" ? "is" : "eq", args.parent_id)
-    .maybeSingle();
+  let q = supabase.from("catalog_categories").select("id").eq("slug", slug);
+  q = args.parent_id === null ? q.is("parent_id", null) : q.eq("parent_id", args.parent_id);
+  const { data: existing } = await q.maybeSingle();
 
   if (existing?.id) {
     await supabase.from("catalog_categories").update(row).eq("id", existing.id);
@@ -148,7 +145,7 @@ async function upsertNode(
   return inserted.id;
 }
 
-async function processVehicle(supabase: any, vehicle: any, runId: string) {
+async function processVehicle(supabase: any, vehicle: any): Promise<number> {
   const brandId = await upsertNode(supabase, {
     parent_id: null,
     name: vehicle.brand,
@@ -218,6 +215,18 @@ async function processVehicle(supabase: any, vehicle: any, runId: string) {
   return created;
 }
 
+async function selfInvoke(runId: string) {
+  // Fire-and-forget POST to ourselves to process the next chunk
+  fetch(`${SUPABASE_URL}/functions/v1/jm-tree-build`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${SERVICE_ROLE}`,
+    },
+    body: JSON.stringify({ action: "chunk", runId }),
+  }).catch((e) => console.error("[self-invoke] failed:", e));
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -227,75 +236,129 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
 
     if (action === "status") {
-      const runId = body.runId;
       const { data } = await supabase
         .from("jm_tree_sync_runs")
         .select("*")
-        .eq("id", runId)
+        .eq("id", body.runId)
         .single();
       return new Response(JSON.stringify({ success: true, run: data }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Start a run
-    const allowedBrands = ["Chrysler", "Dodge", "RAM", "Lancia"];
-    const { data: vehicles } = await supabase
-      .from("nextis_vehicles")
-      .select("id, brand, model, engine, year_from, year_to")
-      .in("brand", allowedBrands)
-      .order("brand").order("model").order("engine");
+    // ---------- CHUNK: process next CHUNK_SIZE vehicles for an existing run ----------
+    if (action === "chunk") {
+      const runId = body.runId;
+      const { data: run } = await supabase
+        .from("jm_tree_sync_runs")
+        .select("*")
+        .eq("id", runId)
+        .single();
+      if (!run || run.status !== "running") {
+        return new Response(JSON.stringify({ success: true, stopped: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    const list = vehicles || [];
+      const allowedBrands = ["Chrysler", "Dodge", "RAM", "Lancia"];
+      const { data: vehicles } = await supabase
+        .from("nextis_vehicles")
+        .select("id, brand, model, engine, year_from, year_to")
+        .in("brand", allowedBrands)
+        .order("brand").order("model").order("engine")
+        .range(run.vehicles_done, run.vehicles_done + CHUNK_SIZE - 1);
+
+      const list = vehicles || [];
+      if (list.length === 0) {
+        await supabase.from("jm_tree_sync_runs").update({
+          status: "done",
+          current_step: "Hotovo",
+          finished_at: new Date().toISOString(),
+        }).eq("id", runId);
+        return new Response(JSON.stringify({ success: true, done: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Process this chunk in background, return immediately
+      const work = async () => {
+        let done = run.vehicles_done;
+        let created = run.categories_created;
+        for (const v of list) {
+          try {
+            created += await processVehicle(supabase, v);
+          } catch (e) {
+            console.error(`[chunk] vehicle ${v.brand} ${v.model}:`, e);
+            await supabase
+              .from("jm_tree_sync_runs")
+              .update({ last_error: String(e).slice(0, 500) })
+              .eq("id", runId);
+          }
+          done++;
+          await supabase.from("jm_tree_sync_runs").update({
+            vehicles_done: done,
+            categories_created: created,
+            current_step: `Vozidlo ${done}/${run.vehicles_total}`,
+          }).eq("id", runId);
+        }
+        // Schedule next chunk
+        if (done < run.vehicles_total) {
+          await selfInvoke(runId);
+        } else {
+          await supabase.from("jm_tree_sync_runs").update({
+            status: "done",
+            current_step: "Hotovo",
+            finished_at: new Date().toISOString(),
+          }).eq("id", runId);
+        }
+      };
+      // @ts-ignore
+      EdgeRuntime.waitUntil(work());
+
+      return new Response(JSON.stringify({ success: true, processing: list.length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ---------- START: create run, kick off first chunk ----------
+    // Mark any stuck running run as failed first
+    await supabase
+      .from("jm_tree_sync_runs")
+      .update({ status: "failed", last_error: "Superseded by new run", finished_at: new Date().toISOString() })
+      .eq("status", "running");
+
+    const allowedBrands = ["Chrysler", "Dodge", "RAM", "Lancia"];
+    const { count } = await supabase
+      .from("nextis_vehicles")
+      .select("*", { count: "exact", head: true })
+      .in("brand", allowedBrands);
+
+    const total = count || 0;
+
+    // If user wants to resume from existing tree, count existing categories
+    const { count: existingCats } = await supabase
+      .from("catalog_categories")
+      .select("*", { count: "exact", head: true })
+      .eq("source", "jm");
+
     const { data: run } = await supabase
       .from("jm_tree_sync_runs")
       .insert({
         status: "running",
         scope: "all",
-        vehicles_total: list.length,
-        current_step: "Generuji strom (AI)…",
+        vehicles_total: total,
+        vehicles_done: 0,
+        categories_created: existingCats || 0,
+        current_step: "Spouštím chunked sync…",
       })
       .select("*")
       .single();
 
-    // background job
-    const work = async () => {
-      let done = 0;
-      let created = 0;
-      for (const v of list) {
-        try {
-          const c = await processVehicle(supabase, v, run.id);
-          created += c;
-        } catch (e) {
-          console.error(`[jm-tree-build] vehicle ${v.brand} ${v.model}:`, e);
-          await supabase
-            .from("jm_tree_sync_runs")
-            .update({ last_error: String(e).slice(0, 500) })
-            .eq("id", run.id);
-        }
-        done++;
-        if (done % 3 === 0 || done === list.length) {
-          await supabase.from("jm_tree_sync_runs").update({
-            vehicles_done: done,
-            categories_created: created,
-            current_step: `Vozidlo ${done}/${list.length}`,
-          }).eq("id", run.id);
-        }
-      }
-      await supabase.from("jm_tree_sync_runs").update({
-        status: "done",
-        vehicles_done: done,
-        categories_created: created,
-        current_step: "Hotovo",
-        finished_at: new Date().toISOString(),
-      }).eq("id", run.id);
-    };
-
-    // @ts-ignore EdgeRuntime is provided by Supabase
-    EdgeRuntime.waitUntil(work());
+    // kick off first chunk
+    selfInvoke(run.id);
 
     return new Response(
-      JSON.stringify({ success: true, runId: run.id, total: list.length }),
+      JSON.stringify({ success: true, runId: run.id, total }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
