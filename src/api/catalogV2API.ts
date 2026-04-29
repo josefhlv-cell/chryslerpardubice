@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia", "Jeep"] as const;
+export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
 
 export type CatalogPart = {
   id: string;
@@ -17,7 +17,9 @@ export type CatalogPart = {
   is_oem: boolean;
   badge_label: "ORIGINÁL" | "NÁHRADA" | "NEZNÁMÝ";
   rank: number;
-  technical_parameters?: Record<string, any> | null;
+  final_price: number | null;
+  markup_percent: number;
+  technical_parameters?: Record | null;
   compatible_vehicles?: string[] | null;
 };
 
@@ -31,7 +33,6 @@ export type CatalogCategoryNode = {
   children: CatalogCategoryNode[];
 };
 
-// Legacy DB-shape category node (used by older CatalogTree component)
 export type CategoryNode = {
   id: string;
   parent_id: string | null;
@@ -56,49 +57,170 @@ export type NextisVehicle = {
   year_to?: number | null;
 };
 
+const DE_TO_CS: Record = {
+  'BREMSBELAG SATZ': 'Sada brzdových destiček',
+  'BREMSBELAG VORNE': 'Brzdové destičky přední',
+  'BREMSBELAG HINTEN': 'Brzdové destičky zadní',
+  'BREMSENCHEIBE VORNE': 'Brzdový kotouč přední',
+  'BREMSENCHEIBE HINTEN': 'Brzdový kotouč zadní',
+  'BREMSSATTEL VORNE': 'Brzdový třmen přední',
+  'BREMSSATTEL HINTEN': 'Brzdový třmen zadní',
+  'BREMSZYLINDER': 'Brzdový válec',
+  'BREMSFLUEESSIGKEIT': 'Brzdová kapalina',
+  'ABS VENTIL': 'ABS ventil',
+  'ABS PUMPE': 'ABS čerpadlo',
+  'ZAHNRIEMEN': 'Rozvodový řemen',
+  'ZAHNRIEMEN SATZ': 'Sada rozvodového řemene',
+  'ZYLINDERKOPF': 'Hlava válců',
+  'OELWANNE': 'Olejová vana',
+  'OELFILTER': 'Olejový filtr',
+  'ZUENDKERZE': 'Zapalovací svíčka',
+  'WASSERPUMPE': 'Vodní čerpadlo',
+  'WASSERPUMPE KOMPLETT': 'Vodní čerpadlo kompletní',
+  'KUEHLER': 'Chladič',
+  'KUEHLER KOMBI': 'Chladič kombinovaný',
+  'KUEHLFLUEESSIGKEIT': 'Chladící kapalina',
+  'THERMOSTAT': 'Termostat',
+  'VENTILATOR': 'Ventilátor',
+  'VENTILATOR VISIKUS': 'Viskózní ventilátor',
+  'STOSSDAEMPFER': 'Tlumič nárazů',
+  'SPANNFEDER': 'Pružina',
+  'FAHRKERKSBUSSCHE': 'Pouzdro podvozku',
+  'QUERLENKRR': 'Příčné rameno',
+  'LICHTMASCHINE': 'Alternátor',
+  'ANLASSER': 'Startér',
+  'AKKUMULATOR': 'Baterie',
+  'BATTERIE': 'Baterie',
+  'RELAIS': 'Relé',
+  'LUFTFILTER': 'Vzduchový filtr',
+  'KABINNENFILTER': 'Filtr kabiny',
+  'KRAFTSTOFFFILTER': 'Palivový filtr',
+  'KRAFTSTOFFPUMPE': 'Palivové čerpadlo',
+  'EINSPRITZVENTIL': 'Vstřikovací ventil',
+  'GETRIEBE': 'Převodovka',
+  'KUPPPLUNG': 'Spojka',
+  'KUPPPLUNG SATZ': 'Sada spojky',
+  'KUPPLUNG SCHEIBE': 'Kotouč spojky',
+  'TUEER': 'Dveře',
+  'MOTORHAUBE': 'Kapota motoru',
+  'SCHEIBE': 'Okno',
+  'SPIEGEL': 'Zrcadlo',
+  'RUECKBLIKSSPIEGEL': 'Zpětné zrcátko',
+  'SEITENSPIEGEL': 'Boční zrcadlo',
+  'STOSSSTANGE': 'Nárazník',
+  'TUERKGRIFF': 'Rukojeť dveří',
+  'SITZ': 'Sedadlo',
+  'RUEKKLEHNE': 'Opěradlo',
+  'KOPFSTUTZE': 'Opěrka hlavy',
+  'GUERTEL': 'Bezpečnostní pás',
+  'AIRBAG': 'Airbag',
+  'MOTOROEL': 'Motorový olej',
+  'GETRIEBEOEL': 'Převodový olej',
+  'DIFFERENZIALOEL': 'Diferenciálový olej',
+};
+
 const normalizeOem = (s: string) => (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
 const stripDiacritics = (s: string) =>
   (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-function normalizeRow(row: any): CatalogPart {
-  const source = (row?.catalog_source || "mopar").toLowerCase();
-  const isOem = ["mopar", "mopar_oem", "epc", "7zap", "epc-ai", "csv"].includes(source);
+function sanitizeName(raw: string): string {
+  if (!raw) return '—';
+  let text = String(raw || "").trim();
+  for (const [de, cs] of Object.entries(DE_TO_CS)) {
+    const regex = new RegExp(`\\b${de}\\b`, 'gi');
+    text = text.replace(regex, cs);
+  }
+  text = text.replace(/\s+/g, ' ');
+  if (text === text.toUpperCase() && text.length > 3) {
+    text = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+  }
+  return text;
+}
+
+function calculateFinalPrice(basePrice: number | null, source: string): { final: number | null; markup: number } {
+  if (basePrice === null) return { final: null, markup: 0 };
+  if (source === 'jm') {
+    return { final: Number((basePrice * 1.36).toFixed(2)), markup: 36 };
+  }
+  return { final: basePrice, markup: 0 };
+}
+
+function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
+  const seen = new Map();
+  const sorted = parts.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    const aPrice = a.final_price || 999999;
+    const bPrice = b.final_price || 999999;
+    return aPrice - bPrice;
+  });
+  for (const part of sorted) {
+    const key = normalizeOem(part.oem_number);
+    if (!seen.has(key)) {
+      seen.set(key, part);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+function normalizeRow(row: any, source: string = 'mopar'): CatalogPart {
+  const sourceNorm = (source || row?.catalog_source || 'mopar').toLowerCase();
+  const isOem = ['mopar', 'mopar_oem', 'epc', '7zap', 'epc-ai', 'csv'].includes(sourceNorm);
+  const basePrice = Number(row?.price_with_vat) || null;
+  const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
-  const priceWithVat = Number(row?.price_with_vat);
-  const hasPrice = priceNoVat > 0 || priceWithVat > 0;
+  const hasPrice = (basePrice && basePrice > 0) || (priceNoVat && priceNoVat > 0);
+  
   return {
     id: String(row?.id || Math.random()),
-    oem_number: String(row?.oem_number || ""),
-    name: String(row?.name || row?.oem_number || "Díl"),
+    oem_number: String(row?.oem_number || ''),
+    name: sanitizeName(String(row?.name || row?.oem_number || 'Díl')),
     manufacturer: row?.manufacturer ?? null,
-    catalog_source: source,
+    catalog_source: sourceNorm,
     price_without_vat: priceNoVat > 0 ? priceNoVat : null,
-    price_with_vat: priceWithVat > 0 ? priceWithVat : null,
-    availability: hasPrice ? (row?.availability ?? "available") : "on_order",
+    price_with_vat: basePrice,
+    availability: hasPrice ? (row?.availability ?? 'available') : 'on_order',
     image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
     category: row?.category ?? null,
     description: row?.description ?? null,
     is_oem: isOem,
-    badge_label: isOem ? "ORIGINÁL" : "NÁHRADA",
+    badge_label: isOem ? 'ORIGINÁL' : 'NÁHRADA',
     rank: isOem ? 1 : 5,
+    final_price: finalPrice,
+    markup_percent: markup,
+    technical_parameters: row?.technical_parameters ?? null,
+    compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
   };
 }
 
-// Legacy global OEM search (used by GlobalOEMSearch component)
 export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart[]; jm: CatalogPart[] }> {
   const q = (query || "").trim();
   if (!q) return { oem: [], jm: [] };
-  const { data } = await supabase
-    .from("parts_new")
-    .select("*")
-    .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
-    .limit(50);
-  const all = (data || []).map(normalizeRow);
-  return {
-    oem: all.filter((p) => p.is_oem),
-    jm: all.filter((p) => !p.is_oem),
-  };
+  
+  try {
+    const { data } = await supabase
+      .from("parts_new")
+      .select("*")
+      .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
+      .limit(50);
+    
+    const oemParts = (data || []).map(p => normalizeRow(p, 'mopar'));
+    
+    const jmResult = await supabase.functions.invoke('jm-proxy', {
+      body: { action: 'searchByCode', payload: { code: q } }
+    });
+    
+    const jmParts = (jmResult?.data?.items || []).map((it: any) => normalizeRow(it, 'jm'));
+    const combined = deduplicateParts([...oemParts, ...jmParts]);
+    
+    return {
+      oem: oemParts,
+      jm: jmParts,
+    };
+  } catch (err) {
+    console.error('[globalOemSearch] error:', err);
+    return { oem: [], jm: [] };
+  }
 }
 
 export async function fetchBrands() {
@@ -122,223 +244,87 @@ export async function fetchNextisVehicles(brand: string, model: string) {
   return (data || []) as NextisVehicle[];
 }
 
-/**
- * Canonical product category tree.
- * The `label` MUST exactly match the canonical value stored in `parts_new.category`
- * (after the 2026-04 normalization migration). Counts are filled in from the DB.
- */
-const CANONICAL_TREE: Omit<CatalogCategoryNode, "count">[] = [
-  {
-    id: "brakes", label: "Brzdové zařízení", path: ["Brzdové zařízení"], sectionId: null,
-    keywords: ["brzd", "brake", "abs", "třmen", "trmen", "kotouč", "kotouc", "destičk", "destick", "caliper", "rotor"],
-    children: [],
-  },
-  {
-    id: "engine", label: "Motor", path: ["Motor"], sectionId: null,
-    keywords: ["motor", "engine", "rozvod", "svíčk", "svick", "těsnění", "tesneni", "ventil", "valve", "píst", "pist", "kolben"],
-    children: [],
-  },
-  {
-    id: "filters", label: "Filtry", path: ["Filtry"], sectionId: null,
-    keywords: ["filtr", "filter", "oelfilter", "luftfilter"],
-    children: [],
-  },
-  {
-    id: "cooling", label: "Chlazení", path: ["Chlazení"], sectionId: null,
-    keywords: ["chlad", "cool", "radiator", "termostat", "thermostat", "kuehler", "wasserpumpe"],
-    children: [],
-  },
-  {
-    id: "suspension", label: "Odpružení", path: ["Odpružení"], sectionId: null,
-    keywords: ["odpruž", "odpruz", "tlumič", "tlumic", "náprav", "naprav", "rameno", "suspension", "shock", "spring", "pružin", "silentblok", "stossdaempfer"],
-    children: [],
-  },
-  {
-    id: "steering", label: "Řízení", path: ["Řízení"], sectionId: null,
-    keywords: ["řízení", "rizeni", "steer", "servolenkung", "tie rod", "kulový čep", "kulovy cep"],
-    children: [],
-  },
-  {
-    id: "transmission", label: "Převodovka", path: ["Převodovka"], sectionId: null,
-    keywords: ["převod", "prevod", "transmission", "gearbox", "spojk", "clutch", "kupplung"],
-    children: [],
-  },
-  {
-    id: "electrical", label: "Elektroinstalace", path: ["Elektroinstalace"], sectionId: null,
-    keywords: ["elektr", "alternátor", "alternator", "starter", "anlasser", "senzor", "sensor", "geber", "kabelstrang", "kabelov", "wiring", "steuergeraet", "řídicí jednotka"],
-    children: [],
-  },
-  {
-    id: "lighting", label: "Osvětlení", path: ["Osvětlení"], sectionId: null,
-    keywords: ["světlomet", "svetlomet", "světlo", "svetlo", "žárovka", "zarovka", "scheinwerfer", "leuchte", "headlight", "bulb"],
-    children: [],
-  },
-  {
-    id: "body", label: "Karoserie", path: ["Karoserie"], sectionId: null,
-    keywords: ["karoser", "body", "dveře", "dvere", "nárazník", "naraznik", "stossfaenger", "tuer", "blatník", "blatnik", "kapot", "víko", "viko"],
-    children: [],
-  },
-  {
-    id: "interior", label: "Interiér", path: ["Interiér"], sectionId: null,
-    keywords: ["interiér", "interier", "interior", "sedadl", "obložení", "oblozeni", "verkleidung"],
-    children: [],
-  },
-  {
-    id: "hvac", label: "Klimatizace", path: ["Klimatizace"], sectionId: null,
-    keywords: ["klimat", "topen", "a/c", "hvac", "kompresor klima", "condenser"],
-    children: [],
-  },
-  {
-    id: "exhaust", label: "Výfuk", path: ["Výfuk"], sectionId: null,
-    keywords: ["výfuk", "vyfuk", "exhaust", "katalyz", "schalldaempfer", "muffler"],
-    children: [],
-  },
-  {
-    id: "fuel", label: "Palivový systém", path: ["Palivový systém"], sectionId: null,
-    keywords: ["palivo", "fuel", "vstřik", "vstrik", "injektor", "injector", "kraftstoff"],
-    children: [],
-  },
-  {
-    id: "fluids", label: "Kapaliny a oleje", path: ["Kapaliny a oleje"], sectionId: null,
-    keywords: ["olej", "oil", "kapalin", "fluid", "mazi", "atf", "dot 4"],
-    children: [],
-  },
-  {
-    id: "maintenance", label: "Údržba", path: ["Údržba"], sectionId: null,
-    keywords: ["údržba", "udrzba", "service", "maintenance", "sada"],
-    children: [],
-  },
-  {
-    id: "tyres", label: "Pneumatiky", path: ["Pneumatiky"], sectionId: null,
-    keywords: ["pneu", "tyre", "tire"],
-    children: [],
-  },
-  {
-    id: "accessories", label: "Příslušenství", path: ["Příslušenství"], sectionId: null,
-    keywords: ["příslušenství", "prislusenstvi", "accessor"],
-    children: [],
-  },
-  {
-    id: "other", label: "Ostatní", path: ["Ostatní"], sectionId: null,
-    keywords: [],
-    children: [],
-  },
-];
-
-/**
- * Build the category tree with real counts derived from parts_new for the given vehicle.
- * Counts use exact match on the canonical `category` column (post-migration values).
- */
-export async function fetchJmCategoryTree(opts: {
-  brand?: string;
-  model?: string;
-  engine?: string;
-  nextisVehicleId?: string;
-}): Promise<CatalogCategoryNode[]> {
-  const tree: CatalogCategoryNode[] = CANONICAL_TREE.map((node) => ({ ...node, count: 0 }));
-
+export async function fetchJmCategoryTree(opts: any) {
   try {
-    let query = supabase.from("parts_new_public").select("category", { count: "exact", head: false }).limit(5000);
-    if (opts?.brand) query = query.ilike("compatible_vehicles", `%${opts.brand}%`);
-    if (opts?.model) query = query.ilike("compatible_vehicles", `%${opts.model}%`);
-    const { data } = await query;
-    const counts = new Map<string, number>();
-    for (const row of (data || []) as Array<{ category: string | null }>) {
-      const c = (row.category || "Ostatní").trim();
-      counts.set(c, (counts.get(c) || 0) + 1);
-    }
-    for (const node of tree) {
-      node.count = counts.get(node.label) || 0;
-    }
+    const { data } = await supabase.functions.invoke('jm-proxy', {
+      body: { action: 'vehicleCategories', payload: opts }
+    });
+    return data?.categories || [];
   } catch (err) {
-    console.warn("[catalogV2API] category count failed", err);
+    console.error('[fetchJmCategoryTree] error:', err);
+    return [];
   }
-
-  // Hide empty leaves except "Ostatní" (always shown as fallback)
-  return tree.filter((n) => n.count > 0 || n.id === "other");
 }
 
 export async function fetchJmForVehicle(opts: any) {
   try {
-    const { data } = await supabase.functions.invoke("jm-proxy", { body: { action: "searchByVehicle", payload: opts } });
-    return { items: (data?.data?.items || []).map((it: any) => normalizeRow(it)), warning: data?.warning };
-  } catch {
-    return { items: [] };
+    const { data, error } = await supabase.functions.invoke('jm-proxy', {
+      body: { action: 'searchByVehicle', payload: opts }
+    });
+    if (error) {
+      console.warn('[fetchJmForVehicle] error:', error);
+      return { items: [], warning: 'J+M API error' };
+    }
+    return {
+      items: (data?.items || []).map((it: any) => normalizeRow(it, 'jm')),
+      warning: data?.warning
+    };
+  } catch (err) {
+    console.error('[fetchJmForVehicle] exception:', err);
+    return { items: [], warning: String(err) };
   }
 }
 
 export async function fetchJmByCodes(codes: string[]) {
   try {
-    const { data } = await supabase.functions.invoke("jm-proxy", { body: { action: "searchByCodes", payload: { codes } } });
-    return (data?.data?.items || []).map((it: any) => normalizeRow(it));
-  } catch {
+    const allItems: CatalogPart[] = [];
+    for (const code of codes) {
+      try {
+        const { data } = await supabase.functions.invoke('jm-proxy', {
+          body: { action: 'searchByCode', payload: { code } }
+        });
+        if (data?.items) {
+          allItems.push(...data.items.map((it: any) => normalizeRow(it, 'jm')));
+        }
+      } catch (err) {
+        console.warn(`[fetchJmByCodes] code ${code} failed:`, err);
+      }
+    }
+    return allItems;
+  } catch (err) {
+    console.error('[fetchJmByCodes] error:', err);
     return [];
   }
 }
 
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
-  const map = new Map<string, CatalogPart>();
-  (oem || []).forEach((p) => map.set(normalizeOem(p.oem_number), p));
-  (jm || []).forEach((p) => {
-    const key = normalizeOem(p.oem_number);
-    if (!map.has(key)) map.set(key, p);
-  });
-  return Array.from(map.values()).sort((a, b) => a.rank - b.rank);
+  const all = [...oem, ...jm];
+  return deduplicateParts(all);
 }
 
-/**
- * List parts for a vehicle filtered by canonical category.
- * Strict: matches `parts_new.category = canonicalCategory`.
- * Falls back to keyword match in `name` if zero exact-category hits (handles legacy rows).
- */
-export async function listPartsForVehicle(opts: {
-  brand: string;
-  model: string;
-  engine?: string;
-  canonicalCategory?: string;
-  categoryKeywords?: string[];
-  page?: number;
-  pageSize?: number;
-}) {
-  const pageSize = opts.pageSize || 30;
-  const page = opts.page || 0;
-  const from = page * pageSize;
-  const to = from + pageSize - 1;
-
-  // Primary query: exact canonical category
-  let q = supabase
+export async function listPartsForVehicle(opts: any) {
+  const { data } = await supabase
     .from("parts_new_public")
-    .select("*", { count: "exact" })
+    .select("*")
     .ilike("compatible_vehicles", `%${opts.brand}%`)
-    .ilike("compatible_vehicles", `%${opts.model}%`);
+    .ilike("compatible_vehicles", `%${opts.model}%`)
+    .limit(200);
+  const all = (data || []).map((row) => normalizeRow(row));
+  return { items: deduplicateParts(all), total: all.length };
+}
 
-  if (opts.canonicalCategory) {
-    q = q.eq("category", opts.canonicalCategory);
-  }
-
-  q = q.range(from, to).order("price_without_vat", { ascending: false, nullsFirst: false });
-
-  const { data, count } = await q;
-  let items = (data || []).map(normalizeRow);
-  let total = count || items.length;
-
-  // Fallback: if exact-category yielded 0 but we have keywords, try keyword match in name
-  if (items.length === 0 && (opts.categoryKeywords?.length || 0) > 0) {
-    const orFilter = opts
-      .categoryKeywords!.slice(0, 8)
-      .map((k) => `name.ilike.%${k}%`)
-      .join(",");
-    let q2 = supabase
+export async function searchCatalog(query: string): Promise {
+  const q = (query || "").trim().toLowerCase();
+  if (!q) return [];
+  try {
+    const { data } = await supabase
       .from("parts_new_public")
-      .select("*", { count: "exact" })
-      .ilike("compatible_vehicles", `%${opts.brand}%`)
-      .ilike("compatible_vehicles", `%${opts.model}%`)
-      .or(orFilter)
-      .range(from, to);
-    const { data: data2, count: count2 } = await q2;
-    items = (data2 || []).map(normalizeRow);
-    total = count2 || items.length;
+      .select("*")
+      .or(`name.ilike.%${q}%,oem_number.ilike.%${q}%,description.ilike.%${q}%`)
+      .limit(100);
+    const all = (data || []).map((row) => normalizeRow(row));
+    return deduplicateParts(all);
+  } catch {
+    return [];
   }
-
-  return { items, total };
 }
