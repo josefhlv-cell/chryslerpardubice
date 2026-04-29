@@ -143,7 +143,7 @@ const unwrapFunctionPayload = (payload: any) => payload?.data ?? payload ?? {};
 function calculateFinalPrice(basePrice: number | null, source: string): { final: number | null; markup: number } {
   if (basePrice === null) return { final: null, markup: 0 };
   if (source === 'jm') {
-    return { final: Number((basePrice * 1.36).toFixed(2)), markup: 36 };
+    return { final: Number((basePrice * 1.37).toFixed(2)), markup: 37 };
   }
   return { final: basePrice, markup: 0 };
 }
