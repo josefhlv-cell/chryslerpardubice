@@ -89,14 +89,22 @@ Popis: ${part.description || "(prázdné)"}`;
   return args ? JSON.parse(args) : null;
 }
 
-async function triggerBackup(supabase: any): Promise<string | null> {
-  // Invoke db-backup edge function and return the path
+async function triggerBackup(): Promise<string | null> {
+  // Internal server-to-server call: use the service key explicitly so db-backup
+  // does not try to validate it as an end-user JWT.
   try {
-    const { data, error } = await supabase.functions.invoke("db-backup", {
-      body: { trigger: "diagnose-part-apply" },
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/db-backup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${SERVICE_ROLE}`,
+        "apikey": SERVICE_ROLE,
+      },
+      body: JSON.stringify({ action: "backup", trigger: "diagnose-part-apply" }),
     });
-    if (error) {
-      console.error("[diagnose-part] backup invoke failed:", error);
+    const data = await res.json().catch(() => null);
+    if (!res.ok || data?.success === false) {
+      console.error("[diagnose-part] backup failed:", res.status, data);
       return null;
     }
     return data?.path || data?.file || `manual-${Date.now()}`;
@@ -171,12 +179,12 @@ Deno.serve(async (req) => {
       }
 
       // 🚨 MANDATORY BACKUP
-      const backupPath = await triggerBackup(supabase);
+      const backupPath = await triggerBackup();
       // Even if backup invoke fails, we still record the attempt — but block apply.
       if (!backupPath) {
         return new Response(
-          JSON.stringify({ success: false, error: "Záloha selhala — oprava zablokována" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          JSON.stringify({ success: false, error: "Záloha selhala — oprava zablokována", fallback: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
