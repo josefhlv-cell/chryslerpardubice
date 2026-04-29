@@ -246,7 +246,83 @@ export async function fetchNextisVehicles(brand: string, model: string) {
   return (data || []) as NextisVehicle[];
 }
 
+// Cache flag value for 60s to avoid repeated lookups during a session.
+let _flagCache: { value: boolean; ts: number } | null = null;
+export async function isJmTreeFlagEnabled(): Promise<boolean> {
+  if (_flagCache && Date.now() - _flagCache.ts < 60_000) return _flagCache.value;
+  try {
+    const { data } = await supabase
+      .from("feature_flags")
+      .select("enabled")
+      .eq("feature_key", "catalog_jm_tree")
+      .maybeSingle();
+    const value = !!data?.enabled;
+    _flagCache = { value, ts: Date.now() };
+    return value;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read the locally-mirrored 5-level catalog tree (Brand→Model→Engine→Category→Subcategory)
+ * for one vehicle. Used when feature flag `catalog_jm_tree` is ON.
+ */
+async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string }): Promise<CatalogCategoryNode[]> {
+  const { data, error } = await supabase
+    .from("catalog_categories")
+    .select("id, parent_id, slug, name_cs, sort_order, vehicle_brand, vehicle_model, vehicle_engine")
+    .order("sort_order", { ascending: true });
+  if (error || !data) return [];
+
+  // Filter to the relevant scope: keep nodes that match brand/model/engine OR are global (null scope)
+  const scoped = data.filter((n: any) => {
+    if (opts.brand && n.vehicle_brand && n.vehicle_brand.toLowerCase() !== opts.brand.toLowerCase()) return false;
+    if (opts.model && n.vehicle_model && n.vehicle_model.toLowerCase() !== opts.model.toLowerCase()) return false;
+    if (opts.engine && n.vehicle_engine && n.vehicle_engine.toLowerCase() !== opts.engine.toLowerCase()) return false;
+    return true;
+  });
+
+  const byParent = new Map<string | null, any[]>();
+  for (const n of scoped) {
+    const k = n.parent_id || null;
+    if (!byParent.has(k)) byParent.set(k, []);
+    byParent.get(k)!.push(n);
+  }
+
+  const build = (parentId: string | null, path: string[]): CatalogCategoryNode[] => {
+    const kids = byParent.get(parentId) || [];
+    return kids.map((n) => {
+      const nodePath = [...path, n.slug];
+      return {
+        id: n.id,
+        label: n.name_cs,
+        path: nodePath,
+        keywords: [],
+        count: 0,
+        sectionId: null,
+        children: build(n.id, nodePath),
+      };
+    });
+  };
+
+  // Find root nodes for category-level: skip Brand/Model/Engine wrappers if present
+  // by walking down to the deepest scope match.
+  const tree = build(null, []);
+  return tree;
+}
+
 export async function fetchJmCategoryTree(opts: any) {
+  // Feature flag ON → use local mirrored tree (J+M-style 5 levels)
+  if (await isJmTreeFlagEnabled()) {
+    const local = await fetchLocalCategoryTree({
+      brand: opts?.brand || opts?.vehicle?.brand,
+      model: opts?.model || opts?.vehicle?.model,
+      engine: opts?.engine || opts?.vehicle?.engine,
+    });
+    if (local.length > 0) return local;
+    // Fall through to JM proxy if local mirror is empty (not yet built)
+  }
   try {
     const { data } = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'vehicleCategories', payload: opts }
@@ -409,6 +485,27 @@ export async function listPartsForVehicle(opts: any) {
     else if (orFilter) query = query.or(orFilter);
     return await query.order('price_with_vat', { ascending: true }).range(from, to);
   };
+
+  // STRATEGY 0: when flag ON and we have a category node id, use the explicit
+  // catalog_part_categories mapping (built by jm-classify-parts).
+  if (opts.categoryNodeId && (await isJmTreeFlagEnabled())) {
+    const { data: mapRows } = await supabase
+      .from('catalog_part_categories')
+      .select('part_id')
+      .eq('category_id', opts.categoryNodeId)
+      .limit(2000);
+    const partIds = [...new Set((mapRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    if (partIds.length > 0) {
+      const { data } = await supabase
+        .from('parts_new_public')
+        .select('*')
+        .in('id', partIds)
+        .order('price_with_vat', { ascending: true })
+        .range(from, to);
+      const all = (data || []).map((row) => normalizeRow(row));
+      if (all.length > 0) return { items: deduplicateParts(all), total: all.length };
+    }
+  }
 
   // Try in order: compat join → text strict → text without engine → category-only fallback
   const a = await tryViaCompat();

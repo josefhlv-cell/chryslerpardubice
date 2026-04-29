@@ -268,6 +268,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           listPartsForVehicle({
             brand, model, engine,
             nextisVehicleId: selectedVehicleId,
+            categoryNodeId: category.id,
             canonicalCategory: category.label,
             categoryKeywords: category.keywords,
             page, pageSize: 30,
