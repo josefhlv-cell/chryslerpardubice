@@ -466,6 +466,8 @@ async function generateFixProposals(runId: string, critical: any[], summary: Rec
         payload: {},
       });
     }
+  }
+}
 
 // ============= APLIKACE OPRAV =============
 async function applyFix(fixId: string, userId: string | null) {
