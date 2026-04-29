@@ -398,6 +398,11 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
   return deduplicateParts(all);
 }
 
+function finalizeCatalogRows(rows: any[], from: number, to: number) {
+  const all = deduplicateParts((rows || []).map((row) => normalizeRow(row)));
+  return { items: all.slice(from, to + 1), total: all.length };
+}
+
 /**
  * Mapping from JM tree subcategory labels → canonical parts_new.category.
  * The DB has 19 broad categories; the JM tree has hundreds of leaves.
@@ -484,7 +489,7 @@ export async function listPartsForVehicle(opts: any) {
     let q = supabase.from('parts_new_public').select('*').in('id', partIds);
     if (canonical) q = q.eq('category', canonical);
     else if (orFilter) q = q.or(orFilter);
-    const { data, error } = await q.order('price_with_vat', { ascending: true }).range(from, to);
+    const { data, error } = await q.limit(2000);
     return { rows: data || [], error };
   };
 
@@ -498,7 +503,7 @@ export async function listPartsForVehicle(opts: any) {
     if (useEngine && opts.engine) query = query.ilike('compatible_vehicles', `%${opts.engine}%`);
     if (canonical) query = query.eq('category', canonical);
     else if (orFilter) query = query.or(orFilter);
-    return await query.order('price_with_vat', { ascending: true }).range(from, to);
+    return await query.limit(2000);
   };
 
   // STRATEGY 0: when flag ON and we have a category node id, use the explicit
@@ -515,30 +520,25 @@ export async function listPartsForVehicle(opts: any) {
         .from('parts_new_public')
         .select('*')
         .in('id', partIds)
-        .order('price_with_vat', { ascending: true })
-        .range(from, to);
-      const all = (data || []).map((row) => normalizeRow(row));
-      if (all.length > 0) return { items: deduplicateParts(all), total: all.length };
+        .limit(2000);
+      if ((data || []).length > 0) return finalizeCatalogRows(data || [], from, to);
     }
   }
 
   // Try in order: compat join → text strict → text without engine → category-only fallback
   const a = await tryViaCompat();
   if (!a.error && a.rows.length > 0) {
-    const all = a.rows.map((row) => normalizeRow(row));
-    return { items: deduplicateParts(all), total: all.length };
+    return finalizeCatalogRows(a.rows, from, to);
   }
 
   const b1 = await tryViaText(true);
   if (!b1.error && (b1.data || []).length > 0) {
-    const all = (b1.data || []).map((row) => normalizeRow(row));
-    return { items: deduplicateParts(all), total: all.length };
+    return finalizeCatalogRows(b1.data || [], from, to);
   }
 
   const b2 = await tryViaText(false);
   if (!b2.error && (b2.data || []).length > 0) {
-    const all = (b2.data || []).map((row) => normalizeRow(row));
-    return { items: deduplicateParts(all), total: all.length };
+    return finalizeCatalogRows(b2.data || [], from, to);
   }
 
   // Last resort: show category for the brand alone (any vehicle)
@@ -548,10 +548,8 @@ export async function listPartsForVehicle(opts: any) {
       .select('*')
       .eq('category', canonical)
       .ilike('compatible_vehicles', `%${opts.brand}%`)
-      .order('price_with_vat', { ascending: true })
-      .range(from, to);
-    const all = (data || []).map((row) => normalizeRow(row));
-    return { items: deduplicateParts(all), total: all.length };
+      .limit(2000);
+    return finalizeCatalogRows(data || [], from, to);
   }
 
   return { items: [], total: 0 };
