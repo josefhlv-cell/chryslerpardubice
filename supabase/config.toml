@@ -59,3 +59,12 @@ verify_jwt = false
 
 [functions.bulk-price-sync]
 verify_jwt = false
+
+[functions.jm-tree-build]
+verify_jwt = false
+
+[functions.jm-classify-parts]
+verify_jwt = false
+
+[functions.diagnose-part]
+verify_jwt = false
