@@ -251,7 +251,8 @@ export async function fetchJmCategoryTree(opts: any) {
     const { data } = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'vehicleCategories', payload: opts }
     });
-    return data?.categories || [];
+    const payload = unwrapFunctionPayload(data);
+    return Array.isArray(payload?.categories) ? payload.categories : [];
   } catch (err) {
     console.error('[fetchJmCategoryTree] error:', err);
     return [];
@@ -267,9 +268,10 @@ export async function fetchJmForVehicle(opts: any) {
       console.warn('[fetchJmForVehicle] error:', error);
       return { items: [], warning: 'J+M API error' };
     }
+    const payload = unwrapFunctionPayload(data);
     return {
-      items: (data?.items || []).map((it: any) => normalizeRow(it, 'jm')),
-      warning: data?.warning
+      items: (payload?.items || []).map((it: any) => normalizeRow(it, 'jm')),
+      warning: payload?.warning
     };
   } catch (err) {
     console.error('[fetchJmForVehicle] exception:', err);
@@ -285,8 +287,9 @@ export async function fetchJmByCodes(codes: string[]) {
         const { data } = await supabase.functions.invoke('jm-proxy', {
           body: { action: 'searchByCode', payload: { code } }
         });
-        if (data?.items) {
-          allItems.push(...data.items.map((it: any) => normalizeRow(it, 'jm')));
+        const payload = unwrapFunctionPayload(data);
+        if (payload?.items) {
+          allItems.push(...payload.items.map((it: any) => normalizeRow(it, 'jm')));
         }
       } catch (err) {
         console.warn(`[fetchJmByCodes] code ${code} failed:`, err);
@@ -315,7 +318,7 @@ export async function listPartsForVehicle(opts: any) {
   return { items: deduplicateParts(all), total: all.length };
 }
 
-export async function searchCatalog(query: string): Promise {
+export async function searchCatalog(query: string): Promise<CatalogPart[]> {
   const q = (query || "").trim().toLowerCase();
   if (!q) return [];
   try {
