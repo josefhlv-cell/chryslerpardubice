@@ -1,5 +1,5 @@
-// jm-tree-build (FAST): parallel AI calls + bulk DB inserts.
-// Each invocation processes CHUNK_SIZE vehicles concurrently, then self-invokes.
+// jm-tree-build (SAFE): deterministic TecDoc/J+M-like template + chunked inserts.
+// No long AI calls here — this function must always finish and self-invoke reliably.
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -12,56 +12,36 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const CHUNK_SIZE = 12; // vehicles processed per invocation without AI/network waits
 
-const CHUNK_SIZE = 5; // vehicles processed in PARALLEL per invocation
+const DEFAULT_TREE = [
+  { name: "Brzdové zařízení", subcategories: ["Brzdové destičky", "Brzdové kotouče", "Brzdové třmeny", "Brzdové hadice a trubky", "ABS senzory", "Parkovací brzda"] },
+  { name: "Filtry", subcategories: ["Olejové filtry", "Vzduchové filtry", "Kabinové filtry", "Palivové filtry", "Filtry převodovky"] },
+  { name: "Motor", subcategories: ["Těsnění motoru", "Rozvody", "Zapalování", "Sání motoru", "Mazání", "Uložení motoru", "Řemeny a kladky"] },
+  { name: "Chlazení", subcategories: ["Chladiče", "Vodní čerpadla", "Termostaty", "Ventilátory chlazení", "Hadice chlazení", "Expanzní nádoby"] },
+  { name: "Odpružení", subcategories: ["Tlumiče nárazů", "Pružiny", "Ramena náprav", "Silentbloky", "Stabilizátory", "Ložiska kol"] },
+  { name: "Řízení", subcategories: ["Čepy řízení", "Tyče řízení", "Servořízení", "Hřeben řízení", "Volantové díly"] },
+  { name: "Převodovka", subcategories: ["Automatická převodovka", "Manuální převodovka", "Diferenciál", "Poloosy", "Kardan", "Oleje převodovky"] },
+  { name: "Spojka", subcategories: ["Spojkové sady", "Spojkový válec", "Spojkové ložisko", "Setrvačník"] },
+  { name: "Elektroinstalace", subcategories: ["Alternátory", "Startéry", "Baterie", "Senzory", "Relé a pojistky", "Kabeláž"] },
+  { name: "Karoserie", subcategories: ["Nárazníky", "Kapoty", "Blatníky", "Dveře", "Zrcátka", "Skla"] },
+  { name: "Klimatizace", subcategories: ["Kompresory klimatizace", "Kondenzátory", "Výparníky", "Vysoušeče", "Hadice klimatizace", "Topení"] },
+  { name: "Palivový systém", subcategories: ["Palivová čerpadla", "Vstřikovače", "Palivové nádrže", "Regulátory tlaku", "Palivové potrubí"] },
+  { name: "Výfuk", subcategories: ["Tlumiče výfuku", "Katalyzátory", "Lambda sondy", "Výfukové potrubí", "DPF filtry"] },
+  { name: "Osvětlení", subcategories: ["Světlomety", "Zadní světla", "Mlhovky", "Žárovky", "Směrovky"] },
+  { name: "Interiér", subcategories: ["Sedadla", "Palubní deska", "Ovladače", "Bezpečnostní pásy", "Airbagy"] },
+  { name: "Kapaliny a oleje", subcategories: ["Motorové oleje", "Převodové oleje", "Brzdové kapaliny", "Chladicí kapaliny", "Aditiva"] },
+  { name: "Pneumatiky", subcategories: ["Pneumatiky", "Disky kol", "TPMS senzory", "Šrouby kol"] },
+  { name: "Údržba", subcategories: ["Servisní sady", "Stěrače", "Čisticí prostředky", "Nářadí"] },
+  { name: "Příslušenství", subcategories: ["Tažná zařízení", "Autokoberce", "Nosiče", "Doplňky"] },
+  { name: "Ostatní", subcategories: ["Univerzální díly", "Spojovací materiál", "Nezařazené díly"] },
+];
 
 function slugify(s: string): string {
   return (s || "")
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "").slice(0, 80);
-}
-
-async function aiTreeForVehicle(v: any) {
-  const sys = `Jsi expert na náhradní díly amerických aut (Chrysler/Dodge/RAM/Lancia).
-Vrať TecDoc/J+M kompatibilní strom kategorií pro DANÝ MOTOR.
-- 12-18 hlavních kategorií (Brzdy, Motor, Filtry, Chlazení, Odpružení, Řízení, Převodovka, Spojka, Elektro, Karoserie, Klima, Palivo, Výfuk, Kola, Interiér, Osvětlení, Oleje).
-- 2-6 subkategorií pod každou. Česky, formálně, žádné duplicity.`;
-  const usr = `Vozidlo: ${v.brand} ${v.model} ${v.engine ?? ""} ${v.year_from ? `(${v.year_from}-${v.year_to ?? "?"})` : ""}`;
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
-      messages: [{ role: "system", content: sys }, { role: "user", content: usr }],
-      tools: [{
-        type: "function",
-        function: {
-          name: "return_tree",
-          parameters: {
-            type: "object",
-            properties: {
-              categories: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: { name: { type: "string" }, subcategories: { type: "array", items: { type: "string" } } },
-                  required: ["name", "subcategories"],
-                },
-              },
-            },
-            required: ["categories"],
-          },
-        },
-      }],
-      tool_choice: { type: "function", function: { name: "return_tree" } },
-    }),
-  });
-  if (!res.ok) throw new Error(`AI ${res.status}`);
-  const data = await res.json();
-  const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  return args ? (JSON.parse(args).categories || []) : [];
 }
 
 // Bulk-insert nodes for ONE vehicle's tree. Uses cached parent lookups + a single bulk insert per level.
@@ -154,8 +134,7 @@ async function buildVehicleTree(supabase: any, v: any, tree: any[]): Promise<num
 }
 
 async function processVehicle(supabase: any, v: any): Promise<number> {
-  const tree = await aiTreeForVehicle(v);
-  return buildVehicleTree(supabase, v, tree);
+  return buildVehicleTree(supabase, v, DEFAULT_TREE);
 }
 
 function selfInvoke(runId: string) {
@@ -207,7 +186,7 @@ Deno.serve(async (req) => {
       }
 
       const work = async () => {
-        // Run all vehicles in this chunk in PARALLEL
+        // Keep database writes bounded and deterministic; no AI calls, no rate limits.
         const results = await Promise.allSettled(list.map((v) => processVehicle(supabase, v)));
         let createdInChunk = 0;
         const errors: string[] = [];
@@ -221,7 +200,7 @@ Deno.serve(async (req) => {
         await supabase.from("jm_tree_sync_runs").update({
           vehicles_done: newDone,
           categories_created: newCreated,
-          current_step: `Vozidlo ${newDone}/${run.vehicles_total}`,
+          current_step: `Vozidlo ${newDone}/${run.vehicles_total} — bezpečné dávkování`,
           last_error: errors.length > 0 ? errors.join(" | ").slice(0, 500) : run.last_error,
         }).eq("id", runId);
 
@@ -258,7 +237,7 @@ Deno.serve(async (req) => {
       status: "running", scope: "all",
       vehicles_total: total, vehicles_done: 0,
       categories_created: existingCats || 0,
-      current_step: "Spouštím (paralelně, 5 vozidel naráz)…",
+      current_step: "Spouštím bezpečné dávkování bez AI čekání…",
     }).select("*").single();
 
     selfInvoke(run.id);
