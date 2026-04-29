@@ -548,6 +548,7 @@ async function applyFix(fixId: string, userId: string | null) {
       }
     }
 
+    else if (fix.fix_type === "rebuild_compatibility") {
       // Zavoláme compat-matcher
       const url = `${SUPABASE_URL}/functions/v1/compat-matcher`;
       const resp = await fetch(url, {
