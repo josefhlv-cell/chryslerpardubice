@@ -145,12 +145,9 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
         </div>
       )}
 
-      {part.compatible_vehicles && (
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Kompatibilní vozidla</p>
-          <p className="text-xs leading-relaxed">{part.compatible_vehicles}</p>
-        </div>
-      )}
+      {/* Kompatibilní vozy — z catalog_vehicle_compatibility, s filtrováním */}
+      <CompatibleVehiclesSection part={part} />
+
 
       {/* Cross-references / Aftermarket alternatives */}
       <div className="space-y-2">
