@@ -19,7 +19,7 @@ export type CatalogPart = {
   rank: number;
   final_price: number | null;
   markup_percent: number;
-  technical_parameters?: Record | null;
+  technical_parameters?: Record<string, unknown> | null;
   compatible_vehicles?: string[] | null;
 };
 
@@ -57,7 +57,7 @@ export type NextisVehicle = {
   year_to?: number | null;
 };
 
-const DE_TO_CS: Record = {
+const DE_TO_CS: Record<string, string> = {
   'BREMSBELAG SATZ': 'Sada brzdových destiček',
   'BREMSBELAG VORNE': 'Brzdové destičky přední',
   'BREMSBELAG HINTEN': 'Brzdové destičky zadní',
@@ -137,6 +137,8 @@ function sanitizeName(raw: string): string {
   }
   return text;
 }
+
+const unwrapFunctionPayload = (payload: any) => payload?.data ?? payload ?? {};
 
 function calculateFinalPrice(basePrice: number | null, source: string): { final: number | null; markup: number } {
   if (basePrice === null) return { final: null, markup: 0 };
