@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
 
     // ── Auth: require admin ──
     const authHeader = req.headers.get('Authorization');
