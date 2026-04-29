@@ -145,6 +145,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const [jmCount, setJmCount] = useState(0);
   const [jmWarning, setJmWarning] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [brakeSubtype, setBrakeSubtype] = useState<string>("all");
 
   useEffect(() => {
     setLoading(true);
