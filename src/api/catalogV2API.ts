@@ -117,11 +117,44 @@ export async function fetchNextisVehicles(brand: string, model: string) {
   return (data || []) as NextisVehicle[];
 }
 
-export async function fetchJmCategoryTree(opts: any) {
-  try {
-    const { data } = await supabase.functions.invoke("jm-proxy", { body: { action: "getCategoryTree", payload: opts } });
-    return data?.data || [];
-  } catch { return []; }
+// Static product category tree — mirrors PRODUCT_CATEGORY_TREE in jm-proxy.
+// Returns CatalogCategoryNode[] with proper shape (label, keywords, children, count).
+// We don't fetch from DB because catalog_categories stores vehicle hierarchy,
+// not product categories. The product tree is small and stable.
+const PRODUCT_TREE: CatalogCategoryNode[] = [
+  {
+    id: "brakes", label: "Brzdové zařízení", path: ["Brzdové zařízení"], sectionId: null, count: 0,
+    keywords: ["brzd", "brake", "abs", "třmen", "trmen", "kotouč", "kotouc", "destičk", "destick"],
+    children: [
+      {
+        id: "disc-brakes", label: "Kotoučové brzdy", path: ["Brzdové zařízení", "Kotoučové brzdy"], sectionId: null, count: 0,
+        keywords: ["brzd", "brake", "kotouč", "kotouc", "destičk", "destick", "třmen", "trmen"],
+        children: [
+          { id: "brake-pads", label: "Brzdové destičky", path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové destičky"], sectionId: null, count: 0, keywords: ["destičk", "destick", "brake pad", "pads"], children: [] },
+          { id: "brake-discs", label: "Brzdové kotouče", path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové kotouče"], sectionId: null, count: 0, keywords: ["kotouč", "kotouc", "disc", "rotor"], children: [] },
+          { id: "brake-calipers", label: "Brzdové třmeny", path: ["Brzdové zařízení", "Kotoučové brzdy", "Brzdové třmeny"], sectionId: null, count: 0, keywords: ["třmen", "trmen", "caliper"], children: [] },
+        ],
+      },
+      { id: "brake-fluid", label: "Brzdová kapalina", path: ["Brzdové zařízení", "Brzdová kapalina"], sectionId: null, count: 0, keywords: ["brzdová kapalina", "brzdova kapalina", "brake fluid", "dot 3", "dot 4"], children: [] },
+      { id: "abs", label: "ABS a snímače", path: ["Brzdové zařízení", "ABS a snímače"], sectionId: null, count: 0, keywords: ["abs", "snímač", "snimac", "sensor"], children: [] },
+    ],
+  },
+  { id: "engine", label: "Motor", path: ["Motor"], sectionId: null, count: 0, keywords: ["motor", "engine", "rozvod", "svíčk", "svick", "těsnění", "tesneni"], children: [] },
+  { id: "filters", label: "Filtry", path: ["Filtry"], sectionId: null, count: 0, keywords: ["filtr", "filter"], children: [] },
+  { id: "cooling", label: "Chlazení", path: ["Chlazení"], sectionId: null, count: 0, keywords: ["chlad", "cool", "radiator", "termostat"], children: [] },
+  { id: "suspension", label: "Odpružení", path: ["Odpružení"], sectionId: null, count: 0, keywords: ["odpruž", "odpruz", "tlumič", "tlumic", "náprav", "naprav", "rameno", "suspension"], children: [] },
+  { id: "steering", label: "Řízení", path: ["Řízení"], sectionId: null, count: 0, keywords: ["řízení", "rizeni", "steer"], children: [] },
+  { id: "transmission", label: "Převodovka", path: ["Převodovka"], sectionId: null, count: 0, keywords: ["převod", "prevod", "transmission", "gearbox"], children: [] },
+  { id: "electrical", label: "Elektroinstalace", path: ["Elektroinstalace"], sectionId: null, count: 0, keywords: ["elektr", "alternátor", "alternator", "starter", "senzor"], children: [] },
+  { id: "body", label: "Karoserie", path: ["Karoserie"], sectionId: null, count: 0, keywords: ["karoser", "body", "dveře", "dvere", "nárazník", "naraznik"], children: [] },
+  { id: "hvac", label: "Klimatizace", path: ["Klimatizace"], sectionId: null, count: 0, keywords: ["klimat", "topen", "a/c", "hvac"], children: [] },
+  { id: "exhaust", label: "Výfuk", path: ["Výfuk"], sectionId: null, count: 0, keywords: ["výfuk", "vyfuk", "exhaust", "katalyz"], children: [] },
+  { id: "fluids", label: "Kapaliny a oleje", path: ["Kapaliny a oleje"], sectionId: null, count: 0, keywords: ["olej", "oil", "kapalin", "fluid", "mazi"], children: [] },
+];
+
+export async function fetchJmCategoryTree(_opts: any): Promise<CatalogCategoryNode[]> {
+  // Return cloned static tree so callers can mutate counts without polluting source.
+  return PRODUCT_TREE.map((node) => structuredClone(node));
 }
 
 export async function fetchJmForVehicle(opts: any) {
