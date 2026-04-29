@@ -79,6 +79,37 @@ const CATEGORY_ALIASES: Record<string, string> = {
   "oils": "Náplně a maziva",
 };
 
+// ====== Heuristika kategorie podle klíčových slov v názvu ======
+const CATEGORY_KEYWORDS: { keywords: string[]; category: string }[] = [
+  { keywords: ["brzd", "brake", "bremse", "destič", "kotouč", "třmen", "destičky"], category: "Brzdové zařízení" },
+  { keywords: ["filtr", "filter", "olejov", "vzduchov", "kabin", "palivov filtr"], category: "Filtry" },
+  { keywords: ["motor", "engine", "písty", "ventil", "hlava válc", "kliková"], category: "Motor" },
+  { keywords: ["převodov", "transmission", "ozub", "synchron"], category: "Převodovka" },
+  { keywords: ["tlumič", "pružin", "shock", "absorber", "stossdaempfer"], category: "Tlumiče a pružiny" },
+  { keywords: ["alternát", "startér", "kabel", "wire", "harness", "elektro", "lichtmaschine", "anlasser"], category: "Elektroinstalace" },
+  { keywords: ["chladič", "cooling", "termosta", "vodní čerpadlo", "kuehler", "thermostat"], category: "Chlazení" },
+  { keywords: ["paliv", "fuel", "vstřik", "injektor", "kraftstoff"], category: "Palivový systém" },
+  { keywords: ["výfuk", "exhaust", "katalyz", "tlumič výfuk"], category: "Výfukový systém" },
+  { keywords: ["nárazník", "kapota", "dveře", "blatník", "body", "karoseri"], category: "Karoserie" },
+  { keywords: ["sedadl", "palubn", "interi", "obložen"], category: "Interiér" },
+  { keywords: ["světl", "light", "lamp", "žárovk", "led "], category: "Osvětlení" },
+  { keywords: ["klimatiz", "kondenzát", "evaporát", "a/c"], category: "Klimatizace" },
+  { keywords: ["rozvod", "timing", "řemen", "napín"], category: "Rozvody" },
+  { keywords: ["zapal", "svíčk", "ignition", "cívk", "zuendkerze"], category: "Zapalování" },
+  { keywords: ["spojk", "clutch", "vypínací"], category: "Spojka" },
+  { keywords: ["řízení", "steering", "tyč řízení", "kloub řízení"], category: "Řízení" },
+  { keywords: ["olej", "kapalin", "mazivo", "fluid", "antifreez", "nemrznou"], category: "Náplně a maziva" },
+  { keywords: ["ložisko", "uložení motoru", "rameno", "silentblok", "podvozek"], category: "Podvozek" },
+];
+
+function guessCategoryFromName(name: string): string | null {
+  const lower = (name || "").toLowerCase();
+  for (const rule of CATEGORY_KEYWORDS) {
+    if (rule.keywords.some((k) => lower.includes(k))) return rule.category;
+  }
+  return null;
+}
+
 // ====== Slovník překladů (pro fix translate_names) ======
 const NAME_TRANSLATIONS: Record<string, string> = {
   "BREMSBELAG SATZ": "Sada brzdových destiček",
