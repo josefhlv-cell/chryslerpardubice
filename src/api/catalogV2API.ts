@@ -17,6 +17,8 @@ export type CatalogPart = {
   is_oem: boolean;
   badge_label: "ORIGINÁL" | "NÁHRADA" | "NEZNÁMÝ";
   rank: number;
+  technical_parameters?: Record<string, any> | null;
+  compatible_vehicles?: string[] | null;
 };
 
 export type CatalogCategoryNode = {
@@ -29,12 +31,29 @@ export type CatalogCategoryNode = {
   children: CatalogCategoryNode[];
 };
 
+// Backwards-compat alias used by older components
+export type CategoryNode = CatalogCategoryNode;
+
 export type NextisVehicle = {
   id: string;
   brand: string;
   model: string;
   engine: string | null;
+  year_from?: number | null;
+  year_to?: number | null;
 };
+
+// Legacy global OEM search (used by GlobalOEMSearch component)
+export async function globalOemSearch(query: string): Promise<CatalogPart[]> {
+  const q = (query || "").trim();
+  if (!q) return [];
+  const { data } = await supabase
+    .from("parts_new")
+    .select("*")
+    .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
+    .limit(50);
+  return (data || []).map(normalizeRow);
+}
 
 const normalizeOem = (s: string) => (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
