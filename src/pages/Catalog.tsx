@@ -91,6 +91,12 @@ function findNodeWithParent(
  * shodné s `node.label`. Stačí jeden přesný match (case-insensitive, bez diakritiky).
  * Fallback: pokud díl nemá kategorii, zkus keyword match v názvu.
  */
+/**
+ * Match part to category node.
+ * Po normalizaci jsou parts_new.category jen 19 širokých kanonických hodnot,
+ * zatímco strom má stovky subkategorií ("Kotoučové brzdy" atd.).
+ * Strategie: keyword/canonical match na názvu i kategorii dílu.
+ */
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
   if (!node) return true;
 
@@ -98,17 +104,18 @@ function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): b
     (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
   const partCat = norm(part.category || "");
+  const partName = norm(part.name || "");
   const nodeLabel = norm(node.label);
 
-  // Primary: exact canonical category match
+  // 1) Exact category match
   if (partCat && partCat === nodeLabel) return true;
-
-  // No category on part → keyword fallback in name
-  if (!partCat && node.keywords.length > 0) {
-    const hay = norm(part.name);
-    return node.keywords.some((k) => hay.includes(norm(k)));
+  // 2) Node label appears as substring in part category or name
+  if (nodeLabel && (partCat.includes(nodeLabel) || partName.includes(nodeLabel))) return true;
+  // 3) Any keyword from node matches name or category
+  if (node.keywords?.length) {
+    const hay = `${partCat} ${partName}`;
+    if (node.keywords.some((k) => hay.includes(norm(k)))) return true;
   }
-
   return false;
 }
 
