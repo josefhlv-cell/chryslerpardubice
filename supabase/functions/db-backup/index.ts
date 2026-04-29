@@ -62,7 +62,10 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     let isScheduled = false;
 
-    if (!authHeader || authHeader === `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`) {
+    if (authHeader === `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`) {
+      // Internal server-to-server call from another backend function.
+      isScheduled = true;
+    } else if (!authHeader || authHeader === `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`) {
       // Could be a cron call — allow if no specific user needed
       isScheduled = true;
     } else {
