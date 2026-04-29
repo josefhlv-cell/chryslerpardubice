@@ -271,7 +271,7 @@ export async function isJmTreeFlagEnabled(): Promise<boolean> {
 async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string }): Promise<CatalogCategoryNode[]> {
   const { data, error } = await supabase
     .from("catalog_categories")
-    .select("id, parent_id, slug, name_cs, sort_order, vehicle_brand, vehicle_model, vehicle_engine")
+    .select("id, parent_id, slug, name_cs, node_type, sort_order, vehicle_brand, vehicle_model, vehicle_engine")
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
 
@@ -290,26 +290,41 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     byParent.get(k)!.push(n);
   }
 
+  const canonicalCounts = new Map<string, number>();
+  const { data: countRows } = await supabase.from("parts_new_public").select("category");
+  for (const row of countRows || []) {
+    const key = String((row as any).category || "Ostatní");
+    canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
+  }
+
   const build = (parentId: string | null, path: string[]): CatalogCategoryNode[] => {
     const kids = byParent.get(parentId) || [];
     return kids.map((n) => {
       const nodePath = [...path, n.slug];
+      const canonical = resolveCanonicalCategory(n.name_cs, []);
       return {
         id: n.id,
         label: n.name_cs,
         path: nodePath,
-        keywords: [],
-        count: 0,
+        keywords: [n.name_cs, canonical].filter(Boolean) as string[],
+        count: canonical ? (canonicalCounts.get(canonical) || 0) : 0,
         sectionId: null,
         children: build(n.id, nodePath),
       };
     });
   };
 
-  // Find root nodes for category-level: skip Brand/Model/Engine wrappers if present
-  // by walking down to the deepest scope match.
-  const tree = build(null, []);
-  return tree;
+  const roots = byParent.get(null) || [];
+  const brandNode = roots.find((n) => n.node_type === "brand" && (!opts.brand || n.name_cs.toLowerCase() === opts.brand.toLowerCase()));
+  const modelNodes = brandNode ? (byParent.get(brandNode.id) || []) : [];
+  const modelNode = modelNodes.find((n) => n.node_type === "model" && (!opts.model || String(n.vehicle_model || n.name_cs).toLowerCase() === opts.model.toLowerCase() || n.name_cs.toLowerCase().startsWith(opts.model.toLowerCase())));
+  const engineNodes = modelNode ? (byParent.get(modelNode.id) || []) : [];
+  const engineNode = engineNodes.find((n) => n.node_type === "engine" && (!opts.engine || String(n.vehicle_engine || n.name_cs).toLowerCase() === opts.engine.toLowerCase()));
+
+  if (engineNode) return build(engineNode.id, []);
+  if (modelNode) return build(modelNode.id, []);
+  if (brandNode) return build(brandNode.id, []);
+  return build(null, []).filter((n) => !["Chrysler", "Dodge", "RAM", "Lancia", "Cadillac"].includes(n.label));
 }
 
 export async function fetchJmCategoryTree(opts: any) {
