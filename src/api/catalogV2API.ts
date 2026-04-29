@@ -57,15 +57,20 @@ export type NextisVehicle = {
 };
 
 // Legacy global OEM search (used by GlobalOEMSearch component)
-export async function globalOemSearch(query: string): Promise<CatalogPart[]> {
+// Legacy global OEM search (used by GlobalOEMSearch component)
+export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart[]; jm: CatalogPart[] }> {
   const q = (query || "").trim();
-  if (!q) return [];
+  if (!q) return { oem: [], jm: [] };
   const { data } = await supabase
     .from("parts_new")
     .select("*")
     .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
     .limit(50);
-  return (data || []).map(normalizeRow);
+  const all = (data || []).map(normalizeRow);
+  return {
+    oem: all.filter((p) => p.is_oem),
+    jm: all.filter((p) => !p.is_oem),
+  };
 }
 
 const normalizeOem = (s: string) => (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
