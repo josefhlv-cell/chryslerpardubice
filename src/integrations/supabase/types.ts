@@ -214,6 +214,68 @@ export type Database = {
           },
         ]
       }
+      catalog_diagnostic_fixes: {
+        Row: {
+          affected_count: number
+          applied_at: string | null
+          applied_by: string | null
+          applied_count: number | null
+          created_at: string
+          description: string | null
+          error_message: string | null
+          fix_type: string
+          id: string
+          payload: Json
+          preview: Json
+          run_id: string
+          severity: string
+          status: string
+          title: string
+        }
+        Insert: {
+          affected_count?: number
+          applied_at?: string | null
+          applied_by?: string | null
+          applied_count?: number | null
+          created_at?: string
+          description?: string | null
+          error_message?: string | null
+          fix_type: string
+          id?: string
+          payload?: Json
+          preview?: Json
+          run_id: string
+          severity?: string
+          status?: string
+          title: string
+        }
+        Update: {
+          affected_count?: number
+          applied_at?: string | null
+          applied_by?: string | null
+          applied_count?: number | null
+          created_at?: string
+          description?: string | null
+          error_message?: string | null
+          fix_type?: string
+          id?: string
+          payload?: Json
+          preview?: Json
+          run_id?: string
+          severity?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_diagnostic_fixes_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_diagnostic_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_diagnostic_results: {
         Row: {
           brand: string
@@ -282,6 +344,7 @@ export type Database = {
       catalog_diagnostic_runs: {
         Row: {
           created_at: string
+          critical_issues: Json
           current_step: string | null
           finished_at: string | null
           id: string
@@ -294,9 +357,11 @@ export type Database = {
           total_combinations: number
           total_parts_found: number
           updated_at: string
+          validation_summary: Json
         }
         Insert: {
           created_at?: string
+          critical_issues?: Json
           current_step?: string | null
           finished_at?: string | null
           id?: string
@@ -309,9 +374,11 @@ export type Database = {
           total_combinations?: number
           total_parts_found?: number
           updated_at?: string
+          validation_summary?: Json
         }
         Update: {
           created_at?: string
+          critical_issues?: Json
           current_step?: string | null
           finished_at?: string | null
           id?: string
@@ -324,6 +391,7 @@ export type Database = {
           total_combinations?: number
           total_parts_found?: number
           updated_at?: string
+          validation_summary?: Json
         }
         Relationships: []
       }
