@@ -17,6 +17,8 @@ export type CatalogPart = {
   is_oem: boolean;
   badge_label: "ORIGINÁL" | "NÁHRADA" | "NEZNÁMÝ";
   rank: number;
+  technical_parameters?: Record<string, any> | null;
+  compatible_vehicles?: string[] | null;
 };
 
 export type CatalogCategoryNode = {
@@ -29,12 +31,47 @@ export type CatalogCategoryNode = {
   children: CatalogCategoryNode[];
 };
 
+// Legacy DB-shape category node (used by older CatalogTree component)
+export type CategoryNode = {
+  id: string;
+  parent_id: string | null;
+  slug: string;
+  name_cs: string;
+  name_en: string | null;
+  node_type: string;
+  vehicle_brand: string | null;
+  vehicle_model: string | null;
+  vehicle_engine: string | null;
+  is_global: boolean;
+  sort_order: number;
+  children?: CategoryNode[];
+};
+
 export type NextisVehicle = {
   id: string;
   brand: string;
   model: string;
   engine: string | null;
+  year_from?: number | null;
+  year_to?: number | null;
 };
+
+// Legacy global OEM search (used by GlobalOEMSearch component)
+// Legacy global OEM search (used by GlobalOEMSearch component)
+export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart[]; jm: CatalogPart[] }> {
+  const q = (query || "").trim();
+  if (!q) return { oem: [], jm: [] };
+  const { data } = await supabase
+    .from("parts_new")
+    .select("*")
+    .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
+    .limit(50);
+  const all = (data || []).map(normalizeRow);
+  return {
+    oem: all.filter((p) => p.is_oem),
+    jm: all.filter((p) => !p.is_oem),
+  };
+}
 
 const normalizeOem = (s: string) => (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
