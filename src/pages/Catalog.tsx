@@ -119,6 +119,36 @@ function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): b
   return false;
 }
 
+/**
+ * Klíčová slova pro sub-typy "Brzdové zařízení". Funguje nezávisle na subkategoriích —
+ * filtruje výsledky podle slov v názvu / kategorii dílu.
+ */
+const BRAKE_SUBTYPES: { id: string; label: string; keywords: string[] }[] = [
+  { id: "caliper", label: "Třmen", keywords: ["třmen", "trmen", "sattel", "caliper"] },
+  { id: "disc", label: "Kotouč", keywords: ["kotouč", "kotouc", "scheibe", "disc", "rotor"] },
+  { id: "pads", label: "Destičky", keywords: ["destič", "destic", "belag", "klotz", "pad"] },
+  { id: "drum", label: "Bubny / čelisti", keywords: ["bubn", "drum", "trommel", "čelist", "celist", "shoe", "backe"] },
+  { id: "hose", label: "Hadice / trubky", keywords: ["hadic", "trubk", "hose", "leitung", "line"] },
+  { id: "fluid", label: "Brzd. kapalina", keywords: ["kapalin", "fluid", "dot", "brzdov.*olej", "brake.*fluid"] },
+  { id: "abs", label: "ABS / senzor", keywords: ["abs", "senzor", "sensor"] },
+  { id: "cylinder", label: "Válec", keywords: ["válec", "valec", "zylinder", "cylinder"] },
+];
+
+function isBrakeCategory(label: string | undefined | null) {
+  if (!label) return false;
+  return /brzd/i.test(label);
+}
+
+function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean {
+  if (subtypeId === "all") return true;
+  const sub = BRAKE_SUBTYPES.find((s) => s.id === subtypeId);
+  if (!sub) return true;
+  const norm = (s: string) =>
+    (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const hay = `${norm(part.name || "")} ${norm(part.category || "")}`;
+  return sub.keywords.some((k) => new RegExp(norm(k)).test(hay));
+}
+
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
   const { user, canPlaceOrder } = useAuth();
