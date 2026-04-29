@@ -212,8 +212,8 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
       body: { action: 'searchByCode', payload: { code: q } }
     });
     
-    const jmParts = (jmResult?.data?.items || []).map((it: any) => normalizeRow(it, 'jm'));
-    const combined = deduplicateParts([...oemParts, ...jmParts]);
+    const jmPayload = unwrapFunctionPayload(jmResult?.data);
+    const jmParts = (jmPayload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
     
     return {
       oem: oemParts,
@@ -308,13 +308,28 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
 }
 
 export async function listPartsForVehicle(opts: any) {
-  const { data } = await supabase
-    .from("parts_new_public")
-    .select("*")
-    .ilike("compatible_vehicles", `%${opts.brand}%`)
-    .ilike("compatible_vehicles", `%${opts.model}%`)
-    .limit(200);
-  const all = (data || []).map((row) => normalizeRow(row));
+  const page = Math.max(Number(opts.page || 0), 0);
+  const pageSize = Math.min(Math.max(Number(opts.pageSize || 30), 1), 100);
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+  const category = String(opts.canonicalCategory || "").trim();
+
+  const fetchRows = async (useEngine: boolean) => {
+    let query = supabase
+      .from("parts_new_public")
+      .select("*")
+      .ilike("compatible_vehicles", `%${opts.brand}%`)
+      .ilike("compatible_vehicles", `%${opts.model}%`);
+    if (useEngine && opts.engine) query = query.ilike("compatible_vehicles", `%${opts.engine}%`);
+    if (category) query = query.eq("category", category);
+    return await query.order("price_with_vat", { ascending: true }).range(from, to);
+  };
+
+  const strict = await fetchRows(true);
+  const fallback = strict.error || (strict.data || []).length === 0 ? await fetchRows(false) : strict;
+  if (fallback.error) throw fallback.error;
+
+  const all = (fallback.data || []).map((row) => normalizeRow(row));
   return { items: deduplicateParts(all), total: all.length };
 }
 
