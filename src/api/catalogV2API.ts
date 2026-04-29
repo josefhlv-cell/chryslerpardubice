@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
+export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Lancia"] as const;
 
 export type CatalogPart = {
   id: string;
