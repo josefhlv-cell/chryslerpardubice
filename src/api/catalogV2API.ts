@@ -44,6 +44,7 @@ export type CategoryNode = {
   vehicle_engine: string | null;
   is_global: boolean;
   sort_order: number;
+  children?: CategoryNode[];
 };
 
 export type NextisVehicle = {
