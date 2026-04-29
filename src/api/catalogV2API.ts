@@ -19,7 +19,7 @@ export type CatalogPart = {
   rank: number;
   final_price: number | null;
   markup_percent: number;
-  technical_parameters?: Record | null;
+  technical_parameters?: Record<string, string> | null;
   compatible_vehicles?: string[] | null;
 };
 
@@ -57,7 +57,7 @@ export type NextisVehicle = {
   year_to?: number | null;
 };
 
-const DE_TO_CS: Record = {
+const DE_TO_CS: Record<string, string> = {
   'BREMSBELAG SATZ': 'Sada brzdových destiček',
   'BREMSBELAG VORNE': 'Brzdové destičky přední',
   'BREMSBELAG HINTEN': 'Brzdové destičky zadní',
@@ -138,10 +138,12 @@ function sanitizeName(raw: string): string {
   return text;
 }
 
+const unwrapFunctionPayload = (payload: any) => payload?.data ?? payload ?? {};
+
 function calculateFinalPrice(basePrice: number | null, source: string): { final: number | null; markup: number } {
   if (basePrice === null) return { final: null, markup: 0 };
   if (source === 'jm') {
-    return { final: Number((basePrice * 1.36).toFixed(2)), markup: 36 };
+    return { final: Number((basePrice * 1.37).toFixed(2)), markup: 37 };
   }
   return { final: basePrice, markup: 0 };
 }
@@ -210,8 +212,8 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
       body: { action: 'searchByCode', payload: { code: q } }
     });
     
-    const jmParts = (jmResult?.data?.items || []).map((it: any) => normalizeRow(it, 'jm'));
-    const combined = deduplicateParts([...oemParts, ...jmParts]);
+    const jmPayload = unwrapFunctionPayload(jmResult?.data);
+    const jmParts = (jmPayload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
     
     return {
       oem: oemParts,
@@ -249,7 +251,8 @@ export async function fetchJmCategoryTree(opts: any) {
     const { data } = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'vehicleCategories', payload: opts }
     });
-    return data?.categories || [];
+    const payload = unwrapFunctionPayload(data);
+    return Array.isArray(payload?.categories) ? payload.categories : [];
   } catch (err) {
     console.error('[fetchJmCategoryTree] error:', err);
     return [];
@@ -265,9 +268,10 @@ export async function fetchJmForVehicle(opts: any) {
       console.warn('[fetchJmForVehicle] error:', error);
       return { items: [], warning: 'J+M API error' };
     }
+    const payload = unwrapFunctionPayload(data);
     return {
-      items: (data?.items || []).map((it: any) => normalizeRow(it, 'jm')),
-      warning: data?.warning
+      items: (payload?.items || []).map((it: any) => normalizeRow(it, 'jm')),
+      warning: payload?.warning
     };
   } catch (err) {
     console.error('[fetchJmForVehicle] exception:', err);
@@ -283,8 +287,9 @@ export async function fetchJmByCodes(codes: string[]) {
         const { data } = await supabase.functions.invoke('jm-proxy', {
           body: { action: 'searchByCode', payload: { code } }
         });
-        if (data?.items) {
-          allItems.push(...data.items.map((it: any) => normalizeRow(it, 'jm')));
+        const payload = unwrapFunctionPayload(data);
+        if (payload?.items) {
+          allItems.push(...payload.items.map((it: any) => normalizeRow(it, 'jm')));
         }
       } catch (err) {
         console.warn(`[fetchJmByCodes] code ${code} failed:`, err);
@@ -303,17 +308,32 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
 }
 
 export async function listPartsForVehicle(opts: any) {
-  const { data } = await supabase
-    .from("parts_new_public")
-    .select("*")
-    .ilike("compatible_vehicles", `%${opts.brand}%`)
-    .ilike("compatible_vehicles", `%${opts.model}%`)
-    .limit(200);
-  const all = (data || []).map((row) => normalizeRow(row));
+  const page = Math.max(Number(opts.page || 0), 0);
+  const pageSize = Math.min(Math.max(Number(opts.pageSize || 30), 1), 100);
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+  const category = String(opts.canonicalCategory || "").trim();
+
+  const fetchRows = async (useEngine: boolean) => {
+    let query = supabase
+      .from("parts_new_public")
+      .select("*")
+      .ilike("compatible_vehicles", `%${opts.brand}%`)
+      .ilike("compatible_vehicles", `%${opts.model}%`);
+    if (useEngine && opts.engine) query = query.ilike("compatible_vehicles", `%${opts.engine}%`);
+    if (category) query = query.eq("category", category);
+    return await query.order("price_with_vat", { ascending: true }).range(from, to);
+  };
+
+  const strict = await fetchRows(true);
+  const fallback = strict.error || (strict.data || []).length === 0 ? await fetchRows(false) : strict;
+  if (fallback.error) throw fallback.error;
+
+  const all = (fallback.data || []).map((row) => normalizeRow(row));
   return { items: deduplicateParts(all), total: all.length };
 }
 
-export async function searchCatalog(query: string): Promise {
+export async function searchCatalog(query: string): Promise<CatalogPart[]> {
   const q = (query || "").trim().toLowerCase();
   if (!q) return [];
   try {
