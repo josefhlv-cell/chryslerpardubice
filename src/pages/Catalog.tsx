@@ -636,11 +636,60 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               </div>
             )}
 
+            {/* Sub-typový chip filtr pro Brzdové zařízení (nezávislý na subkategoriích) */}
+            {isBrakeCategory(category?.label) && items.length > 0 && (() => {
+              const counts = BRAKE_SUBTYPES.map((s) => ({
+                ...s,
+                count: items.filter((p) => partMatchesBrakeSubtype(p, s.id)).length,
+              })).filter((s) => s.count > 0);
+              if (counts.length === 0) return null;
+              return (
+                <div className="mb-4 p-3 rounded-xl border border-border/40 bg-card/40">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                    Typ brzdového dílu
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setBrakeSubtype("all")}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        brakeSubtype === "all"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-secondary text-foreground border-border hover:border-primary/50"
+                      }`}
+                    >
+                      Vše <span className="opacity-60 ml-1">{items.length}</span>
+                    </button>
+                    {counts.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setBrakeSubtype(s.id)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                          brakeSubtype === s.id
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-secondary text-foreground border-border hover:border-primary/50"
+                        }`}
+                      >
+                        {s.label} <span className="opacity-60 ml-1">{s.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <CatalogListing
-              items={items}
+              items={
+                isBrakeCategory(category?.label) && brakeSubtype !== "all"
+                  ? items.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype))
+                  : items
+              }
               loading={listLoading && items.length === 0}
               onOrder={handleOrder}
-              emptyHint="V této kategorii zatím nejsou žádné díly."
+              emptyHint={
+                isBrakeCategory(category?.label) && brakeSubtype !== "all"
+                  ? "V tomto sub-typu nejsou žádné díly. Zkuste vybrat jiný typ nebo „Vše“."
+                  : "V této kategorii zatím nejsou žádné díly."
+              }
             />
 
             {!listLoading && !jmLoading && items.length === 0 && (
