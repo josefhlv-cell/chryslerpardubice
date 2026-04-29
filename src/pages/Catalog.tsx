@@ -363,6 +363,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
   useEffect(() => {
     setPage(0);
+    setBrakeSubtype("all");
   }, [brand, model, engine, category]);
 
   const handleOrder = async (p: CatalogPart) => {
