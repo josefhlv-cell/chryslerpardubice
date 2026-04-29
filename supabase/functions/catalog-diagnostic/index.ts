@@ -292,7 +292,7 @@ async function priorityValidation(runId: string) {
       severity: "medium",
       code: "MISSING_NAMES",
       title: `${emptyNameCount} dílů bez názvu`,
-      message: "Doplnit z OEM čísla a výrobce („Mopar 68XXXXXX").",
+      message: 'Doplnit z OEM čísla a výrobce (např. Mopar 68XXXXXX).',
       fixable: true,
       fix_type: "fill_missing_names",
       details: emptyNames?.slice(0, 10) || [],
