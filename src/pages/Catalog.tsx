@@ -86,46 +86,30 @@ function findNodeWithParent(
 }
 
 /**
- * STRICT J+M CATEGORY FILTER
- * 
- * J+M díly s nesprávnou kategorií v DB se filtrují pryč.
- * Pokud má J+M díl např. category="Karoserie" ale kategorie je "Brzdové destičky",
- * dijl se zfiltruje.
- * 
- * OEM díly procházejí keyword matching (jako dřív).
+ * Strict canonical-category filter.
+ * Po normalizační migraci 2026-04 jsou všechny `parts_new.category` hodnoty
+ * shodné s `node.label`. Stačí jeden přesný match (case-insensitive, bez diakritiky).
+ * Fallback: pokud díl nemá kategorii, zkus keyword match v názvu.
  */
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
-  if (!node || node.keywords.length === 0) return true;
+  if (!node) return true;
 
-  const haystack = `${part.name} ${part.category || ""}`
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  const norm = (s: string) =>
+    (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-  const partCategory = (part.category || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  const partCat = norm(part.category || "");
+  const nodeLabel = norm(node.label);
 
-  
-  const nodeLabelNorm = node.label
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-  
-  // STRICT: Pokud má J+M díl kategorii v DB a NEODPOVÍDÁ výběru,
-  // tak ho filtruj pryč. Zamezí se zobrazení "Rameno nápravy" pod "Brzdové destičky"
-  if (part.catalog_source === "jm" && part.category) {
-    // J+M díl má kategorii — musí matchovat aktuálně vybranou kategorii
-    if (partCategory !== nodeLabelNorm) {
-      return false;
-    }
+  // Primary: exact canonical category match
+  if (partCat && partCat === nodeLabel) return true;
+
+  // No category on part → keyword fallback in name
+  if (!partCat && node.keywords.length > 0) {
+    const hay = norm(part.name);
+    return node.keywords.some((k) => hay.includes(norm(k)));
   }
-  
-  // OEM díly a J+M bez kategorie — keyword matching
-  return node.keywords.some((keyword) =>
-    haystack.includes(keyword.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase())
-  );
+
+  return false;
 }
 
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
@@ -245,7 +229,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         const [oemRes, jmVehicleRes] = await Promise.allSettled([
           listPartsForVehicle({
             brand, model, engine,
-            nextisVehicleId: selectedVehicleId,
             canonicalCategory: category.label,
             categoryKeywords: category.keywords,
             page, pageSize: 30,
