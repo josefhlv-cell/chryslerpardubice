@@ -430,8 +430,42 @@ async function generateFixProposals(runId: string, critical: any[], summary: Rec
         payload: {},
       });
     }
-  }
-}
+
+    if (issue.fix_type === "fill_missing_names") {
+      const previews = (issue.details || []).map((p: any) => ({
+        oem: p.oem_number,
+        before: "(prázdné)",
+        after: `${p.manufacturer || "Mopar"} ${p.oem_number || ""}`.trim(),
+      }));
+      await s.from("catalog_diagnostic_fixes").insert({
+        run_id: runId,
+        fix_type: "fill_missing_names",
+        severity: "medium",
+        title: `Doplnit ${summary.empty_names} chybějících názvů`,
+        description: 'Vygeneruje název ve formátu "VÝROBCE OEM" pro díly bez názvu.',
+        affected_count: summary.empty_names,
+        preview: previews,
+        payload: {},
+      });
+    }
+
+    if (issue.fix_type === "assign_categories_by_name") {
+      const previews = (issue.details || []).map((p: any) => ({
+        oem: p.oem,
+        name: p.name,
+        category: p.guess,
+      }));
+      await s.from("catalog_diagnostic_fixes").insert({
+        run_id: runId,
+        fix_type: "assign_categories_by_name",
+        severity: "high",
+        title: `Auto-zařadit ${summary.guessable_categories} dílů do kategorie podle názvu`,
+        description: "Heuristika klíčových slov v názvu (brzd → Brzdové zařízení, filtr → Filtry, …).",
+        affected_count: summary.guessable_categories,
+        preview: previews,
+        payload: {},
+      });
+    }
 
 // ============= APLIKACE OPRAV =============
 async function applyFix(fixId: string, userId: string | null) {
