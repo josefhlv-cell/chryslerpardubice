@@ -547,9 +547,54 @@ export async function fetchJmByCodes(codes: string[]) {
   }
 }
 
+/**
+ * Merge OEM rows with J+M alternatives.
+ * Cap: max 3 J+M alternatives per OEM number, max 30 J+M total.
+ * This mirrors how eshop.jmautodily.cz shows aftermarket replacements:
+ * a small, focused set of branded alternatives per original part — not dozens.
+ */
+const MAX_JM_PER_OEM = 3;
+const MAX_JM_TOTAL = 30;
+
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
-  const all = [...oem, ...jm];
-  return deduplicateParts(all);
+  // Drop disabled aftermarket sources defensively.
+  const oemClean = filterDisabledSources(oem);
+  const jmClean = filterDisabledSources(jm);
+
+  // Always keep OEM. Group JM by base OEM (8-digit prefix) so each original
+  // gets a bounded set of alternatives.
+  const baseKey = (oem: string) => normalizeOem(oem).replace(/^K/, '').match(/^\d{8}/)?.[0] || normalizeOem(oem);
+  const oemBaseSet = new Set(oemClean.map((p) => baseKey(p.oem_number)));
+
+  // Sort JM: priced first, then with photo, then by brand quality (named brand > empty)
+  const jmSorted = [...jmClean].sort((a, b) => {
+    const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
+    const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
+    if (priceA !== priceB) return priceB - priceA;
+    const photoA = a.image_urls?.[0] ? 1 : 0;
+    const photoB = b.image_urls?.[0] ? 1 : 0;
+    if (photoA !== photoB) return photoB - photoA;
+    const brandA = (a.manufacturer || '').trim().length > 0 ? 1 : 0;
+    const brandB = (b.manufacturer || '').trim().length > 0 ? 1 : 0;
+    return brandB - brandA;
+  });
+
+  const perOemCount = new Map<string, number>();
+  const jmKept: CatalogPart[] = [];
+  for (const part of jmSorted) {
+    if (jmKept.length >= MAX_JM_TOTAL) break;
+    const key = baseKey(part.oem_number);
+    // Prefer JM whose base OEM matches an OEM we have in the list
+    const isLinked = oemBaseSet.has(key);
+    const cur = perOemCount.get(key) || 0;
+    if (cur >= MAX_JM_PER_OEM) continue;
+    // Skip JM that aren't linked to any of our OEMs when we already have linked ones
+    if (!isLinked && jmKept.length >= 10) continue;
+    perOemCount.set(key, cur + 1);
+    jmKept.push(part);
+  }
+
+  return deduplicateParts([...oemClean, ...jmKept]);
 }
 
 function finalizeCatalogRows(rows: any[], from: number, to: number) {
