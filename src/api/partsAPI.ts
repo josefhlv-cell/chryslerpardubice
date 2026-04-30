@@ -111,8 +111,9 @@ export const getMakroSlugs = (uiCategory: string): string[] =>
 /** Check if a source is an alternative (non-OEM) source */
 export const isAltSource = (source: string) => ALT_SOURCES.includes(source);
 
-/** Enabled alternative catalog sources */
-export const enabledSources = new Set(["mopar", "epc-ai", "csv", "sag", "autokelly", "makro"]);
+/** Enabled catalog sources — pouze OEM zdroje + J+M (aftermarket přes API).
+ *  Vypnuté (ponecháno v DB pro historii, ale skryté): makro, sag, autokelly, epc-ai, ai-epc, crossref, ai. */
+export const enabledSources = new Set(["mopar", "mopar_oem", "csv", "7zap", "epc-link", "jm"]);
 
 /** Blocked manufacturers per source (lowercase) */
 export const blockedManufacturers: Record<string, Set<string>> = {
