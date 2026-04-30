@@ -165,8 +165,8 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
   return Array.from(seen.values());
 }
 
-function normalizeRow(row: any, source: string = 'mopar'): CatalogPart {
-  const sourceNorm = (source || row?.catalog_source || 'mopar').toLowerCase();
+function normalizeRow(row: any, source?: string): CatalogPart {
+  const sourceNorm = String(source || row?.catalog_source || row?.supplier || 'mopar').toLowerCase();
   const mfr = String(row?.manufacturer || '').trim().toLowerCase();
   // ORIGINÁL = pouze ověřené Mopar OEM zdroje:
   //   - mopar, mopar_oem (oficiální Mopar katalog)
@@ -217,7 +217,7 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
       .limit(50);
     
-    const oemParts = (data || []).map(p => normalizeRow(p, 'mopar'));
+    const oemParts = (data || []).map(p => normalizeRow(p));
     
     const jmResult = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'searchByCode', payload: { code: q } }
@@ -282,7 +282,7 @@ export async function isJmTreeFlagEnabled(): Promise<boolean> {
 async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string; year?: number; powerKw?: number }): Promise<CatalogCategoryNode[]> {
   const { data, error } = await supabase
     .from("catalog_categories")
-    .select("id, parent_id, slug, name_cs, node_type, sort_order, vehicle_brand, vehicle_model, vehicle_engine, year_from, year_to, power_kw")
+    .select("id, parent_id, slug, name_cs, node_type, is_global, sort_order, vehicle_brand, vehicle_model, vehicle_engine, year_from, year_to, power_kw")
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
 
