@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_catalog_categories_20260430_v3: {
+        Row: {
+          created_at: string | null
+          external_id: string | null
+          id: string | null
+          is_global: boolean | null
+          name_cs: string | null
+          name_en: string | null
+          node_type: string | null
+          parent_id: string | null
+          power_kw: number | null
+          slug: string | null
+          sort_order: number | null
+          source: Database["public"]["Enums"]["catalog_source_type"] | null
+          updated_at: string | null
+          vehicle_brand: string | null
+          vehicle_engine: string | null
+          vehicle_model: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          is_global?: boolean | null
+          name_cs?: string | null
+          name_en?: string | null
+          node_type?: string | null
+          parent_id?: string | null
+          power_kw?: number | null
+          slug?: string | null
+          sort_order?: number | null
+          source?: Database["public"]["Enums"]["catalog_source_type"] | null
+          updated_at?: string | null
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          is_global?: boolean | null
+          name_cs?: string | null
+          name_en?: string | null
+          node_type?: string | null
+          parent_id?: string | null
+          power_kw?: number | null
+          slug?: string | null
+          sort_order?: number | null
+          source?: Database["public"]["Enums"]["catalog_source_type"] | null
+          updated_at?: string | null
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
+      _backup_catalog_part_categories_20260430_v3: {
+        Row: {
+          category_id: string | null
+          created_at: string | null
+          id: string | null
+          is_primary: boolean | null
+          part_id: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_primary?: boolean | null
+          part_id?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_primary?: boolean | null
+          part_id?: string | null
+        }
+        Relationships: []
+      }
       admin_sessions: {
         Row: {
           created_at: string
