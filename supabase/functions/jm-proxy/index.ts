@@ -69,6 +69,38 @@ const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "cadillac
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// ---------- structured event logger (writes to catalog_event_log) ----------
+// Fire-and-forget: failures must never break the request flow.
+async function logCatalogEvent(
+  adminClient: any,
+  params: {
+    level?: 'debug' | 'info' | 'warn' | 'error';
+    event: string;
+    message?: string;
+    oem_number?: string | null;
+    vehicle_id?: string | null;
+    category?: string | null;
+    duration_ms?: number;
+    details?: Record<string, unknown>;
+  },
+) {
+  try {
+    await adminClient.from('catalog_event_log').insert({
+      source: 'jm-proxy',
+      level: params.level ?? 'info',
+      event: params.event,
+      message: params.message ?? null,
+      oem_number: params.oem_number ?? null,
+      vehicle_id: params.vehicle_id ?? null,
+      category: params.category ?? null,
+      duration_ms: params.duration_ms ?? null,
+      details: params.details ?? {},
+    });
+  } catch (e) {
+    console.warn('[logCatalogEvent] insert failed:', (e as Error).message);
+  }
+}
+
 async function getToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) return cachedToken.token;
 
