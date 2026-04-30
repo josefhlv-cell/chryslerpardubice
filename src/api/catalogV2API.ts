@@ -168,9 +168,11 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
 function normalizeRow(row: any, source: string = 'mopar'): CatalogPart {
   const sourceNorm = (source || row?.catalog_source || 'mopar').toLowerCase();
   const mfr = String(row?.manufacturer || '').trim().toLowerCase();
-  // ORIGINÁL = pouze Mopar (manufacturer Mopar nebo source mopar/mopar_oem).
-  // 7zap, epc-ai, makro, autokelly, crossref jsou aftermarket → NÁHRADA.
-  const isOem = mfr === 'mopar' || ['mopar', 'mopar_oem'].includes(sourceNorm);
+  // ORIGINÁL = Mopar OEM katalogy (mopar, mopar_oem, 7zap = oficiální Mopar EPC, csv import OEM).
+  // NÁHRADA = aftermarket: epc-ai (AI návrhy), makro, autokelly, crossref, sag.
+  const oemSources = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
+  const aftermarketSources = ['epc-ai', 'ai-epc', 'makro', 'autokelly', 'crossref', 'sag'];
+  const isOem = !aftermarketSources.includes(sourceNorm) && (mfr === 'mopar' || oemSources.includes(sourceNorm));
   const basePrice = Number(row?.price_with_vat) || null;
   const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
