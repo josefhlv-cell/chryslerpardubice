@@ -319,7 +319,14 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
   const modelNodes = brandNode ? (byParent.get(brandNode.id) || []) : [];
   const modelNode = modelNodes.find((n) => n.node_type === "model" && (!opts.model || String(n.vehicle_model || n.name_cs).toLowerCase() === opts.model.toLowerCase() || n.name_cs.toLowerCase().startsWith(opts.model.toLowerCase())));
   const engineNodes = modelNode ? (byParent.get(modelNode.id) || []) : [];
-  const engineNode = engineNodes.find((n) => n.node_type === "engine" && (!opts.engine || String(n.vehicle_engine || n.name_cs).toLowerCase() === opts.engine.toLowerCase()));
+  const engineNode = engineNodes.find((n) => {
+    if (n.node_type !== "engine") return false;
+    if (opts.engine && String(n.vehicle_engine || "").toLowerCase() !== opts.engine.toLowerCase()) return false;
+    if (opts.powerKw && n.power_kw && Math.abs(n.power_kw - opts.powerKw) > 10) return false;
+    if (opts.year && n.year_from && opts.year < n.year_from) return false;
+    if (opts.year && n.year_to && opts.year > n.year_to) return false;
+    return true;
+  });
 
   if (engineNode) return build(engineNode.id, []);
   if (modelNode) return build(modelNode.id, []);
