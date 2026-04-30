@@ -234,6 +234,74 @@ ${targets.map((t) => `${t.oem} | ${t.name}`).join('\n')}`;
       if (!error) inserted += chunk.length;
     }
 
+    // 8b. ZLATÉ PRAVIDLO: pokud aftermarket part_number existuje v parts_new,
+    //     propaguj engine-specific kompatibilitu z Mopar OEM dílu na něj.
+    //     Tím získáme přesné vehicle-mapping bez fuzzy guess.
+    let propagated = 0;
+    try {
+      const moparOems = [...new Set(inserts.map((i) => i.oem_number))];
+      const aftPartNumbers = [...new Set(inserts.map((i) => i.part_number))];
+
+      const { data: moparParts } = await sb
+        .from('parts_new')
+        .select('id, oem_number, category')
+        .in('oem_number', moparOems)
+        .in('catalog_source', ['mopar', 'mopar_oem', '7zap']);
+
+      const { data: aftParts } = await sb
+        .from('parts_new')
+        .select('id, oem_number, category')
+        .in('oem_number', aftPartNumbers);
+
+      const aftByPn = new Map<string, { id: string; category: string | null }>();
+      for (const ap of aftParts || []) aftByPn.set(ap.oem_number, ap);
+
+      for (const mp of moparParts || []) {
+        const linkedPns = inserts.filter((i) => i.oem_number === mp.oem_number).map((i) => i.part_number);
+        const aftIds = linkedPns.map((pn) => aftByPn.get(pn)?.id).filter(Boolean) as string[];
+        if (aftIds.length === 0) continue;
+
+        const { data: moparCompat } = await sb
+          .from('catalog_vehicle_compatibility')
+          .select('nextis_vehicle_id, brand, model, engine, year_from, year_to')
+          .eq('part_id', mp.id);
+
+        if (!moparCompat || moparCompat.length === 0) continue;
+
+        const newRows: any[] = [];
+        for (const aftId of aftIds) {
+          if (mp.category) {
+            await sb.from('parts_new').update({ category: mp.category }).eq('id', aftId);
+          }
+          for (const c of moparCompat) {
+            newRows.push({
+              part_id: aftId,
+              nextis_vehicle_id: c.nextis_vehicle_id,
+              brand: c.brand,
+              model: c.model,
+              engine: c.engine,
+              year_from: c.year_from,
+              year_to: c.year_to,
+              is_oem: false,
+              match_method: 'crossref-mopar',
+              match_confidence: 95,
+              source: 'manual',
+            });
+          }
+        }
+        for (let i = 0; i < newRows.length; i += 200) {
+          const chunk = newRows.slice(i, i + 200);
+          const { error: ce } = await sb.from('catalog_vehicle_compatibility').upsert(chunk, {
+            onConflict: 'part_id,nextis_vehicle_id',
+            ignoreDuplicates: true,
+          });
+          if (!ce) propagated += chunk.length;
+        }
+      }
+    } catch (propErr) {
+      await logEvent(sb, { level: 'warn', event: 'auto_seed_propagation_fail', message: (propErr as Error).message });
+    }
+
     // 9. Update queue rows
     const updates = targets.map((t) => {
       const added = perOemAdded[t.oem] ?? 0;
@@ -267,6 +335,7 @@ ${targets.map((t) => `${t.oem} | ${t.name}`).join('\n')}`;
       success: true,
       processed: targets.length,
       inserted,
+      propagated,
       moparTotal,
       haveCrossref: haveCrossref.size,
       duration_ms: ms,
