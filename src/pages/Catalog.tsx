@@ -241,7 +241,14 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           setCategories([]);
           return;
         }
-        const tree = await fetchJmCategoryTree({ nextisVehicleId: vehicleId, brand, model, engine });
+        const tree = await fetchJmCategoryTree({
+          nextisVehicleId: vehicleId,
+          brand,
+          model,
+          engine,
+          year: vehicle?.year_from || undefined,
+          powerKw: vehicle?.power_kw || undefined,
+        });
         setCategories(tree);
       })
       .catch((e) => toast.error("Nelze načíst kategorie: " + e.message))
@@ -268,6 +275,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           listPartsForVehicle({
             brand, model, engine,
             nextisVehicleId: selectedVehicleId,
+            year: vehicles.find((v) => v.id === selectedVehicleId)?.year_from || undefined,
             categoryNodeId: category.id,
             canonicalCategory: category.label,
             categoryKeywords: category.keywords,
@@ -277,6 +285,8 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
             ? fetchJmForVehicle({
                 brand, model, engine,
                 nextisVehicleId: selectedVehicleId,
+                  year: vehicles.find((v) => v.id === selectedVehicleId)?.year_from || undefined,
+                  powerKw: vehicles.find((v) => v.id === selectedVehicleId)?.power_kw || undefined,
                 sectionId: category.sectionId,
                 category: category.label,
                 categoryId: category.id,
