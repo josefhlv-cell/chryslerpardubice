@@ -524,27 +524,48 @@ export async function fetchJmForVehicle(opts: any) {
   }
 }
 
+// Per-session cache for J+M searchByCode results (5 min TTL).
+// Avoids re-querying expensive Nextis crossref ladder for codes already seen.
+const _jmCodeCache = new Map<string, { items: CatalogPart[]; ts: number }>();
+const JM_CODE_TTL = 5 * 60 * 1000;
+
 export async function fetchJmByCodes(codes: string[]) {
-  try {
-    const allItems: CatalogPart[] = [];
-    for (const code of codes) {
-      try {
-        const { data } = await supabase.functions.invoke('jm-proxy', {
-          body: { action: 'searchByCode', payload: { code } }
-        });
-        const payload = unwrapFunctionPayload(data);
-        if (payload?.items) {
-          allItems.push(...payload.items.map((it: any) => normalizeRow(it, 'jm')));
-        }
-      } catch (err) {
-        console.warn(`[fetchJmByCodes] code ${code} failed:`, err);
-      }
+  const uniq = [...new Set(codes.filter(Boolean))];
+  if (uniq.length === 0) return [];
+
+  const fresh: string[] = [];
+  const cached: CatalogPart[] = [];
+  const now = Date.now();
+  for (const code of uniq) {
+    const hit = _jmCodeCache.get(code);
+    if (hit && now - hit.ts < JM_CODE_TTL) {
+      cached.push(...hit.items);
+    } else {
+      fresh.push(code);
     }
-    return allItems;
-  } catch (err) {
-    console.error('[fetchJmByCodes] error:', err);
-    return [];
   }
+
+  // PARALLEL invoke for all uncached codes — each call is independent.
+  const results = await Promise.allSettled(
+    fresh.map((code) =>
+      supabase.functions
+        .invoke('jm-proxy', { body: { action: 'searchByCode', payload: { code } } })
+        .then(({ data }) => {
+          const payload = unwrapFunctionPayload(data);
+          const items: CatalogPart[] = (payload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
+          _jmCodeCache.set(code, { items, ts: Date.now() });
+          return items;
+        })
+    )
+  );
+
+  const fetched: CatalogPart[] = [];
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') fetched.push(...r.value);
+    else console.warn(`[fetchJmByCodes] code ${fresh[i]} failed:`, r.reason);
+  });
+
+  return [...cached, ...fetched];
 }
 
 /**
