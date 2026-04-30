@@ -269,12 +269,79 @@ function collectImageUrls(it: any): string[] {
   return [...urls];
 }
 
+function extractDescription(it: any): string {
+  // Nextis exposes description under several names; pick the longest non-empty one
+  const candidates = [
+    it.productDescription, it.ProductDescription,
+    it.description, it.Description,
+    it.productDetail, it.ProductDetail,
+    it.longDescription, it.LongDescription,
+    it.note, it.Note,
+  ].filter((v) => typeof v === 'string' && v.trim().length > 0);
+  if (candidates.length === 0) return '';
+  return String(candidates.sort((a, b) => b.length - a.length)[0]).trim();
+}
+
+function extractTechParams(it: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  const sources = [
+    it.technicalParameters, it.TechnicalParameters,
+    it.parameters, it.Parameters,
+    it.attributes, it.Attributes,
+    it.features, it.Features,
+  ];
+  for (const src of sources) {
+    if (!src) continue;
+    if (Array.isArray(src)) {
+      for (const row of src) {
+        if (!row) continue;
+        const key = String(row.name || row.Name || row.key || row.Key || row.label || row.Label || '').trim();
+        const val = String(row.value || row.Value || row.text || row.Text || '').trim();
+        if (key && val) out[key] = val;
+      }
+    } else if (typeof src === 'object') {
+      for (const [k, v] of Object.entries(src)) {
+        if (v != null && String(v).trim()) out[k] = String(v).trim();
+      }
+    }
+  }
+  return out;
+}
+
+function extractOeNumbers(it: any): string[] {
+  const out = new Set<string>();
+  const sources = [
+    it.originalNumbers, it.OriginalNumbers,
+    it.oeNumbers, it.OeNumbers, it.OENumbers,
+    it.references, it.References,
+    it.crossReferences, it.CrossReferences,
+  ];
+  for (const src of sources) {
+    if (!src) continue;
+    if (Array.isArray(src)) {
+      for (const row of src) {
+        if (typeof row === 'string') out.add(row.trim());
+        else if (row && typeof row === 'object') {
+          const v = row.number || row.Number || row.code || row.Code || row.oe || row.OE;
+          if (v) out.add(String(v).trim());
+        }
+      }
+    } else if (typeof src === 'string') {
+      src.split(/[,;\s]+/).filter(Boolean).forEach((s) => out.add(s.trim()));
+    }
+  }
+  return [...out].filter(Boolean);
+}
+
 function normalizeCatalogItem(it: any): UnifiedPart {
   // Real Nextis CatalogItem shape
   const code = it.productCode || it.ProductCode || '';
   const prefix = it.productPrefix || it.ProductPrefix || '';
   const brand = it.productBrand || it.ProductBrand || '';
   const name = it.productName || it.ProductName || it.productDescription || '';
+  const description = extractDescription(it);
+  const technical_parameters = extractTechParams(it);
+  const oe_numbers = extractOeNumbers(it);
   const price = it.price || it.Price || {};
   const purchaseNoVat = Number(price.unitPrice ?? price.UnitPrice ?? 0);
   const purchaseVat = Number(price.unitPriceIncVAT ?? price.UnitPriceIncVAT ?? purchaseNoVat * 1.21);
@@ -290,6 +357,9 @@ function normalizeCatalogItem(it: any): UnifiedPart {
     oem_number: String(prefix ? `${prefix}${code}` : code).trim(),
     brand: String(brand).trim(),
     name: String(name).trim(),
+    description,
+    technical_parameters,
+    oe_numbers,
     price_without_vat: Math.round(priceNoVat * 100) / 100,
     price_with_vat: Math.round(priceVat * 100) / 100,
     stock,
