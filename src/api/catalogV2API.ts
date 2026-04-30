@@ -167,7 +167,12 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
 
 function normalizeRow(row: any, source: string = 'mopar'): CatalogPart {
   const sourceNorm = (source || row?.catalog_source || 'mopar').toLowerCase();
-  const isOem = ['mopar', 'mopar_oem', 'epc', '7zap', 'epc-ai', 'csv'].includes(sourceNorm);
+  const mfr = String(row?.manufacturer || '').trim().toLowerCase();
+  // ORIGINÁL = Mopar OEM katalogy (mopar, mopar_oem, 7zap = oficiální Mopar EPC, csv import OEM).
+  // NÁHRADA = aftermarket: epc-ai (AI návrhy), makro, autokelly, crossref, sag.
+  const oemSources = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
+  const aftermarketSources = ['epc-ai', 'ai-epc', 'makro', 'autokelly', 'crossref', 'sag'];
+  const isOem = !aftermarketSources.includes(sourceNorm) && (mfr === 'mopar' || oemSources.includes(sourceNorm));
   const basePrice = Number(row?.price_with_vat) || null;
   const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
@@ -328,10 +333,35 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     return true;
   });
 
-  if (engineNode) return build(engineNode.id, []);
-  if (modelNode) return build(modelNode.id, []);
-  if (brandNode) return build(brandNode.id, []);
-  return build(null, []).filter((n) => !["Chrysler", "Dodge", "RAM", "Lancia", "Cadillac"].includes(n.label));
+  // Globální J+M strom je vždy stejný (parent_id=NULL, is_global=true).
+  // Vehicle scope (brand/model/engine) ovlivňuje jen filtraci dílů, ne strukturu stromu.
+  const globalRoots = (byParent.get(null) || []).filter((n: any) => n.node_type === 'category' && n.is_global);
+  if (globalRoots.length > 0) {
+    const buildGlobal = (parentId: string, path: string[]): CatalogCategoryNode[] => {
+      const kids = (byParent.get(parentId) || []).filter((k: any) => k.node_type === 'subcategory');
+      return kids.map((k: any) => ({
+        id: k.id,
+        label: k.name_cs,
+        path: [...path, k.slug],
+        keywords: [k.name_cs],
+        count: 0,
+        sectionId: null,
+        children: buildGlobal(k.id, [...path, k.slug]),
+      }));
+    };
+    return globalRoots
+      .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+      .map((n: any) => ({
+        id: n.id,
+        label: n.name_cs,
+        path: [n.slug],
+        keywords: [n.name_cs],
+        count: canonicalCounts.get(n.name_cs) || 0,
+        sectionId: null,
+        children: buildGlobal(n.id, [n.slug]),
+      }));
+  }
+  return [];
 }
 
 export async function fetchJmCategoryTree(opts: any) {
@@ -418,23 +448,30 @@ function finalizeCatalogRows(rows: any[], from: number, to: number) {
  * Without this map, drill-down to "Kotoučové brzdy" returns 0 rows.
  */
 const SUBCATEGORY_TO_CANONICAL: Array<{ keywords: string[]; canonical: string }> = [
-  { keywords: ['brzd', 'kotouč', 'destič', 'třmen', 'abs', 'bubn'], canonical: 'Brzdové zařízení' },
-  { keywords: ['filtr'], canonical: 'Filtry' },
-  { keywords: ['motor', 'hlava válc', 'olejová van', 'vačk', 'klikov', 'pístn'], canonical: 'Motor' },
-  { keywords: ['chlad', 'termostat', 'vodní čerpadl', 'ventilátor'], canonical: 'Chlazení' },
-  { keywords: ['výfuk', 'katalyz', 'tlumič výf', 'lambd'], canonical: 'Výfuk' },
-  { keywords: ['převodov', 'spojk', 'kardan', 'diferenc'], canonical: 'Převodovka' },
-  { keywords: ['odpruž', 'tlumič náraz', 'pružin', 'rameno', 'silentbl', 'stabiliz'], canonical: 'Odpružení' },
-  { keywords: ['řízení', 'volant', 'řídicí'], canonical: 'Řízení' },
-  { keywords: ['osvětl', 'světlomet', 'reflektor', 'žárov', 'led'], canonical: 'Osvětlení' },
-  { keywords: ['elektr', 'baterie', 'alternátor', 'startér', 'svíčk', 'cívka', 'relé', 'pojistk'], canonical: 'Elektroinstalace' },
-  { keywords: ['klimat', 'topení', 'kompresor klima'], canonical: 'Klimatizace' },
-  { keywords: ['palivov', 'vstřikov', 'čerpadlo paliv'], canonical: 'Palivový systém' },
-  { keywords: ['karoser', 'nárazn', 'kapot', 'dveř', 'blatn', 'maska'], canonical: 'Karoserie' },
-  { keywords: ['interiér', 'sedadl', 'opěr', 'palubní deska', 'koberec'], canonical: 'Interiér' },
-  { keywords: ['olej', 'kapalin', 'mazi'], canonical: 'Kapaliny a oleje' },
-  { keywords: ['pneu', 'kolo', 'disk'], canonical: 'Pneumatiky' },
-  { keywords: ['údržb', 'servis'], canonical: 'Údržba' },
+  { keywords: ['airbag', 'bezpe', 'pas '], canonical: 'Bezpečnostní systém' },
+  { keywords: ['brzd', 'kotouč', 'destič', 'třmen', 'abs', 'bubn', 'oblož'], canonical: 'Brzdové zařízení' },
+  { keywords: ['stěrač', 'ostřik', 'čištění skel'], canonical: 'Čištění skel' },
+  { keywords: ['servis', 'údržb', 'nářad'], canonical: 'Díly pro servis / kontrolu / údržbu' },
+  { keywords: ['filtr'], canonical: 'Filtr' },
+  { keywords: ['hybrid', 'elektr pohon'], canonical: 'Hybridní / elektrický pohon' },
+  { keywords: ['chlad', 'termostat', 'vodní čerpadl', 'ventilátor chla', 'expanzní'], canonical: 'Chlazení' },
+  { keywords: ['rádio', 'reproduktor', 'navigac', 'displej'], canonical: 'Informační / komunikační systém' },
+  { keywords: ['karoser', 'nárazn', 'kapot', 'dveř', 'blatn', 'maska', 'sklo', 'zrcátk', 'zrcadl'], canonical: 'Karosérie' },
+  { keywords: ['klimat', 'topení', 'kompresor klima', 'kondenz'], canonical: 'Klimatizace' },
+  { keywords: ['pneu', 'kolo', 'disk', 'ráfek'], canonical: 'Kola / pneu' },
+  { keywords: ['sedadl', 'koberec', 'palubní deska', 'interi'], canonical: 'Komfortní systémy' },
+  { keywords: ['motor', 'hlava válc', 'olejová van', 'vačk', 'klikov', 'pístn', 'turbo', 'rozvod'], canonical: 'Motor' },
+  { keywords: ['odpruž', 'tlumič', 'pružin', 'rameno', 'silentbl', 'stabiliz', 'ložisko'], canonical: 'Odpružení / tlumení' },
+  { keywords: ['palivov', 'vstřikov', 'čerpadlo paliv', 'palivové čerpadlo'], canonical: 'Palivové čerpadlo' },
+  { keywords: ['poloos', 'pohon kol'], canonical: 'Pohon kol' },
+  { keywords: ['kardan', 'diferenc'], canonical: 'Pohon nápravy' },
+  { keywords: ['nosič', 'tažné'], canonical: 'Přepravní vybavení' },
+  { keywords: ['řízení', 'volant', 'řídicí', 'hřeben řízení'], canonical: 'Řízení' },
+  { keywords: ['spojk', 'setrvačn'], canonical: 'Spojka' },
+  { keywords: ['výfuk', 'katalyz', 'tlumič výf', 'lambd', 'dpf'], canonical: 'Výfukový systém' },
+  { keywords: ['zapalov', 'svíčk', 'cívka', 'žhavi'], canonical: 'Zapalování / žhavení' },
+  { keywords: ['převodov', 'manuální převod', 'automatická převod'], canonical: 'Převodovka' },
+  { keywords: ['alternátor', 'startér', 'baterie', 'relé', 'pojistk', 'kabelá', 'senzor', 'snímač'], canonical: 'Elektroinstalace' },
 ];
 
 function resolveCanonicalCategory(label: string, keywords: string[] = []): string | null {
