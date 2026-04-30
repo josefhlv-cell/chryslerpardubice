@@ -309,6 +309,13 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
   }
 
+  const nodeCounts = new Map<string, number>();
+  const { data: mappedRows } = await supabase.from("catalog_part_categories").select("category_id").limit(10000);
+  for (const row of mappedRows || []) {
+    const key = String((row as any).category_id || "");
+    if (key) nodeCounts.set(key, (nodeCounts.get(key) || 0) + 1);
+  }
+
   const build = (parentId: string | null, path: string[]): CatalogCategoryNode[] => {
     const kids = byParent.get(parentId) || [];
     return kids.map((n) => {
@@ -351,7 +358,7 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
         label: k.name_cs,
         path: [...path, k.slug],
         keywords: [k.name_cs],
-        count: 0,
+        count: nodeCounts.get(k.id) || (resolveCanonicalCategory(k.name_cs, []) ? canonicalCounts.get(resolveCanonicalCategory(k.name_cs, [])!) || 0 : 0),
         sectionId: null,
         children: buildGlobal(k.id, [...path, k.slug]),
       }));
