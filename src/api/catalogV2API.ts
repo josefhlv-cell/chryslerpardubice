@@ -480,6 +480,12 @@ export async function listPartsForVehicle(opts: any) {
     } else {
       compatQ = compatQ.ilike('brand', opts.brand);
       if (opts.model) compatQ = compatQ.ilike('model', opts.model);
+      if (opts.engine) compatQ = compatQ.ilike('engine', opts.engine);
+      // Year filter: include rows whose [year_from, year_to] overlaps the user year
+      if (opts.year) {
+        compatQ = compatQ.or(`year_from.is.null,year_from.lte.${opts.year}`)
+                         .or(`year_to.is.null,year_to.gte.${opts.year}`);
+      }
     }
     const { data: compatRows, error: compatErr } = await compatQ;
     if (compatErr) return { rows: [], error: compatErr };
