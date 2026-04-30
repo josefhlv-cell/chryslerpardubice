@@ -216,12 +216,6 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
 function normalizeRow(row: any, source?: string): CatalogPart {
   const sourceNorm = String(source || row?.catalog_source || row?.supplier || 'mopar').toLowerCase();
   const mfr = String(row?.manufacturer || '').trim().toLowerCase();
-  // ORIGINÁL = pouze ověřené Mopar OEM zdroje:
-  //   - mopar, mopar_oem (oficiální Mopar katalog)
-  //   - 7zap, epc-link (Mopar EPC oficiální scraping s reálným OEM)
-  //   - csv (manuální import — pokud manufacturer=Mopar)
-  // NÁHRADA = vše ostatní vč. AI generovaných (epc-ai, ai-epc) a aftermarketu (makro, autokelly, jm, sag, crossref).
-  // KRITICKÉ: AI sources NESMÍ být OEM, i když si tvrdí manufacturer='Mopar' — jde o nepřesné generované návrhy.
   const oemSources = ['mopar', 'mopar_oem', '7zap', 'epc-link'];
   const aftermarketSources = ['epc-ai', 'ai-epc', 'makro', 'autokelly', 'crossref', 'sag', 'jm', 'ai'];
   const isAftermarket = aftermarketSources.includes(sourceNorm);
@@ -231,25 +225,44 @@ function normalizeRow(row: any, source?: string): CatalogPart {
   const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
   const hasPrice = (basePrice && basePrice > 0) || (priceNoVat && priceNoVat > 0);
-  
+
+  // For J+M (aftermarket) rows, the supplier puts the producer brand under `brand`
+  // (TRW, ATE, Bosch, ...). For local DB rows it sits in `manufacturer`.
+  const manufacturer = row?.manufacturer ?? row?.brand ?? null;
+
+  // Build description from J+M raw fields when available
+  let description: string | null = row?.description ?? null;
+  if (!description && Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0) {
+    description = `OE čísla: ${row.oe_numbers.slice(0, 8).join(', ')}`;
+  } else if (description && Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0) {
+    description = `${description}\n\nOE čísla: ${row.oe_numbers.slice(0, 8).join(', ')}`;
+  }
+
+  // Technical parameters: object map from J+M, or stored on local row
+  let technical_parameters: Record<string, string> | null = null;
+  if (row?.technical_parameters && typeof row.technical_parameters === 'object' && !Array.isArray(row.technical_parameters)) {
+    const entries = Object.entries(row.technical_parameters).filter(([, v]) => v != null && String(v).trim() !== '');
+    technical_parameters = entries.length > 0 ? Object.fromEntries(entries) as Record<string, string> : null;
+  }
+
   return {
-    id: String(row?.id || Math.random()),
+    id: String(row?.id || `${sourceNorm}-${row?.oem_number || Math.random()}`),
     oem_number: String(row?.oem_number || ''),
     name: sanitizeName(String(row?.name || row?.oem_number || 'Díl')),
-    manufacturer: row?.manufacturer ?? null,
+    manufacturer: manufacturer ? String(manufacturer).trim() : null,
     catalog_source: sourceNorm,
     price_without_vat: priceNoVat > 0 ? priceNoVat : null,
     price_with_vat: basePrice,
     availability: hasPrice ? (row?.availability ?? 'available') : 'on_order',
     image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
     category: row?.category ?? null,
-    description: row?.description ?? null,
+    description,
     is_oem: isOem,
     badge_label: isOem ? 'ORIGINÁL' : 'NÁHRADA',
     rank: isOem ? 1 : 5,
     final_price: finalPrice,
     markup_percent: markup,
-    technical_parameters: row?.technical_parameters ?? null,
+    technical_parameters,
     compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
   };
 }
@@ -534,9 +547,54 @@ export async function fetchJmByCodes(codes: string[]) {
   }
 }
 
+/**
+ * Merge OEM rows with J+M alternatives.
+ * Cap: max 3 J+M alternatives per OEM number, max 30 J+M total.
+ * This mirrors how eshop.jmautodily.cz shows aftermarket replacements:
+ * a small, focused set of branded alternatives per original part — not dozens.
+ */
+const MAX_JM_PER_OEM = 3;
+const MAX_JM_TOTAL = 30;
+
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
-  const all = [...oem, ...jm];
-  return deduplicateParts(all);
+  // Drop disabled aftermarket sources defensively.
+  const oemClean = filterDisabledSources(oem);
+  const jmClean = filterDisabledSources(jm);
+
+  // Always keep OEM. Group JM by base OEM (8-digit prefix) so each original
+  // gets a bounded set of alternatives.
+  const baseKey = (oem: string) => normalizeOem(oem).replace(/^K/, '').match(/^\d{8}/)?.[0] || normalizeOem(oem);
+  const oemBaseSet = new Set(oemClean.map((p) => baseKey(p.oem_number)));
+
+  // Sort JM: priced first, then with photo, then by brand quality (named brand > empty)
+  const jmSorted = [...jmClean].sort((a, b) => {
+    const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
+    const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
+    if (priceA !== priceB) return priceB - priceA;
+    const photoA = a.image_urls?.[0] ? 1 : 0;
+    const photoB = b.image_urls?.[0] ? 1 : 0;
+    if (photoA !== photoB) return photoB - photoA;
+    const brandA = (a.manufacturer || '').trim().length > 0 ? 1 : 0;
+    const brandB = (b.manufacturer || '').trim().length > 0 ? 1 : 0;
+    return brandB - brandA;
+  });
+
+  const perOemCount = new Map<string, number>();
+  const jmKept: CatalogPart[] = [];
+  for (const part of jmSorted) {
+    if (jmKept.length >= MAX_JM_TOTAL) break;
+    const key = baseKey(part.oem_number);
+    // Prefer JM whose base OEM matches an OEM we have in the list
+    const isLinked = oemBaseSet.has(key);
+    const cur = perOemCount.get(key) || 0;
+    if (cur >= MAX_JM_PER_OEM) continue;
+    // Skip JM that aren't linked to any of our OEMs when we already have linked ones
+    if (!isLinked && jmKept.length >= 10) continue;
+    perOemCount.set(key, cur + 1);
+    jmKept.push(part);
+  }
+
+  return deduplicateParts([...oemClean, ...jmKept]);
 }
 
 function finalizeCatalogRows(rows: any[], from: number, to: number) {
