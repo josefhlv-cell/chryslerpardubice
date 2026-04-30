@@ -55,6 +55,7 @@ export type NextisVehicle = {
   engine: string | null;
   year_from?: number | null;
   year_to?: number | null;
+  power_kw?: number | null;
 };
 
 const DE_TO_CS: Record<string, string> = {
