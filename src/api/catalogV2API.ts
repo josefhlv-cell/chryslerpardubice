@@ -331,10 +331,35 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     return true;
   });
 
-  if (engineNode) return build(engineNode.id, []);
-  if (modelNode) return build(modelNode.id, []);
-  if (brandNode) return build(brandNode.id, []);
-  return build(null, []).filter((n) => !["Chrysler", "Dodge", "RAM", "Lancia", "Cadillac"].includes(n.label));
+  // Globální J+M strom je vždy stejný (parent_id=NULL, is_global=true).
+  // Vehicle scope (brand/model/engine) ovlivňuje jen filtraci dílů, ne strukturu stromu.
+  const globalRoots = (byParent.get(null) || []).filter((n: any) => n.node_type === 'category' && n.is_global);
+  if (globalRoots.length > 0) {
+    const buildGlobal = (parentId: string, path: string[]): CatalogCategoryNode[] => {
+      const kids = (byParent.get(parentId) || []).filter((k: any) => k.node_type === 'subcategory');
+      return kids.map((k: any) => ({
+        id: k.id,
+        label: k.name_cs,
+        path: [...path, k.slug],
+        keywords: [k.name_cs],
+        count: 0,
+        sectionId: null,
+        children: buildGlobal(k.id, [...path, k.slug]),
+      }));
+    };
+    return globalRoots
+      .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
+      .map((n: any) => ({
+        id: n.id,
+        label: n.name_cs,
+        path: [n.slug],
+        keywords: [n.name_cs],
+        count: canonicalCounts.get(n.name_cs) || 0,
+        sectionId: null,
+        children: buildGlobal(n.id, [n.slug]),
+      }));
+  }
+  return [];
 }
 
 export async function fetchJmCategoryTree(opts: any) {
