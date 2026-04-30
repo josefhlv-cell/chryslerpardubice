@@ -86,7 +86,7 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex items-start gap-2 mb-1">
+          <div className="flex items-start gap-2 mb-1 flex-wrap">
             <Badge
               variant={isOem ? "default" : "secondary"}
               className={cn(
@@ -97,7 +97,16 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
               {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
               {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
             </Badge>
-            {p.manufacturer && (
+            {!isOem && p.manufacturer && (
+              <Badge
+                variant="outline"
+                className="text-[10px] px-1.5 py-0 h-5 shrink-0 border-amber-500/40 text-amber-600 dark:text-amber-400 font-semibold uppercase tracking-wide"
+                title="Výrobce náhradního dílu"
+              >
+                {p.manufacturer}
+              </Badge>
+            )}
+            {isOem && p.manufacturer && (
               <span className="text-[10px] text-muted-foreground truncate">{p.manufacturer}</span>
             )}
             {p.category && (
