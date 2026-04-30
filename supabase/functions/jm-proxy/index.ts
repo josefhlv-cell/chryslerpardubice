@@ -959,6 +959,27 @@ Deno.serve(async (req) => {
           skipBrandFilter,
           totalRawHits,
         };
+
+        // Structured log when no results (helps diagnose missing parts)
+        if (merged.length === 0) {
+          await logCatalogEvent(adminClient, {
+            level: 'warn',
+            event: 'searchByCode_empty',
+            oem_number: rawCode,
+            message: `Žádné J+M položky pro OEM ${rawCode}`,
+            details: {
+              variantsTried: variants,
+              totalRawHits,
+              skipBrandFilter,
+              enableCrossref,
+              attemptCount: attempts.length,
+              firstAttempts: attempts.slice(0, 5),
+              reason: totalRawHits === 0
+                ? 'no_raw_hits_from_nextis'
+                : 'all_filtered_out_by_brand_blacklist',
+            },
+          });
+        }
         break;
       }
 
