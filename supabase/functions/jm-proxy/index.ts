@@ -481,28 +481,37 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
 
 async function fetchJmViaCrossRefs(adminClient: any, oeCode: string, category = ''): Promise<{ items: UnifiedPart[]; xrefsTried: string[]; rawHits: number }> {
   const xrefs = await lookupCrossRefsForOem(adminClient, oeCode, 80);
-  const items: UnifiedPart[] = [];
   const xrefsTried: string[] = [];
-  let rawHits = 0;
 
-  for (const x of xrefs) {
+  // Run all crossref lookups in PARALLEL. Each one was previously sequential and
+  // could take 1-2s — for 3 refs that meant 3-6s extra latency.
+  const tasks = xrefs.map(async (x) => {
     const partNumber = String(x.part_number || '').trim();
-    if (!partNumber) continue;
+    if (!partNumber) return { rawCount: 0, items: [] as UnifiedPart[] };
     xrefsTried.push(partNumber);
-    console.log(`Found Cross-Ref ${partNumber} for OE ${oeCode}. Querying J+M again...`);
     let result = await fetchJmForSpecificCode(partNumber, 'CodeProduct');
     if (result.items.length === 0) {
       const oeResult = await fetchJmForSpecificCode(partNumber, 'CodeOE');
       result = { rawCount: result.rawCount + oeResult.rawCount, items: oeResult.items };
     }
-    rawHits += result.rawCount;
-    for (const part of result.items) {
-      items.push({
+    return {
+      rawCount: result.rawCount,
+      items: result.items.map((part) => ({
         ...part,
         category: category || part.category,
         related_oem_number: oeCode,
         searched_code: partNumber,
-      });
+      })),
+    };
+  });
+
+  const settled = await Promise.allSettled(tasks);
+  const items: UnifiedPart[] = [];
+  let rawHits = 0;
+  for (const r of settled) {
+    if (r.status === 'fulfilled') {
+      rawHits += r.value.rawCount;
+      items.push(...r.value.items);
     }
   }
 
