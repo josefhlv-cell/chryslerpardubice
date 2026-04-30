@@ -681,18 +681,17 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
 }
 
 // ---------- HTTP entry ----------
+const PUBLIC_READ_ACTIONS = new Set([
+  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock'
+]);
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    const bearer = authHeader.replace('Bearer ', '').trim();
+    const authHeader = req.headers.get('Authorization') || '';
+    const hasAuth = authHeader.startsWith('Bearer ');
+    const bearer = hasAuth ? authHeader.replace('Bearer ', '').trim() : '';
     const apiKeyHeader = req.headers.get('apikey') || '';
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
     const publishableKey = Deno.env.get('SUPABASE_PUBLISHABLE_KEY') || '';
@@ -704,10 +703,17 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { action, payload = {} } = body;
 
-    // Auth: server keys (cron) always allowed; otherwise validate user JWT.
-    // For syncCategories / enrichPrices, additionally require admin role.
+    // Auth: server keys (cron) and PUBLIC_READ_ACTIONS skip JWT validation.
+    // Other actions (syncCategories, enrichPrices, admin tasks) require user JWT + admin role.
     let userId: string | null = null;
-    if (!isServerKey) {
+    const isPublicRead = PUBLIC_READ_ACTIONS.has(action);
+    if (!isServerKey && !isPublicRead) {
+      if (!hasAuth) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
       const authClient = createClient(
         Deno.env.get('SUPABASE_URL')!,
         anonKey,
