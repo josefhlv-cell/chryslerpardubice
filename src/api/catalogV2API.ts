@@ -216,12 +216,6 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
 function normalizeRow(row: any, source?: string): CatalogPart {
   const sourceNorm = String(source || row?.catalog_source || row?.supplier || 'mopar').toLowerCase();
   const mfr = String(row?.manufacturer || '').trim().toLowerCase();
-  // ORIGINÁL = pouze ověřené Mopar OEM zdroje:
-  //   - mopar, mopar_oem (oficiální Mopar katalog)
-  //   - 7zap, epc-link (Mopar EPC oficiální scraping s reálným OEM)
-  //   - csv (manuální import — pokud manufacturer=Mopar)
-  // NÁHRADA = vše ostatní vč. AI generovaných (epc-ai, ai-epc) a aftermarketu (makro, autokelly, jm, sag, crossref).
-  // KRITICKÉ: AI sources NESMÍ být OEM, i když si tvrdí manufacturer='Mopar' — jde o nepřesné generované návrhy.
   const oemSources = ['mopar', 'mopar_oem', '7zap', 'epc-link'];
   const aftermarketSources = ['epc-ai', 'ai-epc', 'makro', 'autokelly', 'crossref', 'sag', 'jm', 'ai'];
   const isAftermarket = aftermarketSources.includes(sourceNorm);
@@ -231,25 +225,44 @@ function normalizeRow(row: any, source?: string): CatalogPart {
   const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
   const hasPrice = (basePrice && basePrice > 0) || (priceNoVat && priceNoVat > 0);
-  
+
+  // For J+M (aftermarket) rows, the supplier puts the producer brand under `brand`
+  // (TRW, ATE, Bosch, ...). For local DB rows it sits in `manufacturer`.
+  const manufacturer = row?.manufacturer ?? row?.brand ?? null;
+
+  // Build description from J+M raw fields when available
+  let description: string | null = row?.description ?? null;
+  if (!description && Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0) {
+    description = `OE čísla: ${row.oe_numbers.slice(0, 8).join(', ')}`;
+  } else if (description && Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0) {
+    description = `${description}\n\nOE čísla: ${row.oe_numbers.slice(0, 8).join(', ')}`;
+  }
+
+  // Technical parameters: object map from J+M, or stored on local row
+  let technical_parameters: Record<string, string> | null = null;
+  if (row?.technical_parameters && typeof row.technical_parameters === 'object' && !Array.isArray(row.technical_parameters)) {
+    const entries = Object.entries(row.technical_parameters).filter(([, v]) => v != null && String(v).trim() !== '');
+    technical_parameters = entries.length > 0 ? Object.fromEntries(entries) as Record<string, string> : null;
+  }
+
   return {
-    id: String(row?.id || Math.random()),
+    id: String(row?.id || `${sourceNorm}-${row?.oem_number || Math.random()}`),
     oem_number: String(row?.oem_number || ''),
     name: sanitizeName(String(row?.name || row?.oem_number || 'Díl')),
-    manufacturer: row?.manufacturer ?? null,
+    manufacturer: manufacturer ? String(manufacturer).trim() : null,
     catalog_source: sourceNorm,
     price_without_vat: priceNoVat > 0 ? priceNoVat : null,
     price_with_vat: basePrice,
     availability: hasPrice ? (row?.availability ?? 'available') : 'on_order',
     image_urls: Array.isArray(row?.image_urls) ? row.image_urls : null,
     category: row?.category ?? null,
-    description: row?.description ?? null,
+    description,
     is_oem: isOem,
     badge_label: isOem ? 'ORIGINÁL' : 'NÁHRADA',
     rank: isOem ? 1 : 5,
     final_price: finalPrice,
     markup_percent: markup,
-    technical_parameters: row?.technical_parameters ?? null,
+    technical_parameters,
     compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
   };
 }
