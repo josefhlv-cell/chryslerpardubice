@@ -366,8 +366,6 @@ const Admin = () => {
            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Katalog</TabsTrigger>}
            {isEnabled("catalog") && <TabsTrigger value="catalog-tools" className="text-[11px] gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Import</TabsTrigger>}
            {isEnabled("catalog") && <TabsTrigger value="catalog-repair" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Diagnostika & opravy</TabsTrigger>}
-            {isEnabled("catalog") && <TabsTrigger value="jm-tree" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />J+M Strom</TabsTrigger>}
-            {isEnabled("catalog") && <TabsTrigger value="part-diag" className="text-[11px] gap-1 shrink-0"><Search className="w-3 h-3" />Per-díl</TabsTrigger>}
             {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
             {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
             {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
