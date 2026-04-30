@@ -580,7 +580,20 @@ export async function listPartsForVehicle(opts: any) {
       .select('part_id')
       .eq('category_id', opts.categoryNodeId)
       .limit(2000);
-    const partIds = [...new Set((mapRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    let partIds = [...new Set((mapRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    if (partIds.length > 0 && (opts.nextisVehicleId || opts.brand)) {
+      let compatQ = supabase.from('catalog_vehicle_compatibility').select('part_id').in('part_id', partIds).limit(2000);
+      if (opts.nextisVehicleId) compatQ = compatQ.eq('nextis_vehicle_id', opts.nextisVehicleId);
+      else {
+        compatQ = compatQ.ilike('brand', opts.brand);
+        if (opts.model) compatQ = compatQ.ilike('model', opts.model);
+        if (opts.engine) compatQ = compatQ.ilike('engine', opts.engine);
+        if (opts.year) compatQ = compatQ.or(`year_from.is.null,year_from.lte.${opts.year}`).or(`year_to.is.null,year_to.gte.${opts.year}`);
+      }
+      const { data: compatRows } = await compatQ;
+      const allowedIds = new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean));
+      partIds = partIds.filter((id) => allowedIds.has(id));
+    }
     if (partIds.length > 0) {
       const { data } = await supabase
         .from('parts_new_public')
