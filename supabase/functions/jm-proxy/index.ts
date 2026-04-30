@@ -69,6 +69,11 @@ const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "cadillac
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// ---------- searchByCode in-memory cache (5 min TTL) ----------
+// Survives between warm Edge invocations on the same isolate.
+const _searchByCodeCache = new Map<string, { result: any; ts: number }>();
+const SEARCH_CODE_TTL = 5 * 60 * 1000;
+
 // ---------- structured event logger (writes to catalog_event_log) ----------
 // Fire-and-forget: failures must never break the request flow.
 async function logCatalogEvent(
@@ -448,9 +453,10 @@ async function lookupCrossRefsForOem(adminClient: any, rawCode: string, limit = 
 
 async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'CodeProduct' = 'CodeProduct'): Promise<{ rawCount: number; items: UnifiedPart[] }> {
   const targets: Array<string | undefined> = ['P', undefined, 'O'];
-  const collected: UnifiedPart[] = [];
-  let rawCount = 0;
-  for (const target of targets) {
+
+  // Run all three target attempts in PARALLEL — Nextis returns fast for misses,
+  // so the cost of doing them concurrently is small and we save 2 round-trips.
+  const calls = targets.map(async (target) => {
     const reqBody: Record<string, unknown> = {
       code,
       target,
@@ -465,40 +471,52 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
     if (!target) delete reqBody.target;
     const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody).catch((e) => ({ _error: String(e) }));
     const rawList = raw?.items || raw?.Items || [];
-    rawCount += rawList.length;
-    const items = normalizeItems(raw);
-    if (items.length > 0) {
-      collected.push(...items);
-      break;
-    }
+    return { rawCount: rawList.length, items: normalizeItems(raw) };
+  });
+
+  const results = await Promise.all(calls);
+  let rawCount = 0;
+  const collected: UnifiedPart[] = [];
+  for (const r of results) {
+    rawCount += r.rawCount;
+    if (r.items.length > 0) collected.push(...r.items);
   }
   return { rawCount, items: dedupeUnifiedParts(collected) };
 }
 
 async function fetchJmViaCrossRefs(adminClient: any, oeCode: string, category = ''): Promise<{ items: UnifiedPart[]; xrefsTried: string[]; rawHits: number }> {
   const xrefs = await lookupCrossRefsForOem(adminClient, oeCode, 80);
-  const items: UnifiedPart[] = [];
   const xrefsTried: string[] = [];
-  let rawHits = 0;
 
-  for (const x of xrefs) {
+  // Run all crossref lookups in PARALLEL. Each one was previously sequential and
+  // could take 1-2s — for 3 refs that meant 3-6s extra latency.
+  const tasks = xrefs.map(async (x) => {
     const partNumber = String(x.part_number || '').trim();
-    if (!partNumber) continue;
+    if (!partNumber) return { rawCount: 0, items: [] as UnifiedPart[] };
     xrefsTried.push(partNumber);
-    console.log(`Found Cross-Ref ${partNumber} for OE ${oeCode}. Querying J+M again...`);
     let result = await fetchJmForSpecificCode(partNumber, 'CodeProduct');
     if (result.items.length === 0) {
       const oeResult = await fetchJmForSpecificCode(partNumber, 'CodeOE');
       result = { rawCount: result.rawCount + oeResult.rawCount, items: oeResult.items };
     }
-    rawHits += result.rawCount;
-    for (const part of result.items) {
-      items.push({
+    return {
+      rawCount: result.rawCount,
+      items: result.items.map((part) => ({
         ...part,
         category: category || part.category,
         related_oem_number: oeCode,
         searched_code: partNumber,
-      });
+      })),
+    };
+  });
+
+  const settled = await Promise.allSettled(tasks);
+  const items: UnifiedPart[] = [];
+  let rawHits = 0;
+  for (const r of settled) {
+    if (r.status === 'fulfilled') {
+      rawHits += r.value.rawCount;
+      items.push(...r.value.items);
     }
   }
 
@@ -975,8 +993,14 @@ Deno.serve(async (req) => {
         const skipBrandFilter = payload.skipBrandFilter === true || payload.debug === true;
         const enableCrossref = payload.enableCrossref !== false; // default ON
 
-        // OE PREFIX/SUFFIX LADDER: try original, K-prefix variants, suffix-stripped,
-        // and base-8 variants before falling back to local crossrefs.
+        // Edge in-memory cache (5 min). Survives between warm invocations.
+        const cacheKey = `${rawCode}|${skipBrandFilter ? 1 : 0}|${enableCrossref ? 1 : 0}`;
+        const cached = _searchByCodeCache.get(cacheKey);
+        if (cached && Date.now() - cached.ts < SEARCH_CODE_TTL) {
+          result = { ...cached.result, fromCache: true };
+          break;
+        }
+
         const normalized = normalizeOemCode(rawCode);
         const stripped = normalized.replace(/^K/, '');
         const baseNoSuffix = stripped.replace(/[A-Z]{1,3}$/i, '');
@@ -996,18 +1020,27 @@ Deno.serve(async (req) => {
         let merged: UnifiedPart[] = [];
         let totalRawHits = 0;
 
-        for (const variant of variants) {
-          const direct = await fetchJmForSpecificCode(variant, 'CodeOE');
+        // PARALLEL variant + crossref ladder. Previously sequential = up to 10s for one OEM.
+        const variantTask = Promise.all(
+          variants.map(async (variant) => {
+            const direct = await fetchJmForSpecificCode(variant, 'CodeOE');
+            return { variant, direct };
+          })
+        );
+        const crossrefTask = enableCrossref
+          ? fetchJmViaCrossRefs(adminClient, rawCode)
+          : Promise.resolve({ items: [] as UnifiedPart[], xrefsTried: [] as string[], rawHits: 0 });
+
+        const [variantResults, cross] = await Promise.all([variantTask, crossrefTask]);
+        for (const { variant, direct } of variantResults) {
           totalRawHits += direct.rawCount;
           attempts.push({ code: variant, raw: direct.rawCount, count: direct.items.length, mode: 'direct-oe' });
           if (direct.items.length) merged.push(...direct.items);
         }
-
+        totalRawHits += cross.rawHits;
+        attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
+        merged.push(...cross.items);
         if (enableCrossref) {
-          const cross = await fetchJmViaCrossRefs(adminClient, rawCode);
-          totalRawHits += cross.rawHits;
-          attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
-          merged.push(...cross.items);
           console.log(`[searchByCode] crossref recursive lookup ${cross.xrefsTried.length} refs for ${rawCode}, items=${cross.items.length}`);
         }
 
@@ -1020,9 +1053,13 @@ Deno.serve(async (req) => {
           return skipBrandFilter ? true : isUsBrand(p.brand);
         });
 
+        // Fire-and-forget price enrichment — never blocks response.
         try {
           const codes = merged.map((i) => i.oem_number).filter(Boolean);
-          if (codes.length) await enrichPricesIntoDb(adminClient, codes);
+          if (codes.length) {
+            // @ts-ignore Deno EdgeRuntime API
+            (globalThis as any).EdgeRuntime?.waitUntil?.(enrichPricesIntoDb(adminClient, codes).catch(() => {}));
+          }
         } catch (_) { /* non-blocking */ }
 
         result = {
@@ -1033,7 +1070,13 @@ Deno.serve(async (req) => {
           totalRawHits,
         };
 
-        // Structured log when no results (helps diagnose missing parts)
+        _searchByCodeCache.set(cacheKey, { result, ts: Date.now() });
+        // Bound cache size — drop oldest if exceeded.
+        if (_searchByCodeCache.size > 500) {
+          const firstKey = _searchByCodeCache.keys().next().value;
+          if (firstKey) _searchByCodeCache.delete(firstKey);
+        }
+
         if (merged.length === 0) {
           await logCatalogEvent(adminClient, {
             level: 'warn',
