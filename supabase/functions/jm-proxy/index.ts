@@ -168,6 +168,9 @@ interface UnifiedPart {
   oem_number: string;
   brand: string;
   name: string;
+  description?: string;
+  technical_parameters?: Record<string, string>;
+  oe_numbers?: string[];
   price_without_vat: number;
   price_with_vat: number;
   stock: number;
