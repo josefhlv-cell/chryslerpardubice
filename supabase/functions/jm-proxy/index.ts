@@ -69,6 +69,38 @@ const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "cadillac
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// ---------- structured event logger (writes to catalog_event_log) ----------
+// Fire-and-forget: failures must never break the request flow.
+async function logCatalogEvent(
+  adminClient: any,
+  params: {
+    level?: 'debug' | 'info' | 'warn' | 'error';
+    event: string;
+    message?: string;
+    oem_number?: string | null;
+    vehicle_id?: string | null;
+    category?: string | null;
+    duration_ms?: number;
+    details?: Record<string, unknown>;
+  },
+) {
+  try {
+    await adminClient.from('catalog_event_log').insert({
+      source: 'jm-proxy',
+      level: params.level ?? 'info',
+      event: params.event,
+      message: params.message ?? null,
+      oem_number: params.oem_number ?? null,
+      vehicle_id: params.vehicle_id ?? null,
+      category: params.category ?? null,
+      duration_ms: params.duration_ms ?? null,
+      details: params.details ?? {},
+    });
+  } catch (e) {
+    console.warn('[logCatalogEvent] insert failed:', (e as Error).message);
+  }
+}
+
 async function getToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 30_000) return cachedToken.token;
 
@@ -927,6 +959,27 @@ Deno.serve(async (req) => {
           skipBrandFilter,
           totalRawHits,
         };
+
+        // Structured log when no results (helps diagnose missing parts)
+        if (merged.length === 0) {
+          await logCatalogEvent(adminClient, {
+            level: 'warn',
+            event: 'searchByCode_empty',
+            oem_number: rawCode,
+            message: `Žádné J+M položky pro OEM ${rawCode}`,
+            details: {
+              variantsTried: variants,
+              totalRawHits,
+              skipBrandFilter,
+              enableCrossref,
+              attemptCount: attempts.length,
+              firstAttempts: attempts.slice(0, 5),
+              reason: totalRawHits === 0
+                ? 'no_raw_hits_from_nextis'
+                : 'all_filtered_out_by_brand_blacklist',
+            },
+          });
+        }
         break;
       }
 
@@ -1267,6 +1320,25 @@ Deno.serve(async (req) => {
           usedStep,
           triedBrand: brand, triedModel: model, triedEngine: engine, category,
         };
+
+        if (collected.length === 0) {
+          await logCatalogEvent(adminClient, {
+            level: 'warn',
+            event: 'searchByVehicle_empty',
+            category: category || null,
+            message: `Žádné J+M díly pro ${brand} ${model} ${engine || ''} / ${category || 'všechny kategorie'}`,
+            details: {
+              brand, model, engine, category,
+              codesQueried: oemCodes.length,
+              totalNextisHits: totalRaw,
+              usedStep,
+              codeAttempts: codeAttempts.slice(0, 10),
+              reason: oemCodes.length === 0
+                ? 'no_local_oem_codes_for_vehicle'
+                : (totalRaw === 0 ? 'no_jm_hits_for_oem_codes' : 'all_filtered_out'),
+            },
+          });
+        }
         break;
       }
 
@@ -1329,6 +1401,17 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error('jm-proxy error:', e);
+    // Best-effort error logging — uses fresh service-role client (admin client may not exist if early failure)
+    try {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logCatalogEvent(sb, {
+        level: 'error',
+        event: 'jm_proxy_unhandled',
+        message: (e as Error).message,
+        details: { stack: ((e as Error).stack || '').slice(0, 1000) },
+      });
+    } catch (_) { /* swallow */ }
     return new Response(
       JSON.stringify({ success: false, error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

@@ -2,6 +2,38 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
 
+// ---------- structured client-side logger ----------
+// Best-effort: never throws, never blocks UI.
+async function logCatalogEvent(params: {
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  event: string;
+  message?: string;
+  oem_number?: string | null;
+  vehicle_id?: string | null;
+  category?: string | null;
+  duration_ms?: number;
+  details?: Record<string, unknown>;
+}) {
+  try {
+    await (supabase as any).from('catalog_event_log').insert({
+      source: 'catalogV2API',
+      level: params.level ?? 'info',
+      event: params.event,
+      message: params.message ?? null,
+      oem_number: params.oem_number ?? null,
+      vehicle_id: params.vehicle_id ?? null,
+      category: params.category ?? null,
+      duration_ms: params.duration_ms ?? null,
+      details: params.details ?? {},
+    });
+  } catch (e) {
+    // RLS will reject anonymous inserts — that's fine, we just skip silently.
+    if ((e as any)?.code && (e as any).code !== '42501') {
+      console.warn('[catalogV2API.log] insert failed:', e);
+    }
+  }
+}
+
 export type CatalogPart = {
   id: string;
   oem_number: string;
@@ -226,13 +258,29 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
     
     const jmPayload = unwrapFunctionPayload(jmResult?.data);
     const jmParts = (jmPayload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
-    
+
+    if (oemParts.length === 0 && jmParts.length === 0) {
+      logCatalogEvent({
+        level: 'warn',
+        event: 'globalOemSearch_empty',
+        oem_number: q,
+        message: `Vyhledávání bez výsledků: ${q}`,
+        details: { jmAttempts: jmPayload?.attempts?.slice(0, 5) || [], jmTotalRaw: jmPayload?.totalRawHits ?? 0 },
+      });
+    }
+
     return {
       oem: oemParts,
       jm: jmParts,
     };
   } catch (err) {
     console.error('[globalOemSearch] error:', err);
+    logCatalogEvent({
+      level: 'error',
+      event: 'globalOemSearch_exception',
+      oem_number: q,
+      message: (err as Error).message,
+    });
     return { oem: [], jm: [] };
   }
 }
@@ -628,9 +676,36 @@ export async function listPartsForVehicle(opts: any) {
       .eq('category', canonical)
       .ilike('compatible_vehicles', `%${opts.brand}%`)
       .limit(2000);
+    if ((data || []).length === 0) {
+      logCatalogEvent({
+        level: 'warn',
+        event: 'listPartsForVehicle_empty',
+        vehicle_id: opts.nextisVehicleId || null,
+        category: canonical,
+        message: `Žádné díly pro ${opts.brand} ${opts.model || ''} ${opts.engine || ''} / ${canonical}`,
+        details: {
+          brand: opts.brand, model: opts.model, engine: opts.engine, year: opts.year,
+          canonical, keywords, categoryNodeId: opts.categoryNodeId,
+          strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine', 'brandFallback'],
+          reason: 'no_local_parts_match_any_strategy',
+        },
+      });
+    }
     return finalizeCatalogRows(data || [], from, to);
   }
 
+  logCatalogEvent({
+    level: 'warn',
+    event: 'listPartsForVehicle_empty',
+    vehicle_id: opts.nextisVehicleId || null,
+    category: rawLabel || null,
+    message: `Žádné díly a žádná kanonická kategorie (${rawLabel || 'n/a'})`,
+    details: {
+      brand: opts.brand, model: opts.model, engine: opts.engine,
+      rawLabel, keywords,
+      reason: 'no_canonical_category_resolved',
+    },
+  });
   return { items: [], total: 0 };
 }
 

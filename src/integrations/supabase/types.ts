@@ -492,6 +492,48 @@ export type Database = {
         }
         Relationships: []
       }
+      catalog_event_log: {
+        Row: {
+          category: string | null
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          event: string
+          id: string
+          level: string
+          message: string | null
+          oem_number: string | null
+          source: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          event: string
+          id?: string
+          level?: string
+          message?: string | null
+          oem_number?: string | null
+          source: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          event?: string
+          id?: string
+          level?: string
+          message?: string | null
+          oem_number?: string | null
+          source?: string
+          vehicle_id?: string | null
+        }
+        Relationships: []
+      }
       catalog_part_categories: {
         Row: {
           category_id: string
@@ -673,6 +715,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      crossref_seed_queue: {
+        Row: {
+          alternatives_added: number
+          attempts: number
+          created_at: string
+          id: string
+          last_error: string | null
+          oem_number: string
+          part_name: string | null
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          alternatives_added?: number
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          oem_number: string
+          part_name?: string | null
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          alternatives_added?: number
+          attempts?: number
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          oem_number?: string
+          part_name?: string | null
+          processed_at?: string | null
+          status?: string
+        }
+        Relationships: []
       }
       employees: {
         Row: {
