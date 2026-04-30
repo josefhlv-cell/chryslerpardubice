@@ -379,8 +379,12 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     byParent.get(k)!.push(n);
   }
 
+  // Pull a richer set of part metadata (name + category) so we can compute
+  // *per-subcategory* counts via keyword matching, not just per canonical category.
+  type PartMeta = { name: string; category: string };
+  const partsForCount: PartMeta[] = [];
   const canonicalCounts = new Map<string, number>();
-  // Scoped count: pokud máme vozidlo, počítáme jen díly kompatibilní s ním; jinak globálně
+
   if (opts.brand && opts.model && opts.engine) {
     const { data: vRow } = await supabase
       .from("nextis_vehicles")
@@ -392,64 +396,79 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     if (vRow?.id) {
       const { data: scopedRows } = await supabase
         .from("catalog_vehicle_compatibility")
-        .select("part_id, parts_new!inner(category)")
+        .select("part_id, parts_new!inner(name, category)")
         .eq("nextis_vehicle_id", vRow.id)
         .limit(20000);
       for (const row of (scopedRows || []) as any[]) {
         const cat = String(row?.parts_new?.category || "Ostatní");
+        const name = String(row?.parts_new?.name || "");
+        partsForCount.push({ name, category: cat });
         canonicalCounts.set(cat, (canonicalCounts.get(cat) || 0) + 1);
       }
     }
   }
-  if (canonicalCounts.size === 0) {
-    // Fallback na globální count z parts_new_public
-    const { data: countRows } = await supabase.from("parts_new_public").select("category").limit(20000);
+  if (partsForCount.length === 0) {
+    const { data: countRows } = await supabase
+      .from("parts_new_public")
+      .select("name, category")
+      .limit(20000);
     for (const row of countRows || []) {
-      const key = String((row as any).category || "Ostatní");
-      canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
+      const name = String((row as any).name || "");
+      const cat = String((row as any).category || "Ostatní");
+      partsForCount.push({ name, category: cat });
+      canonicalCounts.set(cat, (canonicalCounts.get(cat) || 0) + 1);
     }
   }
 
+  // Pre-normalize once for fast subcategory keyword matching
+  const normalizeForCount = (s: string) =>
+    (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const partsHaystack = partsForCount.map((p) => normalizeForCount(`${p.name} ${p.category}`));
+
+  // Explicit per-subcategory keyword map. Falls back to the subcategory label
+  // itself when not listed. This prevents "all subcategories show parent count".
+  const SUBCAT_KEYWORDS: Record<string, string[]> = {
+    "brzdová kapalina": ["kapalin", "fluid", "dot 3", "dot 4", "brake fluid"],
+    "brzdové hadičky": ["hadic", "trubk", "hose", "leitung", "brake line"],
+    "brzdový třmen": ["třmen", "trmen", "sattel", "caliper"],
+    "brzdový váleček": ["válec", "valec", "zylinder", "cylinder"],
+    "bubnová brzda": ["bubn", "drum", "trommel", "čelist", "celist", "shoe"],
+    "kotoučová brzda": ["kotouč", "kotouc", "destič", "destic", "scheibe", "disc", "rotor", "pad", "belag"],
+    "brzdové destičky": ["destič", "destic", "pad", "belag", "klotz"],
+    "brzdové kotouče": ["kotouč", "kotouc", "scheibe", "disc", "rotor"],
+    "brzdové třmeny": ["třmen", "trmen", "sattel", "caliper"],
+    "abs a snímače": ["abs", "snímač", "snimac", "sensor"],
+    "filtr oleje": ["olejov filtr", "oil filter", "ölfilter"],
+    "vzduchový filtr": ["vzduch", "luftfilter", "air filter"],
+    "filtr kabiny": ["kabin", "pollen", "cabin filter"],
+    "palivový filtr": ["palivový filtr", "kraftstofffilter", "fuel filter"],
+  };
+
+  const countForSubcategoryLabel = (label: string): number => {
+    const normLabel = normalizeForCount(label);
+    const keywords = (SUBCAT_KEYWORDS[normLabel] || [normLabel])
+      .map(normalizeForCount)
+      .filter(Boolean);
+    if (keywords.length === 0) return 0;
+    let n = 0;
+    for (const hay of partsHaystack) {
+      if (keywords.some((k) => hay.includes(k))) n++;
+    }
+    return n;
+  };
+
   const nodeCounts = new Map<string, number>();
-  const { data: mappedRows } = await supabase.from("catalog_part_categories").select("category_id").limit(10000);
+  const { data: mappedRows } = await supabase
+    .from("catalog_part_categories")
+    .select("category_id")
+    .limit(10000);
   for (const row of mappedRows || []) {
     const key = String((row as any).category_id || "");
     if (key) nodeCounts.set(key, (nodeCounts.get(key) || 0) + 1);
   }
 
-  const build = (parentId: string | null, path: string[]): CatalogCategoryNode[] => {
-    const kids = byParent.get(parentId) || [];
-    return kids.map((n) => {
-      const nodePath = [...path, n.slug];
-      const canonical = resolveCanonicalCategory(n.name_cs, []);
-      return {
-        id: n.id,
-        label: n.name_cs,
-        path: nodePath,
-        keywords: [n.name_cs, canonical].filter(Boolean) as string[],
-        count: canonical ? (canonicalCounts.get(canonical) || 0) : 0,
-        sectionId: null,
-        children: build(n.id, nodePath),
-      };
-    });
-  };
-
-  const roots = byParent.get(null) || [];
-  const brandNode = roots.find((n) => n.node_type === "brand" && (!opts.brand || n.name_cs.toLowerCase() === opts.brand.toLowerCase()));
-  const modelNodes = brandNode ? (byParent.get(brandNode.id) || []) : [];
-  const modelNode = modelNodes.find((n) => n.node_type === "model" && (!opts.model || String(n.vehicle_model || n.name_cs).toLowerCase() === opts.model.toLowerCase() || n.name_cs.toLowerCase().startsWith(opts.model.toLowerCase())));
-  const engineNodes = modelNode ? (byParent.get(modelNode.id) || []) : [];
-  const engineNode = engineNodes.find((n) => {
-    if (n.node_type !== "engine") return false;
-    if (opts.engine && String(n.vehicle_engine || "").toLowerCase() !== opts.engine.toLowerCase()) return false;
-    if (opts.powerKw && n.power_kw && Math.abs(n.power_kw - opts.powerKw) > 10) return false;
-    if (opts.year && n.year_from && opts.year < n.year_from) return false;
-    if (opts.year && n.year_to && opts.year > n.year_to) return false;
-    return true;
-  });
-
   // Globální J+M strom je vždy stejný (parent_id=NULL, is_global=true).
-  // Vehicle scope (brand/model/engine) ovlivňuje jen filtraci dílů, ne strukturu stromu.
+  // Vehicle scope (brand/model/engine) ovlivňuje filtraci dílů i počty.
   const globalRoots = (byParent.get(null) || []).filter((n: any) => n.node_type === 'category' && n.is_global);
   if (globalRoots.length > 0) {
     const buildGlobal = (parentId: string, path: string[]): CatalogCategoryNode[] => {
@@ -459,7 +478,10 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
         label: k.name_cs,
         path: [...path, k.slug],
         keywords: [k.name_cs],
-        count: nodeCounts.get(k.id) || (resolveCanonicalCategory(k.name_cs, []) ? canonicalCounts.get(resolveCanonicalCategory(k.name_cs, [])!) || 0 : 0),
+        // Per-subcategory count via keyword match (NOT parent canonical fallback).
+        // If the subcategory has a manual mapping in catalog_part_categories use that;
+        // otherwise compute from keyword match against the scoped parts list.
+        count: nodeCounts.get(k.id) ?? countForSubcategoryLabel(k.name_cs),
         sectionId: null,
         children: buildGlobal(k.id, [...path, k.slug]),
       }));
@@ -471,6 +493,7 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
         label: n.name_cs,
         path: [n.slug],
         keywords: [n.name_cs],
+        // Top-level category: use canonical bucket count (already accurate).
         count: canonicalCounts.get(n.name_cs) || 0,
         sectionId: null,
         children: buildGlobal(n.id, [n.slug]),
