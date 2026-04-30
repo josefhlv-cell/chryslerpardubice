@@ -69,6 +69,11 @@ const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "cadillac
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
+// ---------- searchByCode in-memory cache (5 min TTL) ----------
+// Survives between warm Edge invocations on the same isolate.
+const _searchByCodeCache = new Map<string, { result: any; ts: number }>();
+const SEARCH_CODE_TTL = 5 * 60 * 1000;
+
 // ---------- structured event logger (writes to catalog_event_log) ----------
 // Fire-and-forget: failures must never break the request flow.
 async function logCatalogEvent(
