@@ -266,14 +266,14 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
 
   const grouped = collapseSupersessions(items);
 
-  // Sort "with-price first" — items with a real price come on top, then OEM, then the rest.
+  // J+M mirror rule: genuine OEM first, then priced aftermarket, then on-order items.
   const sorted = [...grouped].sort((a, b) => {
-    const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
-    const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
-    if (priceA !== priceB) return priceB - priceA;
     const oemA = a.is_oem ? 1 : 0;
     const oemB = b.is_oem ? 1 : 0;
     if (oemA !== oemB) return oemB - oemA;
+    const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
+    const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
+    if (priceA !== priceB) return priceB - priceA;
     return 0;
   });
 
