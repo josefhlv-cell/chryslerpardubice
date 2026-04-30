@@ -1401,6 +1401,17 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error('jm-proxy error:', e);
+    // Best-effort error logging — uses fresh service-role client (admin client may not exist if early failure)
+    try {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      await logCatalogEvent(sb, {
+        level: 'error',
+        event: 'jm_proxy_unhandled',
+        message: (e as Error).message,
+        details: { stack: ((e as Error).stack || '').slice(0, 1000) },
+      });
+    } catch (_) { /* swallow */ }
     return new Response(
       JSON.stringify({ success: false, error: (e as Error).message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
