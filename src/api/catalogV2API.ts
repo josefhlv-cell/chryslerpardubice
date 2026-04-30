@@ -258,13 +258,29 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
     
     const jmPayload = unwrapFunctionPayload(jmResult?.data);
     const jmParts = (jmPayload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
-    
+
+    if (oemParts.length === 0 && jmParts.length === 0) {
+      logCatalogEvent({
+        level: 'warn',
+        event: 'globalOemSearch_empty',
+        oem_number: q,
+        message: `Vyhledávání bez výsledků: ${q}`,
+        details: { jmAttempts: jmPayload?.attempts?.slice(0, 5) || [], jmTotalRaw: jmPayload?.totalRawHits ?? 0 },
+      });
+    }
+
     return {
       oem: oemParts,
       jm: jmParts,
     };
   } catch (err) {
     console.error('[globalOemSearch] error:', err);
+    logCatalogEvent({
+      level: 'error',
+      event: 'globalOemSearch_exception',
+      oem_number: q,
+      message: (err as Error).message,
+    });
     return { oem: [], jm: [] };
   }
 }
