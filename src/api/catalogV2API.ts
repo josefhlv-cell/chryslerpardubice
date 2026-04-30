@@ -15,7 +15,7 @@ async function logCatalogEvent(params: {
   details?: Record<string, unknown>;
 }) {
   try {
-    await supabase.from('catalog_event_log').insert({
+    await (supabase as any).from('catalog_event_log').insert({
       source: 'catalogV2API',
       level: params.level ?? 'info',
       event: params.event,
