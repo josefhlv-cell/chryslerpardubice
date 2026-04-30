@@ -181,6 +181,21 @@ function calculateFinalPrice(basePrice: number | null, source: string): { final:
   return { final: basePrice, markup: 0 };
 }
 
+// Aftermarket sources we no longer use directly. Data stays in DB for history,
+// but the catalog UI must NEVER show them — J+M (via jm-proxy) is the sole
+// aftermarket supplier and also drives the catalog tree.
+const DISABLED_AFTERMARKET_SOURCES = new Set([
+  'makro', 'sag', 'autokelly', 'epc-ai', 'ai-epc', 'crossref', 'ai',
+]);
+
+export function isDisabledAftermarketSource(source: string | null | undefined): boolean {
+  return DISABLED_AFTERMARKET_SOURCES.has(String(source || '').toLowerCase());
+}
+
+function filterDisabledSources(parts: CatalogPart[]): CatalogPart[] {
+  return parts.filter((p) => !isDisabledAftermarketSource(p.catalog_source));
+}
+
 function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
   const seen = new Map();
   const sorted = parts.sort((a, b) => {
