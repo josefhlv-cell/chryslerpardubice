@@ -268,10 +268,10 @@ export async function isJmTreeFlagEnabled(): Promise<boolean> {
  * Read the locally-mirrored 5-level catalog tree (Brand→Model→Engine→Category→Subcategory)
  * for one vehicle. Used when feature flag `catalog_jm_tree` is ON.
  */
-async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string }): Promise<CatalogCategoryNode[]> {
+async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string; year?: number; powerKw?: number }): Promise<CatalogCategoryNode[]> {
   const { data, error } = await supabase
     .from("catalog_categories")
-    .select("id, parent_id, slug, name_cs, node_type, sort_order, vehicle_brand, vehicle_model, vehicle_engine")
+    .select("id, parent_id, slug, name_cs, node_type, sort_order, vehicle_brand, vehicle_model, vehicle_engine, year_from, year_to, power_kw")
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
 
