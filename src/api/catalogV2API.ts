@@ -181,6 +181,21 @@ function calculateFinalPrice(basePrice: number | null, source: string): { final:
   return { final: basePrice, markup: 0 };
 }
 
+// Aftermarket sources we no longer use directly. Data stays in DB for history,
+// but the catalog UI must NEVER show them — J+M (via jm-proxy) is the sole
+// aftermarket supplier and also drives the catalog tree.
+const DISABLED_AFTERMARKET_SOURCES = new Set([
+  'makro', 'sag', 'autokelly', 'epc-ai', 'ai-epc', 'crossref', 'ai',
+]);
+
+export function isDisabledAftermarketSource(source: string | null | undefined): boolean {
+  return DISABLED_AFTERMARKET_SOURCES.has(String(source || '').toLowerCase());
+}
+
+function filterDisabledSources(parts: CatalogPart[]): CatalogPart[] {
+  return parts.filter((p) => !isDisabledAftermarketSource(p.catalog_source));
+}
+
 function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
   const seen = new Map();
   const sorted = parts.sort((a, b) => {
@@ -250,7 +265,8 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
       .limit(50);
     
-    const oemParts = (data || []).map(p => normalizeRow(p));
+    const oemPartsRaw = (data || []).map(p => normalizeRow(p));
+    const oemParts = filterDisabledSources(oemPartsRaw);
     
     const jmResult = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'searchByCode', payload: { code: q } }
@@ -524,7 +540,7 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
 }
 
 function finalizeCatalogRows(rows: any[], from: number, to: number) {
-  const all = deduplicateParts((rows || []).map((row) => normalizeRow(row)));
+  const all = filterDisabledSources(deduplicateParts((rows || []).map((row) => normalizeRow(row))));
   return { items: all.slice(from, to + 1), total: all.length };
 }
 
@@ -742,8 +758,8 @@ export async function searchCatalog(query: string): Promise<CatalogPart[]> {
       .select("*")
       .or(`name.ilike.%${q}%,oem_number.ilike.%${q}%,description.ilike.%${q}%`)
       .limit(100);
-    const all = (data || []).map((row) => normalizeRow(row));
-    return deduplicateParts(all);
+    const all = filterDisabledSources(deduplicateParts((data || []).map((row) => normalizeRow(row))));
+    return all;
   } catch {
     return [];
   }
