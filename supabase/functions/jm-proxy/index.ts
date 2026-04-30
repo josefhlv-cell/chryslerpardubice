@@ -448,9 +448,10 @@ async function lookupCrossRefsForOem(adminClient: any, rawCode: string, limit = 
 
 async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'CodeProduct' = 'CodeProduct'): Promise<{ rawCount: number; items: UnifiedPart[] }> {
   const targets: Array<string | undefined> = ['P', undefined, 'O'];
-  const collected: UnifiedPart[] = [];
-  let rawCount = 0;
-  for (const target of targets) {
+
+  // Run all three target attempts in PARALLEL — Nextis returns fast for misses,
+  // so the cost of doing them concurrently is small and we save 2 round-trips.
+  const calls = targets.map(async (target) => {
     const reqBody: Record<string, unknown> = {
       code,
       target,
@@ -465,12 +466,15 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
     if (!target) delete reqBody.target;
     const raw = await nextisPost('/catalogs/items-finding-by-code', reqBody).catch((e) => ({ _error: String(e) }));
     const rawList = raw?.items || raw?.Items || [];
-    rawCount += rawList.length;
-    const items = normalizeItems(raw);
-    if (items.length > 0) {
-      collected.push(...items);
-      break;
-    }
+    return { rawCount: rawList.length, items: normalizeItems(raw) };
+  });
+
+  const results = await Promise.all(calls);
+  let rawCount = 0;
+  const collected: UnifiedPart[] = [];
+  for (const r of results) {
+    rawCount += r.rawCount;
+    if (r.items.length > 0) collected.push(...r.items);
   }
   return { rawCount, items: dedupeUnifiedParts(collected) };
 }
