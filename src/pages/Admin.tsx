@@ -611,16 +611,8 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="catalog-diag">
-            <div className="mt-2"><AdminCatalogDiagnostic /></div>
-          </TabsContent>
-
-          <TabsContent value="jm-tree">
-            <div className="mt-2"><AdminJmTreeSync /></div>
-          </TabsContent>
-
-          <TabsContent value="part-diag">
-            <div className="mt-2"><AdminPartDiagnostics /></div>
+          <TabsContent value="catalog-repair">
+            <div className="mt-2"><AdminCatalogCommandCenter /></div>
           </TabsContent>
 
           <TabsContent value="history">
