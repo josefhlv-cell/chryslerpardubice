@@ -428,15 +428,20 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
   // Explicit per-subcategory keyword map. Falls back to the subcategory label
   // itself when not listed. This prevents "all subcategories show parent count".
   const SUBCAT_KEYWORDS: Record<string, string[]> = {
+    // Brzdy — úroveň 2
     "brzdová kapalina": ["kapalin", "fluid", "dot 3", "dot 4", "brake fluid"],
     "brzdové hadičky": ["hadic", "trubk", "hose", "leitung", "brake line"],
     "brzdový třmen": ["třmen", "trmen", "sattel", "caliper"],
     "brzdový váleček": ["válec", "valec", "zylinder", "cylinder"],
     "bubnová brzda": ["bubn", "drum", "trommel", "čelist", "celist", "shoe"],
-    "kotoučová brzda": ["kotouč", "kotouc", "destič", "destic", "scheibe", "disc", "rotor", "pad", "belag"],
-    "brzdové destičky": ["destič", "destic", "pad", "belag", "klotz"],
-    "brzdové kotouče": ["kotouč", "kotouc", "scheibe", "disc", "rotor"],
-    "brzdové třmeny": ["třmen", "trmen", "sattel", "caliper"],
+    "kotoučová brzda": ["destič", "destic", "pad ", "pad,", "belag", "klotz", "kotouč", "kotouc", "scheibe", "rotor"],
+    "páky / bowdeny": ["páka", "paka", "bowden", "lanko"],
+    // Brzdy — úroveň 3 (uvnitř Kotoučová brzda)
+    "brzdové obložení": ["destič", "destic", "pad", "belag", "klotz", "obložen", "oblozen"],
+    "brzdový kotouč": ["kotouč brzdov", "kotouc brzdov", "brzdový kotouč", "brzdovy kotouc", "scheibe", "brake disc", "brake rotor"],
+    "souprava brzd": ["sada brzd", "souprav", "kit", "satz"],
+    "příslušenství": [],
+    // Filtry
     "abs a snímače": ["abs", "snímač", "snimac", "sensor"],
     "filtr oleje": ["olejov filtr", "oil filter", "ölfilter"],
     "vzduchový filtr": ["vzduch", "luftfilter", "air filter"],
