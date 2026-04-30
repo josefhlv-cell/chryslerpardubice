@@ -2,6 +2,38 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
 
+// ---------- structured client-side logger ----------
+// Best-effort: never throws, never blocks UI.
+async function logCatalogEvent(params: {
+  level?: 'debug' | 'info' | 'warn' | 'error';
+  event: string;
+  message?: string;
+  oem_number?: string | null;
+  vehicle_id?: string | null;
+  category?: string | null;
+  duration_ms?: number;
+  details?: Record<string, unknown>;
+}) {
+  try {
+    await supabase.from('catalog_event_log').insert({
+      source: 'catalogV2API',
+      level: params.level ?? 'info',
+      event: params.event,
+      message: params.message ?? null,
+      oem_number: params.oem_number ?? null,
+      vehicle_id: params.vehicle_id ?? null,
+      category: params.category ?? null,
+      duration_ms: params.duration_ms ?? null,
+      details: params.details ?? {},
+    });
+  } catch (e) {
+    // RLS will reject anonymous inserts — that's fine, we just skip silently.
+    if ((e as any)?.code && (e as any).code !== '42501') {
+      console.warn('[catalogV2API.log] insert failed:', e);
+    }
+  }
+}
+
 export type CatalogPart = {
   id: string;
   oem_number: string;
