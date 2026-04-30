@@ -660,9 +660,36 @@ export async function listPartsForVehicle(opts: any) {
       .eq('category', canonical)
       .ilike('compatible_vehicles', `%${opts.brand}%`)
       .limit(2000);
+    if ((data || []).length === 0) {
+      logCatalogEvent({
+        level: 'warn',
+        event: 'listPartsForVehicle_empty',
+        vehicle_id: opts.nextisVehicleId || null,
+        category: canonical,
+        message: `Žádné díly pro ${opts.brand} ${opts.model || ''} ${opts.engine || ''} / ${canonical}`,
+        details: {
+          brand: opts.brand, model: opts.model, engine: opts.engine, year: opts.year,
+          canonical, keywords, categoryNodeId: opts.categoryNodeId,
+          strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine', 'brandFallback'],
+          reason: 'no_local_parts_match_any_strategy',
+        },
+      });
+    }
     return finalizeCatalogRows(data || [], from, to);
   }
 
+  logCatalogEvent({
+    level: 'warn',
+    event: 'listPartsForVehicle_empty',
+    vehicle_id: opts.nextisVehicleId || null,
+    category: rawLabel || null,
+    message: `Žádné díly a žádná kanonická kategorie (${rawLabel || 'n/a'})`,
+    details: {
+      brand: opts.brand, model: opts.model, engine: opts.engine,
+      rawLabel, keywords,
+      reason: 'no_canonical_category_resolved',
+    },
+  });
   return { items: [], total: 0 };
 }
 
