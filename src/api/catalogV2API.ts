@@ -268,10 +268,10 @@ export async function isJmTreeFlagEnabled(): Promise<boolean> {
  * Read the locally-mirrored 5-level catalog tree (Brand→Model→Engine→Category→Subcategory)
  * for one vehicle. Used when feature flag `catalog_jm_tree` is ON.
  */
-async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string }): Promise<CatalogCategoryNode[]> {
+async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string; year?: number; powerKw?: number }): Promise<CatalogCategoryNode[]> {
   const { data, error } = await supabase
     .from("catalog_categories")
-    .select("id, parent_id, slug, name_cs, node_type, sort_order, vehicle_brand, vehicle_model, vehicle_engine")
+    .select("id, parent_id, slug, name_cs, node_type, sort_order, vehicle_brand, vehicle_model, vehicle_engine, year_from, year_to, power_kw")
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
 
@@ -319,7 +319,14 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
   const modelNodes = brandNode ? (byParent.get(brandNode.id) || []) : [];
   const modelNode = modelNodes.find((n) => n.node_type === "model" && (!opts.model || String(n.vehicle_model || n.name_cs).toLowerCase() === opts.model.toLowerCase() || n.name_cs.toLowerCase().startsWith(opts.model.toLowerCase())));
   const engineNodes = modelNode ? (byParent.get(modelNode.id) || []) : [];
-  const engineNode = engineNodes.find((n) => n.node_type === "engine" && (!opts.engine || String(n.vehicle_engine || n.name_cs).toLowerCase() === opts.engine.toLowerCase()));
+  const engineNode = engineNodes.find((n) => {
+    if (n.node_type !== "engine") return false;
+    if (opts.engine && String(n.vehicle_engine || "").toLowerCase() !== opts.engine.toLowerCase()) return false;
+    if (opts.powerKw && n.power_kw && Math.abs(n.power_kw - opts.powerKw) > 10) return false;
+    if (opts.year && n.year_from && opts.year < n.year_from) return false;
+    if (opts.year && n.year_to && opts.year > n.year_to) return false;
+    return true;
+  });
 
   if (engineNode) return build(engineNode.id, []);
   if (modelNode) return build(modelNode.id, []);
@@ -334,6 +341,8 @@ export async function fetchJmCategoryTree(opts: any) {
       brand: opts?.brand || opts?.vehicle?.brand,
       model: opts?.model || opts?.vehicle?.model,
       engine: opts?.engine || opts?.vehicle?.engine,
+      year: opts?.year || opts?.vehicle?.year,
+      powerKw: opts?.powerKw || opts?.vehicle?.power_kw,
     });
     if (local.length > 0) return local;
     // Fall through to JM proxy if local mirror is empty (not yet built)
@@ -480,6 +489,12 @@ export async function listPartsForVehicle(opts: any) {
     } else {
       compatQ = compatQ.ilike('brand', opts.brand);
       if (opts.model) compatQ = compatQ.ilike('model', opts.model);
+      if (opts.engine) compatQ = compatQ.ilike('engine', opts.engine);
+      // Year filter: include rows whose [year_from, year_to] overlaps the user year
+      if (opts.year) {
+        compatQ = compatQ.or(`year_from.is.null,year_from.lte.${opts.year}`)
+                         .or(`year_to.is.null,year_to.gte.${opts.year}`);
+      }
     }
     const { data: compatRows, error: compatErr } = await compatQ;
     if (compatErr) return { rows: [], error: compatErr };

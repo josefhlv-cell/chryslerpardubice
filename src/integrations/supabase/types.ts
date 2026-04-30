@@ -156,6 +156,7 @@ export type Database = {
           name_en: string | null
           node_type: string
           parent_id: string | null
+          power_kw: number | null
           slug: string
           sort_order: number | null
           source: Database["public"]["Enums"]["catalog_source_type"]
@@ -175,6 +176,7 @@ export type Database = {
           name_en?: string | null
           node_type?: string
           parent_id?: string | null
+          power_kw?: number | null
           slug: string
           sort_order?: number | null
           source?: Database["public"]["Enums"]["catalog_source_type"]
@@ -194,6 +196,7 @@ export type Database = {
           name_en?: string | null
           node_type?: string
           parent_id?: string | null
+          power_kw?: number | null
           slug?: string
           sort_order?: number | null
           source?: Database["public"]["Enums"]["catalog_source_type"]
@@ -210,6 +213,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_engine_variants"
             referencedColumns: ["id"]
           },
         ]
@@ -423,6 +433,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_part_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_engine_variants"
             referencedColumns: ["id"]
           },
           {
@@ -2713,6 +2730,60 @@ export type Database = {
       }
     }
     Views: {
+      catalog_engine_variants: {
+        Row: {
+          id: string | null
+          name_cs: string | null
+          parent_id: string | null
+          power_kw: number | null
+          slug: string | null
+          vehicle_brand: string | null
+          vehicle_engine: string | null
+          vehicle_model: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          id?: string | null
+          name_cs?: string | null
+          parent_id?: string | null
+          power_kw?: number | null
+          slug?: string | null
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          id?: string | null
+          name_cs?: string | null
+          parent_id?: string | null
+          power_kw?: number | null
+          slug?: string | null
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_engine_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parts_new_public: {
         Row: {
           availability: string | null
