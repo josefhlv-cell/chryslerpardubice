@@ -167,7 +167,10 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
 
 function normalizeRow(row: any, source: string = 'mopar'): CatalogPart {
   const sourceNorm = (source || row?.catalog_source || 'mopar').toLowerCase();
-  const isOem = ['mopar', 'mopar_oem', 'epc', '7zap', 'epc-ai', 'csv'].includes(sourceNorm);
+  const mfr = String(row?.manufacturer || '').trim().toLowerCase();
+  // ORIGINÁL = pouze Mopar (manufacturer Mopar nebo source mopar/mopar_oem).
+  // 7zap, epc-ai, makro, autokelly, crossref jsou aftermarket → NÁHRADA.
+  const isOem = mfr === 'mopar' || ['mopar', 'mopar_oem'].includes(sourceNorm);
   const basePrice = Number(row?.price_with_vat) || null;
   const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
