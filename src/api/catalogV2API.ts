@@ -341,6 +341,8 @@ export async function fetchJmCategoryTree(opts: any) {
       brand: opts?.brand || opts?.vehicle?.brand,
       model: opts?.model || opts?.vehicle?.model,
       engine: opts?.engine || opts?.vehicle?.engine,
+      year: opts?.year || opts?.vehicle?.year,
+      powerKw: opts?.powerKw || opts?.vehicle?.power_kw,
     });
     if (local.length > 0) return local;
     // Fall through to JM proxy if local mirror is empty (not yet built)
