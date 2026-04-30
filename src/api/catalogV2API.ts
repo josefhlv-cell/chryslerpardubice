@@ -351,10 +351,34 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
   }
 
   const canonicalCounts = new Map<string, number>();
-  const { data: countRows } = await supabase.from("parts_new_public").select("category");
-  for (const row of countRows || []) {
-    const key = String((row as any).category || "Ostatní");
-    canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
+  // Scoped count: pokud máme vozidlo, počítáme jen díly kompatibilní s ním; jinak globálně
+  if (opts.brand && opts.model && opts.engine) {
+    const { data: vRow } = await supabase
+      .from("nextis_vehicles")
+      .select("id")
+      .ilike("brand", opts.brand)
+      .ilike("model", opts.model)
+      .ilike("engine", opts.engine)
+      .maybeSingle();
+    if (vRow?.id) {
+      const { data: scopedRows } = await supabase
+        .from("catalog_vehicle_compatibility")
+        .select("part_id, parts_new!inner(category)")
+        .eq("nextis_vehicle_id", vRow.id)
+        .limit(20000);
+      for (const row of (scopedRows || []) as any[]) {
+        const cat = String(row?.parts_new?.category || "Ostatní");
+        canonicalCounts.set(cat, (canonicalCounts.get(cat) || 0) + 1);
+      }
+    }
+  }
+  if (canonicalCounts.size === 0) {
+    // Fallback na globální count z parts_new_public
+    const { data: countRows } = await supabase.from("parts_new_public").select("category").limit(20000);
+    for (const row of countRows || []) {
+      const key = String((row as any).category || "Ostatní");
+      canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + 1);
+    }
   }
 
   const nodeCounts = new Map<string, number>();
