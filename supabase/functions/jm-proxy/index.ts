@@ -988,8 +988,14 @@ Deno.serve(async (req) => {
         const skipBrandFilter = payload.skipBrandFilter === true || payload.debug === true;
         const enableCrossref = payload.enableCrossref !== false; // default ON
 
-        // OE PREFIX/SUFFIX LADDER: try original, K-prefix variants, suffix-stripped,
-        // and base-8 variants before falling back to local crossrefs.
+        // Edge in-memory cache (5 min). Survives between warm invocations.
+        const cacheKey = `${rawCode}|${skipBrandFilter ? 1 : 0}|${enableCrossref ? 1 : 0}`;
+        const cached = _searchByCodeCache.get(cacheKey);
+        if (cached && Date.now() - cached.ts < SEARCH_CODE_TTL) {
+          result = { ...cached.result, fromCache: true };
+          break;
+        }
+
         const normalized = normalizeOemCode(rawCode);
         const stripped = normalized.replace(/^K/, '');
         const baseNoSuffix = stripped.replace(/[A-Z]{1,3}$/i, '');
@@ -1009,18 +1015,27 @@ Deno.serve(async (req) => {
         let merged: UnifiedPart[] = [];
         let totalRawHits = 0;
 
-        for (const variant of variants) {
-          const direct = await fetchJmForSpecificCode(variant, 'CodeOE');
+        // PARALLEL variant + crossref ladder. Previously sequential = up to 10s for one OEM.
+        const variantTask = Promise.all(
+          variants.map(async (variant) => {
+            const direct = await fetchJmForSpecificCode(variant, 'CodeOE');
+            return { variant, direct };
+          })
+        );
+        const crossrefTask = enableCrossref
+          ? fetchJmViaCrossRefs(adminClient, rawCode)
+          : Promise.resolve({ items: [] as UnifiedPart[], xrefsTried: [] as string[], rawHits: 0 });
+
+        const [variantResults, cross] = await Promise.all([variantTask, crossrefTask]);
+        for (const { variant, direct } of variantResults) {
           totalRawHits += direct.rawCount;
           attempts.push({ code: variant, raw: direct.rawCount, count: direct.items.length, mode: 'direct-oe' });
           if (direct.items.length) merged.push(...direct.items);
         }
-
+        totalRawHits += cross.rawHits;
+        attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
+        merged.push(...cross.items);
         if (enableCrossref) {
-          const cross = await fetchJmViaCrossRefs(adminClient, rawCode);
-          totalRawHits += cross.rawHits;
-          attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
-          merged.push(...cross.items);
           console.log(`[searchByCode] crossref recursive lookup ${cross.xrefsTried.length} refs for ${rawCode}, items=${cross.items.length}`);
         }
 
@@ -1033,9 +1048,13 @@ Deno.serve(async (req) => {
           return skipBrandFilter ? true : isUsBrand(p.brand);
         });
 
+        // Fire-and-forget price enrichment — never blocks response.
         try {
           const codes = merged.map((i) => i.oem_number).filter(Boolean);
-          if (codes.length) await enrichPricesIntoDb(adminClient, codes);
+          if (codes.length) {
+            // @ts-ignore Deno EdgeRuntime API
+            (globalThis as any).EdgeRuntime?.waitUntil?.(enrichPricesIntoDb(adminClient, codes).catch(() => {}));
+          }
         } catch (_) { /* non-blocking */ }
 
         result = {
@@ -1046,7 +1065,13 @@ Deno.serve(async (req) => {
           totalRawHits,
         };
 
-        // Structured log when no results (helps diagnose missing parts)
+        _searchByCodeCache.set(cacheKey, { result, ts: Date.now() });
+        // Bound cache size — drop oldest if exceeded.
+        if (_searchByCodeCache.size > 500) {
+          const firstKey = _searchByCodeCache.keys().next().value;
+          if (firstKey) _searchByCodeCache.delete(firstKey);
+        }
+
         if (merged.length === 0) {
           await logCatalogEvent(adminClient, {
             level: 'warn',
