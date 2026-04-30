@@ -317,12 +317,14 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setTotal(oemTotal);
 
         // Also enrich with J+M lookups for visible OEM codes (price+stock)
+        // CAP at top 10 unique OEM codes — calling per-code is expensive and J+M
+        // returns many alternatives for each. The merge step caps total alts to ~30.
         let jmByCodes: CatalogPart[] = [];
         if (page === 0 && oemItems.length > 0) {
-          const codes = oemItems.map((p) => p.oem_number).filter(Boolean);
+          const uniqueCodes = [...new Set(oemItems.map((p) => p.oem_number).filter(Boolean))].slice(0, 10);
           try {
-            jmByCodes = await fetchJmByCodes(codes);
-            console.log(`[Catalog] J+M by codes: ${jmByCodes.length}`);
+            jmByCodes = await fetchJmByCodes(uniqueCodes);
+            console.log(`[Catalog] J+M by codes (cap 10): ${jmByCodes.length} alternatives`);
           } catch (jmErr: any) {
             console.error("[Catalog] J+M by codes failed:", jmErr);
           }
