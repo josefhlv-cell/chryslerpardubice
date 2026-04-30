@@ -335,6 +335,7 @@ ${targets.map((t) => `${t.oem} | ${t.name}`).join('\n')}`;
       success: true,
       processed: targets.length,
       inserted,
+      propagated,
       moparTotal,
       haveCrossref: haveCrossref.size,
       duration_ms: ms,
