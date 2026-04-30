@@ -1320,6 +1320,25 @@ Deno.serve(async (req) => {
           usedStep,
           triedBrand: brand, triedModel: model, triedEngine: engine, category,
         };
+
+        if (collected.length === 0) {
+          await logCatalogEvent(adminClient, {
+            level: 'warn',
+            event: 'searchByVehicle_empty',
+            category: category || null,
+            message: `Žádné J+M díly pro ${brand} ${model} ${engine || ''} / ${category || 'všechny kategorie'}`,
+            details: {
+              brand, model, engine, category,
+              codesQueried: oemCodes.length,
+              totalNextisHits: totalRaw,
+              usedStep,
+              codeAttempts: codeAttempts.slice(0, 10),
+              reason: oemCodes.length === 0
+                ? 'no_local_oem_codes_for_vehicle'
+                : (totalRaw === 0 ? 'no_jm_hits_for_oem_codes' : 'all_filtered_out'),
+            },
+          });
+        }
         break;
       }
 
