@@ -664,6 +664,12 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
         if (oemBaseSet.has(oeKey)) { linkKey = oeKey; break; }
       }
     }
+    // FALLBACK: pokud J+M díl přišel přes správnou kategorii (má related_oem_number
+    // nebo oe_numbers), ale jeho OEM není v naší DB, přiřaď ho k prvnímu OEM
+    // dílu v kategorii. Tím se zobrazí náhrady i pro díly bez přesného záznamu.
+    if (!linkKey && (relKey || oeKeys.length > 0)) {
+      linkKey = [...oemBaseSet][0] || null;
+    }
     if (!linkKey) continue;
     const cur = perOemCount.get(linkKey) || 0;
     if (cur >= MAX_JM_PER_OEM) continue;
