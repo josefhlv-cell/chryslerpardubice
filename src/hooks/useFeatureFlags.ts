@@ -37,7 +37,9 @@ export type FeatureKey =
   | "email_templates"
   | "i18n"
   | "pwa_offline"
-  | "catalog_alternatives";
+  | "catalog_alternatives"
+  | "catalog_jm"
+  | "catalog_epc";
 
 type FeatureFlag = {
   id: string;
@@ -71,7 +73,9 @@ export const useFeatureFlags = () => {
     fetchFlags();
   }, []);
 
-  const isEnabled = (key: FeatureKey): boolean => flags[key] ?? false;
+  // Pokud flag v DB neexistuje, výchozí stav je true (zapnuto).
+  // Jakmile přidáš SQL migraci, DB hodnota má přednost.
+  const isEnabled = (key: FeatureKey): boolean => flags[key] ?? true;
 
   const toggleFlag = async (key: string, enabled: boolean) => {
     await supabase
