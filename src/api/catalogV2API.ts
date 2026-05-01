@@ -55,6 +55,8 @@ export type CatalogPart = {
   compatible_vehicles?: string[] | null;
   /** OEM number this aftermarket part is a replacement for. Set by jm-proxy. */
   related_oem_number?: string | null;
+  /** All OE (original equipment) numbers from suppliers/manufacturers (DODGE/CHRYSLER/FIAT…). */
+  oe_numbers?: string[] | null;
 };
 
 export type CatalogCategoryNode = {
