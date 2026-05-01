@@ -838,31 +838,21 @@ export async function listPartsForVehicle(opts: any) {
     return finalizeCatalogRows(b2.data || [], from, to);
   }
 
-  // Last resort: show category for the brand alone (any vehicle)
-  if (canonical) {
-    const { data } = await supabase
-      .from('parts_new_public')
-      .select('*')
-      .eq('category', canonical)
-      .ilike('compatible_vehicles', `%${opts.brand}%`)
-      .limit(2000);
-    if ((data || []).length === 0) {
-      logCatalogEvent({
-        level: 'warn',
-        event: 'listPartsForVehicle_empty',
-        vehicle_id: opts.nextisVehicleId || null,
-        category: canonical,
-        message: `Žádné díly pro ${opts.brand} ${opts.model || ''} ${opts.engine || ''} / ${canonical}`,
-        details: {
-          brand: opts.brand, model: opts.model, engine: opts.engine, year: opts.year,
-          canonical, keywords, categoryNodeId: opts.categoryNodeId,
-          strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine', 'brandFallback'],
-          reason: 'no_local_parts_match_any_strategy',
-        },
-      });
-    }
-    return finalizeCatalogRows(data || [], from, to);
-  }
+  // Strict mode: no vehicle-agnostic fallback — prevents cross-vehicle pollution
+  logCatalogEvent({
+    level: 'warn',
+    event: 'listPartsForVehicle_empty',
+    vehicle_id: opts.nextisVehicleId || null,
+    category: canonical,
+    message: `Žádné díly po všech strategiích: ${opts.brand} ${opts.model || ''} / ${canonical || rawLabel}`,
+    details: {
+      brand: opts.brand, model: opts.model, engine: opts.engine,
+      canonical, keywords, categoryNodeId: opts.categoryNodeId,
+      strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine'],
+      reason: 'strict_vehicle_scope_no_fallback',
+    },
+  });
+  return { items: [], total: 0 };
 
   logCatalogEvent({
     level: 'warn',
