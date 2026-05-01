@@ -97,37 +97,35 @@ function findNodeWithParent(
  * zatímco strom má stovky subkategorií ("Kotoučové brzdy" atd.).
  * Strategie: keyword/canonical match na názvu i kategorii dílu.
  */
-function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
-  if (!node || node.keywords.length === 0) return true;
-
-  const normalize = (str: string) =>
-    (str || "")
+function partMatchesNode(part: any, node: any): boolean {
+  const normalize = (s: string) =>
+    String(s || "")
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
 
-  const haystack = normalize(${part.name} ${part.category || ""});
-  const partCategory = normalize(part.category || "");
+  const haystack = normalize(`${part.name} ${part.description || ""}`);
+  const partCategory = normalize(part.category);
   const nodeLabelNorm = normalize(node.label);
 
   // 🔥 FIX 1: J+M bez kategorie → fallback přes název
   if (part.catalog_source === "jm") {
     if (!part.category || part.category.trim() === "") {
-      return node.keywords.some((keyword) =>
+      return node.keywords.some((keyword: string) =>
         haystack.includes(normalize(keyword))
       );
     }
   }
 
-  // 🔥 FIX 2: J+M s kategorií → strict match
+  // 🔥 FIX 2: J+M s kategorií → musí sedět přesně
   if (part.catalog_source === "jm" && part.category) {
     if (partCategory !== nodeLabelNorm) {
       return false;
     }
   }
 
-  // OEM + fallback → keyword match
-  return node.keywords.some((keyword) =>
+  // ✅ OEM + fallback → keyword match
+  return node.keywords.some((keyword: string) =>
     haystack.includes(normalize(keyword))
   );
 }
