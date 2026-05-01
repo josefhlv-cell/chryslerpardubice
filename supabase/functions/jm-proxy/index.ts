@@ -1035,10 +1035,18 @@ Deno.serve(async (req) => {
         for (const { variant, direct } of variantResults) {
           totalRawHits += direct.rawCount;
           attempts.push({ code: variant, raw: direct.rawCount, count: direct.items.length, mode: 'direct-oe' });
-          if (direct.items.length) merged.push(...direct.items);
+          if (direct.items.length) {
+            // Tag every J+M alternative with the OEM code that produced it.
+            // Frontend uses this to guarantee category integrity (a J+M item is
+            // only kept if its `related_oem_number` belongs to the OEM list of
+            // the currently-selected category).
+            for (const it of direct.items) (it as any).related_oem_number = (it as any).related_oem_number || rawCode;
+            merged.push(...direct.items);
+          }
         }
         totalRawHits += cross.rawHits;
         attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
+        for (const it of cross.items) (it as any).related_oem_number = (it as any).related_oem_number || rawCode;
         merged.push(...cross.items);
         if (enableCrossref) {
           console.log(`[searchByCode] crossref recursive lookup ${cross.xrefsTried.length} refs for ${rawCode}, items=${cross.items.length}`);
