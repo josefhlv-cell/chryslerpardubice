@@ -1035,10 +1035,18 @@ Deno.serve(async (req) => {
         for (const { variant, direct } of variantResults) {
           totalRawHits += direct.rawCount;
           attempts.push({ code: variant, raw: direct.rawCount, count: direct.items.length, mode: 'direct-oe' });
-          if (direct.items.length) merged.push(...direct.items);
+          if (direct.items.length) {
+            // Tag every J+M alternative with the OEM code that produced it.
+            // Frontend uses this to guarantee category integrity (a J+M item is
+            // only kept if its `related_oem_number` belongs to the OEM list of
+            // the currently-selected category).
+            for (const it of direct.items) (it as any).related_oem_number = (it as any).related_oem_number || rawCode;
+            merged.push(...direct.items);
+          }
         }
         totalRawHits += cross.rawHits;
         attempts.push(...cross.xrefsTried.map((code) => ({ code, raw: 0, count: 0, mode: 'crossref-product' })));
+        for (const it of cross.items) (it as any).related_oem_number = (it as any).related_oem_number || rawCode;
         merged.push(...cross.items);
         if (enableCrossref) {
           console.log(`[searchByCode] crossref recursive lookup ${cross.xrefsTried.length} refs for ${rawCode}, items=${cross.items.length}`);
@@ -1273,6 +1281,9 @@ Deno.serve(async (req) => {
 
         // OEM-fallback helper: query local catalog for matching OEM codes.
         // Tries multiple engine variants ("3.6 V6" / "3.6L V6" / "3.6").
+        // CATEGORY INTEGRITY 2026-05: only OEM (Mopar / 7zap / csv-Mopar) sources
+        // are eligible as seeds — never aftermarket source rows that may have
+        // been imported under a foreign OEM-looking code (KAMOKA F322201 etc.).
         const queryLocalOemCodes = async (
           useEngine: boolean,
           keywordsForFilter: string[],
@@ -1284,9 +1295,10 @@ Deno.serve(async (req) => {
           for (const variant of variantsToTry) {
             let q = adminClient
               .from('parts_new')
-              .select('oem_number, name, category, description, compatible_vehicles')
+              .select('oem_number, name, category, description, compatible_vehicles, catalog_source, manufacturer')
               .ilike('compatible_vehicles', `%${brand}%`)
               .ilike('compatible_vehicles', `%${model}%`)
+              .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
               .limit(500);
             if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
             const { data: rows, error } = await q;
@@ -1295,7 +1307,13 @@ Deno.serve(async (req) => {
               continue;
             }
             if (rows?.length) {
-              allRows.push(...rows);
+              // Belt-and-suspenders: csv source must also have manufacturer=Mopar.
+              const cleanRows = rows.filter((r: any) => {
+                const src = String(r.catalog_source || '').toLowerCase();
+                if (src === 'csv') return String(r.manufacturer || '').trim().toLowerCase() === 'mopar';
+                return true;
+              });
+              allRows.push(...cleanRows);
               break; // first variant that returns data wins
             }
           }
@@ -1317,12 +1335,13 @@ Deno.serve(async (req) => {
           return { codes, matchedRows: filtered.length };
         };
 
-        // RELAXATION LADDER (Phase 2 — Operation Redline 2.0):
-        // 1) strict subcategory + engine
-        // 2) parent keywords + engine (broader, same vehicle)
-        // 3) strict subcategory + brand+model only (ignore engine — covers 300C 3.0 CRD etc.)
-        // 4) parent keywords + brand+model only
-        // 5) brand+model only, NO keyword filter (last resort, gets ANY OEM seed)
+        // RELAXATION LADDER (Phase 3 — Category Integrity 2026-05):
+        // We MUST NEVER pass OEM codes from another category to J+M — that's how
+        // "Palivový filtr" ended up listed under "Brzdové obložení". So:
+        //  - All ladder steps require AT LEAST ONE category keyword (subcat OR parent).
+        //  - The "brand-only / no keywords" step is gone forever.
+        //  - If we have neither subcat nor parent keywords, we return empty rather
+        //    than pollute the result.
         const seedKeywords = categoryKeywords.length > 0 ? categoryKeywords : parentKeywords;
         const sameAsSeed = (kws: string[]) => JSON.stringify(kws) === JSON.stringify(seedKeywords);
         const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
@@ -1330,8 +1349,19 @@ Deno.serve(async (req) => {
           { label: 'engine+parent', useEngine: true,  keywords: parentKeywords },
           { label: 'brand+subcat',  useEngine: false, keywords: seedKeywords },
           { label: 'brand+parent',  useEngine: false, keywords: parentKeywords },
-          { label: 'brand-only',    useEngine: false, keywords: [] },
-        ];
+          // NOTE: "brand-only" rung removed — it was the root cause of cross-category
+          // pollution (e.g. fuel filters appearing under brake pads).
+        ].filter((step) => step.keywords.length > 0);
+
+        if (ladder.length === 0) {
+          result = {
+            items: [],
+            mode: 'oem-fallback',
+            warning: 'No category keywords supplied — refusing brand-only search to prevent cross-category pollution.',
+            triedBrand: brand, triedModel: model, triedEngine: engine, category,
+          };
+          break;
+        }
 
         let oemCodes: string[] = [];
         let usedStep = 'none';

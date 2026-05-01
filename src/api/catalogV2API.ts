@@ -53,6 +53,8 @@ export type CatalogPart = {
   markup_percent: number;
   technical_parameters?: Record<string, string> | null;
   compatible_vehicles?: string[] | null;
+  /** OEM number this aftermarket part is a replacement for. Set by jm-proxy. */
+  related_oem_number?: string | null;
 };
 
 export type CatalogCategoryNode = {
@@ -264,6 +266,7 @@ function normalizeRow(row: any, source?: string): CatalogPart {
     markup_percent: markup,
     technical_parameters,
     compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
+    related_oem_number: row?.related_oem_number ? String(row.related_oem_number) : null,
   };
 }
 
@@ -598,20 +601,24 @@ export async function fetchJmByCodes(codes: string[]) {
 
 /**
  * Merge OEM rows with J+M alternatives.
+ * CATEGORY INTEGRITY 2026-05:
+ * Every J+M item is kept ONLY if it can be linked back to an OEM in the
+ * current category list — either via base OEM number match (8-digit prefix)
+ * or via the `related_oem_number` tag set by jm-proxy/searchByCode.
+ * If `oemClean` is empty (no OEM seed), no J+M aftermarket is shown either.
  * Cap: max 3 J+M alternatives per OEM number, max 30 J+M total.
- * This mirrors how eshop.jmautodily.cz shows aftermarket replacements:
- * a small, focused set of branded alternatives per original part — not dozens.
  */
 const MAX_JM_PER_OEM = 3;
 const MAX_JM_TOTAL = 30;
 
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
-  // Drop disabled aftermarket sources defensively.
   const oemClean = filterDisabledSources(oem);
   const jmClean = filterDisabledSources(jm);
 
-  // Always keep OEM. Group JM by base OEM (8-digit prefix) so each original
-  // gets a bounded set of alternatives.
+  // No OEM seed → no aftermarket shown. Prevents the "Brzdové obložení returns
+  // Palivový filtr" class of bug at the very last layer.
+  if (oemClean.length === 0) return [];
+
   const baseKey = (oem: string) => normalizeOem(oem).replace(/^K/, '').match(/^\d{8}/)?.[0] || normalizeOem(oem);
   const oemBaseSet = new Set(oemClean.map((p) => baseKey(p.oem_number)));
 
@@ -632,14 +639,16 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
   const jmKept: CatalogPart[] = [];
   for (const part of jmSorted) {
     if (jmKept.length >= MAX_JM_TOTAL) break;
-    const key = baseKey(part.oem_number);
-    // Prefer JM whose base OEM matches an OEM we have in the list
-    const isLinked = oemBaseSet.has(key);
-    const cur = perOemCount.get(key) || 0;
+    const ownKey = baseKey(part.oem_number);
+    const relKey = part.related_oem_number ? baseKey(part.related_oem_number) : null;
+    // Linked iff own OEM matches an OEM we already display, OR jm-proxy explicitly
+    // tagged it as a replacement for one of those OEMs.
+    const linkKey = oemBaseSet.has(ownKey) ? ownKey : (relKey && oemBaseSet.has(relKey) ? relKey : null);
+    // Drop unlinked aftermarket — guaranteed category integrity.
+    if (!linkKey) continue;
+    const cur = perOemCount.get(linkKey) || 0;
     if (cur >= MAX_JM_PER_OEM) continue;
-    // Skip JM that aren't linked to any of our OEMs when we already have linked ones
-    if (!isLinked && jmKept.length >= 10) continue;
-    perOemCount.set(key, cur + 1);
+    perOemCount.set(linkKey, cur + 1);
     jmKept.push(part);
   }
 
