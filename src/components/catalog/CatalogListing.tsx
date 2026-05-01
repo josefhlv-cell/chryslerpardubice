@@ -55,7 +55,8 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
   const photo = p.image_urls?.[0];
   const hasDetails =
     !!p.description ||
-    (p.technical_parameters && Object.keys(p.technical_parameters).length > 0);
+    (p.technical_parameters && Object.keys(p.technical_parameters).length > 0) ||
+    (p.oe_numbers && p.oe_numbers.length > 0);
 
   return (
     <div
