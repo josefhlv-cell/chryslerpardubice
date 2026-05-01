@@ -55,6 +55,8 @@ export type CatalogPart = {
   compatible_vehicles?: string[] | null;
   /** OEM number this aftermarket part is a replacement for. Set by jm-proxy. */
   related_oem_number?: string | null;
+  /** All OE (original equipment) numbers from suppliers/manufacturers (DODGE/CHRYSLER/FIAT…). */
+  oe_numbers?: string[] | null;
 };
 
 export type CatalogCategoryNode = {
@@ -267,6 +269,9 @@ function normalizeRow(row: any, source?: string): CatalogPart {
     technical_parameters,
     compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
     related_oem_number: row?.related_oem_number ? String(row.related_oem_number) : null,
+    oe_numbers: Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0
+      ? row.oe_numbers.map((x: any) => String(x)).filter(Boolean)
+      : null,
   };
 }
 
@@ -641,10 +646,19 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
     if (jmKept.length >= MAX_JM_TOTAL) break;
     const ownKey = baseKey(part.oem_number);
     const relKey = part.related_oem_number ? baseKey(part.related_oem_number) : null;
-    // Linked iff own OEM matches an OEM we already display, OR jm-proxy explicitly
-    // tagged it as a replacement for one of those OEMs.
-    const linkKey = oemBaseSet.has(ownKey) ? ownKey : (relKey && oemBaseSet.has(relKey) ? relKey : null);
-    // Drop unlinked aftermarket — guaranteed category integrity.
+    const oeKeys = (part.oe_numbers || []).map((oe) => baseKey(oe)).filter(Boolean);
+
+    let linkKey: string | null = null;
+    if (oemBaseSet.has(ownKey)) {
+      linkKey = ownKey;
+    } else if (relKey && oemBaseSet.has(relKey)) {
+      linkKey = relKey;
+    } else {
+      // Fallback: zkus všechna OE čísla z dílu — J+M často přímo obsahuje Mopar OEM.
+      for (const oeKey of oeKeys) {
+        if (oemBaseSet.has(oeKey)) { linkKey = oeKey; break; }
+      }
+    }
     if (!linkKey) continue;
     const cur = perOemCount.get(linkKey) || 0;
     if (cur >= MAX_JM_PER_OEM) continue;
