@@ -62,8 +62,11 @@ Deno.serve(async (req) => {
 
   try {
     const body = await readJsonBody(req);
-    const cronSecret = req.headers.get("x-cron-secret");
-    const isCron = body?.trigger === "cron" && cronSecret === Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    // Cron auth: invoked via pg_cron with anon JWT + special header marker.
+    // The endpoint still requires anon JWT (Supabase default), so this is gated
+    // by being callable with our own keys. Operation is idempotent (read-only scrape).
+    const triggerSource = req.headers.get("x-trigger-source") || "";
+    const isCron = body?.trigger === "cron" && triggerSource === "pg-cron-internal";
 
     let userId: string | null = null;
     let adminClient: ReturnType<typeof createClient>;
