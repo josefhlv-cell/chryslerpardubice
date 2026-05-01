@@ -1323,6 +1323,8 @@ Deno.serve(async (req) => {
               console.warn('[searchByVehicle] strict category filter removed all engineID hits; keeping vehicle-wide J+M hits for UI fallback');
             }
           }
+          // Propoj J+M položky s naším Mopar OEM přes oe_numbers (zajistí správné NÁHRADA→ORIGINÁL párování)
+          items = await enrichItemsWithRelatedOem(adminClient, items);
           try {
             const codes = items.map((i) => i.oem_number).filter(Boolean);
             if (codes.length) await enrichPricesIntoDb(adminClient, codes);
