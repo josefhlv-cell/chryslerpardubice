@@ -410,6 +410,66 @@ function dedupeUnifiedParts(parts: UnifiedPart[]): UnifiedPart[] {
   return out;
 }
 
+/**
+ * Pro každý J+M díl z výsledků hledej jeho OE čísla (oe_numbers) v tabulce parts_new.
+ * Pokud najdeme shodu s Mopar OEM, nastavíme related_oem_number → frontend díl
+ * správně zařadí jako NÁHRADA pod správný ORIGINÁL.
+ */
+async function enrichItemsWithRelatedOem(
+  adminClient: any,
+  items: UnifiedPart[],
+): Promise<UnifiedPart[]> {
+  const allOeNumbers: string[] = [];
+  for (const item of items) {
+    if (item.oe_numbers?.length) {
+      for (const oe of item.oe_numbers) {
+        const norm = normalizeOemCode(oe);
+        if (!norm) continue;
+        allOeNumbers.push(norm);
+        const stripped = norm.replace(/^K/, '');
+        if (stripped !== norm) allOeNumbers.push(stripped);
+      }
+    }
+  }
+  if (allOeNumbers.length === 0) return items;
+
+  try {
+    const { data: oemRows } = await adminClient
+      .from('parts_new')
+      .select('oem_number')
+      .in('oem_number', [...new Set(allOeNumbers)])
+      .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
+      .limit(500);
+
+    if (!oemRows?.length) return items;
+
+    const oeToMopar = new Map<string, string>();
+    for (const row of oemRows) {
+      const norm = normalizeOemCode(row.oem_number);
+      if (!norm) continue;
+      oeToMopar.set(norm, row.oem_number);
+      oeToMopar.set(`K${norm}`, row.oem_number);
+      oeToMopar.set(norm.replace(/^K/, ''), row.oem_number);
+    }
+
+    return items.map((item) => {
+      if (item.related_oem_number) return item;
+      for (const oe of item.oe_numbers || []) {
+        const norm = normalizeOemCode(oe);
+        const moparOem =
+          oeToMopar.get(norm) || oeToMopar.get(norm.replace(/^K/, '')) || oeToMopar.get(`K${norm}`);
+        if (moparOem) {
+          return { ...item, related_oem_number: moparOem };
+        }
+      }
+      return item;
+    });
+  } catch (e) {
+    console.warn('[enrichItemsWithRelatedOem] failed:', (e as Error).message);
+    return items;
+  }
+}
+
 async function lookupCrossRefsForOem(adminClient: any, rawCode: string, limit = 50): Promise<Array<{ part_number: string; manufacturer: string }>> {
   const normalized = normalizeOemCode(rawCode);
   const stripped = normalized.replace(/^K/, '');
