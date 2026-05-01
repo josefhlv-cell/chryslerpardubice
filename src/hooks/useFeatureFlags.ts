@@ -54,36 +54,54 @@ export const useFeatureFlags = () => {
   const [loading, setLoading] = useState(true);
 
   const fetchFlags = async () => {
-    const { data } = await supabase
-      .from("feature_flags")
-      .select("*")
-      .order("created_at");
-    if (data) {
-      const map: Record<string, boolean> = {};
-      (data as FeatureFlag[]).forEach((f) => {
-        map[f.feature_key] = f.enabled;
-      });
-      setFlags(map);
-      setAllFlags(data as FeatureFlag[]);
+    try {
+      const { data } = await supabase
+        .from("feature_flags")
+        .select("*")
+        .order("created_at");
+
+      if (data) {
+        const map: Record<string, boolean> = {};
+        (data as FeatureFlag[]).forEach((f) => {
+          map[f.feature_key] = f.enabled;
+        });
+        setFlags(map);
+        setAllFlags(data as FeatureFlag[]);
+      }
+    } catch (error) {
+      console.error("Error fetching feature flags:", error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchFlags();
   }, []);
 
-  // Pokud flag v DB neexistuje, výchozí stav je true (zapnuto).
-  // Jakmile přidáš SQL migraci, DB hodnota má přednost.
+  /**
+   * Pokud flag v DB neexistuje, výchozí stav je true (zapnuto).
+   * Jakmile existuje záznam v DB, tato hodnota má přednost.
+   */
   const isEnabled = (key: FeatureKey): boolean => flags[key] ?? true;
 
   const toggleFlag = async (key: string, enabled: boolean) => {
-    await supabase
+    const { error } = await supabase
       .from("feature_flags")
       .update({ enabled } as any)
       .eq("feature_key", key);
-    await fetchFlags();
+
+    if (!error) {
+      await fetchFlags();
+    }
   };
 
-  return { flags, allFlags, loading, isEnabled, toggleFlag, refetch: fetchFlags };
+  return { 
+    flags, 
+    allFlags, 
+    loading, 
+    isEnabled, 
+    toggleFlag, 
+    refetch: fetchFlags 
+  };
 };
