@@ -107,14 +107,14 @@ function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): b
   const partName = norm(part.name || "");
   const nodeLabel = norm(node.label);
 
-  // 1) Exact category match
+  // 1) Přesný match kategorie
   if (partCat && partCat === nodeLabel) return true;
-  // 2) Node label appears as substring in part category or name
-  if (nodeLabel && (partCat.includes(nodeLabel) || partName.includes(nodeLabel))) return true;
-  // 3) Any keyword from node matches name or category
+  // 2) Label uzlu obsažen v kategorii dílu (ne obráceně)
+  if (nodeLabel.length >= 5 && partCat.includes(nodeLabel)) return true;
+  // 3) Keyword match – jen klíčová slova ≥ 5 znaků (zabrání "brzd" matchování všeho)
   if (node.keywords?.length) {
     const hay = `${partCat} ${partName}`;
-    if (node.keywords.some((k) => hay.includes(norm(k)))) return true;
+    if (node.keywords.some((k) => norm(k).length >= 5 && hay.includes(norm(k)))) return true;
   }
   return false;
 }

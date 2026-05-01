@@ -209,7 +209,9 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
     return aPrice - bPrice;
   });
   for (const part of sorted) {
-    const key = normalizeOem(part.oem_number);
+    const key = part.catalog_source === 'jm' && part.related_oem_number
+      ? `jm:${normalizeOem(part.related_oem_number)}:${normalizeOem(part.oem_number)}`
+      : normalizeOem(part.oem_number);
     if (!seen.has(key)) {
       seen.set(key, part);
     }
@@ -262,8 +264,8 @@ function normalizeRow(row: any, source?: string): CatalogPart {
     category: row?.category ?? null,
     description,
     is_oem: isOem,
-    badge_label: isOem ? 'ORIGINÁL' : 'NÁHRADA',
-    rank: isOem ? 1 : 5,
+    badge_label: isOem ? 'ORIGINÁL' : isAftermarket ? 'NÁHRADA' : 'NEZNÁMÝ',
+    rank: isOem ? 1 : isAftermarket ? 5 : 9,
     final_price: finalPrice,
     markup_percent: markup,
     technical_parameters,
@@ -501,16 +503,19 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     };
     return globalRoots
       .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((n: any) => ({
-        id: n.id,
-        label: n.name_cs,
-        path: [n.slug],
-        keywords: [n.name_cs],
-        // Top-level category: use canonical bucket count (already accurate).
-        count: canonicalCounts.get(n.name_cs) || 0,
-        sectionId: null,
-        children: buildGlobal(n.id, [n.slug]),
-      }));
+      .map((n: any) => {
+        const children = buildGlobal(n.id, [n.slug]);
+        return {
+          id: n.id,
+          label: n.name_cs,
+          path: [n.slug],
+          keywords: [n.name_cs],
+          // Top-level: součet dětí (přesnější), fallback na canonical bucket count.
+          count: children.reduce((s, c) => s + c.count, 0) || canonicalCounts.get(n.name_cs) || 0,
+          sectionId: null,
+          children,
+        };
+      });
   }
   return [];
 }
@@ -838,31 +843,21 @@ export async function listPartsForVehicle(opts: any) {
     return finalizeCatalogRows(b2.data || [], from, to);
   }
 
-  // Last resort: show category for the brand alone (any vehicle)
-  if (canonical) {
-    const { data } = await supabase
-      .from('parts_new_public')
-      .select('*')
-      .eq('category', canonical)
-      .ilike('compatible_vehicles', `%${opts.brand}%`)
-      .limit(2000);
-    if ((data || []).length === 0) {
-      logCatalogEvent({
-        level: 'warn',
-        event: 'listPartsForVehicle_empty',
-        vehicle_id: opts.nextisVehicleId || null,
-        category: canonical,
-        message: `Žádné díly pro ${opts.brand} ${opts.model || ''} ${opts.engine || ''} / ${canonical}`,
-        details: {
-          brand: opts.brand, model: opts.model, engine: opts.engine, year: opts.year,
-          canonical, keywords, categoryNodeId: opts.categoryNodeId,
-          strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine', 'brandFallback'],
-          reason: 'no_local_parts_match_any_strategy',
-        },
-      });
-    }
-    return finalizeCatalogRows(data || [], from, to);
-  }
+  // Strict mode: no vehicle-agnostic fallback — prevents cross-vehicle pollution
+  logCatalogEvent({
+    level: 'warn',
+    event: 'listPartsForVehicle_empty',
+    vehicle_id: opts.nextisVehicleId || null,
+    category: canonical,
+    message: `Žádné díly po všech strategiích: ${opts.brand} ${opts.model || ''} / ${canonical || rawLabel}`,
+    details: {
+      brand: opts.brand, model: opts.model, engine: opts.engine,
+      canonical, keywords, categoryNodeId: opts.categoryNodeId,
+      strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine'],
+      reason: 'strict_vehicle_scope_no_fallback',
+    },
+  });
+  return { items: [], total: 0 };
 
   logCatalogEvent({
     level: 'warn',
