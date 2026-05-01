@@ -209,7 +209,9 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
     return aPrice - bPrice;
   });
   for (const part of sorted) {
-    const key = normalizeOem(part.oem_number);
+    const key = part.catalog_source === 'jm' && part.related_oem_number
+      ? `jm:${normalizeOem(part.related_oem_number)}:${normalizeOem(part.oem_number)}`
+      : normalizeOem(part.oem_number);
     if (!seen.has(key)) {
       seen.set(key, part);
     }
