@@ -503,16 +503,19 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     };
     return globalRoots
       .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((n: any) => ({
-        id: n.id,
-        label: n.name_cs,
-        path: [n.slug],
-        keywords: [n.name_cs],
-        // Top-level category: use canonical bucket count (already accurate).
-        count: canonicalCounts.get(n.name_cs) || 0,
-        sectionId: null,
-        children: buildGlobal(n.id, [n.slug]),
-      }));
+      .map((n: any) => {
+        const children = buildGlobal(n.id, [n.slug]);
+        return {
+          id: n.id,
+          label: n.name_cs,
+          path: [n.slug],
+          keywords: [n.name_cs],
+          // Top-level: součet dětí (přesnější), fallback na canonical bucket count.
+          count: children.reduce((s, c) => s + c.count, 0) || canonicalCounts.get(n.name_cs) || 0,
+          sectionId: null,
+          children,
+        };
+      });
   }
   return [];
 }
