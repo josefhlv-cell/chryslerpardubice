@@ -266,6 +266,7 @@ function normalizeRow(row: any, source?: string): CatalogPart {
     markup_percent: markup,
     technical_parameters,
     compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
+    related_oem_number: row?.related_oem_number ? String(row.related_oem_number) : null,
   };
 }
 
