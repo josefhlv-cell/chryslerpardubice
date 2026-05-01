@@ -98,25 +98,38 @@ function findNodeWithParent(
  * Strategie: keyword/canonical match na názvu i kategorii dílu.
  */
 function partMatchesNode(part: CatalogPart, node: CatalogCategoryNode | null): boolean {
-  if (!node) return true;
+  if (!node || node.keywords.length === 0) return true;
 
-  const norm = (s: string) =>
-    (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const normalize = (str: string) =>
+    (str || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
 
-  const partCat = norm(part.category || "");
-  const partName = norm(part.name || "");
-  const nodeLabel = norm(node.label);
+  const haystack = normalize(${part.name} ${part.category || ""});
+  const partCategory = normalize(part.category || "");
+  const nodeLabelNorm = normalize(node.label);
 
-  // 1) Přesný match kategorie
-  if (partCat && partCat === nodeLabel) return true;
-  // 2) Label uzlu obsažen v kategorii dílu (ne obráceně)
-  if (nodeLabel.length >= 5 && partCat.includes(nodeLabel)) return true;
-  // 3) Keyword match – jen klíčová slova ≥ 5 znaků (zabrání "brzd" matchování všeho)
-  if (node.keywords?.length) {
-    const hay = `${partCat} ${partName}`;
-    if (node.keywords.some((k) => norm(k).length >= 5 && hay.includes(norm(k)))) return true;
+  // 🔥 FIX 1: J+M bez kategorie → fallback přes název
+  if (part.catalog_source === "jm") {
+    if (!part.category || part.category.trim() === "") {
+      return node.keywords.some((keyword) =>
+        haystack.includes(normalize(keyword))
+      );
+    }
   }
-  return false;
+
+  // 🔥 FIX 2: J+M s kategorií → strict match
+  if (part.catalog_source === "jm" && part.category) {
+    if (partCategory !== nodeLabelNorm) {
+      return false;
+    }
+  }
+
+  // OEM + fallback → keyword match
+  return node.keywords.some((keyword) =>
+    haystack.includes(normalize(keyword))
+  );
 }
 
 /**
