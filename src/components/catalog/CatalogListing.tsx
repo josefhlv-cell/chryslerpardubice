@@ -169,6 +169,28 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
                   <span className="font-medium">Kompatibilní:</span> {p.compatible_vehicles}
                 </p>
               )}
+              {p.oe_numbers && p.oe_numbers.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-border/20">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    OE čísla (originální výrobci)
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {p.oe_numbers.slice(0, 12).map((oe) => (
+                      <span
+                        key={oe}
+                        className="text-[10px] font-mono bg-secondary/60 text-foreground px-1.5 py-0.5 rounded"
+                      >
+                        {oe}
+                      </span>
+                    ))}
+                    {p.oe_numbers.length > 12 && (
+                      <span className="text-[10px] text-muted-foreground">
+                        +{p.oe_numbers.length - 12} dalších
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>
