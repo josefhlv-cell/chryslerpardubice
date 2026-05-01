@@ -269,6 +269,9 @@ function normalizeRow(row: any, source?: string): CatalogPart {
     technical_parameters,
     compatible_vehicles: Array.isArray(row?.compatible_vehicles) ? row.compatible_vehicles : null,
     related_oem_number: row?.related_oem_number ? String(row.related_oem_number) : null,
+    oe_numbers: Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0
+      ? row.oe_numbers.map((x: any) => String(x)).filter(Boolean)
+      : null,
   };
 }
 
