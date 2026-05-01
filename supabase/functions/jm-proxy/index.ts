@@ -1281,6 +1281,9 @@ Deno.serve(async (req) => {
 
         // OEM-fallback helper: query local catalog for matching OEM codes.
         // Tries multiple engine variants ("3.6 V6" / "3.6L V6" / "3.6").
+        // CATEGORY INTEGRITY 2026-05: only OEM (Mopar / 7zap / csv-Mopar) sources
+        // are eligible as seeds — never aftermarket source rows that may have
+        // been imported under a foreign OEM-looking code (KAMOKA F322201 etc.).
         const queryLocalOemCodes = async (
           useEngine: boolean,
           keywordsForFilter: string[],
@@ -1292,9 +1295,10 @@ Deno.serve(async (req) => {
           for (const variant of variantsToTry) {
             let q = adminClient
               .from('parts_new')
-              .select('oem_number, name, category, description, compatible_vehicles')
+              .select('oem_number, name, category, description, compatible_vehicles, catalog_source, manufacturer')
               .ilike('compatible_vehicles', `%${brand}%`)
               .ilike('compatible_vehicles', `%${model}%`)
+              .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
               .limit(500);
             if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
             const { data: rows, error } = await q;
@@ -1303,7 +1307,13 @@ Deno.serve(async (req) => {
               continue;
             }
             if (rows?.length) {
-              allRows.push(...rows);
+              // Belt-and-suspenders: csv source must also have manufacturer=Mopar.
+              const cleanRows = rows.filter((r: any) => {
+                const src = String(r.catalog_source || '').toLowerCase();
+                if (src === 'csv') return String(r.manufacturer || '').trim().toLowerCase() === 'mopar';
+                return true;
+              });
+              allRows.push(...cleanRows);
               break; // first variant that returns data wins
             }
           }
