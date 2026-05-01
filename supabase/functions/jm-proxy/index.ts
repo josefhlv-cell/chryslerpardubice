@@ -1112,6 +1112,10 @@ Deno.serve(async (req) => {
           console.log(`[searchByCode] crossref recursive lookup ${cross.xrefsTried.length} refs for ${rawCode}, items=${cross.items.length}`);
         }
 
+        // Obohať related_oem_number i přes oe_numbers z API odpovědi (ne jen přes hledaný kód)
+        merged = await enrichItemsWithRelatedOem(adminClient, merged);
+        for (const it of merged) (it as any).related_oem_number = (it as any).related_oem_number || rawCode;
+
         const seen = new Set<string>();
         merged = dedupeUnifiedParts(merged).filter((p) => {
           if (!p.oem_number) return false;
