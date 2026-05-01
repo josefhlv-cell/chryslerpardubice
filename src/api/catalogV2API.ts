@@ -53,6 +53,8 @@ export type CatalogPart = {
   markup_percent: number;
   technical_parameters?: Record<string, string> | null;
   compatible_vehicles?: string[] | null;
+  /** OEM number this aftermarket part is a replacement for. Set by jm-proxy. */
+  related_oem_number?: string | null;
 };
 
 export type CatalogCategoryNode = {
