@@ -1,8 +1,6 @@
 /**
  * Unified Catalog — 5-level Nextis drill-down.
  * Brand → Model → Engine → Category → Parts (OEM/Mopar locked to top).
- *
- * Single entry point. No tabs, no logos, no sidebars.
  */
 import { forwardRef, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -93,23 +91,17 @@ function partMatchesNode(part: any, node: any): boolean {
   const partCategory = normalize(part.category);
   const nodeLabelNorm = normalize(node.label);
 
-  // FIX 1: J+M bez kategorie → fallback přes název
   if (part.catalog_source === "jm") {
     if (!part.category || part.category.trim() === "") {
       return node.keywords.some((keyword: string) =>
         haystack.includes(normalize(keyword))
       );
     }
-  }
-
-  // FIX 2: J+M s kategorií → musí sedět přesně
-  if (part.catalog_source === "jm" && part.category) {
     if (partCategory !== nodeLabelNorm) {
       return false;
     }
   }
 
-  // OEM + fallback → keyword match
   return node.keywords.some((keyword: string) =>
     haystack.includes(normalize(keyword))
   );
@@ -135,8 +127,7 @@ function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean 
   if (subtypeId === "all") return true;
   const sub = BRAKE_SUBTYPES.find((s) => s.id === subtypeId);
   if (!sub) return true;
-  const norm = (s: string) =>
-    (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const hay = `${norm(part.name || "")} ${norm(part.category || "")}`;
   return sub.keywords.some((k) => new RegExp(norm(k)).test(hay));
 }
@@ -249,7 +240,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setListLoading(true);
         setJmLoading(true);
 
-        console.log(`[Catalog] Parallel fetch: OEM + J+M for ${brand} ${model} ${engine} | jm=${jmEnabled}`);
         const [oemRes, jmVehicleRes] = await Promise.allSettled([
           listPartsForVehicle({
             brand, model, engine,
@@ -274,41 +264,32 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               })
             : Promise.resolve({ items: [] as CatalogPart[], warning: undefined as string | undefined }),
         ]);
+
         if (cancelled) return;
 
-        const { items: oemItems, total: oemTotal } =
-          oemRes.status === "fulfilled" ? oemRes.value : { items: [], total: 0 };
-        const jmVehiclePayload =
-          jmVehicleRes.status === "fulfilled"
-            ? jmVehicleRes.value
-            : { items: [] as CatalogPart[], warning: "J+M dotaz selhal" };
+        const { items: oemItems, total: oemTotal } = oemRes.status === "fulfilled" ? oemRes.value : { items: [], total: 0 };
+        const jmVehiclePayload = jmVehicleRes.status === "fulfilled" ? jmVehicleRes.value : { items: [] as CatalogPart[] };
         const jmFromVehicle = jmVehiclePayload.items || [];
-
-        if (oemRes.status === "rejected") console.error("[Catalog] OEM fetch failed:", oemRes.reason);
-        if (jmVehicleRes.status === "rejected") console.warn("[Catalog] J+M vehicle search failed:", jmVehicleRes.reason);
 
         setItems(oemItems);
         setTotal(oemTotal);
 
-        // J+M by OEM kódech – jen pokud je J+M katalog zapnutý
         let jmByCodes: CatalogPart[] = [];
         if (jmEnabled && page === 0 && oemItems.length > 0) {
           const uniqueCodes = [...new Set(oemItems.map((p) => p.oem_number).filter(Boolean))].slice(0, 10);
           try {
             jmByCodes = await fetchJmByCodes(uniqueCodes);
-            console.log(`[Catalog] J+M by codes (cap 10): ${jmByCodes.length} alternatives`);
-          } catch (jmErr: any) {
+          } catch (jmErr) {
             console.error("[Catalog] J+M by codes failed:", jmErr);
           }
         }
 
-        // CATEGORY FILTER: J+M díly bez kategorie vždy propustíme (mergeWithJm je řídí dál),
-        // J+M díly s kategorií filtrujeme jen pokud kategorie nesedí.
         const allJm = [...jmByCodes, ...jmFromVehicle].filter((part) => {
           if (part.catalog_source !== "jm") return partMatchesNode(part, category);
           if (!part.category || part.category.trim() === "") return true;
           return partMatchesNode(part, category);
         });
+
         if (cancelled) return;
         setJmCount(allJm.length);
         const merged = mergeWithJm(oemItems, allJm);
@@ -316,22 +297,9 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setTotal(merged.length);
 
         if (allJm.length === 0 && oemItems.length === 0 && page === 0) {
-          setJmWarning(
-            jmVehiclePayload.warning ||
-              `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst aftermarket díly z J+M.`
-          );
+          setJmWarning(jmVehiclePayload.warning || `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst náhrady.`);
         } else {
           setJmWarning(null);
-        }
-
-        if (oemItems.length === 0 && allJm.length === 0) {
-          console.log("[Catalog strict] Empty scoped category result", {
-            selected_vehicle: selectedVehicleId,
-            selected_engine: engine,
-            selected_category: category.label,
-            jmStatus: jmVehiclePayload.warning || "ok-zero-results",
-            fallback_reason: "strict-category-filter-active",
-          });
         }
       } catch (err: any) {
         if (!cancelled) { toast.error("Chyba načítání: " + err.message); setItems([]); }
@@ -339,7 +307,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         if (!cancelled) { setListLoading(false); setJmLoading(false); }
       }
     })();
-
     return () => { cancelled = true; };
   }, [brand, model, engine, selectedVehicleId, category, page]);
 
@@ -353,9 +320,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     if (!canPlaceOrder) { toast.error("Účet ještě nebyl schválen."); return; }
     try {
       const isLiveJm = p.id.startsWith("jm:") || p.catalog_source === "jm";
-      const unitPrice =
-        p.price_without_vat ??
-        (p.price_with_vat !== null ? Math.round((p.price_with_vat / 1.21) * 100) / 100 : null);
+      const unitPrice = p.price_without_vat ?? (p.price_with_vat !== null ? Math.round((p.price_with_vat / 1.21) * 100) / 100 : null);
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
         part_id: isLiveJm ? null : p.id,
@@ -399,8 +364,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const breadcrumb = [brand, model, engine, category?.label].filter(Boolean);
   const visibleCategories = categoryQuery.trim()
     ? flattenCategoryTree(categories).filter((node) =>
-        [node.label, ...node.path, ...node.keywords]
-          .join(" ").toLowerCase().includes(categoryQuery.trim().toLowerCase())
+        [node.label, ...node.path, ...node.keywords].join(" ").toLowerCase().includes(categoryQuery.trim().toLowerCase())
       )
     : getCategoryLevel(categories, categoryPath);
 
@@ -464,7 +428,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
         {step === "model" && !loading && (
           models.length === 0
-            ? <div className="text-center py-16 text-sm text-muted-foreground">Pro značku <strong>{brand}</strong> nejsou v katalogu žádné modely.</div>
+            ? <div className="text-center py-16 text-sm text-muted-foreground">Žádné modely pro <strong>{brand}</strong>.</div>
             : <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
                 {models.map((m) => (
                   <button key={m} onClick={() => setModel(m)}
@@ -481,7 +445,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
         {step === "engine" && !loading && (
           engines.length === 0
-            ? <div className="text-center py-16 text-sm text-muted-foreground">Pro <strong>{brand} {model}</strong> nejsou definovány motorizace.</div>
+            ? <div className="text-center py-16 text-sm text-muted-foreground">Žádné motorizace pro <strong>{brand} {model}</strong>.</div>
             : <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
                 {engines.map((e) => (
                   <button key={e} onClick={() => setEngine(e)}
@@ -498,16 +462,15 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
         {step === "category" && !loading && (
           categories.length === 0
-            ? <div className="text-center py-16 text-sm text-muted-foreground">Pro toto vozidlo zatím nejsou v katalogu žádné díly.</div>
+            ? <div className="text-center py-16 text-sm text-muted-foreground">Žádné kategorie.</div>
             : <div className="space-y-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input value={categoryQuery} onChange={(event) => setCategoryQuery(event.target.value)}
+                  <Input value={categoryQuery} onChange={(e) => setCategoryQuery(e.target.value)}
                     placeholder="Hledat kategorii nebo díl…" className="pl-9 bg-card border-border/40" />
                 </div>
                 {categoryPath.length > 0 && !categoryQuery && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs"
-                    onClick={() => setCategoryPath((path) => path.slice(0, -1))}>
+                  <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setCategoryPath((p) => p.slice(0, -1))}>
                     <ChevronLeft className="w-3.5 h-3.5 mr-1" /> O úroveň zpět
                   </Button>
                 )}
@@ -517,7 +480,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                     const hasChildren = (c.children?.length || 0) > 0;
                     return (
                       <button key={c.id}
-                        onClick={() => { if (hasChildren && !categoryQuery) setCategoryPath((path) => [...path, c.id]); else setCategory(c); }}
+                        onClick={() => { if (hasChildren && !categoryQuery) setCategoryPath((p) => [...p, c.id]); else setCategory(c); }}
                         className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left">
                         <div className="flex items-center gap-3 min-w-0">
                           <Icon className="w-4 h-4 text-primary/70 shrink-0" />
@@ -537,17 +500,13 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
             <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground gap-3 flex-wrap">
               <span>
                 {total > 0
-                  ? jmCount > 0 && total === jmCount
-                    ? `${jmCount} dílů z J+M Autodíly (náhrady)`
-                    : `${total} dílů — Mopar / OEM první`
+                  ? jmCount > 0 && total === jmCount ? `${jmCount} dílů (náhrady)` : `${total} dílů — OEM první`
                   : jmLoading ? "Hledám díly…" : "Žádné výsledky"}
-                {jmCount > 0 && total !== jmCount && (
-                  <span className="ml-2 text-primary">+ {jmCount} z J+M Autodíly</span>
-                )}
+                {jmCount > 0 && total !== jmCount && <span className="ml-2 text-primary">+ {jmCount} náhrad</span>}
               </span>
               {jmLoading && (
                 <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Hledám živou nabídku J+M…
+                  <Loader2 className="w-3 h-3 animate-spin" /> Hledám v J+M…
                 </span>
               )}
             </div>
@@ -566,15 +525,15 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               if (counts.length === 0) return null;
               return (
                 <div className="mb-4 p-3 rounded-xl border border-border/40 bg-card/40">
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Typ brzdového dílu</p>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Typ dílu</p>
                   <div className="flex flex-wrap gap-1.5">
                     <button onClick={() => setBrakeSubtype("all")}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${brakeSubtype === "all" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-foreground border-border hover:border-primary/50"}`}>
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${brakeSubtype === "all" ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
                       Vše <span className="opacity-60 ml-1">{items.length}</span>
                     </button>
                     {counts.map((s) => (
                       <button key={s.id} onClick={() => setBrakeSubtype(s.id)}
-                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${brakeSubtype === s.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-foreground border-border hover:border-primary/50"}`}>
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${brakeSubtype === s.id ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
                         {s.label} <span className="opacity-60 ml-1">{s.count}</span>
                       </button>
                     ))}
@@ -589,16 +548,13 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 : items}
               loading={listLoading && items.length === 0}
               onOrder={handleOrder}
-              emptyHint={isBrakeCategory(category?.label) && brakeSubtype !== "all"
-                ? "V tomto sub-typu nejsou žádné díly. Zkuste vybrat jiný typ nebo „Vše"."
-                : "V této kategorii zatím nejsou žádné díly."}
+              emptyHint="V této kategorii nejsou žádné díly."
             />
 
             {!listLoading && !jmLoading && items.length === 0 && (
               <div className="mt-6 p-6 rounded-2xl border border-dashed border-border/60 bg-card/40 text-center">
                 <Search className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground mb-4">Nenašli jsme specifické díly pro tento motor, zkuste hledat podle OEM kódu.</p>
-                <p className="text-[11px] text-muted-foreground/70">Použijte vyhledávání OEM kódu výše ↑</p>
+                <p className="text-sm text-muted-foreground mb-4">Nenašli jsme specifické díly, zkuste OEM vyhledávání.</p>
               </div>
             )}
           </>
@@ -609,5 +565,4 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 });
 
 Catalog.displayName = "Catalog";
-
 export default Catalog;
