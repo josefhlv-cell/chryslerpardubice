@@ -1317,12 +1317,13 @@ Deno.serve(async (req) => {
           return { codes, matchedRows: filtered.length };
         };
 
-        // RELAXATION LADDER (Phase 2 — Operation Redline 2.0):
-        // 1) strict subcategory + engine
-        // 2) parent keywords + engine (broader, same vehicle)
-        // 3) strict subcategory + brand+model only (ignore engine — covers 300C 3.0 CRD etc.)
-        // 4) parent keywords + brand+model only
-        // 5) brand+model only, NO keyword filter (last resort, gets ANY OEM seed)
+        // RELAXATION LADDER (Phase 3 — Category Integrity 2026-05):
+        // We MUST NEVER pass OEM codes from another category to J+M — that's how
+        // "Palivový filtr" ended up listed under "Brzdové obložení". So:
+        //  - All ladder steps require AT LEAST ONE category keyword (subcat OR parent).
+        //  - The "brand-only / no keywords" step is gone forever.
+        //  - If we have neither subcat nor parent keywords, we return empty rather
+        //    than pollute the result.
         const seedKeywords = categoryKeywords.length > 0 ? categoryKeywords : parentKeywords;
         const sameAsSeed = (kws: string[]) => JSON.stringify(kws) === JSON.stringify(seedKeywords);
         const ladder: Array<{ label: string; useEngine: boolean; keywords: string[] }> = [
@@ -1330,8 +1331,19 @@ Deno.serve(async (req) => {
           { label: 'engine+parent', useEngine: true,  keywords: parentKeywords },
           { label: 'brand+subcat',  useEngine: false, keywords: seedKeywords },
           { label: 'brand+parent',  useEngine: false, keywords: parentKeywords },
-          { label: 'brand-only',    useEngine: false, keywords: [] },
-        ];
+          // NOTE: "brand-only" rung removed — it was the root cause of cross-category
+          // pollution (e.g. fuel filters appearing under brake pads).
+        ].filter((step) => step.keywords.length > 0);
+
+        if (ladder.length === 0) {
+          result = {
+            items: [],
+            mode: 'oem-fallback',
+            warning: 'No category keywords supplied — refusing brand-only search to prevent cross-category pollution.',
+            triedBrand: brand, triedModel: model, triedEngine: engine, category,
+          };
+          break;
+        }
 
         let oemCodes: string[] = [];
         let usedStep = 'none';
