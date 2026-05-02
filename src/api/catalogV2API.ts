@@ -499,3 +499,27 @@ export async function fetchCatalogProducts(opts: {
     data: { oem, aftermarket_matched: aftermarket, aftermarket_unmatched: [] },
   };
 }
+
+// ─── Aliases & global OEM search ──────────────────────────────────────────────
+
+export type CategoryNode = CatalogCategoryNode;
+
+export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart[]; jm: CatalogPart[] }> {
+  const q = (query || '').trim();
+  if (!q) return { oem: [], jm: [] };
+
+  let oem: CatalogPart[] = [];
+  try {
+    const { data } = await supabase
+      .from('parts_new_public')
+      .select('*')
+      .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
+      .limit(50);
+    oem = (data || []).map((r: any) => normalizeRow(r));
+  } catch (err) {
+    logCatalogEvent({ level: 'warn', event: 'globalOemSearch_db_error', message: String(err) });
+  }
+
+  const jm = await fetchJmByCodes([q]);
+  return { oem, jm };
+}
