@@ -65,7 +65,7 @@ const AdminFeatureSettings = () => {
             const meta = CATALOG_FLAGS[f.feature_key];
             const Icon = meta?.icon || ShoppingBag;
             return (
-              <Card key="{f.id}" className="{f.enabled" ? "border-primary/40" : ""}>
+              <Card key={f.id} className={f.enabled ? "border-primary/40" : ""}>
                 <CardContent className="p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`p-1.5 rounded-lg shrink-0 ${f.enabled ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
@@ -85,9 +85,8 @@ const AdminFeatureSettings = () => {
                       )}
                     </div>
                   </div>
-                  <Switch checked="{f.enabled}" onCheckedChange="{()"> handleToggle(f.feature_key, f.enabled)}
-                  />
-                </Switch></CardContent>
+                  <Switch checked={f.enabled} onCheckedChange={() => handleToggle(f.feature_key, f.enabled)} />
+                </CardContent>
               </Card>
             );
           })}
@@ -101,7 +100,7 @@ const AdminFeatureSettings = () => {
             Ostatní moduly
           </p>
           {otherFlags.map((f) => (
-            <Card key="{f.id}" className="hover:border-primary/20 transition-colors">
+            <Card key={f.id} className="hover:border-primary/20 transition-colors">
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -109,9 +108,8 @@ const AdminFeatureSettings = () => {
                     <Badge variant="outline" className="text-[10px]">{f.feature_key}</Badge>
                   </div>
                 </div>
-                <Switch checked="{f.enabled}" onCheckedChange="{()"> handleToggle(f.feature_key, f.enabled)}
-                />
-              </Switch></CardContent>
+                <Switch checked={f.enabled} onCheckedChange={() => handleToggle(f.feature_key, f.enabled)} />
+              </CardContent>
             </Card>
           ))}
         </div>
