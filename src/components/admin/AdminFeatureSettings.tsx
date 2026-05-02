@@ -85,9 +85,8 @@ const AdminFeatureSettings = () => {
                       )}
                     </div>
                   </div>
-                  <Switch checked="{f.enabled}" onCheckedChange="{()"> handleToggle(f.feature_key, f.enabled)}
-                  />
-                </Switch></CardContent>
+                  <Switch checked={f.enabled} onCheckedChange={() => handleToggle(f.feature_key, f.enabled)} />
+                </CardContent>
               </Card>
             );
           })}
