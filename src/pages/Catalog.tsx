@@ -24,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
-import GlobalOEMSearch from "@/components/catalog/GlobalOEMSearch";
+import VinAndOemSearch from "@/components/catalog/VinAndOemSearch";
 
 const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"];
 
@@ -401,7 +401,18 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       </div>
 
       <div className="max-w-[1400px] mx-auto px-4 py-8">
-        <GlobalOEMSearch onOrder={handleOrder} />
+        <VinAndOemSearch
+          onOrder={handleOrder}
+          onVehicleSelected={({ brand: b, model: m, engine: e }) => {
+            // Match brand against known list (case-insensitive)
+            const matchedBrand = brands.find((x) => x.toLowerCase() === b.toLowerCase()) || b;
+            setBrand(matchedBrand);
+            setModel(m);
+            if (e) setEngine(e);
+            setCategory(null);
+            setCategoryPath([]);
+          }}
+        />
         <div className="mb-6">
           <h2 className="text-base md:text-lg font-semibold tracking-tight">{stepTitle[step]}</h2>
         </div>
