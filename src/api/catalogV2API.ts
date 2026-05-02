@@ -363,14 +363,10 @@ async function fetchLocalCategoryTree(opts: {
 
     const { data: compatData } = await supabase
       .from('catalog_vehicle_compatibility')
-      .select('category, subcategory, count')
+      .select('part_id')
       .eq('nextis_vehicle_id', opts.nextisVehicleId);
 
-    const canonicalCounts = new Map<string, number>();
-    for (const row of compatData || []) {
-      const key = row.category || '';
-      canonicalCounts.set(key, (canonicalCounts.get(key) || 0) + (row.count || 1));
-    }
+    const totalForVehicle = compatData?.length || 0;
 
     const buildGlobal = (parentId: string, parentPath: string[]): CatalogCategoryNode[] => {
       const siblings = (globalRoots as any[]).filter((n: any) => n.parent_id === parentId);
@@ -379,11 +375,10 @@ async function fetchLocalCategoryTree(opts: {
         .map((n: any) => {
           const path = [...parentPath, n.slug];
           const children = buildGlobal(n.id, path);
-          const count = compatData?.filter((c) => c.subcategory === n.name_cs).reduce((s, c) => s + (c.count || 1), 0) || 0;
           return {
             id: n.id, label: n.name_cs, path,
             keywords: [n.name_cs, ...(n.keywords || [])],
-            count, sectionId: null, children,
+            count: 0, sectionId: null, children,
           };
         });
     };
@@ -396,7 +391,7 @@ async function fetchLocalCategoryTree(opts: {
         return {
           id: n.id, label: n.name_cs, path: [n.slug],
           keywords: [n.name_cs],
-          count: children.reduce((s, c) => s + c.count, 0) || canonicalCounts.get(n.name_cs) || 0,
+          count: children.reduce((s, c) => s + c.count, 0) || totalForVehicle,
           sectionId: null, children,
         };
       });
