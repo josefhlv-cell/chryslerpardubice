@@ -416,20 +416,20 @@ export async function listPartsForVehicle(opts: {
   const rawLabel = opts.canonicalCategory || '';
   const keywords = opts.categoryKeywords || [rawLabel];
 
-  // Strategy 1: by categoryNodeId via compat table
-  if (opts.nextisVehicleId && opts.categoryNodeId) {
+  // Strategy 1: by nextisVehicleId via compat table
+  if (opts.nextisVehicleId) {
     try {
       const { data: compatRows } = await supabase
         .from('catalog_vehicle_compatibility')
         .select('part_id')
         .eq('nextis_vehicle_id', opts.nextisVehicleId)
-        .eq('category_node_id', opts.categoryNodeId)
         .limit(500);
 
       if (compatRows?.length) {
-        const partIds = compatRows.map((r: any) => r.part_id).filter(Boolean);
-        const { data } = await supabase
-          .from('parts_new_public').select('*').in('id', partIds).limit(500);
+        const partIds = (compatRows as any[]).map((r: any) => r.part_id).filter(Boolean);
+        let q = supabase.from('parts_new_public').select('*').in('id', partIds).limit(500);
+        if (rawLabel) q = q.ilike('category', `%${rawLabel}%`);
+        const { data } = await q;
         if (data?.length) return finalizeCatalogRows(data, from, to);
       }
     } catch { /* try next strategy */ }
