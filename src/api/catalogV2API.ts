@@ -317,7 +317,7 @@ export async function fetchJmCategoryTree(opts: {
 }): Promise<CatalogCategoryNode[]> {
   try {
     const { data, error } = await supabase.functions.invoke('jm-proxy', {
-      body: { action: 'getCategories', ...opts },
+      body: { action: 'vehicleCategories', ...opts },
     });
     if (error) throw error;
 
