@@ -65,7 +65,7 @@ const AdminFeatureSettings = () => {
             const meta = CATALOG_FLAGS[f.feature_key];
             const Icon = meta?.icon || ShoppingBag;
             return (
-              <Card key="{f.id}" className="{f.enabled" ? "border-primary/40" : ""}>
+              <Card key={f.id} className={f.enabled ? "border-primary/40" : ""}>
                 <CardContent className="p-4 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`p-1.5 rounded-lg shrink-0 ${f.enabled ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
