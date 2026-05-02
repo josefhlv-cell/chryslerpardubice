@@ -100,7 +100,7 @@ const AdminFeatureSettings = () => {
             Ostatní moduly
           </p>
           {otherFlags.map((f) => (
-            <Card key="{f.id}" className="hover:border-primary/20 transition-colors">
+            <Card key={f.id} className="hover:border-primary/20 transition-colors">
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -108,9 +108,8 @@ const AdminFeatureSettings = () => {
                     <Badge variant="outline" className="text-[10px]">{f.feature_key}</Badge>
                   </div>
                 </div>
-                <Switch checked="{f.enabled}" onCheckedChange="{()"> handleToggle(f.feature_key, f.enabled)}
-                />
-              </Switch></CardContent>
+                <Switch checked={f.enabled} onCheckedChange={() => handleToggle(f.feature_key, f.enabled)} />
+              </CardContent>
             </Card>
           ))}
         </div>
