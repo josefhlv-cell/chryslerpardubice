@@ -486,17 +486,25 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                   </Button>
                 )}
                 <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
+                  {visibleCategories.length === 0 && (
+                    <div className="p-6 text-center text-xs text-amber-300/80">
+                      ⚠️ Pro toto vozidlo zatím nejsou v katalogu žádné kategorie s díly.
+                    </div>
+                  )}
                   {visibleCategories.map((c) => {
                     const Icon = CATEGORY_ICON[c.label] || Package;
                     const hasChildren = (c.children?.length || 0) > 0;
+                    const isEmpty = (c.count || 0) === 0 && !hasChildren;
                     return (
                       <button key={c.id}
+                        disabled={isEmpty}
                         onClick={() => { if (hasChildren && !categoryQuery) setCategoryPath((p) => [...p, c.id]); else setCategory(c); }}
-                        className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left">
+                        className={`group w-full flex items-center justify-between gap-3 px-4 py-3 transition-colors text-left ${isEmpty ? 'opacity-40 cursor-not-allowed' : 'hover:bg-secondary/50'}`}
+                        title={isEmpty ? 'Zatím bez napárovaných dílů' : undefined}>
                         <div className="flex items-center gap-3 min-w-0">
                           <Icon className="w-4 h-4 text-primary/70 shrink-0" />
                           <span className="text-sm font-medium truncate">{c.label}</span>
-                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{c.count}</Badge>
+                          <Badge variant={isEmpty ? 'outline' : 'secondary'} className={`text-[10px] h-4 px-1.5 shrink-0 ${isEmpty ? 'border-amber-500/40 text-amber-300/80' : ''}`}>{c.count}</Badge>
                         </div>
                         <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                       </button>
