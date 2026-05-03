@@ -297,7 +297,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setTotal(merged.length);
 
         if (allJm.length === 0 && oemItems.length === 0 && page === 0) {
-          setJmWarning(jmVehiclePayload.warning || `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst náhrady.`);
+          setJmWarning(((jmVehiclePayload as any).warning as string) || `Pro ${brand} ${model}${engine ? " · " + engine : ""} se nepodařilo načíst náhrady.`);
         } else {
           setJmWarning(null);
         }
