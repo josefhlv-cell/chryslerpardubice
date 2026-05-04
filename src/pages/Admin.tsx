@@ -44,6 +44,7 @@ import AdminReviews from "@/components/admin/AdminReviews";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import AdminBackups from "@/components/admin/AdminBackups";
 import AdminCatalogCommandCenter from "@/components/admin/AdminCatalogCommandCenter";
+import AdminCatalogUnified from "@/components/admin/AdminCatalogUnified";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
