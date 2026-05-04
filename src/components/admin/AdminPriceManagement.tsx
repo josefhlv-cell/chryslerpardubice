@@ -149,6 +149,28 @@ const AdminPriceManagement = () => {
 
   return (
     <div className="space-y-4">
+      <Card className="border-primary/30">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="font-semibold text-sm">Synchronizace cen z věrnostsevyplaci</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Cíl: <strong>{missingCount ?? "…"}</strong> dílů bez ceny. Job běží na pozadí.
+              </p>
+            </div>
+            <Button onClick={startBulkMissing} disabled={bulkRunning || !missingCount} size="sm" className="gap-1">
+              {bulkRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {bulkRunning ? "Běží…" : "Spustit synchronizaci cen"}
+            </Button>
+          </div>
+          {bulkStatus && (bulkStatus.processed > 0 || bulkRunning) && (
+            <div className="text-xs text-muted-foreground">
+              📊 {bulkStatus.processed.toLocaleString("cs")} / {bulkStatus.total.toLocaleString("cs")} · ✅ {bulkStatus.updated.toLocaleString("cs")}
+              {bulkRunning && <span className="ml-2 text-primary">• běží</span>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <div className="flex gap-2">
         <Input placeholder="Hledat díl (OEM nebo název)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === "Enter" && searchParts()} />
         <Button onClick={searchParts} disabled={loading} size="icon">
