@@ -89,7 +89,7 @@ const AdminPriceManagement = () => {
     }
   };
 
-
+  const searchParts = async () => {
     if (!search) return;
     setLoading(true);
     const { data } = await supabase.from("parts_new").select("id, name, oem_number, price_without_vat, price_with_vat, price_locked, admin_price, admin_margin_percent, last_price_update")
