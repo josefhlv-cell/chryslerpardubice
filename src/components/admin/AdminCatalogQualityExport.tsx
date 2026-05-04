@@ -234,6 +234,9 @@ const AdminCatalogQualityExport = () => {
             <Button onClick={exportPdf} size="sm" variant="secondary" disabled={!rows.length || !!exporting} className="gap-1">
               {exporting === "pdf" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} PDF
             </Button>
+            <Button onClick={runRepairs} size="sm" variant="default" disabled={repairing} className="gap-1 bg-amber-500 hover:bg-amber-600 text-black">
+              {repairing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />} Spustit opravy
+            </Button>
           </div>
         </div>
 
