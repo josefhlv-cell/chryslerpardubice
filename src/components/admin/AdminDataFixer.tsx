@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { AlertTriangle, CheckCircle2, Download, RefreshCw, Search, Filter, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, RefreshCw, Search, Filter, ShieldAlert, Zap, Eraser } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Part = {
