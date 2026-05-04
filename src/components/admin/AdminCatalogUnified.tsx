@@ -22,6 +22,7 @@ import EPCImport from "./EPCImport";
 import AdminCatalogSettings from "./AdminCatalogSettings";
 import AdminCatalogQualityExport from "./AdminCatalogQualityExport";
 import AdminCatalogCommandCenter from "./AdminCatalogCommandCenter";
+import AdminDataFixer from "./AdminDataFixer";
 import AdminPriceSyncStats from "./AdminPriceSyncStats";
 import AdminBulkPriceSyncRuns from "./AdminBulkPriceSyncRuns";
 import AdminBulkPriceSync from "./AdminBulkPriceSync";
