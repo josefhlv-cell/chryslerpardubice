@@ -42,8 +42,54 @@ const AdminPriceManagement = () => {
   const [history, setHistory] = useState<PriceHistoryEntry[]>([]);
   const [historyPart, setHistoryPart] = useState<Part | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [missingCount, setMissingCount] = useState<number | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<{ processed: number; updated: number; total: number } | null>(null);
 
-  const searchParts = async () => {
+  useEffect(() => {
+    refreshMissing();
+    pollBulkStatus();
+    const t = setInterval(pollBulkStatus, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const refreshMissing = async () => {
+    const { count } = await supabase
+      .from("parts_new")
+      .select("id", { count: "exact", head: true })
+      .or("price_with_vat.is.null,price_with_vat.eq.0");
+    setMissingCount(count || 0);
+  };
+
+  const pollBulkStatus = async () => {
+    const { data } = await supabase
+      .from("price_sync_runs")
+      .select("status,processed,updated_count,total_target")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setBulkRunning(data.status === "running");
+      setBulkStatus({ processed: data.processed || 0, updated: data.updated_count || 0, total: data.total_target || 0 });
+    }
+  };
+
+  const startBulkMissing = async () => {
+    setBulkRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("bulk-price-sync", {
+        body: { action: "start", mode: "missing" },
+      });
+      if (error) throw error;
+      toast({ title: "Synchronizace spuštěna", description: `Cíl: ${data?.totalTarget || 0} dílů. Běží na pozadí.` });
+      pollBulkStatus();
+    } catch (e: any) {
+      toast({ title: "Chyba spuštění", description: e.message, variant: "destructive" });
+      setBulkRunning(false);
+    }
+  };
+
+
     if (!search) return;
     setLoading(true);
     const { data } = await supabase.from("parts_new").select("id, name, oem_number, price_without_vat, price_with_vat, price_locked, admin_price, admin_margin_percent, last_price_update")
