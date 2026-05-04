@@ -150,6 +150,59 @@ const AdminDataFixer = () => {
   const [page, setPage] = useState(0);
   const [edits, setEdits] = useState<Record<string, { name?: string; description?: string }>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [bursting, setBursting] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const runBurst = async () => {
+    if (!confirm("Spustit Burst mód? 5× spustí enrich-part-names po 500 dílech (≈3-5 min).")) return;
+    setBursting(true);
+    let totalJm = 0, totalDict = 0, totalCleared = 0, totalFailed = 0;
+    try {
+      for (let i = 0; i < 5; i++) {
+        const { data, error } = await supabase.functions.invoke("enrich-part-names", { body: { limit: 500 } });
+        if (error) throw error;
+        totalJm += data?.jmMatched || 0;
+        totalDict += data?.dictTranslated || 0;
+        totalCleared += data?.descCleared || 0;
+        totalFailed += data?.failed || 0;
+        toast({ title: `Burst ${i + 1}/5`, description: `J+M: ${data?.jmMatched ?? 0} · slovník: ${data?.dictTranslated ?? 0} · popisy smazány: ${data?.descCleared ?? 0}` });
+      }
+      toast({ title: "Burst dokončen", description: `Celkem J+M ${totalJm}, slovník ${totalDict}, vyčištěno ${totalCleared}, chyb ${totalFailed}` });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Chyba burst", description: e.message, variant: "destructive" });
+    } finally {
+      setBursting(false);
+    }
+  };
+
+  const clearAllMismatches = async () => {
+    const targets = analyzed.filter((p) => p.conflict === "mismatch" || p.conflict === "swap");
+    if (targets.length === 0) {
+      toast({ title: "Nic ke smazání", description: "Žádné nesoulady ani záměny." });
+      return;
+    }
+    if (!confirm(`Opravdu smazat popis u ${targets.length} dílů (Záměna + Nesoulad)?`)) return;
+    setClearing(true);
+    try {
+      const ids = targets.map((p) => p.id);
+      // batchování po 200 ID
+      for (let i = 0; i < ids.length; i += 200) {
+        const slice = ids.slice(i, i + 200);
+        const { error } = await supabase
+          .from("parts_new")
+          .update({ description: null, last_name_check_at: new Date().toISOString() })
+          .in("id", slice);
+        if (error) throw error;
+      }
+      toast({ title: "Smazáno", description: `Vyčištěno ${ids.length} popisů.` });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Chyba", description: e.message, variant: "destructive" });
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
