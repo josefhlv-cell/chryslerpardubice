@@ -101,6 +101,84 @@ export type Database = {
         }
         Relationships: []
       }
+      _backup_parts_new_20260504: {
+        Row: {
+          admin_margin_percent: number | null
+          admin_price: number | null
+          availability: string | null
+          catalog_source: string | null
+          category: string | null
+          compatible_vehicles: string | null
+          currency: string | null
+          description: string | null
+          family: string | null
+          id: string | null
+          image_urls: string[] | null
+          internal_code: string | null
+          last_enrich_attempt_at: string | null
+          last_price_update: string | null
+          manufacturer: string | null
+          name: string | null
+          oem_number: string | null
+          packaging: string | null
+          price_locked: boolean | null
+          price_with_vat: number | null
+          price_without_vat: number | null
+          segment: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_margin_percent?: number | null
+          admin_price?: number | null
+          availability?: string | null
+          catalog_source?: string | null
+          category?: string | null
+          compatible_vehicles?: string | null
+          currency?: string | null
+          description?: string | null
+          family?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          internal_code?: string | null
+          last_enrich_attempt_at?: string | null
+          last_price_update?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          oem_number?: string | null
+          packaging?: string | null
+          price_locked?: boolean | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          segment?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_margin_percent?: number | null
+          admin_price?: number | null
+          availability?: string | null
+          catalog_source?: string | null
+          category?: string | null
+          compatible_vehicles?: string | null
+          currency?: string | null
+          description?: string | null
+          family?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          internal_code?: string | null
+          last_enrich_attempt_at?: string | null
+          last_price_update?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          oem_number?: string | null
+          packaging?: string | null
+          price_locked?: boolean | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          segment?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       admin_sessions: {
         Row: {
           created_at: string
@@ -1608,6 +1686,7 @@ export type Database = {
           image_urls: string[] | null
           internal_code: string | null
           last_enrich_attempt_at: string | null
+          last_name_check_at: string | null
           last_price_update: string | null
           manufacturer: string | null
           name: string
@@ -1633,6 +1712,7 @@ export type Database = {
           image_urls?: string[] | null
           internal_code?: string | null
           last_enrich_attempt_at?: string | null
+          last_name_check_at?: string | null
           last_price_update?: string | null
           manufacturer?: string | null
           name: string
@@ -1658,6 +1738,7 @@ export type Database = {
           image_urls?: string[] | null
           internal_code?: string | null
           last_enrich_attempt_at?: string | null
+          last_name_check_at?: string | null
           last_price_update?: string | null
           manufacturer?: string | null
           name?: string
