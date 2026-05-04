@@ -375,6 +375,14 @@ const AdminDataFixer = () => {
               <RefreshCw className={cn("w-3.5 h-3.5 mr-1", loading && "animate-spin")} />
               Načíst
             </Button>
+            <Button size="sm" variant="outline" onClick={runBurst} disabled={bursting}>
+              <Zap className={cn("w-3.5 h-3.5 mr-1", bursting && "animate-pulse")} />
+              {bursting ? "Burst běží…" : "Burst (5×500)"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={clearAllMismatches} disabled={clearing}>
+              <Eraser className={cn("w-3.5 h-3.5 mr-1", clearing && "animate-pulse")} />
+              Smaž nesoulady
+            </Button>
             <Button size="sm" onClick={exportCSV}>
               <Download className="w-3.5 h-3.5 mr-1" /> Export CSV ({filtered.length})
             </Button>
