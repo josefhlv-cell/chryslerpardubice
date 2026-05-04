@@ -3104,6 +3104,7 @@ export type Database = {
         }[]
       }
       can_place_order: { Args: { _user_id: string }; Returns: boolean }
+      cleanup_expired_api_cache: { Args: never; Returns: number }
       find_or_create_nextis_vehicle: {
         Args: {
           _brand: string
@@ -3126,6 +3127,7 @@ export type Database = {
       manage_price_sync_cron: { Args: { p_action: string }; Returns: boolean }
       normalize_oem: { Args: { _oem: string }; Returns: string }
       oem_priority_rank: { Args: { _source: string }; Returns: number }
+      release_stuck_price_sync_runs: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "customer"
@@ -3151,7 +3153,15 @@ export type Database = {
         | "shipped"
         | "delivered"
         | "cancelled"
-      order_status_v2: "nova" | "zpracovava_se" | "vyrizena" | "zrusena"
+      order_status_v2:
+        | "nova"
+        | "zpracovava_se"
+        | "vyrizena"
+        | "zrusena"
+        | "prijata"
+        | "zaplacena"
+        | "odeslana"
+        | "dorucena"
       order_type: "new" | "used"
       request_status:
         | "pending"
@@ -3321,7 +3331,16 @@ export const Constants = {
         "delivered",
         "cancelled",
       ],
-      order_status_v2: ["nova", "zpracovava_se", "vyrizena", "zrusena"],
+      order_status_v2: [
+        "nova",
+        "zpracovava_se",
+        "vyrizena",
+        "zrusena",
+        "prijata",
+        "zaplacena",
+        "odeslana",
+        "dorucena",
+      ],
       order_type: ["new", "used"],
       request_status: [
         "pending",
