@@ -594,28 +594,13 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          {/* CATALOG IMPORT */}
+          {/* CATALOG — sjednocená záložka pro všechny katalogové nástroje */}
           <TabsContent value="catalog">
             <div className="mt-2">
-              <AdminCatalogHub />
+              <AdminCatalogUnified />
             </div>
           </TabsContent>
 
-          <TabsContent value="catalog-tools">
-            <div className="mt-2 space-y-4">
-              <AICatalogImport />
-              <CatalogImport />
-              <EPCImport />
-              <AdminCatalogSettings />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="catalog-repair">
-            <div className="mt-2 space-y-4">
-              <AdminCatalogQualityExport />
-              <AdminCatalogCommandCenter />
-            </div>
-          </TabsContent>
 
           <TabsContent value="history">
             <div className="mt-2">
