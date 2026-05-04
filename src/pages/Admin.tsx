@@ -612,7 +612,10 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="catalog-repair">
-            <div className="mt-2"><AdminCatalogCommandCenter /></div>
+            <div className="mt-2 space-y-4">
+              <AdminCatalogQualityExport />
+              <AdminCatalogCommandCenter />
+            </div>
           </TabsContent>
 
           <TabsContent value="history">
