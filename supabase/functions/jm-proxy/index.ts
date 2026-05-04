@@ -1169,6 +1169,17 @@ Deno.serve(async (req) => {
         }
 
         if (merged.length === 0) {
+          // Persist negative cache (24h) so next call short-circuits.
+          try {
+            await adminClient.from('api_cache').upsert({
+              cache_type: 'jm_negative',
+              cache_key: negKey,
+              data: { totalRawHits, variantsTried: variants },
+              ttl_seconds: 86400,
+              created_at: new Date().toISOString(),
+            }, { onConflict: 'cache_type,cache_key' });
+          } catch (_) { /* non-blocking */ }
+
           await logCatalogEvent(adminClient, {
             level: 'warn',
             event: 'searchByCode_empty',
