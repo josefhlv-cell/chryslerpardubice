@@ -50,15 +50,35 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!roleData) return json({ error: 'Forbidden' }, 403);
 
-      // Check for already running
+      // Auto-fail stuck runs (no update for >10 min)
+      const staleCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+      await admin
+        .from('price_sync_runs')
+        .update({
+          status: 'failed',
+          last_error: 'Auto-cleared: stuck (no progress >10min)',
+          finished_at: new Date().toISOString(),
+        })
+        .eq('status', 'running')
+        .lt('updated_at', staleCutoff);
+
+      // Check for already running (fresh)
       const { data: running } = await admin
         .from('price_sync_runs')
-        .select('id')
+        .select('id, updated_at')
         .eq('status', 'running')
+        .gte('updated_at', staleCutoff)
         .limit(1)
         .maybeSingle();
       if (running) {
-        return json({ error: 'Sync již běží', runId: running.id }, 409);
+        if (body.force === true) {
+          await admin
+            .from('price_sync_runs')
+            .update({ status: 'failed', last_error: 'Force-cleared by admin', finished_at: new Date().toISOString() })
+            .eq('id', running.id);
+        } else {
+          return json({ error: 'Sync již běží', runId: running.id }, 409);
+        }
       }
 
       // Count target
