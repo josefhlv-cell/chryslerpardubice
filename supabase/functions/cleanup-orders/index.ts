@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     );
 
     // Delete completed/cancelled orders older than 7 days (auto) or all completed (manual)
-    const completedStatuses = ['vyrizena', 'zrusena', 'completed', 'cancelled', 'delivered', 'fulfilled'];
+    const completedStatuses = ['vyrizena', 'zrusena', 'dorucena'];
 
     let query = supabase
       .from('orders')
