@@ -632,11 +632,6 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          {isEnabled("epc_diagrams") && (
-            <TabsContent value="epc-diagrams">
-              <div className="mt-2"><AdminEPCDiagrams /></div>
-            </TabsContent>
-          )}
 
           {isEnabled("service_orders") && (
             <TabsContent value="service-orders">
