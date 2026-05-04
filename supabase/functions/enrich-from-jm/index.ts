@@ -115,16 +115,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Stamp every attempted part so the queue advances even when J+M has no match.
+  if (attemptedIds.length) {
+    await sb
+      .from("parts_new")
+      .update({ last_enrich_attempt_at: new Date().toISOString() })
+      .in("id", attemptedIds);
+  }
+
   await sb.from("catalog_event_log").insert({
     source: "enrich-from-jm",
     event: "batch_done",
     level: "info",
-    message: `Enriched ${updated}/${scanned}`,
-    details: { updated, scanned, errors: errors.slice(0, 10) },
+    message: `Enriched ${updated}/${scanned} (noMatch=${noMatch})`,
+    details: { updated, scanned, noMatch, errors: errors.slice(0, 10) },
   });
 
   return new Response(
-    JSON.stringify({ success: true, scanned, updated, errors: errors.slice(0, 10) }),
+    JSON.stringify({ success: true, scanned, updated, noMatch, errors: errors.slice(0, 10) }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 });
