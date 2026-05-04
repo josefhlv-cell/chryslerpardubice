@@ -426,14 +426,18 @@ async function processPart(
     }
   }
 
-  // Search variants with zero-padding
+  // Search variants with zero-padding + extra prefix coverage (K, 6, SP)
+  // K = standard catalog prefix, 6 = engine/Mopar OEM family, SP = service-pack
   const padded = partNumber.length <= 9 ? `0${partNumber}` : partNumber;
-  const searchVariants = [...new Set([
+  const variantList: string[] = [
     `K${padded}`,
     `K${partNumber}`,
+    `6${partNumber}`,
+    `SP${partNumber}`,
     padded,
     partNumber,
-  ])];
+  ];
+  const searchVariants = [...new Set(variantList)];
 
   let searchHtml = '';
   let searchCode = '';
