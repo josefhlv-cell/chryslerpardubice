@@ -36,8 +36,63 @@ const PAGE_LIMIT = 1000;
 const AdminCatalogQualityExport = () => {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [repairLog, setRepairLog] = useState<string[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
+
+  const runRepairs = async () => {
+    setRepairing(true);
+    setRepairLog([]);
+    const log = (m: string) => setRepairLog((p) => [...p, m]);
+    try {
+      // 1) Spusť bulk price sync na chybějící ceny
+      log("⏳ Spouštím synchronizaci cen pro díly bez ceny…");
+      const { data: priceData, error: priceErr } = await supabase.functions.invoke("bulk-price-sync", {
+        body: { action: "start", mode: "missing" },
+      });
+      if (priceErr) log(`⚠️ Ceny: ${priceErr.message}`);
+      else log(`✅ Ceny: spuštěno (cíl ${priceData?.totalTarget ?? "?"} dílů, běží v pozadí)`);
+
+      // 2) Enrich from J+M (popisy + fotky), iterativně po dávkách
+      log("⏳ Doplňuji popisy a fotky z J+M…");
+      let totalUpdated = 0;
+      let totalScanned = 0;
+      for (let i = 0; i < 5; i++) {
+        const { data, error } = await supabase.functions.invoke("enrich-from-jm", {
+          body: {},
+        });
+        if (error) {
+          log(`⚠️ Enrich dávka ${i + 1}: ${error.message}`);
+          break;
+        }
+        const u = (data as any)?.updated ?? 0;
+        const s = (data as any)?.scanned ?? 0;
+        totalUpdated += u;
+        totalScanned += s;
+        log(`  · dávka ${i + 1}: doplněno ${u}/${s}`);
+        if (u === 0) break;
+      }
+      log(`✅ Enrich hotovo: doplněno ${totalUpdated} (z ${totalScanned} prověřených)`);
+
+      // 3) Spusť párování vozidel
+      log("⏳ Spouštím párování dílů na vozidla…");
+      const { data: matchData, error: matchErr } = await supabase.functions.invoke("compat-matcher", {
+        body: { mode: "auto", limit: 500 },
+      });
+      if (matchErr) log(`⚠️ Compat: ${matchErr.message}`);
+      else log(`✅ Compat: ${(matchData as any)?.matched ?? 0} nových párování`);
+
+      toast({ title: "Opravy spuštěny", description: "Sleduj postup v logu níže. Cenová synchronizace běží v pozadí." });
+      // Reload stats
+      await loadDiagnostics();
+    } catch (e: any) {
+      log(`❌ Chyba: ${e.message}`);
+      toast({ title: "Chyba oprav", description: e.message, variant: "destructive" });
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   const loadDiagnostics = async () => {
     setLoading(true);
