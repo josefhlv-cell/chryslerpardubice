@@ -495,19 +495,30 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                     const Icon = CATEGORY_ICON[c.label] || Package;
                     const hasChildren = (c.children?.length || 0) > 0;
                     const isEmpty = (c.count || 0) === 0 && !hasChildren;
+                    const emptyReason = isEmpty
+                      ? "V této kategorii zatím nejsou napárované díly. Možné příčiny: díly z J+M ještě nemají přiřazenou kategorii, chybí cena z věrnostsevyplaci, nebo není napárování OEM ↔ vozidlo. Můžete: kontaktovat servis, podívat se do globálního OEM hledání, nebo vyzkoušet jinou podkategorii."
+                      : null;
                     return (
-                      <button key={c.id}
-                        disabled={isEmpty}
-                        onClick={() => { if (hasChildren && !categoryQuery) setCategoryPath((p) => [...p, c.id]); else setCategory(c); }}
-                        className={`group w-full flex items-center justify-between gap-3 px-4 py-3 transition-colors text-left ${isEmpty ? 'opacity-40 cursor-not-allowed' : 'hover:bg-secondary/50'}`}
-                        title={isEmpty ? 'Zatím bez napárovaných dílů' : undefined}>
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Icon className="w-4 h-4 text-primary/70 shrink-0" />
-                          <span className="text-sm font-medium truncate">{c.label}</span>
-                          <Badge variant={isEmpty ? 'outline' : 'secondary'} className={`text-[10px] h-4 px-1.5 shrink-0 ${isEmpty ? 'border-amber-500/40 text-amber-300/80' : ''}`}>{c.count}</Badge>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
-                      </button>
+                      <div key={c.id} className={isEmpty ? 'bg-muted/10' : ''}>
+                        <button
+                          disabled={isEmpty}
+                          onClick={() => { if (hasChildren && !categoryQuery) setCategoryPath((p) => [...p, c.id]); else setCategory(c); }}
+                          className={`group w-full flex items-center justify-between gap-3 px-4 py-3 transition-colors text-left ${isEmpty ? 'opacity-60 cursor-not-allowed' : 'hover:bg-secondary/50'}`}
+                          title={isEmpty ? 'Zatím bez napárovaných dílů — klikněte pro detail' : undefined}>
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Icon className="w-4 h-4 text-primary/70 shrink-0" />
+                            <span className="text-sm font-medium truncate">{c.label}</span>
+                            <Badge variant={isEmpty ? 'outline' : 'secondary'} className={`text-[10px] h-4 px-1.5 shrink-0 ${isEmpty ? 'border-amber-500/40 text-amber-300/80' : ''}`}>{c.count}</Badge>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                        </button>
+                        {emptyReason && (
+                          <details className="px-4 pb-2 -mt-1">
+                            <summary className="text-[10px] text-amber-300/70 cursor-pointer hover:text-amber-300">Proč je prázdná?</summary>
+                            <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{emptyReason}</p>
+                          </details>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

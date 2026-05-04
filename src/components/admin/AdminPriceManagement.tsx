@@ -42,6 +42,52 @@ const AdminPriceManagement = () => {
   const [history, setHistory] = useState<PriceHistoryEntry[]>([]);
   const [historyPart, setHistoryPart] = useState<Part | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [missingCount, setMissingCount] = useState<number | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState<{ processed: number; updated: number; total: number } | null>(null);
+
+  useEffect(() => {
+    refreshMissing();
+    pollBulkStatus();
+    const t = setInterval(pollBulkStatus, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const refreshMissing = async () => {
+    const { count } = await supabase
+      .from("parts_new")
+      .select("id", { count: "exact", head: true })
+      .or("price_with_vat.is.null,price_with_vat.eq.0");
+    setMissingCount(count || 0);
+  };
+
+  const pollBulkStatus = async () => {
+    const { data } = await supabase
+      .from("price_sync_runs")
+      .select("status,processed,updated_count,total_target")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data) {
+      setBulkRunning(data.status === "running");
+      setBulkStatus({ processed: data.processed || 0, updated: data.updated_count || 0, total: data.total_target || 0 });
+    }
+  };
+
+  const startBulkMissing = async () => {
+    setBulkRunning(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("bulk-price-sync", {
+        body: { action: "start", mode: "missing" },
+      });
+      if (error) throw error;
+      toast({ title: "Synchronizace spuštěna", description: `Cíl: ${data?.totalTarget || 0} dílů. Běží na pozadí.` });
+      pollBulkStatus();
+    } catch (e: any) {
+      toast({ title: "Chyba spuštění", description: e.message, variant: "destructive" });
+      setBulkRunning(false);
+    }
+  };
 
   const searchParts = async () => {
     if (!search) return;
@@ -103,6 +149,28 @@ const AdminPriceManagement = () => {
 
   return (
     <div className="space-y-4">
+      <Card className="border-primary/30">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="font-semibold text-sm">Synchronizace cen z věrnostsevyplaci</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Cíl: <strong>{missingCount ?? "…"}</strong> dílů bez ceny. Job běží na pozadí.
+              </p>
+            </div>
+            <Button onClick={startBulkMissing} disabled={bulkRunning || !missingCount} size="sm" className="gap-1">
+              {bulkRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              {bulkRunning ? "Běží…" : "Spustit synchronizaci cen"}
+            </Button>
+          </div>
+          {bulkStatus && (bulkStatus.processed > 0 || bulkRunning) && (
+            <div className="text-xs text-muted-foreground">
+              📊 {bulkStatus.processed.toLocaleString("cs")} / {bulkStatus.total.toLocaleString("cs")} · ✅ {bulkStatus.updated.toLocaleString("cs")}
+              {bulkRunning && <span className="ml-2 text-primary">• běží</span>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <div className="flex gap-2">
         <Input placeholder="Hledat díl (OEM nebo název)..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === "Enter" && searchParts()} />
         <Button onClick={searchParts} disabled={loading} size="icon">
