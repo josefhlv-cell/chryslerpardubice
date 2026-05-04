@@ -1686,6 +1686,7 @@ export type Database = {
           image_urls: string[] | null
           internal_code: string | null
           last_enrich_attempt_at: string | null
+          last_name_check_at: string | null
           last_price_update: string | null
           manufacturer: string | null
           name: string
@@ -1711,6 +1712,7 @@ export type Database = {
           image_urls?: string[] | null
           internal_code?: string | null
           last_enrich_attempt_at?: string | null
+          last_name_check_at?: string | null
           last_price_update?: string | null
           manufacturer?: string | null
           name: string
@@ -1736,6 +1738,7 @@ export type Database = {
           image_urls?: string[] | null
           internal_code?: string | null
           last_enrich_attempt_at?: string | null
+          last_name_check_at?: string | null
           last_price_update?: string | null
           manufacturer?: string | null
           name?: string

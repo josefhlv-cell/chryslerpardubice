@@ -1,0 +1,2 @@
+ALTER TABLE public.parts_new ADD COLUMN IF NOT EXISTS last_name_check_at timestamp with time zone;
+CREATE INDEX IF NOT EXISTS idx_parts_new_last_name_check ON public.parts_new(last_name_check_at NULLS FIRST);
