@@ -368,7 +368,7 @@ const Admin = () => {
             {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
             {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
             {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
-            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-[11px] gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
+            
             <TabsTrigger value="service-plans" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
             {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-[11px] gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
             {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-[11px] gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
