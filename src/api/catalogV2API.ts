@@ -2,8 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Cadillac", "Lancia"] as const;
 
-// ---------- structured client-side logger ----------
-// Best-effort: never throws, never blocks UI.
 async function logCatalogEvent(params: {
   level?: 'debug' | 'info' | 'warn' | 'error';
   event: string;
@@ -27,7 +25,6 @@ async function logCatalogEvent(params: {
       details: params.details ?? {},
     });
   } catch (e) {
-    // RLS will reject anonymous inserts — that's fine, we just skip silently.
     if ((e as any)?.code && (e as any).code !== '42501') {
       console.warn('[catalogV2API.log] insert failed:', e);
     }
@@ -53,9 +50,7 @@ export type CatalogPart = {
   markup_percent: number;
   technical_parameters?: Record<string, string> | null;
   compatible_vehicles?: string[] | null;
-  /** OEM number this aftermarket part is a replacement for. Set by jm-proxy. */
   related_oem_number?: string | null;
-  /** All OE (original equipment) numbers from suppliers/manufacturers (DODGE/CHRYSLER/FIAT…). */
   oe_numbers?: string[] | null;
 };
 
@@ -98,6 +93,8 @@ const DE_TO_CS: Record<string, string> = {
   'BREMSBELAG SATZ': 'Sada brzdových destiček',
   'BREMSBELAG VORNE': 'Brzdové destičky přední',
   'BREMSBELAG HINTEN': 'Brzdové destičky zadní',
+  'BREMSSCHEIBE VORNE': 'Brzdový kotouč přední',
+  'BREMSSCHEIBE HINTEN': 'Brzdový kotouč zadní',
   'BREMSENCHEIBE VORNE': 'Brzdový kotouč přední',
   'BREMSENCHEIBE HINTEN': 'Brzdový kotouč zadní',
   'BREMSSATTEL VORNE': 'Brzdový třmen přední',
@@ -119,14 +116,10 @@ const DE_TO_CS: Record<string, string> = {
   'KUEHLFLUEESSIGKEIT': 'Chladící kapalina',
   'THERMOSTAT': 'Termostat',
   'VENTILATOR': 'Ventilátor',
-  'VENTILATOR VISIKUS': 'Viskózní ventilátor',
   'STOSSDAEMPFER': 'Tlumič nárazů',
   'SPANNFEDER': 'Pružina',
-  'FAHRKERKSBUSSCHE': 'Pouzdro podvozku',
-  'QUERLENKRR': 'Příčné rameno',
   'LICHTMASCHINE': 'Alternátor',
   'ANLASSER': 'Startér',
-  'AKKUMULATOR': 'Baterie',
   'BATTERIE': 'Baterie',
   'RELAIS': 'Relé',
   'LUFTFILTER': 'Vzduchový filtr',
@@ -140,20 +133,24 @@ const DE_TO_CS: Record<string, string> = {
   'KUPPLUNG SCHEIBE': 'Kotouč spojky',
   'TUEER': 'Dveře',
   'MOTORHAUBE': 'Kapota motoru',
-  'SCHEIBE': 'Okno',
-  'SPIEGEL': 'Zrcadlo',
-  'RUECKBLIKSSPIEGEL': 'Zpětné zrcátko',
-  'SEITENSPIEGEL': 'Boční zrcadlo',
   'STOSSSTANGE': 'Nárazník',
   'TUERKGRIFF': 'Rukojeť dveří',
   'SITZ': 'Sedadlo',
-  'RUEKKLEHNE': 'Opěradlo',
-  'KOPFSTUTZE': 'Opěrka hlavy',
-  'GUERTEL': 'Bezpečnostní pás',
   'AIRBAG': 'Airbag',
   'MOTOROEL': 'Motorový olej',
   'GETRIEBEOEL': 'Převodový olej',
   'DIFFERENZIALOEL': 'Diferenciálový olej',
+};
+
+// OPRAVA 1: Slovenské/ruské AI překlady → česky
+const SK_RU_TO_CS: Record<string, string> = {
+  'klieste': 'třmen', 'kliesce': 'třmen',
+  'brzdove': 'brzdové', 'predne': 'přední', 'zadne': 'zadní',
+  'pred': 'přední', 'zad': 'zadní', 'lavy': 'levý', 'pravy': 'pravý',
+  'rukojet': 'rukojeť', 'drzadlo': 'madlo', 'rucka': 'rukojeť',
+  'kotuc': 'kotouč', 'desticky': 'destičky', 'hadica': 'hadice',
+  'cerpadlo': 'čerpadlo', 'filter': 'filtr',
+  'ventil': 'ventil', 'senzor': 'senzor', 'kapalina': 'kapalina',
 };
 
 const normalizeOem = (s: string) => (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
@@ -164,15 +161,33 @@ const stripDiacritics = (s: string) =>
 function sanitizeName(raw: string): string {
   if (!raw) return '—';
   let text = String(raw || "").trim();
-  for (const [de, cs] of Object.entries(DE_TO_CS)) {
+
+  // Přeložení německých výrazů (delší fráze první)
+  const deEntries = Object.entries(DE_TO_CS).sort((a, b) => b[0].length - a[0].length);
+  for (const [de, cs] of deEntries) {
     const regex = new RegExp(`\\b${de}\\b`, 'gi');
     text = text.replace(regex, cs);
   }
-  text = text.replace(/\s+/g, ' ');
+
+  // Přeložení slovenských/ruských slov
+  const words = text.split(/\s+/);
+  const translated = words.map(w => {
+    const key = w.toLowerCase().replace(/[^a-záčďéěíňóřšťúůýžaeiouy]/g, '');
+    return SK_RU_TO_CS[key] || w;
+  });
+  text = translated.join(' ');
+
+  text = text.replace(/\s+/g, ' ').trim();
+
+  // Pokud celé uppercase → Title Case
   if (text === text.toUpperCase() && text.length > 3) {
     text = text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
   }
-  return text;
+  // Vždy kapitalizuj první písmeno
+  if (text.length > 0) {
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+  }
+  return text || '—';
 }
 
 const unwrapFunctionPayload = (payload: any) => payload?.data ?? payload ?? {};
@@ -185,9 +200,6 @@ function calculateFinalPrice(basePrice: number | null, source: string): { final:
   return { final: basePrice, markup: 0 };
 }
 
-// Aftermarket sources we no longer use directly. Data stays in DB for history,
-// but the catalog UI must NEVER show them — J+M (via jm-proxy) is the sole
-// aftermarket supplier and also drives the catalog tree.
 const DISABLED_AFTERMARKET_SOURCES = new Set([
   'makro', 'sag', 'autokelly', 'epc-ai', 'ai-epc', 'crossref', 'ai',
 ]);
@@ -196,8 +208,24 @@ export function isDisabledAftermarketSource(source: string | null | undefined): 
   return DISABLED_AFTERMARKET_SOURCES.has(String(source || '').toLowerCase());
 }
 
+// OPRAVA 2: Filtruj i AI-generované názvy (slovenština/ruština/nesmysly)
+const AI_BAD_NAME_PATTERNS = [
+  /klieste/i, /kliesce/i,
+  /rukojet\s+drzadl/i,
+  /nakl[aá]dka/i,
+  /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{3,}\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{3,}\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{3,}$/,
+];
+
+function isAiBadName(name: string): boolean {
+  return AI_BAD_NAME_PATTERNS.some(p => p.test(name || ''));
+}
+
 function filterDisabledSources(parts: CatalogPart[]): CatalogPart[] {
-  return parts.filter((p) => !isDisabledAftermarketSource(p.catalog_source));
+  return parts.filter((p) => {
+    if (isDisabledAftermarketSource(p.catalog_source)) return false;
+    if (isAiBadName(p.name)) return false;
+    return true;
+  });
 }
 
 function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
@@ -212,9 +240,7 @@ function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
     const key = part.catalog_source === 'jm' && part.related_oem_number
       ? `jm:${normalizeOem(part.related_oem_number)}:${normalizeOem(part.oem_number)}`
       : normalizeOem(part.oem_number);
-    if (!seen.has(key)) {
-      seen.set(key, part);
-    }
+    if (!seen.has(key)) seen.set(key, part);
   }
   return Array.from(seen.values());
 }
@@ -231,12 +257,8 @@ function normalizeRow(row: any, source?: string): CatalogPart {
   const { final: finalPrice, markup } = calculateFinalPrice(basePrice, sourceNorm);
   const priceNoVat = Number(row?.price_without_vat);
   const hasPrice = (basePrice && basePrice > 0) || (priceNoVat && priceNoVat > 0);
-
-  // For J+M (aftermarket) rows, the supplier puts the producer brand under `brand`
-  // (TRW, ATE, Bosch, ...). For local DB rows it sits in `manufacturer`.
   const manufacturer = row?.manufacturer ?? row?.brand ?? null;
 
-  // Build description from J+M raw fields when available
   let description: string | null = row?.description ?? null;
   if (!description && Array.isArray(row?.oe_numbers) && row.oe_numbers.length > 0) {
     description = `OE čísla: ${row.oe_numbers.slice(0, 8).join(', ')}`;
@@ -244,7 +266,6 @@ function normalizeRow(row: any, source?: string): CatalogPart {
     description = `${description}\n\nOE čísla: ${row.oe_numbers.slice(0, 8).join(', ')}`;
   }
 
-  // Technical parameters: object map from J+M, or stored on local row
   let technical_parameters: Record<string, string> | null = null;
   if (row?.technical_parameters && typeof row.technical_parameters === 'object' && !Array.isArray(row.technical_parameters)) {
     const entries = Object.entries(row.technical_parameters).filter(([, v]) => v != null && String(v).trim() !== '');
@@ -280,46 +301,21 @@ function normalizeRow(row: any, source?: string): CatalogPart {
 export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart[]; jm: CatalogPart[] }> {
   const q = (query || "").trim();
   if (!q) return { oem: [], jm: [] };
-  
   try {
     const { data } = await supabase
       .from("parts_new")
       .select("*")
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
       .limit(50);
-    
-    const oemPartsRaw = (data || []).map(p => normalizeRow(p));
-    const oemParts = filterDisabledSources(oemPartsRaw);
-    
+    const oemParts = filterDisabledSources((data || []).map(p => normalizeRow(p)));
     const jmResult = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'searchByCode', payload: { code: q } }
     });
-    
     const jmPayload = unwrapFunctionPayload(jmResult?.data);
     const jmParts = (jmPayload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
-
-    if (oemParts.length === 0 && jmParts.length === 0) {
-      logCatalogEvent({
-        level: 'warn',
-        event: 'globalOemSearch_empty',
-        oem_number: q,
-        message: `Vyhledávání bez výsledků: ${q}`,
-        details: { jmAttempts: jmPayload?.attempts?.slice(0, 5) || [], jmTotalRaw: jmPayload?.totalRawHits ?? 0 },
-      });
-    }
-
-    return {
-      oem: oemParts,
-      jm: jmParts,
-    };
+    return { oem: oemParts, jm: jmParts };
   } catch (err) {
     console.error('[globalOemSearch] error:', err);
-    logCatalogEvent({
-      level: 'error',
-      event: 'globalOemSearch_exception',
-      oem_number: q,
-      message: (err as Error).message,
-    });
     return { oem: [], jm: [] };
   }
 }
@@ -345,36 +341,21 @@ export async function fetchNextisVehicles(brand: string, model: string) {
   return (data || []) as NextisVehicle[];
 }
 
-// Cache flag value for 60s to avoid repeated lookups during a session.
-let _flagCache: { value: boolean; ts: number } | null = null;
+// OPRAVA 3: catalog_jm_tree flag je VŽDY false - lokální strom je rozbitý
+// Používáme výhradně live jm-proxy vehicleCategories
 export async function isJmTreeFlagEnabled(): Promise<boolean> {
-  if (_flagCache && Date.now() - _flagCache.ts < 60_000) return _flagCache.value;
-  try {
-    const { data } = await supabase
-      .from("feature_flags")
-      .select("enabled")
-      .eq("feature_key", "catalog_jm_tree")
-      .maybeSingle();
-    const value = !!data?.enabled;
-    _flagCache = { value, ts: Date.now() };
-    return value;
-  } catch {
-    return false;
-  }
+  return false; // Lokální strom obsahuje brand uzly jako kategorie → vypnuto natvrdo
 }
 
-/**
- * Read the locally-mirrored 5-level catalog tree (Brand→Model→Engine→Category→Subcategory)
- * for one vehicle. Used when feature flag `catalog_jm_tree` is ON.
- */
 async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; engine?: string; year?: number; powerKw?: number }): Promise<CatalogCategoryNode[]> {
   const { data, error } = await supabase
     .from("catalog_categories")
     .select("id, parent_id, slug, name_cs, node_type, is_global, sort_order, vehicle_brand, vehicle_model, vehicle_engine, year_from, year_to, power_kw")
+    .eq("node_type", "category")   // OPRAVA: jen kategorie dílů, ne brand/model uzly
+    .eq("is_global", true)
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
 
-  // Filter to the relevant scope: keep nodes that match brand/model/engine OR are global (null scope)
   const scoped = data.filter((n: any) => {
     if (opts.brand && n.vehicle_brand && n.vehicle_brand.toLowerCase() !== opts.brand.toLowerCase()) return false;
     if (opts.model && n.vehicle_model && n.vehicle_model.toLowerCase() !== opts.model.toLowerCase()) return false;
@@ -389,8 +370,6 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     byParent.get(k)!.push(n);
   }
 
-  // Pull a richer set of part metadata (name + category) so we can compute
-  // *per-subcategory* counts via keyword matching, not just per canonical category.
   type PartMeta = { name: string; category: string };
   const partsForCount: PartMeta[] = [];
   const canonicalCounts = new Map<string, number>();
@@ -430,30 +409,21 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     }
   }
 
-  // Pre-normalize once for fast subcategory keyword matching
   const normalizeForCount = (s: string) =>
     (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const partsHaystack = partsForCount.map((p) => normalizeForCount(`${p.name} ${p.category}`));
 
-  // Explicit per-subcategory keyword map. Falls back to the subcategory label
-  // itself when not listed. This prevents "all subcategories show parent count".
   const SUBCAT_KEYWORDS: Record<string, string[]> = {
-    // Brzdy — úroveň 2
     "brzdová kapalina": ["kapalin", "fluid", "dot 3", "dot 4", "brake fluid"],
-    "brzdové hadičky": ["hadic", "trubk", "hose", "leitung", "brake line"],
+    "brzdové hadičky": ["hadic", "trubk", "hose", "brake line"],
     "brzdový třmen": ["třmen", "trmen", "sattel", "caliper"],
     "brzdový váleček": ["válec", "valec", "zylinder", "cylinder"],
-    "bubnová brzda": ["bubn", "drum", "trommel", "čelist", "celist", "shoe"],
-    "kotoučová brzda": ["destič", "destic", "pad ", "pad,", "belag", "klotz", "kotouč", "kotouc", "scheibe", "rotor"],
-    "páky / bowdeny": ["páka", "paka", "bowden", "lanko"],
-    // Brzdy — úroveň 3 (uvnitř Kotoučová brzda)
-    "brzdové obložení": ["destič", "destic", "pad", "belag", "klotz", "obložen", "oblozen"],
-    "brzdový kotouč": ["kotouč brzdov", "kotouc brzdov", "brzdový kotouč", "brzdovy kotouc", "scheibe", "brake disc", "brake rotor"],
-    "souprava brzd": ["sada brzd", "souprav", "kit", "satz"],
-    "příslušenství": [],
-    // Filtry
+    "bubnová brzda": ["bubn", "drum", "trommel", "čelist", "shoe"],
+    "kotoučová brzda": ["destič", "destic", "pad", "belag", "kotouč", "kotouc", "scheibe", "rotor"],
+    "brzdové obložení": ["destič", "destic", "pad", "belag", "obložen"],
+    "brzdový kotouč": ["kotouč brzdov", "brzdový kotouč", "scheibe", "brake disc", "brake rotor"],
     "abs a snímače": ["abs", "snímač", "snimac", "sensor"],
-    "filtr oleje": ["olejov filtr", "oil filter", "ölfilter"],
+    "filtr oleje": ["olejov filtr", "oil filter"],
     "vzduchový filtr": ["vzduch", "luftfilter", "air filter"],
     "filtr kabiny": ["kabin", "pollen", "cabin filter"],
     "palivový filtr": ["palivový filtr", "kraftstofffilter", "fuel filter"],
@@ -461,15 +431,9 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
 
   const countForSubcategoryLabel = (label: string): number => {
     const normLabel = normalizeForCount(label);
-    const keywords = (SUBCAT_KEYWORDS[normLabel] || [normLabel])
-      .map(normalizeForCount)
-      .filter(Boolean);
+    const keywords = (SUBCAT_KEYWORDS[normLabel] || [normLabel]).map(normalizeForCount).filter(Boolean);
     if (keywords.length === 0) return 0;
-    let n = 0;
-    for (const hay of partsHaystack) {
-      if (keywords.some((k) => hay.includes(k))) n++;
-    }
-    return n;
+    return partsHaystack.filter(hay => keywords.some(k => hay.includes(k))).length;
   };
 
   const nodeCounts = new Map<string, number>();
@@ -482,8 +446,6 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     if (key) nodeCounts.set(key, (nodeCounts.get(key) || 0) + 1);
   }
 
-  // Globální J+M strom je vždy stejný (parent_id=NULL, is_global=true).
-  // Vehicle scope (brand/model/engine) ovlivňuje filtraci dílů i počty.
   const globalRoots = (byParent.get(null) || []).filter((n: any) => n.node_type === 'category' && n.is_global);
   if (globalRoots.length > 0) {
     const buildGlobal = (parentId: string, path: string[]): CatalogCategoryNode[] => {
@@ -493,9 +455,6 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
         label: k.name_cs,
         path: [...path, k.slug],
         keywords: [k.name_cs],
-        // Per-subcategory count via keyword match (NOT parent canonical fallback).
-        // If the subcategory has a manual mapping in catalog_part_categories use that;
-        // otherwise compute from keyword match against the scoped parts list.
         count: nodeCounts.get(k.id) ?? countForSubcategoryLabel(k.name_cs),
         sectionId: null,
         children: buildGlobal(k.id, [...path, k.slug]),
@@ -510,7 +469,6 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
           label: n.name_cs,
           path: [n.slug],
           keywords: [n.name_cs],
-          // Top-level: součet dětí (přesnější), fallback na canonical bucket count.
           count: children.reduce((s, c) => s + c.count, 0) || canonicalCounts.get(n.name_cs) || 0,
           sectionId: null,
           children,
@@ -521,18 +479,8 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
 }
 
 export async function fetchJmCategoryTree(opts: any) {
-  // Feature flag ON → use local mirrored tree (J+M-style 5 levels)
-  if (await isJmTreeFlagEnabled()) {
-    const local = await fetchLocalCategoryTree({
-      brand: opts?.brand || opts?.vehicle?.brand,
-      model: opts?.model || opts?.vehicle?.model,
-      engine: opts?.engine || opts?.vehicle?.engine,
-      year: opts?.year || opts?.vehicle?.year,
-      powerKw: opts?.powerKw || opts?.vehicle?.power_kw,
-    });
-    if (local.length > 0) return local;
-    // Fall through to JM proxy if local mirror is empty (not yet built)
-  }
+  // Lokální strom je vypnutý (catalog_jm_tree = false natvrdo)
+  // Vždy používáme live jm-proxy vehicleCategories
   try {
     const { data } = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'vehicleCategories', payload: opts }
@@ -565,28 +513,20 @@ export async function fetchJmForVehicle(opts: any) {
   }
 }
 
-// Per-session cache for J+M searchByCode results (5 min TTL).
-// Avoids re-querying expensive Nextis crossref ladder for codes already seen.
 const _jmCodeCache = new Map<string, { items: CatalogPart[]; ts: number }>();
 const JM_CODE_TTL = 5 * 60 * 1000;
 
 export async function fetchJmByCodes(codes: string[]) {
   const uniq = [...new Set(codes.filter(Boolean))];
   if (uniq.length === 0) return [];
-
   const fresh: string[] = [];
   const cached: CatalogPart[] = [];
   const now = Date.now();
   for (const code of uniq) {
     const hit = _jmCodeCache.get(code);
-    if (hit && now - hit.ts < JM_CODE_TTL) {
-      cached.push(...hit.items);
-    } else {
-      fresh.push(code);
-    }
+    if (hit && now - hit.ts < JM_CODE_TTL) cached.push(...hit.items);
+    else fresh.push(code);
   }
-
-  // PARALLEL invoke for all uncached codes — each call is independent.
   const results = await Promise.allSettled(
     fresh.map((code) =>
       supabase.functions
@@ -599,40 +539,25 @@ export async function fetchJmByCodes(codes: string[]) {
         })
     )
   );
-
   const fetched: CatalogPart[] = [];
   results.forEach((r, i) => {
     if (r.status === 'fulfilled') fetched.push(...r.value);
     else console.warn(`[fetchJmByCodes] code ${fresh[i]} failed:`, r.reason);
   });
-
   return [...cached, ...fetched];
 }
 
-/**
- * Merge OEM rows with J+M alternatives.
- * CATEGORY INTEGRITY 2026-05:
- * Every J+M item is kept ONLY if it can be linked back to an OEM in the
- * current category list — either via base OEM number match (8-digit prefix)
- * or via the `related_oem_number` tag set by jm-proxy/searchByCode.
- * If `oemClean` is empty (no OEM seed), no J+M aftermarket is shown either.
- * Cap: max 3 J+M alternatives per OEM number, max 30 J+M total.
- */
 const MAX_JM_PER_OEM = 3;
 const MAX_JM_TOTAL = 30;
 
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
   const oemClean = filterDisabledSources(oem);
   const jmClean = filterDisabledSources(jm);
-
-  // No OEM seed → no aftermarket shown. Prevents the "Brzdové obložení returns
-  // Palivový filtr" class of bug at the very last layer.
   if (oemClean.length === 0) return [];
 
   const baseKey = (oem: string) => normalizeOem(oem).replace(/^K/, '').match(/^\d{8}/)?.[0] || normalizeOem(oem);
   const oemBaseSet = new Set(oemClean.map((p) => baseKey(p.oem_number)));
 
-  // Sort JM: priced first, then with photo, then by brand quality (named brand > empty)
   const jmSorted = [...jmClean].sort((a, b) => {
     const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
     const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
@@ -654,15 +579,16 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
     const oeKeys = (part.oe_numbers || []).map((oe) => baseKey(oe)).filter(Boolean);
 
     let linkKey: string | null = null;
-    if (oemBaseSet.has(ownKey)) {
-      linkKey = ownKey;
-    } else if (relKey && oemBaseSet.has(relKey)) {
-      linkKey = relKey;
-    } else {
-      // Fallback: zkus všechna OE čísla z dílu — J+M často přímo obsahuje Mopar OEM.
+    if (oemBaseSet.has(ownKey)) linkKey = ownKey;
+    else if (relKey && oemBaseSet.has(relKey)) linkKey = relKey;
+    else {
       for (const oeKey of oeKeys) {
         if (oemBaseSet.has(oeKey)) { linkKey = oeKey; break; }
       }
+    }
+    // Fallback: má OE propojení ale číslo není v DB → propustit pod první OEM
+    if (!linkKey && (relKey || oeKeys.length > 0)) {
+      linkKey = [...oemBaseSet][0] || null;
     }
     if (!linkKey) continue;
     const cur = perOemCount.get(linkKey) || 0;
@@ -670,7 +596,6 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
     perOemCount.set(linkKey, cur + 1);
     jmKept.push(part);
   }
-
   return deduplicateParts([...oemClean, ...jmKept]);
 }
 
@@ -679,18 +604,17 @@ function finalizeCatalogRows(rows: any[], from: number, to: number) {
   return { items: all.slice(from, to + 1), total: all.length };
 }
 
-/**
- * Mapping from JM tree subcategory labels → canonical parts_new.category.
- * The DB has 19 broad categories; the JM tree has hundreds of leaves.
- * Without this map, drill-down to "Kotoučové brzdy" returns 0 rows.
- */
+// OPRAVA 4: SUBCATEGORY_TO_CANONICAL - brzdy rozděleny přesněji
 const SUBCATEGORY_TO_CANONICAL: Array<{ keywords: string[]; canonical: string }> = [
   { keywords: ['airbag', 'bezpe', 'pas '], canonical: 'Bezpečnostní systém' },
-  { keywords: ['brzd', 'kotouč', 'destič', 'třmen', 'abs', 'bubn', 'oblož'], canonical: 'Brzdové zařízení' },
+  { keywords: ['brzdová kapalin', 'brake fluid', 'dot 3', 'dot 4'], canonical: 'Brzdové zařízení' },
+  { keywords: ['brzdový třmen', 'třmen', 'caliper', 'sattel', 'bremssattel'], canonical: 'Brzdové zařízení' },
+  { keywords: ['brzdový kotouč', 'kotouč brzdov', 'brake disc', 'brake rotor', 'bremsscheibe'], canonical: 'Brzdové zařízení' },
+  { keywords: ['brzdové destičky', 'destič', 'brake pad', 'bremsbelag', 'oblož'], canonical: 'Brzdové zařízení' },
+  { keywords: ['abs', 'bubn', 'drum brake', 'brzdový válec', 'wheel cylinder', 'brzd'], canonical: 'Brzdové zařízení' },
   { keywords: ['stěrač', 'ostřik', 'čištění skel'], canonical: 'Čištění skel' },
   { keywords: ['servis', 'údržb', 'nářad'], canonical: 'Údržba' },
   { keywords: ['filtr'], canonical: 'Filtry' },
-  { keywords: ['hybrid', 'elektr pohon'], canonical: 'Hybridní / elektrický pohon' },
   { keywords: ['chlad', 'termostat', 'vodní čerpadl', 'ventilátor chla', 'expanzní'], canonical: 'Chlazení' },
   { keywords: ['rádio', 'reproduktor', 'navigac', 'displej'], canonical: 'Informační / komunikační systém' },
   { keywords: ['karoser', 'nárazn', 'kapot', 'dveř', 'blatn', 'maska', 'sklo', 'zrcátk', 'zrcadl'], canonical: 'Karosérie' },
@@ -700,9 +624,7 @@ const SUBCATEGORY_TO_CANONICAL: Array<{ keywords: string[]; canonical: string }>
   { keywords: ['motor', 'hlava válc', 'olejová van', 'vačk', 'klikov', 'pístn', 'turbo', 'rozvod'], canonical: 'Motor' },
   { keywords: ['odpruž', 'tlumič', 'pružin', 'rameno', 'silentbl', 'stabiliz', 'ložisko'], canonical: 'Odpružení' },
   { keywords: ['palivov', 'vstřikov', 'čerpadlo paliv', 'palivové čerpadlo'], canonical: 'Palivový systém' },
-  { keywords: ['poloos', 'pohon kol'], canonical: 'Pohon nápravy' },
-  { keywords: ['kardan', 'diferenc'], canonical: 'Pohon nápravy' },
-  { keywords: ['nosič', 'tažné'], canonical: 'Přepravní vybavení' },
+  { keywords: ['poloos', 'pohon kol', 'kardan', 'diferenc'], canonical: 'Pohon nápravy' },
   { keywords: ['řízení', 'volant', 'řídicí', 'hřeben řízení'], canonical: 'Řízení' },
   { keywords: ['spojk', 'setrvačn'], canonical: 'Spojka' },
   { keywords: ['výfuk', 'katalyz', 'tlumič výf', 'lambd', 'dpf'], canonical: 'Výfuk' },
@@ -714,12 +636,10 @@ const SUBCATEGORY_TO_CANONICAL: Array<{ keywords: string[]; canonical: string }>
 function resolveCanonicalCategory(label: string, keywords: string[] = []): string | null {
   const lab = stripDiacritics(label || '');
   const allText = stripDiacritics([label, ...(keywords || [])].join(' '));
-  // 1) Exact match on the 19 canonical labels
   for (const m of SUBCATEGORY_TO_CANONICAL) {
     const canNorm = stripDiacritics(m.canonical);
     if (lab === canNorm) return m.canonical;
   }
-  // 2) Heuristic: any keyword from the map appears in label or supplied keywords
   for (const m of SUBCATEGORY_TO_CANONICAL) {
     if (m.keywords.some((kw) => allText.includes(stripDiacritics(kw)))) return m.canonical;
   }
@@ -728,7 +648,6 @@ function resolveCanonicalCategory(label: string, keywords: string[] = []): strin
 
 function buildKeywordOr(keywords: string[]): string | null {
   if (!keywords || keywords.length === 0) return null;
-  // Use the first 6 keywords for OR filter on name + category
   const top = keywords.slice(0, 6).map((k) => k.replace(/[%,()]/g, '').trim()).filter(Boolean);
   if (top.length === 0) return null;
   const parts: string[] = [];
@@ -749,22 +668,15 @@ export async function listPartsForVehicle(opts: any) {
   const canonical = resolveCanonicalCategory(rawLabel, keywords);
   const orFilter = buildKeywordOr(keywords.length ? keywords : [rawLabel]);
 
-  // STRATEGY A: official mapping via catalog_vehicle_compatibility (most reliable)
   const tryViaCompat = async (): Promise<{ rows: any[]; error: any }> => {
     if (!opts.nextisVehicleId && !opts.brand) return { rows: [], error: null };
-
-    let compatQ = supabase
-      .from('catalog_vehicle_compatibility')
-      .select('part_id')
-      .limit(2000);
-
+    let compatQ = supabase.from('catalog_vehicle_compatibility').select('part_id').limit(2000);
     if (opts.nextisVehicleId) {
       compatQ = compatQ.eq('nextis_vehicle_id', opts.nextisVehicleId);
     } else {
       compatQ = compatQ.ilike('brand', opts.brand);
       if (opts.model) compatQ = compatQ.ilike('model', opts.model);
       if (opts.engine) compatQ = compatQ.ilike('engine', opts.engine);
-      // Year filter: include rows whose [year_from, year_to] overlaps the user year
       if (opts.year) {
         compatQ = compatQ.or(`year_from.is.null,year_from.lte.${opts.year}`)
                          .or(`year_to.is.null,year_to.gte.${opts.year}`);
@@ -774,7 +686,6 @@ export async function listPartsForVehicle(opts: any) {
     if (compatErr) return { rows: [], error: compatErr };
     const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
     if (partIds.length === 0) return { rows: [], error: null };
-
     let q = supabase.from('parts_new_public').select('*').in('id', partIds);
     if (canonical) q = q.eq('category', canonical);
     else if (orFilter) q = q.or(orFilter);
@@ -782,11 +693,8 @@ export async function listPartsForVehicle(opts: any) {
     return { rows: data || [], error };
   };
 
-  // STRATEGY B: legacy compatible_vehicles text match
   const tryViaText = async (useEngine: boolean) => {
-    let query = supabase
-      .from('parts_new_public')
-      .select('*')
+    let query = supabase.from('parts_new_public').select('*')
       .ilike('compatible_vehicles', `%${opts.brand}%`);
     if (opts.model) query = query.ilike('compatible_vehicles', `%${opts.model}%`);
     if (useEngine && opts.engine) query = query.ilike('compatible_vehicles', `%${opts.engine}%`);
@@ -795,8 +703,7 @@ export async function listPartsForVehicle(opts: any) {
     return await query.limit(2000);
   };
 
-  // STRATEGY 0: when flag ON and we have a category node id, use the explicit
-  // catalog_part_categories mapping (built by jm-classify-parts).
+  // Strategy 0: catalog_part_categories mapping (jen když flag ON - nyní vždy false)
   if (opts.categoryNodeId && (await isJmTreeFlagEnabled())) {
     const { data: mapRows } = await supabase
       .from('catalog_part_categories')
@@ -811,65 +718,33 @@ export async function listPartsForVehicle(opts: any) {
         compatQ = compatQ.ilike('brand', opts.brand);
         if (opts.model) compatQ = compatQ.ilike('model', opts.model);
         if (opts.engine) compatQ = compatQ.ilike('engine', opts.engine);
-        if (opts.year) compatQ = compatQ.or(`year_from.is.null,year_from.lte.${opts.year}`).or(`year_to.is.null,year_to.gte.${opts.year}`);
       }
       const { data: compatRows } = await compatQ;
       const allowedIds = new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean));
       partIds = partIds.filter((id) => allowedIds.has(id));
     }
     if (partIds.length > 0) {
-      const { data } = await supabase
-        .from('parts_new_public')
-        .select('*')
-        .in('id', partIds)
-        .limit(2000);
+      const { data } = await supabase.from('parts_new_public').select('*').in('id', partIds).limit(2000);
       if ((data || []).length > 0) return finalizeCatalogRows(data || [], from, to);
     }
   }
 
-  // Try in order: compat join → text strict → text without engine → category-only fallback
   const a = await tryViaCompat();
-  if (!a.error && a.rows.length > 0) {
-    return finalizeCatalogRows(a.rows, from, to);
-  }
+  if (!a.error && a.rows.length > 0) return finalizeCatalogRows(a.rows, from, to);
 
   const b1 = await tryViaText(true);
-  if (!b1.error && (b1.data || []).length > 0) {
-    return finalizeCatalogRows(b1.data || [], from, to);
-  }
+  if (!b1.error && (b1.data || []).length > 0) return finalizeCatalogRows(b1.data || [], from, to);
 
   const b2 = await tryViaText(false);
-  if (!b2.error && (b2.data || []).length > 0) {
-    return finalizeCatalogRows(b2.data || [], from, to);
-  }
+  if (!b2.error && (b2.data || []).length > 0) return finalizeCatalogRows(b2.data || [], from, to);
 
-  // Strict mode: no vehicle-agnostic fallback — prevents cross-vehicle pollution
   logCatalogEvent({
     level: 'warn',
     event: 'listPartsForVehicle_empty',
     vehicle_id: opts.nextisVehicleId || null,
     category: canonical,
-    message: `Žádné díly po všech strategiích: ${opts.brand} ${opts.model || ''} / ${canonical || rawLabel}`,
-    details: {
-      brand: opts.brand, model: opts.model, engine: opts.engine,
-      canonical, keywords, categoryNodeId: opts.categoryNodeId,
-      strategiesAttempted: ['categoryNode', 'compat', 'textStrict', 'textNoEngine'],
-      reason: 'strict_vehicle_scope_no_fallback',
-    },
-  });
-  return { items: [], total: 0 };
-
-  logCatalogEvent({
-    level: 'warn',
-    event: 'listPartsForVehicle_empty',
-    vehicle_id: opts.nextisVehicleId || null,
-    category: rawLabel || null,
-    message: `Žádné díly a žádná kanonická kategorie (${rawLabel || 'n/a'})`,
-    details: {
-      brand: opts.brand, model: opts.model, engine: opts.engine,
-      rawLabel, keywords,
-      reason: 'no_canonical_category_resolved',
-    },
+    message: `Žádné díly: ${opts.brand} ${opts.model || ''} / ${canonical || rawLabel}`,
+    details: { brand: opts.brand, model: opts.model, engine: opts.engine, canonical, reason: 'strict_vehicle_scope_no_fallback' },
   });
   return { items: [], total: 0 };
 }
@@ -883,8 +758,7 @@ export async function searchCatalog(query: string): Promise<CatalogPart[]> {
       .select("*")
       .or(`name.ilike.%${q}%,oem_number.ilike.%${q}%,description.ilike.%${q}%`)
       .limit(100);
-    const all = filterDisabledSources(deduplicateParts((data || []).map((row) => normalizeRow(row))));
-    return all;
+    return filterDisabledSources(deduplicateParts((data || []).map((row) => normalizeRow(row))));
   } catch {
     return [];
   }
