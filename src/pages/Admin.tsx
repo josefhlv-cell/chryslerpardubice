@@ -621,16 +621,6 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          {isEnabled("price_management") && (
-            <TabsContent value="prices">
-              <div className="mt-2 space-y-4">
-                <AdminPriceSyncStats />
-                <AdminBulkPriceSyncRuns />
-                <AdminBulkPriceSync />
-                <AdminPriceManagement />
-              </div>
-            </TabsContent>
-          )}
 
           <TabsContent value="service-plans">
             <div className="mt-2"><AdminServicePlans /></div>
