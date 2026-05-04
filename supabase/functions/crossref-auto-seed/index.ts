@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Parse body (optional overrides)
     let payload: any = {};
     try { payload = await req.json(); } catch (_) { /* empty body OK for cron */ }
-    const limit = Math.min(Math.max(Number(payload.limit) || 25, 1), 100);
+    const limit = Math.min(Math.max(Number(payload.limit) || 50, 1), 200);
     const dryRun = payload.dryRun === true;
 
     if (!LOVABLE_AI_KEY && !dryRun) {
