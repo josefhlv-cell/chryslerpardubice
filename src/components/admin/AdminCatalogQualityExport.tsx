@@ -277,6 +277,15 @@ const AdminCatalogQualityExport = () => {
             )}
           </div>
         )}
+
+        {repairLog.length > 0 && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-1 max-h-48 overflow-y-auto">
+            <div className="text-[10px] uppercase tracking-wide text-amber-400 font-semibold mb-1">Průběh oprav</div>
+            {repairLog.map((l, i) => (
+              <div key={i} className="text-[11px] font-mono text-foreground/80">{l}</div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
