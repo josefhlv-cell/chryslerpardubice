@@ -21,6 +21,7 @@ import AdminNotifications from "@/components/admin/AdminNotifications";
 import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
 import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
 import AdminCatalogHub from "@/components/admin/AdminCatalogHub";
+import AdminCatalogQualityExport from "@/components/admin/AdminCatalogQualityExport";
 import AdminFaultReports from "@/components/admin/AdminFaultReports";
 import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
 import AdminServicePlans from "@/components/admin/AdminServicePlans";
