@@ -51,11 +51,12 @@ Deno.serve(async (req) => {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "100"), 500);
   const onlyMissingImage = url.searchParams.get("scope") !== "all";
 
-  // Fetch parts that need enrichment (missing image OR description)
+  // Fetch parts that need enrichment (missing image OR description).
+  // Order by last_enrich_attempt_at (NULLS first) so each run advances the queue.
   let q = sb
     .from("parts_new")
     .select("id, oem_number, image_urls, description, compatible_vehicles, name")
-    .order("updated_at", { ascending: true })
+    .order("last_enrich_attempt_at", { ascending: true, nullsFirst: true })
     .limit(limit);
 
   if (onlyMissingImage) {
@@ -72,13 +73,16 @@ Deno.serve(async (req) => {
 
   let updated = 0;
   let scanned = 0;
+  let noMatch = 0;
   const errors: string[] = [];
+  const attemptedIds: string[] = [];
 
   for (const p of parts || []) {
     scanned++;
+    attemptedIds.push(p.id as string);
     if (!p.oem_number) continue;
     const res = await callJmProxy("searchByCode", { code: p.oem_number });
-    if (!res?.items?.length) continue;
+    if (!res?.items?.length) { noMatch++; continue; }
 
     // Find item whose oem_number or oe_numbers matches our part's OEM
     const norm = (s: string) => String(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
@@ -111,16 +115,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Stamp every attempted part so the queue advances even when J+M has no match.
+  if (attemptedIds.length) {
+    await sb
+      .from("parts_new")
+      .update({ last_enrich_attempt_at: new Date().toISOString() })
+      .in("id", attemptedIds);
+  }
+
   await sb.from("catalog_event_log").insert({
     source: "enrich-from-jm",
     event: "batch_done",
     level: "info",
-    message: `Enriched ${updated}/${scanned}`,
-    details: { updated, scanned, errors: errors.slice(0, 10) },
+    message: `Enriched ${updated}/${scanned} (noMatch=${noMatch})`,
+    details: { updated, scanned, noMatch, errors: errors.slice(0, 10) },
   });
 
   return new Response(
-    JSON.stringify({ success: true, scanned, updated, errors: errors.slice(0, 10) }),
+    JSON.stringify({ success: true, scanned, updated, noMatch, errors: errors.slice(0, 10) }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
 });

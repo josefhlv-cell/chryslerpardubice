@@ -1,0 +1,2 @@
+ALTER TABLE public.parts_new ADD COLUMN IF NOT EXISTS last_enrich_attempt_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_parts_new_enrich_attempt ON public.parts_new(last_enrich_attempt_at NULLS FIRST) WHERE image_urls IS NULL;
