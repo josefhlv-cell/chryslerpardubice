@@ -1061,6 +1061,25 @@ Deno.serve(async (req) => {
           break;
         }
 
+        // Negative cache (24h): if Nextis returned nothing recently, skip the round-trip.
+        // Stops 300+ daily futile lookups for OEMs Nextis doesn't carry.
+        const negKey = `jm_neg:${normalizeOemCode(rawCode)}`;
+        try {
+          const { data: neg } = await adminClient
+            .from('api_cache')
+            .select('created_at, ttl_seconds')
+            .eq('cache_type', 'jm_negative')
+            .eq('cache_key', negKey)
+            .maybeSingle();
+          if (neg) {
+            const ageMs = Date.now() - new Date(neg.created_at as string).getTime();
+            if (ageMs < (neg.ttl_seconds ?? 86400) * 1000) {
+              result = { items: [], variantsTried: [], attempts: [], skipBrandFilter, totalRawHits: 0, fromNegativeCache: true };
+              break;
+            }
+          }
+        } catch (_) { /* non-blocking */ }
+
         const normalized = normalizeOemCode(rawCode);
         const stripped = normalized.replace(/^K/, '');
         const baseNoSuffix = stripped.replace(/[A-Z]{1,3}$/i, '');
@@ -1150,6 +1169,17 @@ Deno.serve(async (req) => {
         }
 
         if (merged.length === 0) {
+          // Persist negative cache (24h) so next call short-circuits.
+          try {
+            await adminClient.from('api_cache').upsert({
+              cache_type: 'jm_negative',
+              cache_key: negKey,
+              data: { totalRawHits, variantsTried: variants },
+              ttl_seconds: 86400,
+              created_at: new Date().toISOString(),
+            }, { onConflict: 'cache_type,cache_key' });
+          } catch (_) { /* non-blocking */ }
+
           await logCatalogEvent(adminClient, {
             level: 'warn',
             event: 'searchByCode_empty',

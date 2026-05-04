@@ -1326,7 +1326,7 @@ export type Database = {
           oem_number: string | null
           part_name: string
           quantity: number
-          status: Database["public"]["Enums"]["order_status"]
+          status: Database["public"]["Enums"]["order_status_v2"]
           total_price: number | null
           unit_price: number | null
           updated_at: string
@@ -1344,7 +1344,7 @@ export type Database = {
           oem_number?: string | null
           part_name: string
           quantity?: number
-          status?: Database["public"]["Enums"]["order_status"]
+          status?: Database["public"]["Enums"]["order_status_v2"]
           total_price?: number | null
           unit_price?: number | null
           updated_at?: string
@@ -1362,7 +1362,7 @@ export type Database = {
           oem_number?: string | null
           part_name?: string
           quantity?: number
-          status?: Database["public"]["Enums"]["order_status"]
+          status?: Database["public"]["Enums"]["order_status_v2"]
           total_price?: number | null
           unit_price?: number | null
           updated_at?: string
