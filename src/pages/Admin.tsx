@@ -44,6 +44,7 @@ import AdminReviews from "@/components/admin/AdminReviews";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import AdminBackups from "@/components/admin/AdminBackups";
 import AdminCatalogCommandCenter from "@/components/admin/AdminCatalogCommandCenter";
+import AdminCatalogUnified from "@/components/admin/AdminCatalogUnified";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -365,15 +366,13 @@ const Admin = () => {
             {isEnabled("bookings") && <TabsTrigger value="service" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
             {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-[11px] gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
            {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Katalog</TabsTrigger>}
-           {isEnabled("catalog") && <TabsTrigger value="catalog-tools" className="text-[11px] gap-1 shrink-0"><FileSpreadsheet className="w-3 h-3" />Import</TabsTrigger>}
-           {isEnabled("catalog") && <TabsTrigger value="catalog-repair" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Diagnostika & opravy</TabsTrigger>}
             {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
             {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
             {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
-            {isEnabled("price_management") && <TabsTrigger value="prices" className="text-[11px] gap-1 shrink-0"><DollarSign className="w-3 h-3" />Ceny</TabsTrigger>}
+            
             <TabsTrigger value="service-plans" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
             {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-[11px] gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
-            {isEnabled("epc_diagrams") && <TabsTrigger value="epc-diagrams" className="text-[11px] gap-1 shrink-0"><LayoutGrid className="w-3 h-3" />Nákresy</TabsTrigger>}
+            
             {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-[11px] gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
             {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-[11px] gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
             {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-[11px] gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
@@ -596,28 +595,13 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          {/* CATALOG IMPORT */}
+          {/* CATALOG — sjednocená záložka pro všechny katalogové nástroje */}
           <TabsContent value="catalog">
             <div className="mt-2">
-              <AdminCatalogHub />
+              <AdminCatalogUnified />
             </div>
           </TabsContent>
 
-          <TabsContent value="catalog-tools">
-            <div className="mt-2 space-y-4">
-              <AICatalogImport />
-              <CatalogImport />
-              <EPCImport />
-              <AdminCatalogSettings />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="catalog-repair">
-            <div className="mt-2 space-y-4">
-              <AdminCatalogQualityExport />
-              <AdminCatalogCommandCenter />
-            </div>
-          </TabsContent>
 
           <TabsContent value="history">
             <div className="mt-2">
@@ -637,16 +621,6 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          {isEnabled("price_management") && (
-            <TabsContent value="prices">
-              <div className="mt-2 space-y-4">
-                <AdminPriceSyncStats />
-                <AdminBulkPriceSyncRuns />
-                <AdminBulkPriceSync />
-                <AdminPriceManagement />
-              </div>
-            </TabsContent>
-          )}
 
           <TabsContent value="service-plans">
             <div className="mt-2"><AdminServicePlans /></div>
@@ -658,11 +632,6 @@ const Admin = () => {
             </TabsContent>
           )}
 
-          {isEnabled("epc_diagrams") && (
-            <TabsContent value="epc-diagrams">
-              <div className="mt-2"><AdminEPCDiagrams /></div>
-            </TabsContent>
-          )}
 
           {isEnabled("service_orders") && (
             <TabsContent value="service-orders">
