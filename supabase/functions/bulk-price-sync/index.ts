@@ -140,8 +140,13 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let lastError: string | null = run.last_error;
 
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
-    // Pull next batch of OEMs that need a price
-    let q = admin.from('parts_new').select('id, oem_number').limit(BATCH_SIZE);
+    // Pull next batch — POUZE Mopar/CSV/EPC-Link (7zap/makro nemají ceny na vernostsevyplaci.cz)
+    let q = admin
+      .from('parts_new')
+      .select('id, oem_number, catalog_source')
+      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link'])
+      .neq('is_active', false)
+      .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
       q = q.or('price_with_vat.is.null,price_with_vat.eq.0');
     } else {
