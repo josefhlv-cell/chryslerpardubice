@@ -81,18 +81,23 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Count target
+      // Count target — pouze podporované zdroje
+      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
           .from('parts_new')
           .select('id', { count: 'exact', head: true })
+          .in('catalog_source', allowedSources)
+          .neq('is_active', false)
           .or('price_with_vat.is.null,price_with_vat.eq.0');
         targetCount = count || 0;
       } else {
         const { count } = await admin
           .from('parts_new')
-          .select('id', { count: 'exact', head: true });
+          .select('id', { count: 'exact', head: true })
+          .in('catalog_source', allowedSources)
+          .neq('is_active', false);
         targetCount = count || 0;
       }
 
@@ -140,8 +145,13 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let lastError: string | null = run.last_error;
 
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
-    // Pull next batch of OEMs that need a price
-    let q = admin.from('parts_new').select('id, oem_number').limit(BATCH_SIZE);
+    // Pull next batch — POUZE Mopar/CSV/EPC-Link (7zap/makro nemají ceny na vernostsevyplaci.cz)
+    let q = admin
+      .from('parts_new')
+      .select('id, oem_number, catalog_source')
+      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link'])
+      .neq('is_active', false)
+      .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
       q = q.or('price_with_vat.is.null,price_with_vat.eq.0');
     } else {

@@ -600,7 +600,8 @@ export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
 }
 
 function finalizeCatalogRows(rows: any[], from: number, to: number) {
-  const all = filterDisabledSources(deduplicateParts((rows || []).map((row) => normalizeRow(row))));
+  const activeRows = (rows || []).filter((r: any) => r?.is_active !== false);
+  const all = filterDisabledSources(deduplicateParts(activeRows.map((row) => normalizeRow(row))));
   return { items: all.slice(from, to + 1), total: all.length };
 }
 

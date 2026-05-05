@@ -69,10 +69,12 @@ Deno.serve(async (req) => {
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "15"), 300);
   const useGoogle = url.searchParams.get("google") === "1";
 
-  // Vyber: bez fotky, pod limitem pokusů, řazeno podle nejméně/nejstarších pokusů
+  // Vyber: jen Mopar/CSV/EPC-Link, aktivní, bez fotky, pod limitem pokusů
   const { data: parts, error } = await sb
     .from("parts_new")
-    .select("id, oem_number, name, image_urls, last_enrich_attempt_at, enrich_attempts, last_enrich_status")
+    .select("id, oem_number, name, image_urls, last_enrich_attempt_at, enrich_attempts, last_enrich_status, catalog_source")
+    .in("catalog_source", ["mopar", "mopar_oem", "csv", "epc-link"])
+    .neq("is_active", false)
     .or("image_urls.is.null,image_urls.eq.{}")
     .lt("enrich_attempts", MAX_ATTEMPTS)
     .order("enrich_attempts", { ascending: true })

@@ -1686,6 +1686,7 @@ export type Database = {
           id: string
           image_urls: string[] | null
           internal_code: string | null
+          is_active: boolean
           last_enrich_attempt_at: string | null
           last_enrich_status: string | null
           last_name_check_at: string | null
@@ -1714,6 +1715,7 @@ export type Database = {
           id?: string
           image_urls?: string[] | null
           internal_code?: string | null
+          is_active?: boolean
           last_enrich_attempt_at?: string | null
           last_enrich_status?: string | null
           last_name_check_at?: string | null
@@ -1742,6 +1744,7 @@ export type Database = {
           id?: string
           image_urls?: string[] | null
           internal_code?: string | null
+          is_active?: boolean
           last_enrich_attempt_at?: string | null
           last_enrich_status?: string | null
           last_name_check_at?: string | null
