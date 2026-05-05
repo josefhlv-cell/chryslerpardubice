@@ -80,6 +80,7 @@ const AdminCatalogUnified = () => {
         </TabsContent>
 
         <TabsContent value="repair" className="mt-3 space-y-4">
+          <AdminPhotoEnrichment />
           <AdminDataFixer />
           <AdminCatalogQualityExport />
           <AdminCatalogCommandCenter />
