@@ -23,6 +23,7 @@ import AdminCatalogSettings from "./AdminCatalogSettings";
 import AdminCatalogQualityExport from "./AdminCatalogQualityExport";
 import AdminCatalogCommandCenter from "./AdminCatalogCommandCenter";
 import AdminDataFixer from "./AdminDataFixer";
+import AdminPhotoEnrichment from "./AdminPhotoEnrichment";
 import AdminPriceSyncStats from "./AdminPriceSyncStats";
 import AdminBulkPriceSyncRuns from "./AdminBulkPriceSyncRuns";
 import AdminBulkPriceSync from "./AdminBulkPriceSync";
@@ -80,6 +81,7 @@ const AdminCatalogUnified = () => {
         </TabsContent>
 
         <TabsContent value="repair" className="mt-3 space-y-4">
+          <AdminPhotoEnrichment />
           <AdminDataFixer />
           <AdminCatalogQualityExport />
           <AdminCatalogCommandCenter />

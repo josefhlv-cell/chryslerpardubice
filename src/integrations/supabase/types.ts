@@ -1681,11 +1681,13 @@ export type Database = {
           compatible_vehicles: string | null
           currency: string
           description: string | null
+          enrich_attempts: number
           family: string | null
           id: string
           image_urls: string[] | null
           internal_code: string | null
           last_enrich_attempt_at: string | null
+          last_enrich_status: string | null
           last_name_check_at: string | null
           last_price_update: string | null
           manufacturer: string | null
@@ -1707,11 +1709,13 @@ export type Database = {
           compatible_vehicles?: string | null
           currency?: string
           description?: string | null
+          enrich_attempts?: number
           family?: string | null
           id?: string
           image_urls?: string[] | null
           internal_code?: string | null
           last_enrich_attempt_at?: string | null
+          last_enrich_status?: string | null
           last_name_check_at?: string | null
           last_price_update?: string | null
           manufacturer?: string | null
@@ -1733,11 +1737,13 @@ export type Database = {
           compatible_vehicles?: string | null
           currency?: string
           description?: string | null
+          enrich_attempts?: number
           family?: string | null
           id?: string
           image_urls?: string[] | null
           internal_code?: string | null
           last_enrich_attempt_at?: string | null
+          last_enrich_status?: string | null
           last_name_check_at?: string | null
           last_price_update?: string | null
           manufacturer?: string | null
