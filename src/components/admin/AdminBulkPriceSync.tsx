@@ -256,6 +256,9 @@ const AdminBulkPriceSync = () => {
                 <RefreshCw className="w-4 h-4" />
               </Button>
             </div>
+            <p className="text-[11px] text-muted-foreground mt-1 w-full">
+              Zpracovává pouze Mopar / CSV / EPC-Link. 7zap a Makro díly se přeskakují — ceny pro ně neexistují.
+            </p>
           </div>
 
           {cronWasPaused && (
