@@ -52,6 +52,32 @@ const MODES = [
   { value: "diagrams", label: "Nákresy / schémata", icon: LayoutGrid },
 ] as const;
 
+// Quick EN→CS phrase replacements + markdown cleanup for scraped content
+const TRANSLATIONS: Array<[RegExp, string]> = [
+  [/Service and Repair Manuals for All Makes and Models/gi, "Servisní a opravárenské příručky"],
+  [/Workshop Repair Manuals?/gi, "Dílenská příručka"],
+  [/Workshop Service Manual/gi, "Dílenská servisní příručka"],
+  [/Repair Manual/gi, "Opravárenská příručka"],
+  [/Service Manual/gi, "Servisní příručka"],
+  [/Owners? Manual/gi, "Návod k obsluze"],
+  [/Wiring Diagrams?/gi, "Schéma zapojení"],
+  [/Removal and Installation/gi, "Demontáž a montáž"],
+  [/Specifications?/gi, "Specifikace"],
+  [/Troubleshooting/gi, "Hledání závad"],
+  [/Diagnostic/gi, "Diagnostika"],
+];
+
+const cleanCs = (raw: string | null | undefined): string => {
+  if (!raw) return "";
+  let s = String(raw);
+  // strip markdown image syntax ![alt](url)
+  s = s.replace(/!\[[^\]]*\]\([^)]*\)/g, "");
+  // strip plain markdown links [text](url) → text
+  s = s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  for (const [re, cs] of TRANSLATIONS) s = s.replace(re, cs);
+  return s.replace(/\s{2,}/g, " ").trim();
+};
+
 const AdminServiceProcedures = () => {
   const [procedures, setProcedures] = useState<Procedure[]>([]);
   const [loading, setLoading] = useState(true);
