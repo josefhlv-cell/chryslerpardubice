@@ -33,6 +33,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
   // VIN
   const [vin, setVin] = useState("");
   const [vinLoading, setVinLoading] = useState(false);
+  const [vinResult, setVinResult] = useState<ParsedVinResult | null>(null);
 
   // OEM
   const [oemQ, setOemQ] = useState("");
@@ -48,35 +49,24 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
       return;
     }
     setVinLoading(true);
+    setVinResult(null);
     try {
       const { data, error } = await supabase.functions.invoke("vin-decode-ai", {
         body: { vin: code },
       });
       if (error) throw error;
-      const payload: any = (data as any)?.data || data;
-      const basic = payload?.basic || payload;
-      const enriched = payload?.enriched || {};
-      const rawBrand: string = String(basic?.brand || basic?.make || "").trim();
-      const rawModel: string = String(basic?.model || "").trim();
-      // Normalize brand to Title-Case (NHTSA returns UPPERCASE), keep RAM uppercase
-      const titleCase = (s: string) =>
-        s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-      const brand = rawBrand.toUpperCase() === "RAM" ? "RAM" : titleCase(rawBrand);
-      const model = titleCase(rawModel);
-      const engineParts: string[] = [
-        basic?.engine_displacement,
-        basic?.fuel_type && /diesel/i.test(basic.fuel_type) ? "CRD" : null,
-      ].filter(Boolean) as string[];
-      const engine: string | undefined =
-        enriched?.engine_label || basic?.engine_label || (engineParts.length ? engineParts.join(" ") : undefined);
-      if (!brand || !model) {
-        toast.error("VIN se nepodařilo dekódovat na značku/model.");
+      const parsed = parseVinPayload(data);
+      setVinResult(parsed);
+      if (!parsed.ok) {
+        toast.error(parsed.error || "VIN se nepodařilo dekódovat.");
         return;
       }
-      toast.success(`VIN: ${brand} ${model}${engine ? " · " + engine : ""}`);
-      onVehicleSelected({ brand, model, engine });
+      toast.success(`VIN: ${parsed.brand} ${parsed.model}${parsed.engine ? " · " + parsed.engine : ""}`);
+      onVehicleSelected({ brand: parsed.brand, model: parsed.model, engine: parsed.engine });
     } catch (e: any) {
-      toast.error("Dekódování VIN selhalo: " + (e?.message || "neznámá chyba"));
+      const msg = "Dekódování VIN selhalo: " + (e?.message || "neznámá chyba");
+      setVinResult({ ok: false, brand: "", model: "", error: msg });
+      toast.error(msg);
     } finally {
       setVinLoading(false);
     }
