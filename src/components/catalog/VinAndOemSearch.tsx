@@ -52,10 +52,22 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
         body: { vin: code },
       });
       if (error) throw error;
-      const decoded = (data as any)?.data || data;
-      const brand: string | undefined = decoded?.brand || decoded?.make;
-      const model: string | undefined = decoded?.model;
-      const engine: string | undefined = decoded?.engine || decoded?.engine_label;
+      const payload: any = (data as any)?.data || data;
+      const basic = payload?.basic || payload;
+      const enriched = payload?.enriched || {};
+      const rawBrand: string = String(basic?.brand || basic?.make || "").trim();
+      const rawModel: string = String(basic?.model || "").trim();
+      // Normalize brand to Title-Case (NHTSA returns UPPERCASE), keep RAM uppercase
+      const titleCase = (s: string) =>
+        s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+      const brand = rawBrand.toUpperCase() === "RAM" ? "RAM" : titleCase(rawBrand);
+      const model = titleCase(rawModel);
+      const engineParts: string[] = [
+        basic?.engine_displacement,
+        basic?.fuel_type && /diesel/i.test(basic.fuel_type) ? "CRD" : null,
+      ].filter(Boolean) as string[];
+      const engine: string | undefined =
+        enriched?.engine_label || basic?.engine_label || (engineParts.length ? engineParts.join(" ") : undefined);
       if (!brand || !model) {
         toast.error("VIN se nepodařilo dekódovat na značku/model.");
         return;
@@ -120,7 +132,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
             value={oemQ}
             onChange={(e) => setOemQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && searchOem()}
-            placeholder="Vyhledat podle OEM — najde originál + všechny náhrady z J+M…"
+            placeholder="Vyhledat podle OEM — najde originál i náhrady…"
             className="border-0 bg-transparent focus-visible:ring-0 px-0 h-9 text-sm"
           />
           {oemQ && (
@@ -153,7 +165,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
             {oemHits.map((p) => <ResultRow key={p.id} p={p} onOrder={onOrder} />)}
             {jmHits.length > 0 && (
               <div className="text-[10px] uppercase tracking-wider text-amber-400/90 font-semibold pt-1">
-                Náhrady z J+M ({jmHits.length})
+                Náhrady ({jmHits.length})
               </div>
             )}
             {jmHits.map((p) => <ResultRow key={p.id} p={p} onOrder={onOrder} />)}
