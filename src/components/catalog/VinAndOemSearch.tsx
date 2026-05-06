@@ -165,7 +165,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
             {oemHits.map((p) => <ResultRow key={p.id} p={p} onOrder={onOrder} />)}
             {jmHits.length > 0 && (
               <div className="text-[10px] uppercase tracking-wider text-amber-400/90 font-semibold pt-1">
-                Náhrady z J+M ({jmHits.length})
+                Náhrady ({jmHits.length})
               </div>
             )}
             {jmHits.map((p) => <ResultRow key={p.id} p={p} onOrder={onOrder} />)}
