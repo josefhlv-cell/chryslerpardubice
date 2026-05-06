@@ -325,7 +325,7 @@ const AdminServiceProcedures = () => {
                 <Badge variant="outline">{typeLabels[selected.procedure_type || 'repair']}</Badge>
               </div>
               <div className="prose prose-sm dark:prose-invert max-w-none">
-                <pre className="whitespace-pre-wrap text-xs bg-muted p-3 rounded-lg">{selected.content}</pre>
+                <pre className="whitespace-pre-wrap text-xs bg-muted p-3 rounded-lg">{cleanCs(selected.content)}</pre>
               </div>
               {selected.source_url && (
                 <a
