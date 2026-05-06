@@ -132,7 +132,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
             value={oemQ}
             onChange={(e) => setOemQ(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && searchOem()}
-            placeholder="Vyhledat podle OEM — najde originál + všechny náhrady z J+M…"
+            placeholder="Vyhledat podle OEM — najde originál i náhrady…"
             className="border-0 bg-transparent focus-visible:ring-0 px-0 h-9 text-sm"
           />
           {oemQ && (
