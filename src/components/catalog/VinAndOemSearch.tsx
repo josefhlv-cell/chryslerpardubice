@@ -113,6 +113,34 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
             {vinLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Otevřít"}
           </Button>
         </div>
+
+        {vinResult && vinResult.ok && (
+          <div
+            data-testid="vin-result"
+            className="mt-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="font-medium text-foreground">
+              {vinResult.brand} {vinResult.model}
+            </span>
+            {vinResult.engine && (
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                {vinResult.engine}
+              </Badge>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground">Otevírám katalog…</span>
+          </div>
+        )}
+        {vinResult && !vinResult.ok && (
+          <div
+            data-testid="vin-error"
+            role="alert"
+            className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90"
+          >
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{vinResult.error || "VIN se nepodařilo dekódovat."}</span>
+          </div>
+        )}
       </div>
 
       {/* OEM row */}
