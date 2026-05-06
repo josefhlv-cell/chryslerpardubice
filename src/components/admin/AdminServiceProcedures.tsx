@@ -315,7 +315,7 @@ const AdminServiceProcedures = () => {
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
         <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-base">{selected?.title}</DialogTitle>
+            <DialogTitle className="text-base">{cleanCs(selected?.title)}</DialogTitle>
           </DialogHeader>
           {selected && (
             <div className="space-y-3">
