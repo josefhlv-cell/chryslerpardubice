@@ -9,7 +9,7 @@
  * requested OEM code in their oe_numbers).
  */
 import { useState } from "react";
-import { Search, Loader2, Car, Hash, ShoppingCart, ShieldCheck, RefreshCw, X } from "lucide-react";
+import { Search, Loader2, Car, Hash, ShoppingCart, ShieldCheck, RefreshCw, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { globalOemSearch, type CatalogPart } from "@/api/catalogV2API";
+import { parseVinPayload, type ParsedVinResult } from "./vinPayload";
 
 const formatPrice = (n: number | null | undefined) =>
   n === null || n === undefined || n <= 0
@@ -32,6 +33,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
   // VIN
   const [vin, setVin] = useState("");
   const [vinLoading, setVinLoading] = useState(false);
+  const [vinResult, setVinResult] = useState<ParsedVinResult | null>(null);
 
   // OEM
   const [oemQ, setOemQ] = useState("");
@@ -47,35 +49,24 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
       return;
     }
     setVinLoading(true);
+    setVinResult(null);
     try {
       const { data, error } = await supabase.functions.invoke("vin-decode-ai", {
         body: { vin: code },
       });
       if (error) throw error;
-      const payload: any = (data as any)?.data || data;
-      const basic = payload?.basic || payload;
-      const enriched = payload?.enriched || {};
-      const rawBrand: string = String(basic?.brand || basic?.make || "").trim();
-      const rawModel: string = String(basic?.model || "").trim();
-      // Normalize brand to Title-Case (NHTSA returns UPPERCASE), keep RAM uppercase
-      const titleCase = (s: string) =>
-        s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-      const brand = rawBrand.toUpperCase() === "RAM" ? "RAM" : titleCase(rawBrand);
-      const model = titleCase(rawModel);
-      const engineParts: string[] = [
-        basic?.engine_displacement,
-        basic?.fuel_type && /diesel/i.test(basic.fuel_type) ? "CRD" : null,
-      ].filter(Boolean) as string[];
-      const engine: string | undefined =
-        enriched?.engine_label || basic?.engine_label || (engineParts.length ? engineParts.join(" ") : undefined);
-      if (!brand || !model) {
-        toast.error("VIN se nepodařilo dekódovat na značku/model.");
+      const parsed = parseVinPayload(data);
+      setVinResult(parsed);
+      if (!parsed.ok) {
+        toast.error(parsed.error || "VIN se nepodařilo dekódovat.");
         return;
       }
-      toast.success(`VIN: ${brand} ${model}${engine ? " · " + engine : ""}`);
-      onVehicleSelected({ brand, model, engine });
+      toast.success(`VIN: ${parsed.brand} ${parsed.model}${parsed.engine ? " · " + parsed.engine : ""}`);
+      onVehicleSelected({ brand: parsed.brand, model: parsed.model, engine: parsed.engine });
     } catch (e: any) {
-      toast.error("Dekódování VIN selhalo: " + (e?.message || "neznámá chyba"));
+      const msg = "Dekódování VIN selhalo: " + (e?.message || "neznámá chyba");
+      setVinResult({ ok: false, brand: "", model: "", error: msg });
+      toast.error(msg);
     } finally {
       setVinLoading(false);
     }
@@ -122,6 +113,34 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
             {vinLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Otevřít"}
           </Button>
         </div>
+
+        {vinResult && vinResult.ok && (
+          <div
+            data-testid="vin-result"
+            className="mt-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="font-medium text-foreground">
+              {vinResult.brand} {vinResult.model}
+            </span>
+            {vinResult.engine && (
+              <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                {vinResult.engine}
+              </Badge>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground">Otevírám katalog…</span>
+          </div>
+        )}
+        {vinResult && !vinResult.ok && (
+          <div
+            data-testid="vin-error"
+            role="alert"
+            className="mt-2 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90"
+          >
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{vinResult.error || "VIN se nepodařilo dekódovat."}</span>
+          </div>
+        )}
       </div>
 
       {/* OEM row */}
