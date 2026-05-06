@@ -9,7 +9,7 @@
  * requested OEM code in their oe_numbers).
  */
 import { useState } from "react";
-import { Search, Loader2, Car, Hash, ShoppingCart, ShieldCheck, RefreshCw, X } from "lucide-react";
+import { Search, Loader2, Car, Hash, ShoppingCart, ShieldCheck, RefreshCw, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { globalOemSearch, type CatalogPart } from "@/api/catalogV2API";
+import { parseVinPayload, type ParsedVinResult } from "./vinPayload";
 
 const formatPrice = (n: number | null | undefined) =>
   n === null || n === undefined || n <= 0
