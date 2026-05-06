@@ -52,10 +52,22 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
         body: { vin: code },
       });
       if (error) throw error;
-      const decoded = (data as any)?.data || data;
-      const brand: string | undefined = decoded?.brand || decoded?.make;
-      const model: string | undefined = decoded?.model;
-      const engine: string | undefined = decoded?.engine || decoded?.engine_label;
+      const payload: any = (data as any)?.data || data;
+      const basic = payload?.basic || payload;
+      const enriched = payload?.enriched || {};
+      const rawBrand: string = String(basic?.brand || basic?.make || "").trim();
+      const rawModel: string = String(basic?.model || "").trim();
+      // Normalize brand to Title-Case (NHTSA returns UPPERCASE), keep RAM uppercase
+      const titleCase = (s: string) =>
+        s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+      const brand = rawBrand.toUpperCase() === "RAM" ? "RAM" : titleCase(rawBrand);
+      const model = titleCase(rawModel);
+      const engineParts: string[] = [
+        basic?.engine_displacement,
+        basic?.fuel_type && /diesel/i.test(basic.fuel_type) ? "CRD" : null,
+      ].filter(Boolean) as string[];
+      const engine: string | undefined =
+        enriched?.engine_label || basic?.engine_label || (engineParts.length ? engineParts.join(" ") : undefined);
       if (!brand || !model) {
         toast.error("VIN se nepodařilo dekódovat na značku/model.");
         return;
