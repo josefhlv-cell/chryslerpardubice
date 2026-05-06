@@ -496,7 +496,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                     const hasChildren = (c.children?.length || 0) > 0;
                     const isEmpty = (c.count || 0) === 0 && !hasChildren;
                     const emptyReason = isEmpty
-                      ? "V této kategorii zatím nejsou napárované díly. Možné příčiny: díly z J+M ještě nemají přiřazenou kategorii, chybí cena z věrnostsevyplaci, nebo není napárování OEM ↔ vozidlo. Můžete: kontaktovat servis, podívat se do globálního OEM hledání, nebo vyzkoušet jinou podkategorii."
+                      ? "V této kategorii zatím nejsou napárované díly. Možné příčiny: chybí přiřazená kategorie u některých dílů, chybějící cena, nebo není napárování OEM ↔ vozidlo. Můžete kontaktovat servis, podívat se do globálního OEM hledání, nebo vyzkoušet jinou podkategorii."
                       : null;
                     return (
                       <div key={c.id} className={isEmpty ? 'bg-muted/10' : ''}>
