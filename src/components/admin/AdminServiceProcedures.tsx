@@ -286,7 +286,7 @@ const AdminServiceProcedures = () => {
                       <TypeIcon className="w-4 h-4 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{proc.title}</p>
+                      <p className="text-sm font-medium truncate">{cleanCs(proc.title)}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="outline" className="text-[10px]">{proc.model}</Badge>
                         <Badge variant="secondary" className="text-[10px]">{proc.category}</Badge>
@@ -295,7 +295,7 @@ const AdminServiceProcedures = () => {
                         </span>
                       </div>
                       {proc.content && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{proc.content.substring(0, 150)}...</p>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{cleanCs(proc.content).substring(0, 150)}…</p>
                       )}
                     </div>
                   </div>
