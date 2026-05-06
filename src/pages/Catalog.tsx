@@ -536,7 +536,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               </span>
               {jmLoading && (
                 <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
-                  <Loader2 className="w-3 h-3 animate-spin" /> Hledám v J+M…
+                  <Loader2 className="w-3 h-3 animate-spin" /> Hledám náhrady…
                 </span>
               )}
             </div>
