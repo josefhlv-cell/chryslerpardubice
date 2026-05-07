@@ -185,10 +185,15 @@ Deno.serve(async (req) => {
 // ─── Priority-based part selection ──────────────────────────────────────────
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
+  // Only sources that actually exist on vernostsevyplaci.cz (Mopar OEM catalog).
+  // 7zap/makro/epc-ai/ai-epc are NEVER on this site → would just waste rate budget.
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
+
   if (mode === 'force') {
     const { data: allParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
       .not('oem_number', 'like', 'SAG-%')
       .not('oem_number', 'like', 'AK-%')
       .order('oem_number', { ascending: true })
@@ -220,6 +225,7 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number,
     const { data: staleParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
       .not('oem_number', 'like', 'SAG-%')
       .not('oem_number', 'like', 'AK-%')
       .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
