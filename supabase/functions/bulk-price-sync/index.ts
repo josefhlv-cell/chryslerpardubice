@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       }
 
       // Count target — pouze podporované zdroje
-      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
+      const allowedSources = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
@@ -145,11 +145,11 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let lastError: string | null = run.last_error;
 
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
-    // Pull next batch — POUZE Mopar/CSV/EPC-Link (7zap/makro nemají ceny na vernostsevyplaci.cz)
+    // Pull next batch — Mopar OEM zdroje (7zap = scrapnutý Mopar katalog, ceny tam jsou)
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
-      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link'])
+      .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
       .neq('is_active', false)
       .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
@@ -191,14 +191,15 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         },
         body: JSON.stringify({
           batchSize: batch.length,
-          mode: 'auto',
-          oemList: batch.map((b: any) => b.oem_number),
+          mode: 'force', // bypass cache TTL — bulk sync explicitly wants fresh prices
+          partNumbers: batch.map((b: any) => b.oem_number),
         }),
       });
       const result = await res.json().catch(() => ({}));
+      const sum = result.summary || {};
       processedTotal += batch.length;
-      updatedTotal += result.updated || result.successCount || 0;
-      if (result.errors) errorTotal += result.errors;
+      updatedTotal += sum.updated ?? result.updated ?? result.successCount ?? 0;
+      errorTotal += sum.errors ?? result.errors ?? 0;
     } catch (e) {
       errorTotal += batch.length;
       lastError = e instanceof Error ? e.message : String(e);

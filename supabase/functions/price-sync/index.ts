@@ -46,10 +46,13 @@ Deno.serve(async (req) => {
       segment,
     } = await req.json();
 
-    // Auth check - manual calls require admin, auto/cron calls are allowed
-    if (mode !== 'auto') {
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader?.startsWith('Bearer ')) {
+    // Auth check - server-to-server calls (cron, bulk-price-sync) authenticate via service-role bearer.
+    // Browser/admin manual calls authenticate via user JWT and require admin role.
+    const authHeader = req.headers.get('Authorization') || '';
+    const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const isServiceRole = authHeader === `Bearer ${SERVICE_ROLE}`;
+    if (!isServiceRole && mode !== 'auto') {
+      if (!authHeader.startsWith('Bearer ')) {
         return json({ error: 'Unauthorized' }, 401);
       }
       const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -185,10 +188,15 @@ Deno.serve(async (req) => {
 // ─── Priority-based part selection ──────────────────────────────────────────
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
+  // Only sources that actually exist on vernostsevyplaci.cz (Mopar OEM catalog).
+  // 7zap/makro/epc-ai/ai-epc are NEVER on this site → would just waste rate budget.
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
+
   if (mode === 'force') {
     const { data: allParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
       .not('oem_number', 'like', 'SAG-%')
       .not('oem_number', 'like', 'AK-%')
       .order('oem_number', { ascending: true })
@@ -220,6 +228,7 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number,
     const { data: staleParts } = await supabase
       .from('parts_new')
       .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
       .not('oem_number', 'like', 'SAG-%')
       .not('oem_number', 'like', 'AK-%')
       .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
