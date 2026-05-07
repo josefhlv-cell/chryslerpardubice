@@ -357,9 +357,10 @@ function normalizeCatalogItem(it: any): UnifiedPart {
   const price = it.price || it.Price || {};
   const purchaseNoVat = Number(price.unitPrice ?? price.UnitPrice ?? 0);
   const purchaseVat = Number(price.unitPriceIncVAT ?? price.UnitPriceIncVAT ?? purchaseNoVat * 1.21);
-  // Apply mandatory +30 % markup (Phase 3A)
-  const priceNoVat = purchaseNoVat * JM_MARGIN;
-  const priceVat = purchaseVat * JM_MARGIN;
+  // Apply tiered J+M markup based on purchase price
+  const margin = jmMarginFor(purchaseNoVat);
+  const priceNoVat = purchaseNoVat * margin;
+  const priceVat = purchaseVat * margin;
   const stock = Number(it.qtyAvailableMain ?? it.QtyAvailableMain ?? 0)
               + Number(it.qtyAvailableSupplier ?? it.QtyAvailableSupplier ?? 0);
   const imageUrls = collectImageUrls(it);
