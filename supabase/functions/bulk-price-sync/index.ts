@@ -191,7 +191,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         },
         body: JSON.stringify({
           batchSize: batch.length,
-          mode: 'force', // process explicit list as-is, no extra prioritization
+          mode: 'auto', // skips JWT auth; explicit partNumbers override prioritization
           partNumbers: batch.map((b: any) => b.oem_number),
         }),
       });
