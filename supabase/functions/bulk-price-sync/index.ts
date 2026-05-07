@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       }
 
       // Count target — pouze podporované zdroje
-      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
+      const allowedSources = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
@@ -149,7 +149,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
-      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link'])
+      .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
       .neq('is_active', false)
       .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
