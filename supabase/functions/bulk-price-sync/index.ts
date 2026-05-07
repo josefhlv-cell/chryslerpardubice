@@ -196,9 +196,10 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         }),
       });
       const result = await res.json().catch(() => ({}));
+      const sum = result.summary || {};
       processedTotal += batch.length;
-      updatedTotal += result.updated || result.successCount || 0;
-      if (result.errors) errorTotal += result.errors;
+      updatedTotal += sum.updated ?? result.updated ?? result.successCount ?? 0;
+      errorTotal += sum.errors ?? result.errors ?? 0;
     } catch (e) {
       errorTotal += batch.length;
       lastError = e instanceof Error ? e.message : String(e);
