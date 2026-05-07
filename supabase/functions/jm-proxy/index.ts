@@ -163,9 +163,16 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
 }
 
 // ---------- normalisation ----------
-// MANDATORY +37 % markup applied LIVE on every J+M (aftermarket) price (per architect plan).
+// Tiered J+M margin (per business decision):
+//  - purchase price ≤ 4000 Kč (bez DPH) → +70 %
+//  - purchase price >  4000 Kč (bez DPH) → +40 %
 // OEM (Mopar): 0 % margin (price_locked). Universal: handled via UNIVERSAL_MARGIN.
-const JM_MARGIN = 1.37;
+const JM_MARGIN_LOW = 1.70;   // do 4000 Kč
+const JM_MARGIN_HIGH = 1.40;  // od 4000 Kč
+const JM_MARGIN_THRESHOLD = 4000;
+function jmMarginFor(purchaseNoVat: number): number {
+  return purchaseNoVat <= JM_MARGIN_THRESHOLD ? JM_MARGIN_LOW : JM_MARGIN_HIGH;
+}
 const UNIVERSAL_MARGIN = 1.20;
 
 interface UnifiedPart {
