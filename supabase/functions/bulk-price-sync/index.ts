@@ -145,7 +145,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let lastError: string | null = run.last_error;
 
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
-    // Pull next batch — POUZE Mopar/CSV/EPC-Link (7zap/makro nemají ceny na vernostsevyplaci.cz)
+    // Pull next batch — Mopar OEM zdroje (7zap = scrapnutý Mopar katalog, ceny tam jsou)
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
