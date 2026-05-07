@@ -191,7 +191,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         },
         body: JSON.stringify({
           batchSize: batch.length,
-          mode: 'auto', // skips JWT auth; explicit partNumbers override prioritization
+          mode: 'force', // bypass cache TTL — bulk sync explicitly wants fresh prices
           partNumbers: batch.map((b: any) => b.oem_number),
         }),
       });
