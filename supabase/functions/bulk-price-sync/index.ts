@@ -191,8 +191,8 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         },
         body: JSON.stringify({
           batchSize: batch.length,
-          mode: 'auto',
-          oemList: batch.map((b: any) => b.oem_number),
+          mode: 'force', // process explicit list as-is, no extra prioritization
+          partNumbers: batch.map((b: any) => b.oem_number),
         }),
       });
       const result = await res.json().catch(() => ({}));
