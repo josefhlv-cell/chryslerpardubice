@@ -188,9 +188,9 @@ Deno.serve(async (req) => {
 // ─── Priority-based part selection ──────────────────────────────────────────
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
-  // Only sources that actually exist on vernostsevyplaci.cz (Mopar OEM catalog).
-  // 7zap/makro/epc-ai/ai-epc are NEVER on this site → would just waste rate budget.
-  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
+  // Only sources that actually exist on vernostsevyplaci.cz (Mopar OEM dealer catalog).
+  // 7zap = scraped diagram OEMs, mostly NOT in dealer catalog → skip to save rate budget.
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
 
   if (mode === 'force') {
     const { data: allParts } = await supabase
