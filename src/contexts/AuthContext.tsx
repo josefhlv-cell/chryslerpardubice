@@ -46,6 +46,7 @@ interface AuthContextType {
 
 interface SignUpMeta {
   full_name: string;
+  phone?: string;
   account_type: "private" | "business";
   company_name?: string;
   ico?: string;
@@ -144,6 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       options: {
         data: {
           full_name: meta.full_name,
+          phone: meta.phone || null,
           account_type: meta.account_type,
           company_name: meta.company_name || null,
           ico: meta.ico || null,
