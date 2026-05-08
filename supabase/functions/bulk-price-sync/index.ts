@@ -146,11 +146,12 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let lastError: string | null = run.last_error;
 
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
-    // Pull next batch — Mopar OEM zdroje (7zap = scrapnutý Mopar katalog, ceny tam jsou)
+    // Pull next batch — pouze Mopar OEM zdroje (vernostsevyplaci.cz dealer katalog).
+    // 7zap & ai-epc tam NEJSOU → nemá smysl je dotazovat (jen plýtvá rate-limitem).
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
-      .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
+      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link'])
       .neq('is_active', false)
       .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
