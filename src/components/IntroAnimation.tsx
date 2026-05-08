@@ -93,8 +93,7 @@ const IntroAnimation = () => {
             autoPlay
             muted
             playsInline
-            // @ts-expect-error – legacy iOS attribute
-            webkit-playsinline="true"
+            {...({ "webkit-playsinline": "true" } as Record<string, string>)}
             preload="auto"
             onEnded={dismiss}
           >
