@@ -500,7 +500,7 @@ export async function fetchJmForVehicle(opts: any) {
     });
     if (error) {
       console.warn('[fetchJmForVehicle] error:', error);
-      return { items: [], warning: 'J+M API error' };
+      return { items: [], warning: 'Katalog dočasně nedostupný' };
     }
     const payload = unwrapFunctionPayload(data);
     return {
