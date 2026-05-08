@@ -19,7 +19,7 @@ interface Props {
 
 const formatPrice = (n: number | null | undefined) =>
   n === null || n === undefined || n <= 0
-    ? "Na objednávku"
+    ? "Na dotaz"
     : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 const SkeletonCard = () => (

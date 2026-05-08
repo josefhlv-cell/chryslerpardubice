@@ -138,7 +138,7 @@ const ServiceOrderParts = ({ orderId, isAdmin, onTotalChange }: Props) => {
                   {searchResults.map(r => (
                     <div key={r.id} className="px-2 py-1.5 text-xs hover:bg-secondary/50 cursor-pointer"
                       onClick={() => addFromCatalog(r)}>
-                      {r.name} · {r.oem_number} · {r.price_with_vat > 0 ? `${r.price_with_vat.toLocaleString("cs")} Kč` : "Na objednávku"}
+                      {r.name} · {r.oem_number} · {r.price_with_vat > 0 ? `${r.price_with_vat.toLocaleString("cs")} Kč` : "Na dotaz"}
                     </div>
                   ))}
                 </div>
