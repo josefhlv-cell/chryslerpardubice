@@ -41,6 +41,8 @@ class BLEManager {
   private autoReconnect = true;
   private reconnectAttempts = 0;
   private lastDeviceId: string | null = null;
+  private activeNotifyUuid: string = OBD_CHAR_NOTIFY_UUID;
+  private activeWriteUuid: string = OBD_CHAR_WRITE_UUID;
 
   constructor() {
     this.isNative = typeof (window as any).Capacitor !== 'undefined' &&
