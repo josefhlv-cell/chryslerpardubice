@@ -19,9 +19,14 @@ export type BLEEvent = {
 
 type BLEListener = (event: BLEEvent) => void;
 
+// Vgate iCar Pro BLE 4.0 (and most ELM327 BLE clones) use service 0xFFF0
+// with FFF1 = NOTIFY (responses from adapter) and FFF2 = WRITE (commands to adapter).
+// Some clones swap the two — auto-detect handled by trying both on first failure.
 const OBD_SERVICE_UUID = '0000fff0-0000-1000-8000-00805f9b34fb';
-const OBD_CHAR_WRITE_UUID = '0000fff1-0000-1000-8000-00805f9b34fb';
-const OBD_CHAR_NOTIFY_UUID = '0000fff2-0000-1000-8000-00805f9b34fb';
+const OBD_CHAR_NOTIFY_UUID = '0000fff1-0000-1000-8000-00805f9b34fb';
+const OBD_CHAR_WRITE_UUID = '0000fff2-0000-1000-8000-00805f9b34fb';
+const OBD_CHAR_NOTIFY_ALT = '0000fff2-0000-1000-8000-00805f9b34fb';
+const OBD_CHAR_WRITE_ALT = '0000fff1-0000-1000-8000-00805f9b34fb';
 
 const MAX_RECONNECT_ATTEMPTS = 3;
 const RECONNECT_DELAY_MS = 2000;
