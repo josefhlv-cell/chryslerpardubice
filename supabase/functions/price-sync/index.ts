@@ -188,9 +188,8 @@ Deno.serve(async (req) => {
 // ─── Priority-based part selection ──────────────────────────────────────────
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
-  // Only sources that actually exist on vernostsevyplaci.cz (Mopar OEM dealer catalog).
-  // 7zap = scraped diagram OEMs, mostly NOT in dealer catalog → skip to save rate budget.
-  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
+  // Mopar dealer catalog sources. 7zap added: many OEMs ARE in dealer catalog, worth trying once.
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'ai-epc'];
 
   if (mode === 'force') {
     const { data: allParts } = await supabase
@@ -225,15 +224,37 @@ async function getPrioritizedParts(supabase: any, limit: number, offset: number,
 
   const remaining = limit - results.length;
   if (remaining > 0) {
+    // PRIORITY: parts without prices first, then stale parts
+    const { data: noPriceParts } = await supabase
+      .from('parts_new')
+      .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
+      .not('oem_number', 'like', 'SAG-%')
+      .not('oem_number', 'like', 'AK-%')
+      .lte('price_with_vat', 0)
+      .lt('enrich_attempts', 3)
+      .order('enrich_attempts', { ascending: true })
+      .range(offset, offset + remaining - 1);
+    if (noPriceParts && noPriceParts.length > 0) {
+      for (const p of noPriceParts) {
+        if (!results.includes(p.oem_number)) results.push(p.oem_number);
+      }
+    }
+  }
+
+  // Fallback: stale priced parts (only when no missing-price parts left)
+  if (results.length < limit) {
+    const remaining2 = limit - results.length;
     const { data: staleParts } = await supabase
       .from('parts_new')
       .select('oem_number')
       .in('catalog_source', ALLOWED_SOURCES)
       .not('oem_number', 'like', 'SAG-%')
       .not('oem_number', 'like', 'AK-%')
+      .gt('price_with_vat', 0)
       .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
       .order('last_price_update', { ascending: true, nullsFirst: true })
-      .range(offset, offset + remaining - 1);
+      .range(0, remaining2 - 1);
     if (staleParts) {
       for (const p of staleParts) {
         if (!results.includes(p.oem_number)) results.push(p.oem_number);
