@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react";
 
 const STORAGE_KEY = "app_intro_seen";
 const REPLAY_FLAG = "intro:replay-pending";
