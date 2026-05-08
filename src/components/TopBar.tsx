@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { ShoppingCart, Shield, ChevronDown } from "lucide-react";
+import { ShoppingCart, Shield, ChevronDown, Play } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
@@ -59,6 +59,22 @@ const TopBar = () => {
       </div>
 
       <div className="flex items-center gap-1">
+        <button
+          onClick={() => {
+            sessionStorage.removeItem("app_intro_seen");
+            if (location.pathname === "/") {
+              window.dispatchEvent(new CustomEvent("intro:replay"));
+            } else {
+              sessionStorage.setItem("intro:replay-pending", "1");
+              navigate("/");
+            }
+          }}
+          aria-label="Přehrát úvodní animaci"
+          title="Přehrát úvodní animaci"
+          className="p-2 rounded-lg hover:bg-card/50 transition-colors"
+        >
+          <Play className="w-4 h-4 text-muted-foreground" />
+        </button>
         {isEnabled("i18n") && <LanguageToggle />}
         {isEnabled("dark_mode") && <ThemeToggle />}
         {isAdmin && (

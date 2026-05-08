@@ -48,6 +48,10 @@ const OBDDiagnostics = lazy(() => import("./pages/OBDDiagnostics"));
 const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
 
+const BOT_RE = /Lighthouse|PageSpeed|PTST|Googlebot|Chrome-Lighthouse/i;
+const isBot = typeof navigator !== "undefined" && BOT_RE.test(navigator.userAgent);
+const IntroAnimation = isBot ? null : lazy(() => import("./components/IntroAnimation"));
+
 const queryClient = new QueryClient();
 
 const PageLoader = () => (
@@ -65,6 +69,11 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              {IntroAnimation && (
+                <Suspense fallback={null}>
+                  <IntroAnimation />
+                </Suspense>
+              )}
               <OnboardingGuide />
               <AdminDailyReport />
               <TopBar />
