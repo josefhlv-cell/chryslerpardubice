@@ -13,7 +13,7 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY =
   Deno.env.get('SUPABASE_ANON_KEY') || Deno.env.get('SUPABASE_PUBLISHABLE_KEY')!;
 
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 200;
 const MAX_RUNTIME_MS = 50_000; // self-relaunch before 60s edge timeout
 
 Deno.serve(async (req) => {

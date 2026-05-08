@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
-const CONCURRENCY = 6;
+const CONCURRENCY = 12;
 const BATCH_SIZE = 100;
 const CACHE_TTL_MINUTES = 20;
 const FRESH_THRESHOLD_HOURS = 24; // Skip parts updated within 24h
@@ -520,7 +520,7 @@ async function processPart(
       await supabase.from('parts_new').update(updateData).eq('id', cached.id);
     }
 
-    // per-part log removed to avoid Supabase trace rate-limit flooding
+    console.log(`✅ PRICE_UPDATED: ${partNumber} → ${priceWithVat} Kč`);
     return {
       oem_number: partNumber, status: 'updated', searchCode,
       price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
@@ -533,7 +533,7 @@ async function processPart(
         ...(cached.price_with_vat > 0 ? {} : { availability: 'on_order' }),
       }).eq('id', cached.id);
     }
-    // not-found log removed to avoid trace rate-limit flooding
+    console.log(`⚠️ PRICE_SYNC_NOT_FOUND: ${partNumber} — keeping existing price (${cached?.price_with_vat || 0} Kč)`);
     return { oem_number: partNumber, status: 'not_found', searchCode, fallback_used: !!cached && cached.price_with_vat > 0 };
   }
 }

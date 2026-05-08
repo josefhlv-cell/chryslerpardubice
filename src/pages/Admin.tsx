@@ -44,7 +44,7 @@ import AdminReviews from "@/components/admin/AdminReviews";
 import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
 import AdminBackups from "@/components/admin/AdminBackups";
 import AdminCatalogCommandCenter from "@/components/admin/AdminCatalogCommandCenter";
-import AdminCatalogPriceCenter from "@/components/admin/AdminCatalogPriceCenter";
+import AdminCatalogUnified from "@/components/admin/AdminCatalogUnified";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
 // ---- Types ----
@@ -598,7 +598,7 @@ const Admin = () => {
           {/* CATALOG — sjednocená záložka pro všechny katalogové nástroje */}
           <TabsContent value="catalog">
             <div className="mt-2">
-              <AdminCatalogPriceCenter />
+              <AdminCatalogUnified />
             </div>
           </TabsContent>
 
