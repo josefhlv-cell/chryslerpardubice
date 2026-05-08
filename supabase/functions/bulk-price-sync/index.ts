@@ -82,7 +82,8 @@ Deno.serve(async (req) => {
       }
 
       // Count target — pouze podporované zdroje
-      const allowedSources = ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'];
+      // 7zap & ai-epc sources are NOT in vernostsevyplaci.cz Mopar dealer catalog → exclude.
+      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
