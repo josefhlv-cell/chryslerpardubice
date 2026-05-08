@@ -167,16 +167,35 @@ class BLEManager {
         this.tryAutoReconnect();
       });
 
-      await BleClient.startNotifications(
-        deviceId, OBD_SERVICE_UUID, OBD_CHAR_NOTIFY_UUID,
-        (value) => {
-          const text = new TextDecoder().decode(value);
-          this.responseBuffer += text;
-          this.emit({ type: 'data', payload: text });
-        }
-      );
+      // Try standard layout first (FFF1=notify, FFF2=write); on failure swap.
+      let notifyUuid = OBD_CHAR_NOTIFY_UUID;
+      let writeUuid = OBD_CHAR_WRITE_UUID;
+      try {
+        await BleClient.startNotifications(
+          deviceId, OBD_SERVICE_UUID, notifyUuid,
+          (value) => {
+            const text = new TextDecoder().decode(value);
+            this.responseBuffer += text;
+            this.emit({ type: 'data', payload: text });
+          }
+        );
+      } catch (notifyErr) {
+        console.warn('[BLE] FFF1 notify failed, trying FFF2 (swapped layout):', notifyErr);
+        notifyUuid = OBD_CHAR_NOTIFY_ALT;
+        writeUuid = OBD_CHAR_WRITE_ALT;
+        await BleClient.startNotifications(
+          deviceId, OBD_SERVICE_UUID, notifyUuid,
+          (value) => {
+            const text = new TextDecoder().decode(value);
+            this.responseBuffer += text;
+            this.emit({ type: 'data', payload: text });
+          }
+        );
+      }
+      this.activeNotifyUuid = notifyUuid;
+      this.activeWriteUuid = writeUuid;
 
-      this.connectedDevice = { deviceId, name: 'OBD2 Adapter', rssi: -50, connected: true };
+      this.connectedDevice = { deviceId, name: 'Vgate iCar Pro 4.0', rssi: -50, connected: true };
       this.reconnectAttempts = 0;
       this.setState('connected');
       return true;
@@ -205,10 +224,10 @@ class BLEManager {
   }
 
   async disconnect(): Promise<void> {
-    this.autoReconnect = false; // Prevent auto-reconnect on intentional disconnect
+    this.autoReconnect = false;
     if (this.isNative && this.connectedDevice) {
       try {
-        await BleClient.stopNotifications(this.connectedDevice.deviceId, OBD_SERVICE_UUID, OBD_CHAR_NOTIFY_UUID);
+        await BleClient.stopNotifications(this.connectedDevice.deviceId, OBD_SERVICE_UUID, this.activeNotifyUuid);
         await BleClient.disconnect(this.connectedDevice.deviceId);
       } catch (e) {
         console.error('BLE disconnect error:', e);
@@ -217,7 +236,7 @@ class BLEManager {
     this.connectedDevice = null;
     this.responseBuffer = '';
     this.lastDeviceId = null;
-    this.autoReconnect = true; // Re-enable for next connection
+    this.autoReconnect = true;
     this.setState('disconnected');
   }
 
@@ -227,7 +246,7 @@ class BLEManager {
 
     const encoded = new TextEncoder().encode(data + '\r');
     const dataView = new DataView(encoded.buffer);
-    await BleClient.write(this.connectedDevice!.deviceId, OBD_SERVICE_UUID, OBD_CHAR_WRITE_UUID, dataView);
+    await BleClient.write(this.connectedDevice!.deviceId, OBD_SERVICE_UUID, this.activeWriteUuid, dataView);
   }
 
   async readResponse(timeout = 2000): Promise<string> {
