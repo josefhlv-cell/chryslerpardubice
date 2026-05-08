@@ -14,171 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      _backup_catalog_categories_20260430_v3: {
-        Row: {
-          created_at: string | null
-          external_id: string | null
-          id: string | null
-          is_global: boolean | null
-          name_cs: string | null
-          name_en: string | null
-          node_type: string | null
-          parent_id: string | null
-          power_kw: number | null
-          slug: string | null
-          sort_order: number | null
-          source: Database["public"]["Enums"]["catalog_source_type"] | null
-          updated_at: string | null
-          vehicle_brand: string | null
-          vehicle_engine: string | null
-          vehicle_model: string | null
-          year_from: number | null
-          year_to: number | null
-        }
-        Insert: {
-          created_at?: string | null
-          external_id?: string | null
-          id?: string | null
-          is_global?: boolean | null
-          name_cs?: string | null
-          name_en?: string | null
-          node_type?: string | null
-          parent_id?: string | null
-          power_kw?: number | null
-          slug?: string | null
-          sort_order?: number | null
-          source?: Database["public"]["Enums"]["catalog_source_type"] | null
-          updated_at?: string | null
-          vehicle_brand?: string | null
-          vehicle_engine?: string | null
-          vehicle_model?: string | null
-          year_from?: number | null
-          year_to?: number | null
-        }
-        Update: {
-          created_at?: string | null
-          external_id?: string | null
-          id?: string | null
-          is_global?: boolean | null
-          name_cs?: string | null
-          name_en?: string | null
-          node_type?: string | null
-          parent_id?: string | null
-          power_kw?: number | null
-          slug?: string | null
-          sort_order?: number | null
-          source?: Database["public"]["Enums"]["catalog_source_type"] | null
-          updated_at?: string | null
-          vehicle_brand?: string | null
-          vehicle_engine?: string | null
-          vehicle_model?: string | null
-          year_from?: number | null
-          year_to?: number | null
-        }
-        Relationships: []
-      }
-      _backup_catalog_part_categories_20260430_v3: {
-        Row: {
-          category_id: string | null
-          created_at: string | null
-          id: string | null
-          is_primary: boolean | null
-          part_id: string | null
-        }
-        Insert: {
-          category_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          is_primary?: boolean | null
-          part_id?: string | null
-        }
-        Update: {
-          category_id?: string | null
-          created_at?: string | null
-          id?: string | null
-          is_primary?: boolean | null
-          part_id?: string | null
-        }
-        Relationships: []
-      }
-      _backup_parts_new_20260504: {
-        Row: {
-          admin_margin_percent: number | null
-          admin_price: number | null
-          availability: string | null
-          catalog_source: string | null
-          category: string | null
-          compatible_vehicles: string | null
-          currency: string | null
-          description: string | null
-          family: string | null
-          id: string | null
-          image_urls: string[] | null
-          internal_code: string | null
-          last_enrich_attempt_at: string | null
-          last_price_update: string | null
-          manufacturer: string | null
-          name: string | null
-          oem_number: string | null
-          packaging: string | null
-          price_locked: boolean | null
-          price_with_vat: number | null
-          price_without_vat: number | null
-          segment: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          admin_margin_percent?: number | null
-          admin_price?: number | null
-          availability?: string | null
-          catalog_source?: string | null
-          category?: string | null
-          compatible_vehicles?: string | null
-          currency?: string | null
-          description?: string | null
-          family?: string | null
-          id?: string | null
-          image_urls?: string[] | null
-          internal_code?: string | null
-          last_enrich_attempt_at?: string | null
-          last_price_update?: string | null
-          manufacturer?: string | null
-          name?: string | null
-          oem_number?: string | null
-          packaging?: string | null
-          price_locked?: boolean | null
-          price_with_vat?: number | null
-          price_without_vat?: number | null
-          segment?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          admin_margin_percent?: number | null
-          admin_price?: number | null
-          availability?: string | null
-          catalog_source?: string | null
-          category?: string | null
-          compatible_vehicles?: string | null
-          currency?: string | null
-          description?: string | null
-          family?: string | null
-          id?: string | null
-          image_urls?: string[] | null
-          internal_code?: string | null
-          last_enrich_attempt_at?: string | null
-          last_price_update?: string | null
-          manufacturer?: string | null
-          name?: string | null
-          oem_number?: string | null
-          packaging?: string | null
-          price_locked?: boolean | null
-          price_with_vat?: number | null
-          price_without_vat?: number | null
-          segment?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       admin_sessions: {
         Row: {
           created_at: string
@@ -3255,7 +3090,7 @@ export type Database = {
         | "zaplacena"
         | "odeslana"
         | "dorucena"
-      order_type: "new" | "used"
+      order_type: "new" | "used" | "inquiry"
       request_status:
         | "pending"
         | "quoted"
@@ -3434,7 +3269,7 @@ export const Constants = {
         "odeslana",
         "dorucena",
       ],
-      order_type: ["new", "used"],
+      order_type: ["new", "used", "inquiry"],
       request_status: [
         "pending",
         "quoted",
