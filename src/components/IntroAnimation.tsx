@@ -108,7 +108,7 @@ const IntroAnimation = () => {
                 animate={{ opacity: 0.7, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.4 }}
-                className="absolute bottom-8 left-1/2 -translate-x-1/2 text-xs uppercase tracking-[0.3em] text-white/70 pointer-events-none select-none"
+                className="absolute bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-[0.25em] text-white/70 pointer-events-none select-none"
               >
                 Klikněte pro přeskočení
               </motion.span>
