@@ -90,7 +90,7 @@ const IntroAnimation = () => {
         >
           <video
             ref={videoRef}
-            className="w-full h-full object-cover"
+            className="max-w-full max-h-full w-auto h-auto sm:w-full sm:h-full sm:object-cover object-contain"
             autoPlay
             muted
             playsInline
@@ -102,16 +102,27 @@ const IntroAnimation = () => {
             <source src="/intro.mp4" type="video/mp4" />
           </video>
 
+          {/* Always-visible skip button (top-right) */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); dismiss(); }}
+            aria-label="Přeskočit úvodní animaci"
+            className="absolute top-4 right-4 sm:top-6 sm:right-6 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md text-white text-xs font-medium uppercase tracking-wider transition-colors safe-top"
+          >
+            Přeskočit
+            <X className="w-3.5 h-3.5" />
+          </button>
+
           <AnimatePresence>
             {showSkipHint && (
               <motion.span
                 initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 0.7, y: 0 }}
+                animate={{ opacity: 0.8, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.4 }}
-                className="absolute bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] sm:text-xs uppercase tracking-[0.25em] text-white/70 pointer-events-none select-none"
+                className="absolute bottom-8 sm:bottom-10 left-0 right-0 mx-auto text-center text-[10px] sm:text-xs uppercase tracking-[0.2em] text-white/80 pointer-events-none select-none"
               >
-                Klikněte pro přeskočení
+                Klepněte kamkoli pro přeskočení
               </motion.span>
             )}
           </AnimatePresence>
