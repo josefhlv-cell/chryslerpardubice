@@ -321,18 +321,28 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     try {
       const isLiveJm = p.id.startsWith("jm:") || p.catalog_source === "jm";
       const unitPrice = p.price_without_vat ?? (p.price_with_vat !== null ? Math.round((p.price_with_vat / 1.21) * 100) / 100 : null);
+      const isInquiry = !unitPrice || unitPrice <= 0;
+      let customerNote: string | null = null;
+      if (isInquiry) {
+        customerNote = window.prompt(
+          `Díl "${p.name}" je bez ceny. Napište prosím váš dotaz / poptávku (množství, termín, doplňující info):`,
+          ""
+        );
+        if (customerNote === null) return; // cancelled
+      }
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
         part_id: isLiveJm ? null : p.id,
-        order_type: "new" as const,
+        order_type: isInquiry ? ("inquiry" as const) : ("new" as const),
         quantity: 1,
         unit_price: unitPrice,
         part_name: p.name,
         oem_number: p.oem_number,
         catalog_source: p.catalog_source,
+        customer_note: customerNote,
       });
       if (error) throw error;
-      toast.success(`Objednávka "${p.name}" vytvořena`);
+      toast.success(isInquiry ? `Poptávka "${p.name}" odeslána` : `Objednávka "${p.name}" vytvořena`);
     } catch (err: any) {
       toast.error(err.message);
     }

@@ -363,7 +363,7 @@ const AiMechanic = () => {
                   <div>
                     <p className="text-sm font-medium">{p.name}</p>
                     <p className="text-xs text-muted-foreground">OEM: {p.oem_number}</p>
-                    <p className="text-xs font-semibold">{p.price_with_vat > 0 ? `${p.price_with_vat.toLocaleString("cs")} Kč` : "Na objednávku"}</p>
+                    <p className="text-xs font-semibold">{p.price_with_vat > 0 ? `${p.price_with_vat.toLocaleString("cs")} Kč` : "Na dotaz"}</p>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => navigate("/shop")}>
                     <ShoppingCart className="w-3.5 h-3.5 mr-1" />Objednat

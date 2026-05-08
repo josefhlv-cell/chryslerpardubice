@@ -241,7 +241,7 @@ const Filters = ({
           <SelectContent>
             <SelectItem value="all">Všechny</SelectItem>
             <SelectItem value="available">Skladem</SelectItem>
-            <SelectItem value="on_order">Na objednávku</SelectItem>
+            <SelectItem value="on_order">Na dotaz</SelectItem>
             <SelectItem value="unavailable">Nedostupné</SelectItem>
           </SelectContent>
         </Select>

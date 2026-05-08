@@ -77,20 +77,12 @@ const Auth = () => {
         }
         await signUp(email, password, {
           full_name: fullName,
+          phone: phone.trim(),
           account_type: accountType,
           company_name: accountType === "business" ? companyName : undefined,
           ico: accountType === "business" ? ico : undefined,
           dic: accountType === "business" ? dic : undefined,
         });
-        // Save phone to profile after signup (may fail if email not yet confirmed, that's OK)
-        try {
-          const { data: { user: newUser } } = await supabase.auth.getUser();
-          if (newUser) {
-            await supabase.from("profiles").update({ phone: phone.trim() }).eq("user_id", newUser.id);
-          }
-        } catch {
-          // Profile will be updated on first login after email confirmation
-        }
         if (accountType === "business") {
           toast.success("Registrace odeslána! Váš firemní účet čeká na schválení administrátorem.");
         } else {

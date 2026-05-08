@@ -282,7 +282,7 @@ export const mapToPartResult = (item: any, source: string): PartResult => {
     price_with_vat: item.price_with_vat ?? Math.round((item.price ?? 0) * 1.21 * 100) / 100,
     category: item.category || null,
     family: item.family || item.brand || null,
-    segment: item.segment || (item.available !== undefined ? (item.available ? "Skladem" : "Na objednávku") : null),
+    segment: item.segment || (item.available !== undefined ? (item.available ? "Skladem" : "Na dotaz") : null),
     packaging: item.packaging || null,
     description: item.description || null,
     manufacturer: item.manufacturer || ((catalogSource === "mopar" || catalogSource === "epc-ai") ? "Mopar" : null),

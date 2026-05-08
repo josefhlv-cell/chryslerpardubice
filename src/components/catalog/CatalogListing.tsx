@@ -19,7 +19,7 @@ interface Props {
 
 const formatPrice = (n: number | null | undefined) =>
   n === null || n === undefined || n <= 0
-    ? "Na objednávku"
+    ? "Na dotaz"
     : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 const SkeletonCard = () => (
@@ -138,7 +138,7 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
             </div>
             <Button size="sm" className="h-7 text-xs px-2" onClick={() => onOrder(p)}>
               <ShoppingCart className="w-3 h-3 mr-1" />
-              Objednat
+              {(!p.price_with_vat || p.price_with_vat <= 0) ? "Poptat" : "Objednat"}
             </Button>
           </div>
         </div>
