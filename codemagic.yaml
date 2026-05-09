@@ -12,6 +12,10 @@ workflows:
       - name: Install npm dependencies (clean)
         script: |
           npm ci --legacy-peer-deps
+      - name: Install required Android SDK packages
+        script: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
       - name: Build web assets (Vite)
         script: |
           npm run build
