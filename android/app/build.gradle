@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def hasReleaseSigning = System.getenv("CM_KEYSTORE_PATH") &&
+        System.getenv("CM_KEYSTORE_PASSWORD") &&
+        System.getenv("CM_KEY_ALIAS") &&
+        System.getenv("CM_KEY_PASSWORD")
+def ciBuildNumber = (System.getenv("BUILD_NUMBER") ?: "1").replaceAll("[^0-9]", "")
+
 android {
     namespace = "app.lovable.c6d932101224420590deeec3ccc6923f"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +13,8 @@ android {
         applicationId "app.lovable.c6d932101224420590deeec3ccc6923f"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode ciBuildNumber ? ciBuildNumber.toInteger() : 1
+        versionName System.getenv("VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +22,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(System.getenv("CM_KEYSTORE_PATH"))
+                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CM_KEY_ALIAS")
+                keyPassword System.getenv("CM_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
