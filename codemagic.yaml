@@ -11,11 +11,17 @@ workflows:
     scripts:
       - name: Install npm dependencies (clean)
         script: |
-          npm ci --legacy-peer-deps
+          npm --version
+          npm ci --legacy-peer-deps --no-audit --no-fund || {
+            echo "npm ci failed, retrying with npm install to recover from an out-of-sync lockfile in CI."
+            npm install --legacy-peer-deps --no-audit --no-fund
+          }
       - name: Install required Android SDK packages
         script: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager)"; fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
       - name: Build web assets (Vite)
         script: |
           npm run build
@@ -46,7 +52,11 @@ workflows:
     scripts:
       - name: Install npm dependencies (clean)
         script: |
-          npm ci --legacy-peer-deps
+          npm --version
+          npm ci --legacy-peer-deps --no-audit --no-fund || {
+            echo "npm ci failed, retrying with npm install to recover from an out-of-sync lockfile in CI."
+            npm install --legacy-peer-deps --no-audit --no-fund
+          }
       - name: Build web assets (Vite)
         script: |
           npm run build
