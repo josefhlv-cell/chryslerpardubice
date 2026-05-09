@@ -1,25 +1,76 @@
 workflows:
-    android-workflow:
-      name: Android APK Build
-      max_build_duration: 60
-      environment:
-        java: 21
-        vars:
-          NODE_VERSION: "18"
-      scripts:
-        - name: Install Node modules
-          script: |
-            npm install
-            npm install @capacitor/core @capacitor/cli
-            npm install @capacitor-community/bluetooth-le
-        - name: Sync Capacitor
-          script: |
-            npx cap sync android
-        - name: Build Android APK
-          script: |
-            cd android
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon
-      artifacts:
-        - android/app/build/outputs/apk/debug/app-debug.apk
-  
+  android-workflow:
+    name: Android APK Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      java: 21
+      node: 20
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm install --legacy-peer-deps
+      - name: Build web assets (Vite)
+        script: |
+          npm run build
+      - name: Sync Capacitor (Android)
+        script: |
+          npx cap sync android
+      - name: Build Android Debug APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+    artifacts:
+      - android/app/build/outputs/apk/debug/app-debug.apk
+      - android/app/build/outputs/**/mapping.txt
+
+  ios-workflow:
+    name: iOS Build (unsigned)
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      cocoapods: default
+      node: 20
+    scripts:
+      - name: Install npm dependencies
+        script: |
+          npm install --legacy-peer-deps
+      - name: Build web assets (Vite)
+        script: |
+          npm run build
+      - name: Add iOS platform if missing
+        script: |
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+      - name: Patch iOS Info.plist (Bluetooth & Camera permissions)
+        script: |
+          PLIST="ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru (Vgate iCar Pro 4.0).'" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :NSBluetoothAlwaysUsageDescription 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru (Vgate iCar Pro 4.0).'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :NSBluetoothPeripheralUsageDescription 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Lokalizace je vyžadována pro Bluetooth Low Energy skenování.'" "$PLIST" 2>/dev/null || true
+      - name: Sync Capacitor (iOS)
+        script: |
+          npx cap sync ios
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios/App && pod install --repo-update
+      - name: Build iOS app (no codesigning)
+        script: |
+          cd ios/App
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+    artifacts:
+      - ios/App/build/Build/Products/**/*.app
