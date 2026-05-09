@@ -14,6 +14,102 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          admin_id: string
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip_address: string | null
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+        }
+        Relationships: []
+      }
+      admin_fcm_tokens: {
+        Row: {
+          created_at: string
+          device_info: Json | null
+          id: string
+          last_used_at: string | null
+          platform: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_info?: Json | null
+          id?: string
+          last_used_at?: string | null
+          platform?: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_info?: Json | null
+          id?: string
+          last_used_at?: string | null
+          platform?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_push_subscriptions: {
+        Row: {
+          auth_key: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_used_at: string | null
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_key: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_used_at?: string | null
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_key?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_used_at?: string | null
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_sessions: {
         Row: {
           created_at: string
@@ -665,6 +761,51 @@ export type Database = {
         }
         Relationships: []
       }
+      dtc_codes: {
+        Row: {
+          affected_models: string[] | null
+          causes_cs: string | null
+          code: string
+          created_at: string
+          description_cs: string | null
+          id: string
+          severity: string
+          solution_cs: string | null
+          source: string | null
+          system: string
+          title_cs: string
+          updated_at: string
+        }
+        Insert: {
+          affected_models?: string[] | null
+          causes_cs?: string | null
+          code: string
+          created_at?: string
+          description_cs?: string | null
+          id?: string
+          severity?: string
+          solution_cs?: string | null
+          source?: string | null
+          system?: string
+          title_cs: string
+          updated_at?: string
+        }
+        Update: {
+          affected_models?: string[] | null
+          causes_cs?: string | null
+          code?: string
+          created_at?: string
+          description_cs?: string | null
+          id?: string
+          severity?: string
+          solution_cs?: string | null
+          source?: string | null
+          system?: string
+          title_cs?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       employees: {
         Row: {
           active: boolean
@@ -1028,6 +1169,48 @@ export type Database = {
         }
         Relationships: []
       }
+      mechanic_offline_queue: {
+        Row: {
+          action: string
+          client_created_at: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          error: string | null
+          id: string
+          mechanic_user_id: string
+          payload: Json
+          status: string
+          synced_at: string | null
+        }
+        Insert: {
+          action: string
+          client_created_at: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          error?: string | null
+          id?: string
+          mechanic_user_id: string
+          payload?: Json
+          status?: string
+          synced_at?: string | null
+        }
+        Update: {
+          action?: string
+          client_created_at?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          error?: string | null
+          id?: string
+          mechanic_user_id?: string
+          payload?: Json
+          status?: string
+          synced_at?: string | null
+        }
+        Relationships: []
+      }
       mechanic_tasks: {
         Row: {
           completed_at: string | null
@@ -1281,6 +1464,81 @@ export type Database = {
           message?: string
           title?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      obd_live_consents: {
+        Row: {
+          created_at: string
+          granted: boolean
+          granted_at: string | null
+          id: string
+          note: string | null
+          revoked_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted?: boolean
+          granted_at?: string | null
+          id?: string
+          note?: string | null
+          revoked_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted?: boolean
+          granted_at?: string | null
+          id?: string
+          note?: string | null
+          revoked_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      obd_live_sessions: {
+        Row: {
+          created_at: string
+          dtcs: Json
+          ended_at: string | null
+          id: string
+          is_active: boolean
+          last_seen: string
+          payload: Json
+          started_at: string
+          user_id: string
+          vehicle_id: string | null
+          vin: string | null
+        }
+        Insert: {
+          created_at?: string
+          dtcs?: Json
+          ended_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_seen?: string
+          payload?: Json
+          started_at?: string
+          user_id: string
+          vehicle_id?: string | null
+          vin?: string | null
+        }
+        Update: {
+          created_at?: string
+          dtcs?: Json
+          ended_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_seen?: string
+          payload?: Json
+          started_at?: string
+          user_id?: string
+          vehicle_id?: string | null
+          vin?: string | null
         }
         Relationships: []
       }
@@ -2398,6 +2656,60 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tsbs: {
+        Row: {
+          brand: string | null
+          created_at: string
+          full_text: string | null
+          id: string
+          model: string | null
+          published_at: string | null
+          source_url: string | null
+          summary_cs: string | null
+          system: string | null
+          title_cs: string
+          tsb_number: string
+          updated_at: string
+          vin_pattern: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand?: string | null
+          created_at?: string
+          full_text?: string | null
+          id?: string
+          model?: string | null
+          published_at?: string | null
+          source_url?: string | null
+          summary_cs?: string | null
+          system?: string | null
+          title_cs: string
+          tsb_number: string
+          updated_at?: string
+          vin_pattern?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string | null
+          created_at?: string
+          full_text?: string | null
+          id?: string
+          model?: string | null
+          published_at?: string | null
+          source_url?: string | null
+          summary_cs?: string | null
+          system?: string | null
+          title_cs?: string
+          tsb_number?: string
+          updated_at?: string
+          vin_pattern?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
       }
       used_part_requests: {
         Row: {
