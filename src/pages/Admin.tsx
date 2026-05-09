@@ -1,186 +1,132 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import PageHeader from "@/components/PageHeader";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ShoppingCart, Wrench, Car, Package, RefreshCw, Shield, FileSpreadsheet, Users, CheckCircle, XCircle, Bell, History, AlertTriangle, DollarSign, ArrowDownUp, LayoutGrid, Settings2, ClipboardList, BarChart3, UserCog, Calendar, BookOpen, Clock, Star, TrendingUp, Trash2, Loader2, Database, Search } from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  RefreshCw, Shield, ShoppingCart, Wrench, Car, Users, CheckCircle, XCircle,
+  Bell, History, AlertTriangle, ArrowDownUp, ClipboardList, BarChart3,
+  UserCog, Calendar, BookOpen, Star, TrendingUp, Settings2, Database,
+  LayoutDashboard, Package, Activity, FileText, ScanLine, Smartphone,
+  CloudOff, Loader2, Trash2, FileSpreadsheet,
+} from "lucide-react";
 import { sourceLabel } from "@/api/partsAPI";
-import CatalogImport from "@/components/admin/CatalogImport";
-import EPCImport from "@/components/admin/EPCImport";
-import AdminNotifications from "@/components/admin/AdminNotifications";
-import AdminServiceHistory from "@/components/admin/AdminServiceHistory";
-import AdminCatalogSettings from "@/components/admin/AdminCatalogSettings";
-import AdminCatalogHub from "@/components/admin/AdminCatalogHub";
-import AdminCatalogQualityExport from "@/components/admin/AdminCatalogQualityExport";
-import AdminFaultReports from "@/components/admin/AdminFaultReports";
-import AdminPriceManagement from "@/components/admin/AdminPriceManagement";
-import AdminServicePlans from "@/components/admin/AdminServicePlans";
-import AdminVehicleOffers from "@/components/admin/AdminVehicleOffers";
-import AICatalogImport from "@/components/admin/AICatalogImport";
-import AdminEPCDiagrams from "@/components/admin/AdminEPCDiagrams";
-import AdminBulkPriceSync from "@/components/admin/AdminBulkPriceSync";
-import AdminBulkPriceSyncRuns from "@/components/admin/AdminBulkPriceSyncRuns";
-import AdminPriceSyncStats from "@/components/admin/AdminPriceSyncStats";
-import AdminFeatureSettings from "@/components/admin/AdminFeatureSettings";
-import AdminServiceOrders from "@/components/admin/AdminServiceOrders";
-import AdminMechanics from "@/components/admin/AdminMechanics";
-import AdminServiceStatistics from "@/components/admin/AdminServiceStatistics";
-import AdminServiceScheduler from "@/components/admin/AdminServiceScheduler";
-import AdminEmployees from "@/components/admin/AdminEmployees";
-import AdminServiceProcedures from "@/components/admin/AdminServiceProcedures";
-import AdminNotificationToggle from "@/components/admin/AdminNotificationToggle";
-import AdminActivityLog from "@/components/admin/AdminActivityLog";
-import AdminReviews from "@/components/admin/AdminReviews";
-import AdminDashboardStats from "@/components/admin/AdminDashboardStats";
-import AdminBackups from "@/components/admin/AdminBackups";
-import AdminCatalogCommandCenter from "@/components/admin/AdminCatalogCommandCenter";
-import AdminCatalogUnified from "@/components/admin/AdminCatalogUnified";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
 
-// ---- Types ----
+// Lazy admin moduly (zachované)
+const AdminCatalogUnified = lazy(() => import("@/components/admin/AdminCatalogUnified"));
+const AdminCatalogHub = lazy(() => import("@/components/admin/AdminCatalogHub"));
+const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
+const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
+const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
+const AdminPhotoEnrichment = lazy(() => import("@/components/admin/AdminPhotoEnrichment"));
+const AdminDataFixer = lazy(() => import("@/components/admin/AdminDataFixer"));
+const AdminCatalogQualityExport = lazy(() => import("@/components/admin/AdminCatalogQualityExport"));
+const AdminCatalogCommandCenter = lazy(() => import("@/components/admin/AdminCatalogCommandCenter"));
+const AdminPriceSyncStats = lazy(() => import("@/components/admin/AdminPriceSyncStats"));
+const AdminBulkPriceSyncRuns = lazy(() => import("@/components/admin/AdminBulkPriceSyncRuns"));
+const AdminBulkPriceSync = lazy(() => import("@/components/admin/AdminBulkPriceSync"));
+const AdminPriceManagement = lazy(() => import("@/components/admin/AdminPriceManagement"));
+const AdminEPCDiagrams = lazy(() => import("@/components/admin/AdminEPCDiagrams"));
+const AdminCatalogSettings = lazy(() => import("@/components/admin/AdminCatalogSettings"));
 
-type Profile = {
-  id: string;
-  user_id: string;
-  full_name: string | null;
-  email: string | null;
-  company_name: string | null;
-  ico: string | null;
-  dic: string | null;
-  account_type: string;
-  status: string;
-  discount_percent: number;
-  created_at: string;
-};
+const AdminServiceOrders = lazy(() => import("@/components/admin/AdminServiceOrders"));
+const AdminServiceScheduler = lazy(() => import("@/components/admin/AdminServiceScheduler"));
+const AdminMechanics = lazy(() => import("@/components/admin/AdminMechanics"));
+const AdminServiceStatistics = lazy(() => import("@/components/admin/AdminServiceStatistics"));
+const AdminServicePlans = lazy(() => import("@/components/admin/AdminServicePlans"));
+const AdminServiceProcedures = lazy(() => import("@/components/admin/AdminServiceProcedures"));
+const AdminServiceHistory = lazy(() => import("@/components/admin/AdminServiceHistory"));
+const AdminReviews = lazy(() => import("@/components/admin/AdminReviews"));
 
-type OrderRow = {
-  id: string;
-  user_id: string;
-  part_id: string | null;
-  part_name: string | null;
-  oem_number: string | null;
-  order_type: string;
-  quantity: number;
-  unit_price: number | null;
-  discount_percent: number | null;
-  discounted_price: number | null;
-  price_with_vat: number | null;
-  status: string;
-  admin_note: string | null;
-  customer_note: string | null;
-  catalog_source: string | null;
-  created_at: string;
-  // enriched
-  profile_name?: string | null;
-  profile_email?: string | null;
-};
+const AdminVehicleOffers = lazy(() => import("@/components/admin/AdminVehicleOffers"));
+const AdminFaultReports = lazy(() => import("@/components/admin/AdminFaultReports"));
 
-type Booking = {
-  id: string;
-  vehicle_brand: string | null;
-  vehicle_model: string | null;
-  service_type: string;
-  preferred_date: string;
-  confirmed_date: string | null;
-  note: string | null;
-  wants_replacement_vehicle: boolean;
-  replacement_vehicle_confirmed: boolean | null;
-  status: string;
-  admin_note: string | null;
-  estimated_price: number | null;
-  discount_amount: number | null;
-  final_price: number | null;
-  user_id: string;
-  created_at: string;
-  // enriched
-  profile_name?: string | null;
-  profile_email?: string | null;
-  profile_phone?: string | null;
-};
+const AdminEmployees = lazy(() => import("@/components/admin/AdminEmployees"));
 
-type Inquiry = {
-  id: string;
-  vehicle_id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  message: string | null;
-  status: string;
-  user_id: string | null;
-  created_at: string;
-};
+const AdminNotifications = lazy(() => import("@/components/admin/AdminNotifications"));
+const AdminNotificationToggle = lazy(() => import("@/components/admin/AdminNotificationToggle"));
+const AdminFeatureSettings = lazy(() => import("@/components/admin/AdminFeatureSettings"));
+const AdminActivityLog = lazy(() => import("@/components/admin/AdminActivityLog"));
+const AdminBackups = lazy(() => import("@/components/admin/AdminBackups"));
+const AdminDashboardStats = lazy(() => import("@/components/admin/AdminDashboardStats"));
+
+// Nové moduly
+const AdminRemoteOBD = lazy(() => import("@/components/admin/AdminRemoteOBD"));
+const AdminDTCLibrary = lazy(() => import("@/components/admin/AdminDTCLibrary"));
+const AdminTSBs = lazy(() => import("@/components/admin/AdminTSBs"));
+const AdminDiagPDFs = lazy(() => import("@/components/admin/AdminDiagPDFs"));
+const AdminMobileQuickActions = lazy(() => import("@/components/admin/AdminMobileQuickActions"));
+const AdminVinScanner = lazy(() => import("@/components/admin/AdminVinScanner"));
+const AdminPushSettings = lazy(() => import("@/components/admin/AdminPushSettings"));
+const AdminOfflineQueue = lazy(() => import("@/components/admin/AdminOfflineQueue"));
+const AdminAuditLog = lazy(() => import("@/components/admin/AdminAuditLog"));
+
+type Profile = { id: string; user_id: string; full_name: string | null; email: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; status: string; discount_percent: number; created_at: string; };
+type OrderRow = { id: string; user_id: string; part_id: string | null; part_name: string | null; oem_number: string | null; order_type: string; quantity: number; unit_price: number | null; discount_percent: number | null; discounted_price: number | null; price_with_vat: number | null; status: string; admin_note: string | null; customer_note: string | null; catalog_source: string | null; created_at: string; profile_name?: string | null; profile_email?: string | null; };
+type Booking = { id: string; vehicle_brand: string | null; vehicle_model: string | null; service_type: string; preferred_date: string; confirmed_date: string | null; note: string | null; wants_replacement_vehicle: boolean; replacement_vehicle_confirmed: boolean | null; status: string; admin_note: string | null; estimated_price: number | null; discount_amount: number | null; final_price: number | null; user_id: string; created_at: string; profile_name?: string | null; profile_email?: string | null; profile_phone?: string | null; };
+type Inquiry = { id: string; vehicle_id: string; name: string | null; email: string | null; phone: string | null; message: string | null; status: string; user_id: string | null; created_at: string; };
 
 const statusColors: Record<string, string> = {
-  pending: "bg-warning/15 text-warning border-warning/30",
-  confirmed: "bg-primary/15 text-primary border-primary/30",
-  in_progress: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-  completed: "bg-success/15 text-success border-success/30",
-  cancelled: "bg-destructive/15 text-destructive border-destructive/30",
-  shipped: "bg-primary/15 text-primary border-primary/30",
-  delivered: "bg-success/15 text-success border-success/30",
-  quoted: "bg-primary/15 text-primary border-primary/30",
-  accepted: "bg-success/15 text-success border-success/30",
-  rejected: "bg-destructive/15 text-destructive border-destructive/30",
-  fulfilled: "bg-success/15 text-success border-success/30",
-  new: "bg-warning/15 text-warning border-warning/30",
-  nova: "bg-warning/15 text-warning border-warning/30",
-  zpracovava_se: "bg-primary/15 text-primary border-primary/30",
-  vyrizena: "bg-success/15 text-success border-success/30",
-  zrusena: "bg-destructive/15 text-destructive border-destructive/30",
+  pending: "bg-warning/15 text-warning border-warning/30", confirmed: "bg-primary/15 text-primary border-primary/30",
+  in_progress: "bg-purple-500/15 text-purple-400 border-purple-500/30", completed: "bg-success/15 text-success border-success/30",
+  cancelled: "bg-destructive/15 text-destructive border-destructive/30", shipped: "bg-primary/15 text-primary border-primary/30",
+  delivered: "bg-success/15 text-success border-success/30", quoted: "bg-primary/15 text-primary border-primary/30",
+  accepted: "bg-success/15 text-success border-success/30", rejected: "bg-destructive/15 text-destructive border-destructive/30",
+  fulfilled: "bg-success/15 text-success border-success/30", new: "bg-warning/15 text-warning border-warning/30",
+  nova: "bg-warning/15 text-warning border-warning/30", zpracovava_se: "bg-primary/15 text-primary border-primary/30",
+  vyrizena: "bg-success/15 text-success border-success/30", zrusena: "bg-destructive/15 text-destructive border-destructive/30",
   active: "bg-success/15 text-success border-success/30",
 };
-
 const statusLabel: Record<string, string> = {
-  pending: "Čeká",
-  confirmed: "Potvrzeno",
-  in_progress: "Probíhá",
-  completed: "Dokončeno",
-  cancelled: "Zrušeno",
-  shipped: "Odesláno",
-  delivered: "Doručeno",
-  quoted: "Naceneno",
-  accepted: "Přijato",
-  rejected: "Odmítnuto",
-  fulfilled: "Splněno",
-  new: "Nový",
-  nova: "Nová",
-  zpracovava_se: "Zpracovává se",
-  vyrizena: "Vyřízena",
-  zrusena: "Zrušena",
-  active: "Aktivní",
+  pending: "Čeká", confirmed: "Potvrzeno", in_progress: "Probíhá", completed: "Dokončeno", cancelled: "Zrušeno",
+  shipped: "Odesláno", delivered: "Doručeno", quoted: "Naceneno", accepted: "Přijato", rejected: "Odmítnuto",
+  fulfilled: "Splněno", new: "Nový", nova: "Nová", zpracovava_se: "Zpracovává se", vyrizena: "Vyřízena",
+  zrusena: "Zrušena", active: "Aktivní",
 };
+
+const Loader = () => <div className="flex items-center justify-center p-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>;
 
 const Admin = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
   const { isEnabled } = useFeatureFlags();
 
-  // Data
+  const [section, setSection] = useState<string>(() => {
+    const hash = window.location.hash.replace("#", "");
+    return hash || "overview";
+  });
+
+  useEffect(() => {
+    const onHash = () => setSection(window.location.hash.replace("#", "") || "overview");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const goto = (key: string) => {
+    setSection(key);
+    window.location.hash = key;
+  };
+
+  // Inline data pro firmy/objednávky/servis/poptávky (zachovaná původní logika)
   const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Filters
   const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "new" | "used">("all");
-
-  // Edit dialogs
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
-
-  // Form state
   const [formNote, setFormNote] = useState("");
   const [formStatus, setFormStatus] = useState("");
   const [formDiscount, setFormDiscount] = useState("");
@@ -190,9 +136,7 @@ const Admin = () => {
   const [formReplacementConfirmed, setFormReplacementConfirmed] = useState("");
 
   useEffect(() => {
-    if (!isLoading && (!user || !isAdmin)) {
-      navigate("/auth");
-    }
+    if (!isLoading && (!user || !isAdmin)) navigate("/auth");
   }, [isLoading, user, isAdmin, navigate]);
 
   const fetchAll = async () => {
@@ -206,530 +150,372 @@ const Admin = () => {
     setPendingProfiles((profilesRes.data as Profile[]) || []);
     const rawOrders = (ordersRes.data as OrderRow[]) || [];
     setInquiries((inquiriesRes.data as Inquiry[]) || []);
-
-    // Collect all user IDs from orders + bookings for profile enrichment
     const rawBookings = (bookingsRes.data as Booking[]) || [];
-    const allUserIds = [...new Set([...rawOrders.map(o => o.user_id), ...rawBookings.map(b => b.user_id)])];
-    let profileMap = new Map<string, { full_name: string | null; email: string | null; phone: string | null }>();
+    const allUserIds = [...new Set([...rawOrders.map((o) => o.user_id), ...rawBookings.map((b) => b.user_id)])];
+    const profileMap = new Map<string, any>();
     if (allUserIds.length > 0) {
-      const { data: allProfiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, email, phone")
-        .in("user_id", allUserIds);
-      (allProfiles || []).forEach(p => profileMap.set(p.user_id, p));
+      const { data: allProfiles } = await supabase.from("profiles").select("user_id, full_name, email, phone").in("user_id", allUserIds);
+      (allProfiles || []).forEach((p) => profileMap.set(p.user_id, p));
     }
-
-    setOrders(rawOrders.map(o => ({
-      ...o,
-      profile_name: profileMap.get(o.user_id)?.full_name || null,
-      profile_email: profileMap.get(o.user_id)?.email || null,
-    })));
-    setBookings(rawBookings.map(b => ({
-      ...b,
-      profile_name: profileMap.get(b.user_id)?.full_name || null,
-      profile_email: profileMap.get(b.user_id)?.email || null,
-      profile_phone: profileMap.get(b.user_id)?.phone || null,
-    })));
-
+    setOrders(rawOrders.map((o) => ({ ...o, profile_name: profileMap.get(o.user_id)?.full_name || null, profile_email: profileMap.get(o.user_id)?.email || null })));
+    setBookings(rawBookings.map((b) => ({ ...b, profile_name: profileMap.get(b.user_id)?.full_name || null, profile_email: profileMap.get(b.user_id)?.email || null, profile_phone: profileMap.get(b.user_id)?.phone || null })));
     setLoading(false);
   };
 
-  useEffect(() => {
-    if (isAdmin) fetchAll();
-  }, [isAdmin]);
+  useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin]);
 
-  // ---- Profile approval ----
-  const approveProfile = async (profileId: string, discount: number) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ status: "active", discount_percent: discount })
-      .eq("id", profileId);
-    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Firma schválena" });
-    setEditProfile(null);
-    fetchAll();
+  const approveProfile = async (id: string, discount: number) => {
+    const { error } = await supabase.from("profiles").update({ status: "active", discount_percent: discount }).eq("id", id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Firma schválena" }); setEditProfile(null); fetchAll();
   };
-
-  const rejectProfile = async (profileId: string) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ status: "rejected" })
-      .eq("id", profileId);
-    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Firma zamítnuta" });
-    setEditProfile(null);
-    fetchAll();
+  const rejectProfile = async (id: string) => {
+    const { error } = await supabase.from("profiles").update({ status: "rejected" }).eq("id", id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Firma zamítnuta" }); setEditProfile(null); fetchAll();
   };
-
-  const openProfileEdit = (p: Profile) => {
-    setEditProfile(p);
-    setFormDiscount(p.discount_percent.toString());
-  };
-
-  // ---- Order edit ----
-  const openOrderEdit = (o: OrderRow) => {
-    setEditOrder(o);
-    setFormStatus(o.status);
-    setFormNote(o.admin_note || "");
-  };
-
+  const openProfileEdit = (p: Profile) => { setEditProfile(p); setFormDiscount(p.discount_percent.toString()); };
+  const openOrderEdit = (o: OrderRow) => { setEditOrder(o); setFormStatus(o.status); setFormNote(o.admin_note || ""); };
   const saveOrder = async () => {
     if (!editOrder) return;
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: formStatus as any, admin_note: formNote })
-      .eq("id", editOrder.id);
-    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Uloženo" });
-    setEditOrder(null);
-    fetchAll();
+    const { error } = await supabase.from("orders").update({ status: formStatus as any, admin_note: formNote }).eq("id", editOrder.id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Uloženo" }); setEditOrder(null); fetchAll();
   };
-
-  // ---- Booking edit ----
   const openBookingEdit = (b: Booking) => {
-    setEditBooking(b);
-    setFormStatus(b.status);
-    setFormNote(b.admin_note || "");
-    setFormConfirmedDate(b.confirmed_date || "");
-    setFormEstimatedPrice(b.estimated_price?.toString() || "");
+    setEditBooking(b); setFormStatus(b.status); setFormNote(b.admin_note || "");
+    setFormConfirmedDate(b.confirmed_date || ""); setFormEstimatedPrice(b.estimated_price?.toString() || "");
     setFormFinalPrice(b.final_price?.toString() || "");
     setFormReplacementConfirmed(b.replacement_vehicle_confirmed === null ? "" : b.replacement_vehicle_confirmed ? "yes" : "no");
   };
-
   const saveBooking = async () => {
     if (!editBooking) return;
-    const { error } = await supabase
-      .from("service_bookings")
-      .update({
-        status: formStatus as any,
-        admin_note: formNote,
-        confirmed_date: formConfirmedDate || null,
-        estimated_price: formEstimatedPrice ? parseFloat(formEstimatedPrice) : null,
-        final_price: formFinalPrice ? parseFloat(formFinalPrice) : null,
-        replacement_vehicle_confirmed: formReplacementConfirmed === "" ? null : formReplacementConfirmed === "yes",
-      })
-      .eq("id", editBooking.id);
-    if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Uloženo" });
-    setEditBooking(null);
-    fetchAll();
+    const { error } = await supabase.from("service_bookings").update({
+      status: formStatus as any, admin_note: formNote, confirmed_date: formConfirmedDate || null,
+      estimated_price: formEstimatedPrice ? parseFloat(formEstimatedPrice) : null,
+      final_price: formFinalPrice ? parseFloat(formFinalPrice) : null,
+      replacement_vehicle_confirmed: formReplacementConfirmed === "" ? null : formReplacementConfirmed === "yes",
+    }).eq("id", editBooking.id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Uloženo" }); setEditBooking(null); fetchAll();
   };
 
-  if (isLoading || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString("cs-CZ");
+  const pendingOnly = pendingProfiles.filter((p) => p.status === "pending");
+  const allBusiness = pendingProfiles;
+  const filteredOrders = orderTypeFilter === "all" ? orders : orders.filter((o) => o.order_type === orderTypeFilter);
 
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>;
   if (!isAdmin) return null;
 
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString("cs-CZ");
+  // === Strom navigace ===
+  const tree: AdminTreeNode[] = [
+    { key: "overview", label: "Přehled", icon: LayoutDashboard },
+    {
+      key: "catalog", label: "Katalog", icon: Package, children: [
+        { key: "catalog-overview", label: "Přehled", icon: LayoutDashboard },
+        { key: "catalog-import", label: "Import" },
+        { key: "catalog-repair", label: "Opravy & diagnostika" },
+        ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
+        ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "EPC nákresy" }] : []),
+        { key: "catalog-settings", label: "Nastavení", icon: Settings2 },
+      ],
+    },
+    {
+      key: "service", label: "Servis", icon: Wrench, children: [
+        { key: "service-bookings", label: "Rezervace", badge: bookings.filter((b) => b.status === "pending").length },
+        ...(isEnabled("service_orders") ? [{ key: "service-orders", label: "Zakázky", icon: ClipboardList }] : []),
+        ...(isEnabled("service_scheduler") ? [{ key: "service-scheduler", label: "Plánovač", icon: Calendar }] : []),
+        { key: "service-plans", label: "Plány údržby" },
+        { key: "service-procedures", label: "Postupy", icon: BookOpen },
+        ...(isEnabled("service_history") ? [{ key: "service-history", label: "Servisní knížka", icon: History }] : []),
+        ...(isEnabled("service_reviews") ? [{ key: "service-reviews", label: "Hodnocení", icon: Star }] : []),
+        ...(isEnabled("service_statistics") ? [{ key: "service-stats", label: "Statistiky", icon: BarChart3 }] : []),
+      ],
+    },
+    {
+      key: "orders", label: "Objednávky", icon: ShoppingCart, children: [
+        { key: "orders-list", label: "Seznam objednávek", badge: orders.filter((o) => o.status === "nova").length },
+      ],
+    },
+    {
+      key: "vehicles", label: "Vozy", icon: Car, children: [
+        ...(isEnabled("vehicle_offers") ? [
+          { key: "vehicles-inquiries", label: "Poptávky" },
+          { key: "vehicles-offers", label: "Výkup / Dovoz", icon: ArrowDownUp },
+        ] : []),
+        ...(isEnabled("fault_reports") ? [{ key: "vehicles-faults", label: "Hlášení závad", icon: AlertTriangle }] : []),
+      ],
+    },
+    {
+      key: "users", label: "Zákazníci & role", icon: Users, children: [
+        { key: "users-firms", label: "Firmy", badge: pendingOnly.length },
+        ...(isEnabled("employees") ? [{ key: "users-employees", label: "Zaměstnanci", icon: UserCog }] : []),
+        ...(isEnabled("mechanics_management") ? [{ key: "users-mechanics", label: "Mechanici" }] : []),
+      ],
+    },
+    {
+      key: "diag", label: "Diagnostika", icon: Activity, children: [
+        { key: "diag-remote", label: "Vzdálené OBD live" },
+        { key: "diag-dtc", label: "DTC knihovna", icon: BookOpen },
+        { key: "diag-tsb", label: "TSB databáze", icon: FileText },
+        { key: "diag-pdf", label: "Protokoly (PDF)", icon: FileSpreadsheet },
+      ],
+    },
+    {
+      key: "mobile", label: "Mobil & nástroje", icon: Smartphone, children: [
+        { key: "mobile-quick", label: "Rychlé akce" },
+        { key: "mobile-vin", label: "VIN/QR scanner", icon: ScanLine },
+        { key: "mobile-push", label: "Push notifikace", icon: Bell },
+        { key: "mobile-offline", label: "Offline fronta", icon: CloudOff },
+      ],
+    },
+    {
+      key: "system", label: "Systém", icon: Settings2, children: [
+        { key: "sys-features", label: "Feature flags" },
+        { key: "sys-notifications", label: "Notifikace", icon: Bell },
+        ...(isEnabled("push_notifications") ? [{ key: "sys-push", label: "Push (zákazníci)" }] : []),
+        { key: "sys-activity", label: "Aktivita" },
+        { key: "sys-audit", label: "Audit log", icon: History },
+        { key: "sys-backups", label: "Zálohy", icon: Database },
+        ...(isEnabled("admin_statistics") ? [{ key: "sys-stats", label: "KPI dashboard", icon: TrendingUp }] : []),
+      ],
+    },
+  ];
 
-  const pendingOnly = pendingProfiles.filter(p => p.status === "pending");
-  const allBusiness = pendingProfiles;
+  // === Render obsahu ===
+  const renderSection = () => {
+    switch (section) {
+      // ----- OVERVIEW -----
+      case "overview":
+      case "":
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-lg gradient-bronze flex items-center justify-center"><Shield className="w-5 h-5 text-white" /></div>
+              <div className="flex-1">
+                <h1 className="text-xl font-display font-semibold">Admin panel</h1>
+                <p className="text-xs text-muted-foreground">Vyber sekci v levém menu</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={fetchAll}><RefreshCw className="w-3.5 h-3.5 mr-1" />Obnovit</Button>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {[
+                { label: "Čekající firmy", value: pendingOnly.length, color: "text-destructive", action: () => goto("users-firms") },
+                { label: "Nové objednávky", value: orders.filter((o) => o.status === "nova").length, color: "text-primary", action: () => goto("orders-list") },
+                { label: "Čekající rezervace", value: bookings.filter((b) => b.status === "pending").length, color: "text-warning", action: () => goto("service-bookings") },
+                { label: "Poptávky vozidel", value: inquiries.filter((i) => i.status === "new").length, color: "text-success", action: () => goto("vehicles-inquiries") },
+              ].map((s) => (
+                <Card key={s.label} className="cursor-pointer hover:border-primary/40" onClick={s.action}>
+                  <CardContent className="p-3">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</p>
+                    <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <Suspense fallback={<Loader />}>{isEnabled("admin_statistics") && <AdminDashboardStats />}</Suspense>
+          </div>
+        );
 
-  const filteredOrders = orderTypeFilter === "all"
-    ? orders
-    : orders.filter(o => o.order_type === orderTypeFilter);
+      // ----- CATALOG -----
+      case "catalog":
+      case "catalog-overview": return <Suspense fallback={<Loader />}><AdminCatalogHub /></Suspense>;
+      case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /><EPCImport /></div></Suspense>;
+      case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
+      case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminPriceManagement /></div></Suspense>;
+      case "catalog-epc": return <Suspense fallback={<Loader />}><AdminEPCDiagrams /></Suspense>;
+      case "catalog-settings": return <Suspense fallback={<Loader />}><AdminCatalogSettings /></Suspense>;
+
+      // ----- SERVICE -----
+      case "service":
+      case "service-bookings":
+        return (
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Rezervace servisu</h2>
+            {bookings.length === 0 && <p className="text-sm text-muted-foreground">Žádné rezervace</p>}
+            {bookings.map((b) => (
+              <Card key={b.id} className="cursor-pointer hover:border-primary/40" onClick={() => openBookingEdit(b)}>
+                <CardContent className="p-4 flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-sm">{b.service_type}</p>
+                    <p className="text-xs text-primary">{b.profile_name || "—"} · {b.profile_email || b.profile_phone || "—"}</p>
+                    <p className="text-xs text-muted-foreground">{b.vehicle_brand || "—"} {b.vehicle_model || ""}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
+                    {b.final_price && <p className="text-sm font-semibold mt-1">{b.final_price.toLocaleString("cs")} Kč</p>}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      case "service-orders": return <Suspense fallback={<Loader />}><AdminServiceOrders /></Suspense>;
+      case "service-scheduler": return <Suspense fallback={<Loader />}><AdminServiceScheduler /></Suspense>;
+      case "service-plans": return <Suspense fallback={<Loader />}><AdminServicePlans /></Suspense>;
+      case "service-procedures": return <Suspense fallback={<Loader />}><AdminServiceProcedures /></Suspense>;
+      case "service-history": return <Suspense fallback={<Loader />}><AdminServiceHistory /></Suspense>;
+      case "service-reviews": return <Suspense fallback={<Loader />}><AdminReviews /></Suspense>;
+      case "service-stats": return <Suspense fallback={<Loader />}><AdminServiceStatistics /></Suspense>;
+
+      // ----- ORDERS -----
+      case "orders":
+      case "orders-list":
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h2 className="text-lg font-semibold">Objednávky</h2>
+              <div className="flex gap-1">
+                {(["all", "new", "used"] as const).map((t) => (
+                  <Button key={t} size="sm" variant={orderTypeFilter === t ? "default" : "outline"} onClick={() => setOrderTypeFilter(t)} className="text-xs">
+                    {t === "all" ? "Vše" : t === "new" ? "Nové" : "Použité"}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {filteredOrders.map((o) => (
+              <Card key={o.id} className="cursor-pointer hover:border-primary/40" onClick={() => openOrderEdit(o)}>
+                <CardContent className="p-4 flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm">{o.part_name || "—"}</p>
+                      <Badge variant="outline" className="text-[10px]">{o.order_type === "new" ? "Nový" : "Použitý"}</Badge>
+                    </div>
+                    <p className="text-xs text-primary">{o.profile_name || "—"} · {o.profile_email || "—"}</p>
+                    <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "—"} · {o.quantity}×</p>
+                    {o.catalog_source && <Badge variant="outline" className="text-[10px] mt-0.5">Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}</Badge>}
+                    <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
+                    {o.price_with_vat != null && <p className="text-sm font-semibold mt-1">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+
+      // ----- VEHICLES -----
+      case "vehicles":
+      case "vehicles-inquiries":
+        return (
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Poptávky vozidel</h2>
+            {inquiries.length === 0 && <p className="text-sm text-muted-foreground">Žádné poptávky</p>}
+            {inquiries.map((i) => (
+              <Card key={i.id}>
+                <CardContent className="p-4 flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-sm">{i.name || "Bez jména"}</p>
+                    <p className="text-xs text-muted-foreground">{i.email} · {i.phone}</p>
+                    {i.message && <p className="text-xs italic mt-1">"{i.message}"</p>}
+                    <p className="text-xs text-muted-foreground mt-1">{fmtDate(i.created_at)}</p>
+                  </div>
+                  <Badge className={statusColors[i.status] || ""}>{statusLabel[i.status] || i.status}</Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      case "vehicles-offers": return <Suspense fallback={<Loader />}><AdminVehicleOffers /></Suspense>;
+      case "vehicles-faults": return <Suspense fallback={<Loader />}><AdminFaultReports /></Suspense>;
+
+      // ----- USERS -----
+      case "users":
+      case "users-firms":
+        return (
+          <div className="space-y-3">
+            <h2 className="text-lg font-semibold">Firemní účty</h2>
+            {pendingOnly.length > 0 && <h3 className="text-sm font-semibold text-destructive">Čeká na schválení ({pendingOnly.length})</h3>}
+            {pendingOnly.map((p) => (
+              <Card key={p.id} className="border-warning/30">
+                <CardContent className="p-4 flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-sm">{p.company_name || "Bez názvu"}</p>
+                    <p className="text-xs text-muted-foreground">{p.full_name} · {p.email}</p>
+                    <p className="text-xs text-muted-foreground">IČO: {p.ico || "—"} · DIČ: {p.dic || "—"}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="outline" onClick={() => openProfileEdit(p)}><CheckCircle className="w-4 h-4 mr-1 text-success" />Schválit</Button>
+                    <Button size="sm" variant="outline" onClick={() => rejectProfile(p.id)}><XCircle className="w-4 h-4 text-destructive" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {allBusiness.filter((p) => p.status !== "pending").length > 0 && <h3 className="text-sm font-semibold text-muted-foreground mt-4">Schválené / zamítnuté</h3>}
+            {allBusiness.filter((p) => p.status !== "pending").map((p) => (
+              <Card key={p.id} className="cursor-pointer hover:border-primary/40" onClick={() => openProfileEdit(p)}>
+                <CardContent className="p-4 flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-sm">{p.company_name || "Bez názvu"}</p>
+                    <p className="text-xs text-muted-foreground">{p.full_name} · {p.email}</p>
+                    <p className="text-xs text-muted-foreground">Sleva: {p.discount_percent}%</p>
+                  </div>
+                  <Badge className={statusColors[p.status] || ""}>{statusLabel[p.status] || p.status}</Badge>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      case "users-employees": return <Suspense fallback={<Loader />}><AdminEmployees /></Suspense>;
+      case "users-mechanics": return <Suspense fallback={<Loader />}><AdminMechanics /></Suspense>;
+
+      // ----- DIAGNOSTIKA -----
+      case "diag":
+      case "diag-remote": return <Suspense fallback={<Loader />}><AdminRemoteOBD /></Suspense>;
+      case "diag-dtc": return <Suspense fallback={<Loader />}><AdminDTCLibrary /></Suspense>;
+      case "diag-tsb": return <Suspense fallback={<Loader />}><AdminTSBs /></Suspense>;
+      case "diag-pdf": return <Suspense fallback={<Loader />}><AdminDiagPDFs /></Suspense>;
+
+      // ----- MOBILE -----
+      case "mobile":
+      case "mobile-quick": return <Suspense fallback={<Loader />}><AdminMobileQuickActions /></Suspense>;
+      case "mobile-vin": return <Suspense fallback={<Loader />}><AdminVinScanner /></Suspense>;
+      case "mobile-push": return <Suspense fallback={<Loader />}><AdminPushSettings /></Suspense>;
+      case "mobile-offline": return <Suspense fallback={<Loader />}><AdminOfflineQueue /></Suspense>;
+
+      // ----- SYSTÉM -----
+      case "system":
+      case "sys-features": return <Suspense fallback={<Loader />}><AdminFeatureSettings /></Suspense>;
+      case "sys-notifications": return <Suspense fallback={<Loader />}><AdminNotifications /></Suspense>;
+      case "sys-push": return <Suspense fallback={<Loader />}><AdminNotificationToggle /></Suspense>;
+      case "sys-activity": return <Suspense fallback={<Loader />}><AdminActivityLog /></Suspense>;
+      case "sys-audit": return <Suspense fallback={<Loader />}><AdminAuditLog /></Suspense>;
+      case "sys-backups": return <Suspense fallback={<Loader />}><AdminBackups /></Suspense>;
+      case "sys-stats": return <Suspense fallback={<Loader />}><AdminDashboardStats /></Suspense>;
+
+      default:
+        return <p className="text-muted-foreground">Sekce nenalezena: {section}</p>;
+    }
+  };
 
   return (
-    <div className="min-h-screen pb-20">
-      <PageHeader title="Admin panel" subtitle="Správa systému" />
-      <div className="p-4 max-w-4xl mx-auto">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-lg gradient-bronze flex items-center justify-center">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex-1">
-            <span className="text-sm font-display font-semibold">Řídící centrum</span>
-            <p className="text-[10px] text-muted-foreground">Firmy · Objednávky · Servis · Katalog</p>
-          </div>
-          <Button size="sm" variant="outline" className="border-border/30 h-8" onClick={fetchAll}>
-            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Obnovit
-          </Button>
-        </div>
+    <>
+      <AdminShell tree={tree} activeKey={section} onSelect={goto}>
+        {loading && section === "overview" ? <Loader /> : renderSection()}
+      </AdminShell>
 
-        <Tabs defaultValue="firms">
-          <TabsList className="w-full flex overflow-x-auto scrollbar-hide bg-secondary/40 border border-border/20 p-0.5">
-            <TabsTrigger value="firms" className="text-[11px] gap-1 shrink-0">
-              <Users className="w-3 h-3" />
-              Firmy
-              {pendingOnly.length > 0 && (
-                <span className="ml-1 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] flex items-center justify-center font-bold">
-                  {pendingOnly.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="orders" className="text-[11px] gap-1 shrink-0"><ShoppingCart className="w-3 h-3" />Obj.</TabsTrigger>
-            {isEnabled("bookings") && <TabsTrigger value="service" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Servis</TabsTrigger>}
-            {isEnabled("vehicle_offers") && <TabsTrigger value="inquiries" className="text-[11px] gap-1 shrink-0"><Car className="w-3 h-3" />Vozy</TabsTrigger>}
-           {isEnabled("catalog") && <TabsTrigger value="catalog" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Katalog</TabsTrigger>}
-            {isEnabled("service_history") && <TabsTrigger value="history" className="text-[11px] gap-1 shrink-0"><History className="w-3 h-3" />Knížka</TabsTrigger>}
-            {isEnabled("notifications") && <TabsTrigger value="notifications" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Zprávy</TabsTrigger>}
-            {isEnabled("fault_reports") && <TabsTrigger value="faults" className="text-[11px] gap-1 shrink-0"><AlertTriangle className="w-3 h-3" />Poruchy</TabsTrigger>}
-            
-            <TabsTrigger value="service-plans" className="text-[11px] gap-1 shrink-0"><Wrench className="w-3 h-3" />Plány</TabsTrigger>
-            {isEnabled("vehicle_offers") && <TabsTrigger value="vehicle-offers" className="text-[11px] gap-1 shrink-0"><ArrowDownUp className="w-3 h-3" />Výkup/Dovoz</TabsTrigger>}
-            
-            {isEnabled("service_orders") && <TabsTrigger value="service-orders" className="text-[11px] gap-1 shrink-0"><ClipboardList className="w-3 h-3" />Zakázky</TabsTrigger>}
-            {isEnabled("service_scheduler") && <TabsTrigger value="scheduler" className="text-[11px] gap-1 shrink-0"><Calendar className="w-3 h-3" />Plánování</TabsTrigger>}
-            {isEnabled("mechanics_management") && <TabsTrigger value="mechanics" className="text-[11px] gap-1 shrink-0"><UserCog className="w-3 h-3" />Mechanici</TabsTrigger>}
-            {isEnabled("employees") && <TabsTrigger value="employees" className="text-[11px] gap-1 shrink-0"><Users className="w-3 h-3" />Zaměstnanci</TabsTrigger>}
-            {isEnabled("service_statistics") && <TabsTrigger value="statistics" className="text-[11px] gap-1 shrink-0"><BarChart3 className="w-3 h-3" />Statistiky</TabsTrigger>}
-            <TabsTrigger value="procedures" className="text-[11px] gap-1 shrink-0"><BookOpen className="w-3 h-3" />Postupy</TabsTrigger>
-            {isEnabled("push_notifications") && <TabsTrigger value="push-notif" className="text-[11px] gap-1 shrink-0"><Bell className="w-3 h-3" />Push</TabsTrigger>}
-            {isEnabled("service_reviews") && <TabsTrigger value="reviews" className="text-[11px] gap-1 shrink-0"><Star className="w-3 h-3" />Hodnocení</TabsTrigger>}
-            {isEnabled("admin_statistics") && <TabsTrigger value="dashboard-stats" className="text-[11px] gap-1 shrink-0"><TrendingUp className="w-3 h-3" />Přehled</TabsTrigger>}
-            <TabsTrigger value="features" className="text-[11px] gap-1 shrink-0"><Settings2 className="w-3 h-3" />Moduly</TabsTrigger>
-            {isAdmin && <TabsTrigger value="activity" className="text-[11px] gap-1 shrink-0"><Clock className="w-3 h-3" />Aktivita</TabsTrigger>}
-            {isAdmin && <TabsTrigger value="backups" className="text-[11px] gap-1 shrink-0"><Database className="w-3 h-3" />Zálohy</TabsTrigger>}
-          </TabsList>
-
-          {/* FIRMS / PENDING BUSINESS */}
-          <TabsContent value="firms">
-            <div className="space-y-3 mt-2">
-              {pendingOnly.length > 0 && (
-                <h3 className="text-sm font-semibold text-destructive">Čeká na schválení ({pendingOnly.length})</h3>
-              )}
-              {pendingOnly.map((p) => (
-                <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="border-warning/30">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-sm">{p.company_name || "Bez názvu"}</p>
-                          <p className="text-xs text-muted-foreground">{p.full_name} · {p.email}</p>
-                          <p className="text-xs text-muted-foreground">IČO: {p.ico || "–"} · DIČ: {p.dic || "–"}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(p.created_at)}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="outline" onClick={() => openProfileEdit(p)}>
-                            <CheckCircle className="w-4 h-4 mr-1 text-success" />
-                            Schválit
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => rejectProfile(p.id)}>
-                            <XCircle className="w-4 h-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-
-              {allBusiness.filter(p => p.status !== "pending").length > 0 && (
-                <>
-                  <h3 className="text-sm font-semibold text-muted-foreground mt-4">Schválené / zamítnuté firmy</h3>
-                  {allBusiness.filter(p => p.status !== "pending").map((p) => (
-                    <motion.div key={p.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                      <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openProfileEdit(p)}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <p className="font-semibold text-sm">{p.company_name || "Bez názvu"}</p>
-                              <p className="text-xs text-muted-foreground">{p.full_name} · {p.email}</p>
-                              <p className="text-xs text-muted-foreground">Sleva: {p.discount_percent}%</p>
-                            </div>
-                            <Badge className={statusColors[p.status] || ""}>{statusLabel[p.status] || p.status}</Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-                </>
-              )}
-
-              {allBusiness.length === 0 && (
-                <p className="text-muted-foreground text-sm text-center py-8">Žádné firemní účty</p>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* ORDERS */}
-          <TabsContent value="orders">
-            <div className="space-y-3 mt-2">
-              {/* Type filter + cleanup button */}
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex gap-1">
-                  {(["all", "new", "used"] as const).map((t) => (
-                    <Button
-                      key={t}
-                      size="sm"
-                      variant={orderTypeFilter === t ? "default" : "outline"}
-                      onClick={() => setOrderTypeFilter(t)}
-                      className="text-xs"
-                    >
-                      {t === "all" ? "Vše" : t === "new" ? "Nové díly" : "Použité díly"}
-                    </Button>
-                  ))}
-                </div>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="text-xs gap-1"
-                  onClick={async () => {
-                    if (!confirm("Smazat všechny vyřízené a zrušené objednávky?")) return;
-                    try {
-                      const { data, error } = await supabase.functions.invoke("cleanup-orders", { body: { mode: "manual" } });
-                      if (error) throw error;
-                      toast({ title: "Vyčištěno", description: `Smazáno ${data?.deleted || 0} objednávek` });
-                      fetchAll();
-                    } catch (e: any) {
-                      toast({ title: "Chyba", description: e?.message || "Nepodařilo se", variant: "destructive" });
-                    }
-                  }}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Smazat vyřízené
-                </Button>
-              </div>
-
-              {filteredOrders.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné objednávky</p>}
-              {filteredOrders.map((o) => (
-                <motion.div key={o.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openOrderEdit(o)}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-sm">{o.part_name || "–"}</p>
-                            <Badge variant="outline" className="text-[10px]">
-                              {o.order_type === "new" ? "Nový" : "Použitý"}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-primary font-medium">{o.profile_name || "–"} · {o.profile_email || "–"}</p>
-                          <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "–"} · {o.quantity}×</p>
-                          {o.catalog_source && (
-                            <Badge variant="outline" className="text-[10px] mt-0.5 bg-secondary/50">
-                              Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}
-                            </Badge>
-                          )}
-                          {o.customer_note && <p className="text-xs text-muted-foreground italic mt-1">"{o.customer_note}"</p>}
-                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)} · {o.id.slice(0, 8)}</p>
-                        </div>
-                        <div className="text-right">
-                          <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
-                          {o.price_with_vat != null && <p className="text-sm font-semibold mt-1">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
-                          {o.discount_percent != null && o.discount_percent > 0 && (
-                            <p className="text-[10px] text-muted-foreground">sleva {o.discount_percent}%</p>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* SERVICE */}
-          <TabsContent value="service">
-            <div className="space-y-3 mt-2">
-              {bookings.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné rezervace</p>}
-              {bookings.map((b) => (
-                <motion.div key={b.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card className="cursor-pointer hover:border-primary/40 transition-colors" onClick={() => openBookingEdit(b)}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-sm">{b.service_type}</p>
-                          <p className="text-xs text-primary font-medium">{b.profile_name || "–"} · {b.profile_email || b.profile_phone || "–"}</p>
-                          <p className="text-xs text-muted-foreground">{b.vehicle_brand || "–"} {b.vehicle_model || ""}</p>
-                          <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
-                          {b.wants_replacement_vehicle && <Badge variant="outline" className="text-xs mt-1">Náhradní vůz</Badge>}
-                        </div>
-                        <div className="text-right">
-                          <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
-                          {b.final_price && <p className="text-sm font-semibold mt-1">{b.final_price.toLocaleString("cs")} Kč</p>}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* INQUIRIES */}
-          <TabsContent value="inquiries">
-            <div className="space-y-3 mt-2">
-              {inquiries.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádné poptávky vozidel</p>}
-              {inquiries.map((i) => (
-                <motion.div key={i.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-semibold text-sm">{i.name || "Bez jména"}</p>
-                          <p className="text-xs text-muted-foreground">{i.email} · {i.phone}</p>
-                          {i.message && <p className="text-xs text-muted-foreground mt-1 italic">"{i.message}"</p>}
-                          <p className="text-xs text-muted-foreground mt-1">{fmtDate(i.created_at)}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <Badge className={statusColors[i.status] || ""}>{statusLabel[i.status] || i.status}</Badge>
-                          <Select
-                            value={i.status}
-                            onValueChange={async (newStatus) => {
-                              const { error } = await supabase.from("vehicle_inquiries").update({ status: newStatus }).eq("id", i.id);
-                              if (error) { toast({ title: "Chyba", description: error.message, variant: "destructive" }); return; }
-                              toast({ title: "Stav aktualizován" });
-                              fetchAll();
-                            }}
-                          >
-                            <SelectTrigger className="h-7 text-[10px] w-28"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="new">Nový</SelectItem>
-                              <SelectItem value="contacted">Kontaktován</SelectItem>
-                              <SelectItem value="completed">Dokončeno</SelectItem>
-                              <SelectItem value="cancelled">Zrušeno</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </TabsContent>
-
-          {/* CATALOG — sjednocená záložka pro všechny katalogové nástroje */}
-          <TabsContent value="catalog">
-            <div className="mt-2">
-              <AdminCatalogUnified />
-            </div>
-          </TabsContent>
-
-
-          <TabsContent value="history">
-            <div className="mt-2">
-              <AdminServiceHistory />
-            </div>
-          </TabsContent>
-
-          {isEnabled("notifications") && (
-            <TabsContent value="notifications">
-              <div className="mt-2"><AdminNotifications /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("fault_reports") && (
-            <TabsContent value="faults">
-              <div className="mt-2"><AdminFaultReports /></div>
-            </TabsContent>
-          )}
-
-
-          <TabsContent value="service-plans">
-            <div className="mt-2"><AdminServicePlans /></div>
-          </TabsContent>
-
-          {isEnabled("vehicle_offers") && (
-            <TabsContent value="vehicle-offers">
-              <div className="mt-2"><AdminVehicleOffers /></div>
-            </TabsContent>
-          )}
-
-
-          {isEnabled("service_orders") && (
-            <TabsContent value="service-orders">
-              <div className="mt-2"><AdminServiceOrders /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("mechanics_management") && (
-            <TabsContent value="mechanics">
-              <div className="mt-2"><AdminMechanics /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("service_statistics") && (
-            <TabsContent value="statistics">
-              <div className="mt-2"><AdminServiceStatistics /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("service_scheduler") && (
-            <TabsContent value="scheduler">
-              <div className="mt-2"><AdminServiceScheduler /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("employees") && (
-            <TabsContent value="employees">
-              <div className="mt-2"><AdminEmployees /></div>
-            </TabsContent>
-          )}
-
-          <TabsContent value="procedures">
-            <AdminServiceProcedures />
-          </TabsContent>
-
-          {isEnabled("push_notifications") && (
-            <TabsContent value="push-notif">
-              <div className="mt-2"><AdminNotificationToggle /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("service_reviews") && (
-            <TabsContent value="reviews">
-              <div className="mt-2"><AdminReviews /></div>
-            </TabsContent>
-          )}
-
-          {isEnabled("admin_statistics") && (
-            <TabsContent value="dashboard-stats">
-              <div className="mt-2"><AdminDashboardStats /></div>
-            </TabsContent>
-          )}
-
-          <TabsContent value="features">
-            <div className="mt-2"><AdminFeatureSettings /></div>
-          </TabsContent>
-
-          {isAdmin && (
-            <TabsContent value="activity">
-              <div className="mt-2"><AdminActivityLog /></div>
-            </TabsContent>
-          )}
-
-          {isAdmin && (
-            <TabsContent value="backups">
-              <div className="mt-2"><AdminBackups /></div>
-            </TabsContent>
-          )}
-        </Tabs>
-      </div>
-
-      {/* PROFILE APPROVAL DIALOG */}
+      {/* === Dialogy (zachované) === */}
       <Dialog open={!!editProfile} onOpenChange={() => setEditProfile(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Správa firemního účtu</DialogTitle></DialogHeader>
           {editProfile && (
             <div className="space-y-3">
-              <div className="space-y-1">
-                <p className="text-sm"><span className="font-medium">Firma:</span> {editProfile.company_name}</p>
-                <p className="text-sm"><span className="font-medium">Kontakt:</span> {editProfile.full_name} · {editProfile.email}</p>
-                <p className="text-sm"><span className="font-medium">IČO:</span> {editProfile.ico || "–"}</p>
-                <p className="text-sm"><span className="font-medium">DIČ:</span> {editProfile.dic || "–"}</p>
-                <p className="text-sm"><span className="font-medium">Status:</span> {statusLabel[editProfile.status] || editProfile.status}</p>
+              <div className="space-y-1 text-sm">
+                <p><strong>Firma:</strong> {editProfile.company_name}</p>
+                <p><strong>Kontakt:</strong> {editProfile.full_name} · {editProfile.email}</p>
+                <p><strong>IČO:</strong> {editProfile.ico || "—"} · <strong>DIČ:</strong> {editProfile.dic || "—"}</p>
               </div>
               <div>
                 <label className="text-sm font-medium">Sleva (%)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={formDiscount}
-                  onChange={(e) => setFormDiscount(e.target.value)}
-                  placeholder="0"
-                />
+                <Input type="number" min={0} max={100} value={formDiscount} onChange={(e) => setFormDiscount(e.target.value)} />
               </div>
             </div>
           )}
-          <DialogFooter className="flex gap-2">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setEditProfile(null)}>Zavřít</Button>
             {editProfile?.status === "pending" && (
               <Button variant="destructive" onClick={() => editProfile && rejectProfile(editProfile.id)}>
@@ -737,42 +523,28 @@ const Admin = () => {
               </Button>
             )}
             <Button onClick={() => editProfile && approveProfile(editProfile.id, parseFloat(formDiscount) || 0)}>
-              <CheckCircle className="w-4 h-4 mr-1" />
-              {editProfile?.status === "pending" ? "Schválit" : "Uložit slevu"}
+              <CheckCircle className="w-4 h-4 mr-1" />{editProfile?.status === "pending" ? "Schválit" : "Uložit"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ORDER EDIT DIALOG */}
       <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Upravit objednávku</DialogTitle></DialogHeader>
           {editOrder && (
             <div className="space-y-3">
-              <div className="space-y-1 text-sm">
-                <p><span className="font-medium">Díl:</span> {editOrder.part_name}</p>
-                <p><span className="font-medium">OEM:</span> {editOrder.oem_number || "–"}</p>
-                <p><span className="font-medium">Typ:</span> {editOrder.order_type === "new" ? "Nový" : "Použitý"}</p>
-                {editOrder.unit_price != null && <p><span className="font-medium">Cena bez DPH:</span> {editOrder.unit_price.toLocaleString("cs")} Kč</p>}
-                {editOrder.price_with_vat != null && <p><span className="font-medium">Cena s DPH:</span> {editOrder.price_with_vat.toLocaleString("cs")} Kč</p>}
-                {editOrder.customer_note && <p><span className="font-medium">Poznámka zákazníka:</span> {editOrder.customer_note}</p>}
-              </div>
-              <div>
-                <label className="text-sm font-medium">Status</label>
-                <Select value={formStatus} onValueChange={setFormStatus}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["nova", "zpracovava_se", "vyrizena", "zrusena"].map(s => (
-                      <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Poznámka admina</label>
-                <Textarea value={formNote} onChange={e => setFormNote(e.target.value)} />
-              </div>
+              <p className="text-sm font-medium">{editOrder.part_name}</p>
+              <Select value={formStatus} onValueChange={setFormStatus}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nova">Nová</SelectItem>
+                  <SelectItem value="zpracovava_se">Zpracovává se</SelectItem>
+                  <SelectItem value="vyrizena">Vyřízena</SelectItem>
+                  <SelectItem value="zrusena">Zrušena</SelectItem>
+                </SelectContent>
+              </Select>
+              <Textarea placeholder="Admin poznámka" value={formNote} onChange={(e) => setFormNote(e.target.value)} />
             </div>
           )}
           <DialogFooter>
@@ -782,58 +554,42 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      {/* BOOKING EDIT DIALOG */}
       <Dialog open={!!editBooking} onOpenChange={() => setEditBooking(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Upravit servisní rezervaci</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Status</label>
+          <DialogHeader><DialogTitle>Upravit rezervaci</DialogTitle></DialogHeader>
+          {editBooking && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium">{editBooking.service_type}</p>
               <Select value={formStatus} onValueChange={setFormStatus}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["pending", "confirmed", "in_progress", "completed", "cancelled"].map(s => (
-                    <SelectItem key={s} value={s}>{statusLabel[s]}</SelectItem>
-                  ))}
+                  <SelectItem value="pending">Čeká</SelectItem>
+                  <SelectItem value="confirmed">Potvrzeno</SelectItem>
+                  <SelectItem value="in_progress">Probíhá</SelectItem>
+                  <SelectItem value="completed">Dokončeno</SelectItem>
+                  <SelectItem value="cancelled">Zrušeno</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Potvrzený datum</label>
-              <Input type="date" value={formConfirmedDate} onChange={e => setFormConfirmedDate(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Odhadovaná cena (Kč)</label>
-              <Input type="number" value={formEstimatedPrice} onChange={e => setFormEstimatedPrice(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Finální cena (Kč)</label>
-              <Input type="number" value={formFinalPrice} onChange={e => setFormFinalPrice(e.target.value)} />
-            </div>
-            {editBooking?.wants_replacement_vehicle && (
-              <div>
-                <label className="text-sm font-medium">Náhradní vůz potvrzen?</label>
-                <Select value={formReplacementConfirmed} onValueChange={setFormReplacementConfirmed}>
-                  <SelectTrigger><SelectValue placeholder="Vyberte" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="yes">Ano</SelectItem>
-                    <SelectItem value="no">Ne</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs">Potvrzené datum</label>
+                  <Input type="date" value={formConfirmedDate} onChange={(e) => setFormConfirmedDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs">Finální cena</label>
+                  <Input type="number" value={formFinalPrice} onChange={(e) => setFormFinalPrice(e.target.value)} />
+                </div>
               </div>
-            )}
-            <div>
-              <label className="text-sm font-medium">Poznámka admina</label>
-              <Textarea value={formNote} onChange={e => setFormNote(e.target.value)} />
+              <Textarea placeholder="Admin poznámka" value={formNote} onChange={(e) => setFormNote(e.target.value)} />
             </div>
-          </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditBooking(null)}>Zrušit</Button>
             <Button onClick={saveBooking}>Uložit</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };
 
