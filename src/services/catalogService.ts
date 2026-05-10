@@ -27,6 +27,7 @@ const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/
 const CATEGORY_RULES: Array<{ id: string; label: string; match: RegExp }> = [
   { id: "brakes", label: "Brzdové zařízení", match: /brzd|abs|trmen|kotouc|destick|destic|buben|celist|valec/ },
   { id: "filters", label: "Filtry", match: /filtr/ },
+  { id: "maintenance", label: "Údržba", match: /sterac|udrz|servis|ostriko/ },
   { id: "engine", label: "Motor", match: /motor|zapal|svick|rozvod|tesnen|hlava|pist|ojnic|klik|vack|ventil|olejova pumpa|sani|turbo|egr/ },
   { id: "cooling", label: "Chlazení", match: /chlad|vodni cerpad|termostat|radiator|expanz|ventilator chlad|intercooler/ },
   { id: "axle", label: "Nápravy a odpružení", match: /odpru|tlumic|pruzin|ramen|silentblok|stabiliz|lozisk|naboj|kulov|cep|doraz|pomocny ram/ },
@@ -39,7 +40,6 @@ const CATEGORY_RULES: Array<{ id: string; label: string; match: RegExp }> = [
   { id: "exhaust", label: "Výfukový systém", match: /vyfuk|katalyz|lambda|dpf|tlumic vyf/ },
   { id: "lighting", label: "Osvětlení", match: /svetl|osvet|mlhov|smerov|zarovka|spz/ },
   { id: "safety", label: "Bezpečnostní systém", match: /bezpec|airbag|pas|srs/ },
-  { id: "maintenance", label: "Údržba", match: /sterac|udrz|servis|ostriko/ },
   { id: "fluids", label: "Kapaliny a oleje", match: /olej|kapalin|adblue|def/ },
 ];
 
