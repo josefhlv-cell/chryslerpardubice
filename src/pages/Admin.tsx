@@ -372,6 +372,8 @@ const Admin = () => {
       case "service-reviews": return <Suspense fallback={<Loader />}><AdminReviews /></Suspense>;
       case "service-stats": return <Suspense fallback={<Loader />}><AdminServiceStatistics /></Suspense>;
 
+      case "orders-jm": return <Suspense fallback={<Loader />}><AdminJmOrders /></Suspense>;
+
       // ----- ORDERS -----
       case "orders":
       case "orders-list":
