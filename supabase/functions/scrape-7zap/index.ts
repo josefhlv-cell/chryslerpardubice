@@ -594,4 +594,6 @@ function parsePartsFromMarkdown(md: string): Array<{ oem_number: string; name: s
   return parts;
 }
 
-function jsonResponse(da
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
