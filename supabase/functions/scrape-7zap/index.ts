@@ -115,14 +115,34 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith('Bearer ')) {
       return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
     }
+
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
     const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (claimsError || !claimsData?.claims?.sub) {
+    
+    // ✅ Ověření tokenu pomocí getUser (oprava chyby "getClaims is not a function")
+    const authClient = createAuthClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+    
+    if (userError || !user) {
       return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
     }
-    const adminCheck = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: roleData } = await adminCheck.from('user_roles').select('role').eq('user_id', claimsData.claims.sub).eq('role', 'admin').maybeSingle();
+    const userId = user.id;
+
+    // Admin check
+    const adminClient = createAuthClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: roleData } = await adminClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+
     if (!roleData) {
       return jsonResponse({ success: false, error: 'Forbidden: admin required' }, 403);
     }
@@ -597,3 +617,6 @@ function parsePartsFromMarkdown(md: string): Array<{ oem_number: string; name: s
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
