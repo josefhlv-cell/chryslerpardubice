@@ -243,6 +243,7 @@ const Admin = () => {
     {
       key: "orders", label: "Objednávky", icon: ShoppingCart, children: [
         { key: "orders-list", label: "Seznam objednávek", badge: orders.filter((o) => o.status === "nova").length },
+        { key: "orders-jm", label: "Odeslané do J+M" },
       ],
     },
     {
