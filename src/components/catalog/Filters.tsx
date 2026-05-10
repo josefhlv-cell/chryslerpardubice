@@ -155,11 +155,13 @@ const Filters = ({
               <SelectContent>{models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
             </Select>
           )}
-          {engines.length > 0 && (
-            <Select value={motor} onValueChange={setMotor}>
-              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motor" /></SelectTrigger>
-              <SelectContent>{engines.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}</SelectContent>
-            </Select>
+          {brand && model && (
+            <MotorizationDetails
+              brand={brand}
+              model={model}
+              selectedEngine={motor}
+              onSelect={setMotor}
+            />
           )}
         </div>
       )}
