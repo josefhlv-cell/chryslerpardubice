@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
     const authClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
     
-    // Opravené ověření tokenu
+    // ✅ Opravené ověření tokenu – použijeme getUser() místo neexistující getClaims()
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await authClient.auth.getUser(token);
     if (userError || !user) return j({ success: false, error: 'Unauthorized' }, 401);
