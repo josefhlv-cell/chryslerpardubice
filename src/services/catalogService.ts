@@ -195,5 +195,6 @@ export async function fetchAllPartsForEngine(opts: {
     totalParts,
     oemSeedsUsed,
     warning: payload.warning,
+    debug,
   };
 }
