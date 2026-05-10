@@ -74,7 +74,7 @@ function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean 
 
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
-  const { user, canPlaceOrder } = useAuth();
+  const { user, canPlaceOrder, isAdmin } = useAuth();
 
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
