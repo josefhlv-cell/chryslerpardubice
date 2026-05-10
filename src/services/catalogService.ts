@@ -197,8 +197,8 @@ export async function fetchAllPartsForEngine(opts: {
   const oemByNumber = new Map<string, any>();
   for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
 
-  // 3. Build groups: OEM first, then J+M (deduped, capped per group)
-  const groups: CategoryGroup[] = [];
+  // 3. Build real two-level catalog: parent category → J+M/TecDoc section.
+  const parentMap = new Map<string, CategoryGroup>();
   for (const [id, bucket] of sectionMap) {
     const seenOem = new Set<string>();
     const oemParts: CatalogPart[] = [];
@@ -229,13 +229,25 @@ export async function fetchAllPartsForEngine(opts: {
 
     const parts = [...oemParts, ...jmDeduped];
     if (parts.length === 0) continue;
-    groups.push({ id, label: bucket.label, count: parts.length, parts });
+
+    const parent = parentForSection(bucket.label);
+    if (!parentMap.has(parent.id)) parentMap.set(parent.id, { ...parent, count: 0, parts: [], children: [] });
+    const parentGroup = parentMap.get(parent.id)!;
+    const child: CategoryGroup = { id: `${parent.id}:${id}`, label: bucket.label, count: parts.length, parts };
+    parentGroup.children!.push(child);
+    parentGroup.parts.push(...parts);
+    parentGroup.count += parts.length;
   }
 
-  // Sort: groups with most parts first, "Ostatní" at the end
+  const groups = [...parentMap.values()];
+  for (const group of groups) {
+    group.children = (group.children || []).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "cs"));
+  }
+
+  // Sort: parent groups with most parts first, "Ostatní" at the end
   groups.sort((a, b) => {
-    if (a.id === "0" && b.id !== "0") return 1;
-    if (b.id === "0" && a.id !== "0") return -1;
+    if (a.id === "other" && b.id !== "other") return 1;
+    if (b.id === "other" && a.id !== "other") return -1;
     return b.count - a.count;
   });
 
