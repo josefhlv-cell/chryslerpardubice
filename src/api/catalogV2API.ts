@@ -675,6 +675,11 @@ export async function listPartsForVehicle(opts: any) {
   const canonical = resolveCanonicalCategory(rawLabel, keywords);
   const orFilter = buildKeywordOr(keywords.length ? keywords : [rawLabel]);
 
+  // FIX 2026-05-10: count vs listing mismatch — count used keyword match on
+  // name/description/category, but listing filtered strictly by `category = canonical`.
+  // → parts with the keyword in name but a different `category` were counted but
+  // never returned. Now we always try canonical first, then fall back to the
+  // keyword OR filter on the SAME row set.
   const tryViaCompat = async (): Promise<{ rows: any[]; error: any }> => {
     if (!opts.nextisVehicleId && !opts.brand) return { rows: [], error: null };
     let compatQ = supabase.from('catalog_vehicle_compatibility').select('part_id').limit(2000);
@@ -693,21 +698,49 @@ export async function listPartsForVehicle(opts: any) {
     if (compatErr) return { rows: [], error: compatErr };
     const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
     if (partIds.length === 0) return { rows: [], error: null };
-    let q = supabase.from('parts_new_public').select('*').in('id', partIds);
-    if (canonical) q = q.eq('category', canonical);
-    else if (orFilter) q = q.or(orFilter);
-    const { data, error } = await q.limit(2000);
-    return { rows: data || [], error };
+
+    // Pass 1: strict canonical category match (cleanest data)
+    if (canonical) {
+      const { data: strict, error: strictErr } = await supabase
+        .from('parts_new_public').select('*').in('id', partIds)
+        .eq('category', canonical).limit(2000);
+      if (strictErr) return { rows: [], error: strictErr };
+      if ((strict || []).length > 0) return { rows: strict || [], error: null };
+    }
+    // Pass 2: keyword OR fallback over same vehicle-scoped IDs (matches what count saw)
+    if (orFilter) {
+      const { data: kw, error: kwErr } = await supabase
+        .from('parts_new_public').select('*').in('id', partIds)
+        .or(orFilter).limit(2000);
+      if (kwErr) return { rows: [], error: kwErr };
+      if ((kw || []).length > 0) return { rows: kw || [], error: null };
+    }
+    // Pass 3: no filter at all if neither matched (still scoped to vehicle)
+    const { data: all, error: allErr } = await supabase
+      .from('parts_new_public').select('*').in('id', partIds).limit(2000);
+    return { rows: all || [], error: allErr };
   };
 
   const tryViaText = async (useEngine: boolean) => {
-    let query = supabase.from('parts_new_public').select('*')
-      .ilike('compatible_vehicles', `%${opts.brand}%`);
-    if (opts.model) query = query.ilike('compatible_vehicles', `%${opts.model}%`);
-    if (useEngine && opts.engine) query = query.ilike('compatible_vehicles', `%${opts.engine}%`);
-    if (canonical) query = query.eq('category', canonical);
-    else if (orFilter) query = query.or(orFilter);
-    return await query.limit(2000);
+    const baseFilter = (q: any) => {
+      q = q.ilike('compatible_vehicles', `%${opts.brand}%`);
+      if (opts.model) q = q.ilike('compatible_vehicles', `%${opts.model}%`);
+      if (useEngine && opts.engine) q = q.ilike('compatible_vehicles', `%${opts.engine}%`);
+      return q;
+    };
+    if (canonical) {
+      const strict = await baseFilter(
+        supabase.from('parts_new_public').select('*').eq('category', canonical)
+      ).limit(2000);
+      if (!strict.error && (strict.data || []).length > 0) return strict;
+    }
+    if (orFilter) {
+      const kw = await baseFilter(
+        supabase.from('parts_new_public').select('*').or(orFilter)
+      ).limit(2000);
+      if (!kw.error && (kw.data || []).length > 0) return kw;
+    }
+    return await baseFilter(supabase.from('parts_new_public').select('*')).limit(2000);
   };
 
   // Strategy 0: catalog_part_categories mapping (jen když flag ON - nyní vždy false)
