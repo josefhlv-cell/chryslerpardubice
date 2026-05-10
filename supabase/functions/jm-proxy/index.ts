@@ -1912,6 +1912,12 @@ Deno.serve(async (req) => {
           kTypeSource = r.source;
           kTypeMappingId = r.mappingId;
         }
+        const forceOemFallback = payload.forceOemFallback === true || String(payload.forceOemFallback || '').toLowerCase() === 'true';
+        if (forceOemFallback) {
+          resolvedEngineID = 0;
+          kTypeSource = 'forced_oem_fallback';
+          kTypeMappingId = undefined;
+        }
 
         if (!brand || !model) {
           result = { items: [], warning: 'brand+model required' };
@@ -1932,8 +1938,21 @@ Deno.serve(async (req) => {
               result = { ...(cached.data as any), fromCache: true };
               break;
             }
+            if (payload.cacheOnly === true || String(payload.cacheOnly || '').toLowerCase() === 'true') {
+              result = { ...(cached.data as any), fromCache: true, staleCache: true };
+              break;
+            }
           }
         } catch (_) { /* non-blocking */ }
+
+        if (payload.cacheOnly === true || String(payload.cacheOnly || '').toLowerCase() === 'true') {
+          result = {
+            items: [],
+            warning: 'cache miss',
+            debug: { flow: forceOemFallback ? 'oemFallbackCacheOnly' : 'cacheOnly', k_type: resolvedEngineID, k_type_source: kTypeSource },
+          };
+          break;
+        }
 
         // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop (concurrent + retry) =====
         if (resolvedEngineID > 0) {
