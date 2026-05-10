@@ -1967,6 +1967,81 @@ Deno.serve(async (req) => {
           break;
         }
 
+        // ===== STRATEGY A0: single byVehicle call without genArtID (returns ALL sections) =====
+        // Pokud Nextis API podporuje volání bez filtru sekce, dostaneme všechny díly v jednom requestu
+        // a sekce poskládáme dynamicky podle productGenericArticleID/Name vrácených v každém dílu.
+        if (resolvedEngineID > 0) {
+          try {
+            const startedAt0 = Date.now();
+            const reqBody0 = { engineID: resolvedEngineID, getOECodes: true, target: 'P' };
+            const res0 = await nextisPostWithRetry('/catalogs/items-finding-by-vehicle', reqBody0, {
+              timeoutMs: 25_000,
+              maxAttempts: 2,
+            });
+            if (res0.ok) {
+              const all = normalizeItems(res0.data);
+              const filtered = all.filter((it) => it.oem_number && isAllowedBrand(it.brand));
+              // Group by gen_art_id (TecDoc section) - dynamic, no hard-coded list
+              const seenA: Set<string> = new Set();
+              const grouped: Record<string, { id: number; label: string; items: UnifiedPart[] }> = {};
+              for (const it of filtered) {
+                const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+                if (seenA.has(key)) continue;
+                seenA.add(key);
+                // @ts-ignore - extras
+                const gid = Number(it.gen_art_id || 0);
+                // @ts-ignore - extras
+                const gname = String(it.gen_art_name || '').trim() || 'Ostatní';
+                const k = String(gid || gname);
+                if (!grouped[k]) grouped[k] = { id: gid, label: gname, items: [] };
+                grouped[k].items.push({ ...it, category: gname,
+                  // @ts-ignore
+                  tecdoc_section: { id: gid, label: gname } });
+              }
+              const sectionsList = Object.values(grouped);
+              const collectedAll = sectionsList.flatMap((s) => s.items);
+              if (collectedAll.length > 0) {
+                const enriched = await enrichItemsWithRelatedOem(adminClient, collectedAll);
+                const out = {
+                  items: enriched,
+                  engineID: resolvedEngineID,
+                  sectionsScanned: 1,
+                  sectionsHit: sectionsList.length,
+                  totalRawHits: filtered.length,
+                  source: 'engineID-single-call',
+                  sections: sectionsList.map((s) => ({ id: s.id, label: s.label, count: s.items.length })),
+                  debug: {
+                    flow: 'engineId-fullscan',
+                    k_type: resolvedEngineID,
+                    k_type_source: kTypeSource,
+                    k_type_mapping_id: kTypeMappingId,
+                    durationMs: Date.now() - startedAt0,
+                    sectionsHit: sectionsList.length,
+                    totalRawHits: filtered.length,
+                  },
+                };
+                try {
+                  await adminClient.from('api_cache').upsert({
+                    cache_type: 'jm_parts_for_engine',
+                    cache_key: cacheKey,
+                    data: out,
+                    ttl_seconds: 3600,
+                    created_at: new Date().toISOString(),
+                  }, { onConflict: 'cache_type,cache_key' });
+                } catch (_) { /* non-blocking */ }
+                result = out;
+                break;
+              }
+              // 0 items returned bez genArtID → spadneme do strategy A níže
+              console.warn('[partsForEngine] full-scan returned 0 items for engineID', resolvedEngineID, '- falling back to multi-section loop');
+            } else {
+              console.warn('[partsForEngine] full-scan call failed for engineID', resolvedEngineID, ':', res0.error, '- falling back to multi-section loop');
+            }
+          } catch (e) {
+            console.warn('[partsForEngine] full-scan threw, falling back:', (e as Error).message);
+          }
+        }
+
         // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop (concurrent + retry) =====
         if (resolvedEngineID > 0) {
           const startedAt = Date.now();
