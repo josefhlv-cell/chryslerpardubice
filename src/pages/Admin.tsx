@@ -29,6 +29,7 @@ const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
 const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
 const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
 const Admin7zapScraper = lazy(() => import("@/components/admin/Admin7zapScraper"));
+const AdminJqScraper = lazy(() => import("@/components/admin/AdminJqScraper"));
 const AdminAutoPipeline = lazy(() => import("@/components/admin/AdminAutoPipeline"));
 const AdminCatalogHealth = lazy(() => import("@/components/admin/AdminCatalogHealth"));
 const AdminPhotoEnrichment = lazy(() => import("@/components/admin/AdminPhotoEnrichment"));
