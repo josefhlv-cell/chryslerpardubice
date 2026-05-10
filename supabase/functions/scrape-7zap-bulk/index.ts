@@ -30,18 +30,19 @@ Deno.serve(async (req) => {
     }
 
     const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.0");
-
+    
     const authClient = createClient(SUPABASE_URL, ANON, {
       global: { headers: { Authorization: authHeader } },
     });
-
-    // ✅ FIX: getUser místo getClaims
+    
+    // ✅ FIX: žádný argument
     const {
       data: { user },
-    } = await authClient.auth.getUser(authHeader.replace("Bearer ", ""));
-
+    } = await authClient.auth.getUser();
+    
     if (!user?.id) {
       return j({ success: false, error: "Unauthorized" }, 401);
+    
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE);
