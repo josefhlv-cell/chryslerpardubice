@@ -1847,29 +1847,43 @@ Deno.serve(async (req) => {
         //     → clean classification, full section tree (15-20 categories).
         //  B) No engineID → fall back to OEM-seed flow (parts_new Mopar codes).
         const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        const vinHint = String(payload.vin || '').trim();
+        const yearHint = Number(payload.year || 0);
         let brand = String(payload.brand || '').trim();
         let model = String(payload.model || '').trim();
         let engine = String(payload.engine || '').trim();
-        let resolvedEngineID = 0;
         if (nextisVehicleId) {
           const { data: v } = await adminClient
             .from('nextis_vehicles')
-            .select('brand, model, engine, external_id')
+            .select('brand, model, engine')
             .eq('id', nextisVehicleId)
             .maybeSingle();
           if (v) {
             brand = String(v.brand || brand).trim();
             model = String(v.model || model).trim();
             engine = String(v.engine || engine).trim();
-            const ext = String(v.external_id || '').trim();
-            if (/^\d+$/.test(ext)) resolvedEngineID = Number(ext);
           }
         }
-        if (Number(payload.engineID || 0) > 0) resolvedEngineID = Number(payload.engineID);
+
+        // K-type resolver: vehicle_engine_mappings (VIN → config) → nextis_vehicles fallback → payload.
+        let resolvedEngineID = 0;
+        let kTypeSource: string = 'none';
+        let kTypeMappingId: string | undefined;
+        if (Number(payload.engineID || 0) > 0) {
+          resolvedEngineID = Number(payload.engineID);
+          kTypeSource = 'payload';
+        } else {
+          const r = await resolveKType(adminClient, { brand, model, engine, year: yearHint, vin: vinHint, nextisVehicleId });
+          resolvedEngineID = r.k_type;
+          kTypeSource = r.source;
+          kTypeMappingId = r.mappingId;
+        }
+
         if (!brand || !model) {
           result = { items: [], warning: 'brand+model required' };
           break;
         }
+
         const cacheKey = `${brand}|${model}|${engine}|eid:${resolvedEngineID}`.toLowerCase();
         try {
           const { data: cached } = await adminClient
@@ -1887,47 +1901,80 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* non-blocking */ }
 
-        // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop =====
+        // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop (concurrent + retry) =====
         if (resolvedEngineID > 0) {
-          console.log(`[partsForEngine] engineID=${resolvedEngineID} sections=${TECDOC_SECTIONS.length}`);
-          const BATCH_SECT = 8;
+          const startedAt = Date.now();
+          const GLOBAL_BUDGET_MS = 45_000;
+          const CONCURRENCY = 6;
+          const PER_CALL_TIMEOUT_MS = 8_000;
+          const aborted = { value: false };
           const collected: UnifiedPart[] = [];
           const seen = new Set<string>();
           let totalRaw = 0;
           let sectionsHit = 0;
+          const timedOutSections: number[] = [];
+          const retriedSections: number[] = [];
+          const failedSections: { id: number; error: string }[] = [];
 
-          for (let i = 0; i < TECDOC_SECTIONS.length; i += BATCH_SECT) {
-            const slice = TECDOC_SECTIONS.slice(i, i + BATCH_SECT);
-            const results = await Promise.all(slice.map(async (sec) => {
-              try {
-                const reqBody = { engineID: resolvedEngineID, genArtID: sec.id, getOECodes: true, target: 'P' };
-                const raw = await nextisPost('/catalogs/items-finding-by-vehicle', reqBody);
-                const rawList = raw?.items || raw?.Items || [];
-                return { sec, rawCount: rawList.length, items: normalizeItems(raw) };
-              } catch (e) {
-                console.warn(`[partsForEngine] genArtID=${sec.id} failed:`, (e as Error).message);
+          await writeScanProgress(adminClient, cacheKey, {
+            phase: 'starting', engineID: resolvedEngineID,
+            sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: 0,
+          });
+
+          const budgetTimer = setTimeout(() => { aborted.value = true; }, GLOBAL_BUDGET_MS);
+
+          const sectionResults = await runConcurrent(
+            TECDOC_SECTIONS,
+            CONCURRENCY,
+            async (sec) => {
+              if (aborted.value) return { sec, rawCount: 0, items: [] as UnifiedPart[], skipped: true };
+              const reqBody = { engineID: resolvedEngineID, genArtID: sec.id, getOECodes: true, target: 'P' };
+              const res = await nextisPostWithRetry('/catalogs/items-finding-by-vehicle', reqBody, {
+                timeoutMs: PER_CALL_TIMEOUT_MS,
+                maxAttempts: 3,
+              });
+              if (!res.ok) {
+                if (res.timedOut) timedOutSections.push(sec.id);
+                else failedSections.push({ id: sec.id, error: res.error });
                 return { sec, rawCount: 0, items: [] as UnifiedPart[] };
               }
-            }));
-            for (const r of results) {
-              totalRaw += r.rawCount;
-              if (r.items.length > 0) sectionsHit++;
-              for (const it of r.items) {
-                if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
-                const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                collected.push({
-                  ...it,
-                  category: r.sec.label,
-                  // @ts-ignore — extra field consumed by frontend
-                  tecdoc_section: { id: r.sec.id, label: r.sec.label },
+              if (res.attempts > 1) retriedSections.push(sec.id);
+              const rawList = res.data?.items || res.data?.Items || [];
+              return { sec, rawCount: rawList.length, items: normalizeItems(res.data) };
+            },
+            (done, total) => {
+              if (done % 4 === 0 || done === total) {
+                writeScanProgress(adminClient, cacheKey, {
+                  phase: 'scanning', engineID: resolvedEngineID,
+                  sectionsTotal: total, sectionsDone: done,
+                  sectionsHit, totalRawHits: totalRaw,
+                  elapsedMs: Date.now() - startedAt,
+                  aborted: aborted.value,
                 });
               }
+            },
+          );
+          clearTimeout(budgetTimer);
+
+          for (const r of sectionResults) {
+            totalRaw += r.rawCount;
+            if (r.items.length > 0) sectionsHit++;
+            for (const it of r.items) {
+              if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
+              const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              collected.push({
+                ...it,
+                category: r.sec.label,
+                // @ts-ignore — extra field consumed by frontend
+                tecdoc_section: { id: r.sec.id, label: r.sec.label },
+              });
             }
           }
 
           const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
+          const durationMs = Date.now() - startedAt;
           const out = {
             items: enriched,
             engineID: resolvedEngineID,
@@ -1935,6 +1982,22 @@ Deno.serve(async (req) => {
             sectionsHit,
             totalRawHits: totalRaw,
             source: 'engineID-multi-genart',
+            debug: {
+              flow: 'engineId',
+              k_type: resolvedEngineID,
+              k_type_source: kTypeSource,
+              k_type_mapping_id: kTypeMappingId,
+              sectionsScanned: TECDOC_SECTIONS.length,
+              sectionsHit,
+              totalRawHits: totalRaw,
+              durationMs,
+              timedOutSections,
+              retriedSections,
+              failedSections,
+              partial: aborted.value,
+              concurrency: CONCURRENCY,
+              perCallTimeoutMs: PER_CALL_TIMEOUT_MS,
+            },
           };
           try {
             await adminClient.from('api_cache').upsert({
@@ -1945,6 +2008,12 @@ Deno.serve(async (req) => {
               created_at: new Date().toISOString(),
             }, { onConflict: 'cache_type,cache_key' });
           } catch (_) { /* non-blocking */ }
+          await writeScanProgress(adminClient, cacheKey, {
+            phase: 'done', engineID: resolvedEngineID,
+            sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
+            sectionsHit, totalRawHits: totalRaw,
+            durationMs, partial: aborted.value,
+          });
           result = out;
           break;
         }
