@@ -262,6 +262,17 @@ async function resolveKType(
   const engine = (hint.engine || '').trim();
   const vin = (hint.vin || '').trim().toUpperCase();
   const year = Number(hint.year || 0);
+  const emergency300cMap: Record<string, number> = {
+    '3.0 crd': 19059,
+    '3.5 v6': 17957,
+    '5.7 hemi': 17958,
+    '6.1 srt8': 21586,
+  };
+  if (brand.toLowerCase() === 'chrysler' && model.toLowerCase() === '300c') {
+    const normalizedEngine = engine.toLowerCase().replace(/\s+/g, ' ').trim();
+    const k = emergency300cMap[normalizedEngine];
+    if (k) return { k_type: k, source: 'mapping_config' };
+  }
 
   if (brand && model) {
     try {
