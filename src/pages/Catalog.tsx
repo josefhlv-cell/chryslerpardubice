@@ -157,6 +157,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       .then((res) => {
         if (cancelled) return;
         setGroups(res.groups);
+        setDebugInfo(res.debug || null);
         if (res.warning) setWarning(res.warning);
         if (res.groups.length === 0) setWarning(res.warning || "Pro toto vozidlo se nepodařilo načíst žádné díly.");
       })
