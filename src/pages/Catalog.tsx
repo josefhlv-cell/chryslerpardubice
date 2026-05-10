@@ -16,11 +16,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
 import {
-  fetchBrands, fetchModelsForBrand, fetchEnginesForModel,
-  fetchNextisVehicles, fetchJmCategoryTree, listPartsForVehicle,
-  fetchJmByCodes, fetchJmForVehicle, mergeWithJm,
-  type CatalogPart, type CatalogCategoryNode, type NextisVehicle,
+  fetchBrands, fetchModelsForBrand,
+  fetchNextisVehicles,
+  type CatalogPart, type NextisVehicle,
 } from "@/api/catalogV2API";
+import { fetchAllPartsForEngine, type CategoryGroup } from "@/services/catalogService";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
