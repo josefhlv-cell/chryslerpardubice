@@ -218,7 +218,10 @@ const Admin = () => {
       key: "catalog", label: "Katalog", icon: Package, children: [
         { key: "catalog-overview", label: "Přehled", icon: LayoutDashboard },
         { key: "catalog-import", label: "Import" },
+        { key: "catalog-7zap", label: "7zap scraper" },
         { key: "catalog-repair", label: "Opravy & diagnostika" },
+        { key: "catalog-health", label: "Zdraví katalogu" },
+        { key: "catalog-pipeline", label: "Auto-pipeline" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
         ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "EPC nákresy" }] : []),
         { key: "catalog-settings", label: "Nastavení", icon: Settings2 },
@@ -325,6 +328,9 @@ const Admin = () => {
       case "catalog":
       case "catalog-overview": return <Suspense fallback={<Loader />}><AdminCatalogHub /></Suspense>;
       case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /><EPCImport /></div></Suspense>;
+      case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
+      case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
+      case "catalog-pipeline": return <Suspense fallback={<Loader />}><AdminAutoPipeline /></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
       case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminPriceManagement /></div></Suspense>;
       case "catalog-epc": return <Suspense fallback={<Loader />}><AdminEPCDiagrams /></Suspense>;
