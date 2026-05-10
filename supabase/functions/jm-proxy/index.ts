@@ -1728,7 +1728,10 @@ Deno.serve(async (req) => {
         };
 
         let oemSeeds = await fetchSeeds(true);
-        if (oemSeeds.length === 0) oemSeeds = await fetchSeeds(false);
+        if (oemSeeds.length < 20) {
+          const broad = await fetchSeeds(false);
+          oemSeeds = [...new Set([...oemSeeds, ...broad])];
+        }
         oemSeeds = oemSeeds.slice(0, 80);
 
         if (oemSeeds.length === 0) {
