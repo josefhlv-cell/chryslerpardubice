@@ -1799,13 +1799,13 @@ Deno.serve(async (req) => {
               const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
               if (seen.has(key)) continue;
               seen.add(key);
-              const sec = classifyTecdoc(it);
+              const seedCategory = seedCategoryByCode.get(normalizeOemCode(r.code)) || 'Ostatní';
               collected.push({
                 ...it,
                 related_oem_number: it.related_oem_number || r.code,
-                category: sec.label,
+                category: seedCategory,
                 // @ts-ignore — extra field consumed by frontend
-                tecdoc_section: { id: sec.id, label: sec.label },
+                tecdoc_section: { id: normalizeOemCode(seedCategory).length, label: seedCategory },
               });
             }
           }
