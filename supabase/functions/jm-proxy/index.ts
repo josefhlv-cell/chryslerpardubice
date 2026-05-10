@@ -943,7 +943,7 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
 
 // ---------- HTTP entry ----------
 const PUBLIC_READ_ACTIONS = new Set([
-  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock'
+  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock', 'partsForEngine'
 ]);
 
 Deno.serve(async (req) => {
