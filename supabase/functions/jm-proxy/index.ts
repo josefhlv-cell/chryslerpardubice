@@ -1725,7 +1725,11 @@ Deno.serve(async (req) => {
         })();
 
         // Pull OEM seeds from parts_new (Mopar/7zap/CSV-Mopar). Diverse: cap per category.
-        const fetchSeeds = async (useEngine: boolean): Promise<string[]> => {
+        // IMPORTANT: category comes from the source OEM section and must be preserved.
+        // Do not re-classify J+M results into a small keyword map — that loses most sections.
+        const normalizeSeedCategory = (value: unknown) =>
+          String(value || 'Ostatní').replace(/\s*\([^)]*\)\s*/g, '').trim() || 'Ostatní';
+        const fetchSeeds = async (useEngine: boolean): Promise<{ codes: string[]; categoryByCode: Map<string, string> }> => {
           const variantsToTry = useEngine && engineVariants.length ? engineVariants : [null];
           for (const variant of variantsToTry) {
             let q = adminClient.from('parts_new')
@@ -1741,26 +1745,33 @@ Deno.serve(async (req) => {
               if (src === 'csv') return String(r.manufacturer || '').trim().toLowerCase() === 'mopar';
               return true;
             });
-            // Bucket by category, take up to 25 per bucket → diverse coverage
+            // Bucket by every source category, take up to 25 per bucket → 15–20 visible sections.
             const byCat = new Map<string, string[]>();
+            const categoryByCode = new Map<string, string>();
             for (const r of clean) {
               const oem = String(r.oem_number || '').trim();
               if (!oem) continue;
-              const cat = String(r.category || 'unknown').toLowerCase().replace(/\s*\(.*\)\s*/g, '').trim();
+              const cat = normalizeSeedCategory(r.category);
               if (!byCat.has(cat)) byCat.set(cat, []);
               const arr = byCat.get(cat)!;
-              if (arr.length < 25) arr.push(oem);
+              if (arr.length < 25) {
+                arr.push(oem);
+                categoryByCode.set(normalizeOemCode(oem), cat);
+              }
             }
             const codes = [...new Set([...byCat.values()].flat())];
-            if (codes.length > 0) return codes;
+            if (codes.length > 0) return { codes, categoryByCode };
           }
-          return [];
+          return { codes: [], categoryByCode: new Map() };
         };
 
-        let oemSeeds = await fetchSeeds(true);
+        let seedBundle = await fetchSeeds(true);
+        let oemSeeds = seedBundle.codes;
+        let seedCategoryByCode = seedBundle.categoryByCode;
         if (oemSeeds.length < 30) {
           const broad = await fetchSeeds(false);
-          oemSeeds = [...new Set([...oemSeeds, ...broad])];
+          for (const [code, cat] of broad.categoryByCode) seedCategoryByCode.set(code, cat);
+          oemSeeds = [...new Set([...oemSeeds, ...broad.codes])];
         }
         oemSeeds = oemSeeds.slice(0, 350);
 
