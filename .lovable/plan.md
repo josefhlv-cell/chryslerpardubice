@@ -1,93 +1,83 @@
 ## Cíl
-1. Opravit chybu `Unauthorized` v AI generátoru EPC (viz screenshot — "X Unauthorized" u každé kategorie).
-2. Přidat admin nástroj **7zap OEM Scraper** s preview → sync workflow.
-3. Sjednotit všechny scraping nástroje na vzor **Preview → Sync**.
-4. Auto-pipeline: nový OEM → automaticky kategorizace + dotažení cen z vernostsevyplaci.cz.
-5. Bonus nástroje pro katalog.
 
----
+Funkční katalog pro všech 5 značek, jeden centrální flow: motor → všechny díly → strom kategorií → OEM první, J+M druhé.
 
-## A) Oprava `Unauthorized` v EPC generátoru
+## Co se mění
 
-**Příčina:** `epc-generate-batch` (volaná z fronty / per kategorie) má auth check `Bearer` token, ale při volání z UI v batchi se nepředává správně user JWT, nebo edge function nenačte admin roli.
+### 1. `supabase/functions/jm-proxy/index.ts` — nová akce `partsForEngine`
 
-**Fix:**
-- Sjednotit auth pattern přesně jako v `epc-generate/index.ts` (getClaims + check user_roles).
-- V `AdminEpcManager.tsx` (volající UI) vždy posílat `supabase.functions.invoke()` (nikoliv raw fetch) — automaticky přidá Authorization header.
-- Per-kategorie generování (loop) nahradit jediným voláním fronty + polling stavu z `epc_generation_queue` (zabrání 401 race + edge limit 60s).
-- UI: u každé kategorie zobrazit `pending → running → done/failed` místo okamžitého "Unauthorized".
+Jediný účel: vrátit **všechny J+M díly pro danou motorizaci v jednom volání**, obohacené o OEM párování.
 
----
+Vstup: `{ brand, model, engine, nextisVehicleId? }`
+Výstup: `{ items: UnifiedPart[], totalRawHits, oemSeedsUsed }`
 
-## B) Nový nástroj: **7zap OEM Bulk Scraper**
+Logika:
+1. Načti z `parts_new` všechny Mopar/7zap OEM kódy pro daný brand+model (fuzzy engine match přes existující `queryLocalOemCodes`).
+2. Pro každý OEM zavolej `items-finding-by-code` s `searchTarget=CodeOE` (paralelně, batch po 8, max 80 OEM).
+3. Sloučit, deduplikovat (přes `dedupeUnifiedParts`).
+4. Obohatit přes `enrichItemsWithRelatedOem` → každý J+M má `related_oem_number`.
+5. Pro každý item určit `genArtID` post-hoc z **rozšířeného slovníku** klíčových slov v `productName`/`productDescription` (rozšířit `PRODUCT_CATEGORY_TREE` v jm-proxy o `genArtID` pro každý leaf — TecDoc 80+ ID: `brake-pads=402, brake-discs=82, brake-calipers=472, brake-hoses=95, brake-fluid=1789, abs-sensor=1226, oil-filter=22, air-filter=26, cabin-filter=350, fuel-filter=23, spark-plugs=18, ignition-coil=174, glow-plugs=19, timing-belt=213, timing-chain=8929, water-pump=50, thermostat=195, radiator=31, ac-compressor=300, ac-condenser=233, alternator=71, starter=72, battery=590, shock-absorbers=51, springs=419, control-arms=423, ball-joints=432, tie-rods=433, bushings=459, wheel-bearings=110, cv-joints=204, drive-shafts=204, exhaust-muffler=64, lambda-sensor=180, dpf=2840, catalyst=104, fuel-pump=20, injector=29, transmission-oil=2769, engine-oil=1749, coolant=1707, brake-fluid-dot=1789, wiper-blades=42, headlights=84, taillights=85, mirrors=305, door-handles=2245`).
+6. Vrátit položky s polem `tecdoc_section: { id: number, name: string }`.
 
-Cíl: stáhnout všechny OEM čísla daného modelu z `*.7zap.com` (Mopar/Chrysler/Dodge/RAM tree) jediným kliknutím, s preview před vložením.
+Cache: 1h v `api_cache` per `(brand|model|engine)`.
 
-**Edge function** `scrape-7zap-bulk`:
-- Vstup: `{brand, model, year?, engine?}`
-- Použije Firecrawl `crawl` endpoint na `https://{brand}.7zap.com/en/global/{model}-parts-catalog/` s depth 3.
-- Extrahuje OEM + název + kategorii + diagram URL.
-- Vrátí strukturovaný JSON (NEukládá hned!).
+### 2. `src/services/catalogService.ts` — nový soubor
 
-**Tabulka `scrape_preview_jobs`**:
-- `id, source ('7zap'|'mopar'|'sag'|'ak'|'jm'), brand, model, status, raw_payload jsonb, parts_count, created_by, created_at`.
-- Slouží jako mezisklad pro Preview → Sync.
+```typescript
+export type CategoryGroup = {
+  id: string;            // tecdoc_section.id as string, or 'other'
+  label: string;         // tecdoc_section.name
+  count: number;
+  partsByOem: Map<string, { oem: CatalogPart[]; jm: CatalogPart[] }>;
+};
 
-**Admin UI komponenta `Admin7zapScraper.tsx`** v sekci `Katalog → Import → 7zap`:
-1. Form: brand, model, year, engine.
-2. Tlačítko **"Stáhnout náhled"** → uloží do `scrape_preview_jobs`, zobrazí tabulku všech nalezených OEM (počet, vzorek 50 řádků, kategorie).
-3. Tlačítko **"Synchronizovat s katalogem"** → edge `apply-scrape-preview` (insertuje do `parts_new` s `catalog_source='7zap'`, `price_with_vat=0` → "Na objednávku").
-4. Po insertu automaticky enqueue do nových triggerů (viz D).
+export async function fetchAllPartsForEngine(opts: {
+  brand: string; model: string; engine: string; nextisVehicleId?: string;
+}): Promise<{ groups: CategoryGroup[]; totalParts: number }> {
+  // 1. invoke jm-proxy { action: 'partsForEngine', payload: opts }
+  // 2. extract unique tecdoc_section → groups
+  // 3. for each group, batch-fetch OEM rows from parts_new where oem_number IN (jm.oe_numbers ∪ jm.related_oem_number)
+  // 4. groupů: partsByOem keyed by OEM number, with [oem first, then jm replacements]
+}
+```
 
----
+OEM marže: žádná (cena přímo z `parts_new.price_with_vat`).
+J+M marže: už aplikovaná v jm-proxy `normalizeCatalogItem` (70 %/40 %, beze změny).
 
-## C) Sjednocený **Preview → Sync** pattern
+### 3. `src/pages/Catalog.tsx` — zjednodušení
 
-Refaktor stávajících scraperů (Makro, SAG, AutoKelly) aby všechny prošly mezikrokem `scrape_preview_jobs`:
-- `AdminMakroScraper`, `AdminSagSync`, `AdminAutoKellyScraper` → přidat fázi "Náhled" před skutečným insertem.
-- Společná komponenta `ScrapePreviewTable.tsx` pro zobrazení (filtr značky, hledání OEM, sloupce: OEM, Název, Kategorie, Cena, Akce).
-- Tlačítko **"Vyřadit"** per řádek + bulk **"Schválit a synchronizovat"**.
+Po výběru motoru:
+- 1× volání `fetchAllPartsForEngine` (place loading state na celý strom).
+- Smazat: `fetchJmCategoryTree`, `listPartsForVehicle`, `fetchJmByCodes`, `mergeWithJm` jakožto sekvenční chain.
+- Strom = `groups` z výsledku, klik filtruje `partsByOem` daného groupu.
+- Počty v navigaci = `group.count`.
+- V kartách: nejprve OEM řádky (badge ORIGINÁL, cena z parts_new), pod nimi J+M (badge NÁHRADA, cena s marží).
 
----
+### 4. `src/api/catalogV2API.ts` — vyčistit
 
-## D) Auto-pipeline po vložení nových OEM
+Smazat (mrtvý kód): `fetchLocalCategoryTree`, `fetchJmCategoryTree`, `isJmTreeFlagEnabled`, `mergeWithJm`, `listPartsForVehicle`, `fetchJmByCodes`. Zachovat: `fetchBrands`, `fetchModelsForBrand`, `fetchEnginesForModel`, `fetchNextisVehicles`, `globalOemSearch`, `searchCatalog`, `normalizeRow` (přesunout do `catalogService`).
 
-**Postgres trigger `parts_new_after_insert`**:
-1. Pokud `category IS NULL` → enqueue do `auto_categorize_queue` (zpracuje deterministický classifier `jm-classify-parts`).
-2. Pokud `price_with_vat <= 0 AND catalog_source != 'jm'` → enqueue do `price_fetch_queue` (volá `price-sync` pro vernostsevyplaci.cz).
-3. Pokud OEM neexistuje v `catalog_part_categories` → enqueue do `compat_match_queue` (`compat-matcher`).
+### 5. Motorizace v MotorizationDetails
 
-**Edge function `auto-pipeline-worker`** (cron každé 2 min):
-- Vezme batch 100 položek z každé fronty.
-- Spustí příslušnou logiku (kategorizace / cena / kompatibilita).
-- Loguje do `admin_audit_log`.
+Beze změny — už čte z `nextis_vehicles` přesně co user chce (kW, palivo, ccm, kód, roky).
 
-**UI:** v `AdminCatalogSettings` nová karta **"Auto-pipeline status"** se 3 frontami a posledními 20 zpracovanými.
+## Co se NEdělá
 
----
+- ❌ Nic v `catalog_categories` (nepoužívá se).
+- ❌ Žádný scraping, cookies, Firecrawl.
+- ❌ Žádné nové DB tabulky (existující `jq_*` zůstanou nedotčeny — ten experiment se nepoužívá).
+- ❌ Žádné AI pro kategorizaci ani překlady jmen J+M (jména přicházejí z Nextis česky).
 
-## E) Bonus nástroje (přidám)
+## Test (Chrysler 300C 5.7 HEMI)
 
-1. **OEM Bulk Validator** — zkontroluje všechny OEM v DB proti 7zap a označí mrtvé (`is_obsolete=true`).
-2. **Duplicate OEM Cleaner** — najde duplicity podle normalizovaného OEM (alfanumerické), zobrazí preview a sloučí.
-3. **Catalog Health Dashboard** — % dílů s cenou, % s kategorií, % s fotkou, top-10 nejstarších záznamů bez aktualizace.
-4. **Smart Re-pricing Scheduler** — admin si vybere brand/model/kategorii a naplánuje hromadnou aktualizaci cen na pg_cron (např. "RAM 1500 každou neděli 3:00").
-5. **Cross-source OEM Diff** — porovná OEM seznam mezi Mopar vs 7zap vs J+M, ukáže chybějící.
+1. Vyber motorizaci → roky/kW/palivo viditelné z `nextis_vehicles`.
+2. Po načtení: očekávám 8–15 kategorií se 2–30+ díly každá.
+3. Klik na "Brzdy" → vidím Mopar OEM destičky/kotouče první, pod nimi J+M Frenkit/Brembo s marží.
+4. Klik na "Filtry" → olejové, vzduchové, kabinové.
+5. Při 0 výsledcích: kategorie skryté (nezobrazují se prázdné).
 
----
+## Rizika / co může selhat
 
-## F) Pořadí prací (paralelně v jednom PR)
-
-1. DB migrace: `scrape_preview_jobs`, `auto_categorize_queue`, `price_fetch_queue`, `compat_match_queue`, trigger `parts_new_after_insert`, pg_cron job pro `auto-pipeline-worker`.
-2. Oprava `epc-generate-batch` auth + UI status polling.
-3. Edge `scrape-7zap-bulk` + `apply-scrape-preview` + `auto-pipeline-worker`.
-4. UI: `Admin7zapScraper.tsx`, `ScrapePreviewTable.tsx`, refaktor Makro/SAG/AK na preview-first.
-5. UI: `AdminCatalogHealth.tsx`, `AdminOemValidator.tsx`, `AdminDuplicateCleaner.tsx`, `AdminRepricingScheduler.tsx`, `AdminOemDiff.tsx`.
-6. Zařadit do sidebar stromu: `Katalog → Import → [Náhled scrapů, 7zap, Makro, SAG, AK, CSV]`, `Katalog → Údržba → [Health, Validator, Duplicates, Repricing, Diff]`.
-
----
-
-## Vyloučení / pozn.
-- Nepřidávám aftermarket katalogové zdroje (per `mem://constraints/aftermarket-sources-disabled` — jen J+M zůstává jako aftermarket strom, 7zap je OEM).
-- Ceny stále NIKDY z AI (per `mem://constraints/pricing-integrity`) — vernostsevyplaci.cz crawler je jediný zdroj.
-- Backup proběhl v předchozím requestu, není potřeba znovu.
+- Nextis OEM-fallback je pomalý (až 80 paralelních volání). Cache 1h zmírní opakování, ale **první načtení nového motoru = 5–15 s**. Přidám overlay loading.
+- Klíčová slova pro genArtID nejsou 100 %. Díly bez matche → kategorie "Ostatní" (nezatajovat).
+- Pokud `parts_new` neobsahuje žádné Mopar OEM pro daný motor → nemáme seed → 0 J+M dílů. Tomu předejdeme tím, že fallback rozšíří hledání na brand+model bez engine match (`queryLocalOemCodes` už to umí jako 2. fáze).

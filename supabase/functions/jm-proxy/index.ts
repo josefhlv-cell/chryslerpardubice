@@ -658,6 +658,69 @@ const SECTION_ID_BY_CATEGORY_ID: Record<string, number> = {
   'ac': 244,
 };
 
+// ---- TecDoc-style sections used to group J+M parts client-side ----
+// Each section has an id (TecDoc genArtID), Czech label and keyword regex
+// matched against productName + description (lowercase, no diacritics).
+type TecdocSection = { id: number; label: string; keywords: string[] };
+const TECDOC_SECTIONS: TecdocSection[] = [
+  { id: 402, label: 'Brzdové destičky', keywords: ['destick', 'destic', 'brake pad', 'bremsbelag', 'klotz', 'oblozen brzd'] },
+  { id: 82,  label: 'Brzdové kotouče',  keywords: ['kotouc brzd', 'brake disc', 'brake rotor', 'bremsscheibe'] },
+  { id: 472, label: 'Brzdové třmeny',   keywords: ['trmen', 'caliper', 'bremssattel'] },
+  { id: 95,  label: 'Brzdové hadice',   keywords: ['hadic brzd', 'brake hose', 'brake line'] },
+  { id: 1789,label: 'Brzdová kapalina', keywords: ['brzdov kapalin', 'brake fluid', 'dot 3', 'dot 4', 'dot 5'] },
+  { id: 1226,label: 'ABS senzory',      keywords: ['abs', 'snimac otacek kola'] },
+  { id: 1769,label: 'Brzdový válec',    keywords: ['brzdovy valec', 'wheel cylinder', 'radzylinder'] },
+  { id: 22,  label: 'Olejový filtr',    keywords: ['olejov filtr', 'oil filter', 'oelfilter'] },
+  { id: 26,  label: 'Vzduchový filtr',  keywords: ['vzduchov filtr', 'air filter', 'luftfilter'] },
+  { id: 350, label: 'Filtr kabiny',     keywords: ['filtr kabin', 'cabin filter', 'pollen', 'innenraumfilter'] },
+  { id: 23,  label: 'Palivový filtr',   keywords: ['palivov filtr', 'fuel filter', 'kraftstofffilter'] },
+  { id: 18,  label: 'Zapalovací svíčky',keywords: ['svicka', 'spark plug', 'zundkerze'] },
+  { id: 174, label: 'Zapalovací cívka', keywords: ['cevka zapal', 'ignition coil', 'zundspule'] },
+  { id: 19,  label: 'Žhavící svíčky',   keywords: ['zhavic svic', 'glow plug', 'gluhkerze'] },
+  { id: 213, label: 'Rozvodový řemen',  keywords: ['rozvodov remen', 'timing belt', 'zahnriemen'] },
+  { id: 8929,label: 'Rozvodový řetěz',  keywords: ['rozvodov retez', 'timing chain', 'steuerkette'] },
+  { id: 50,  label: 'Vodní čerpadlo',   keywords: ['vodni cerpad', 'water pump', 'wasserpumpe'] },
+  { id: 195, label: 'Termostat',        keywords: ['termostat', 'thermostat'] },
+  { id: 31,  label: 'Chladič',          keywords: ['chladic mot', 'radiator', 'kuhler'] },
+  { id: 1707,label: 'Chladící kapalina',keywords: ['chladic kapalin', 'coolant', 'antifreeze'] },
+  { id: 300, label: 'AC kompresor',     keywords: ['kompresor klim', 'ac compressor', 'klimakompressor'] },
+  { id: 233, label: 'AC kondenzátor',   keywords: ['kondenz klim', 'ac condenser', 'klimakondensator'] },
+  { id: 71,  label: 'Alternátor',       keywords: ['alternat', 'lichtmaschine', 'generator'] },
+  { id: 72,  label: 'Startér',          keywords: ['starter', 'anlasser'] },
+  { id: 590, label: 'Baterie',          keywords: ['baterie', 'battery', 'batterie'] },
+  { id: 51,  label: 'Tlumiče',          keywords: ['tlumic narazu', 'shock absorber', 'stossdampf'] },
+  { id: 419, label: 'Pružiny',          keywords: ['pruzin', 'spring', 'fahrwerksfeder'] },
+  { id: 423, label: 'Ramena',           keywords: ['rameno zav', 'control arm', 'lenker', 'querlenker'] },
+  { id: 432, label: 'Kulové čepy',      keywords: ['kulov cep', 'ball joint', 'traggelenk'] },
+  { id: 433, label: 'Tyče řízení',      keywords: ['tyc rizen', 'tie rod', 'spurstange'] },
+  { id: 459, label: 'Silentbloky',      keywords: ['silentblok', 'bushing', 'lagerung', 'gummilager'] },
+  { id: 110, label: 'Ložiska kol',      keywords: ['lozisko kola', 'wheel bearing', 'radlager'] },
+  { id: 204, label: 'Poloosy',          keywords: ['poloos', 'cv joint', 'antriebswelle', 'gelenkwelle'] },
+  { id: 64,  label: 'Výfuk',            keywords: ['vyfuk', 'tlumic vyf', 'muffler', 'auspuff', 'schalldampfer'] },
+  { id: 180, label: 'Lambda sonda',     keywords: ['lambda', 'oxygen sensor', 'lambdasonde'] },
+  { id: 2840,label: 'DPF filtr',        keywords: ['dpf', 'particulate filter', 'partikelfilter'] },
+  { id: 104, label: 'Katalyzátor',      keywords: ['katalyz', 'catalyst', 'katalysator'] },
+  { id: 20,  label: 'Palivové čerpadlo',keywords: ['palivov cerpad', 'fuel pump', 'kraftstoffpumpe'] },
+  { id: 29,  label: 'Vstřikovače',      keywords: ['vstrikov', 'injector', 'einspritz'] },
+  { id: 1749,label: 'Motorový olej',    keywords: ['motorov olej', 'motor oil', 'motoroel'] },
+  { id: 2769,label: 'Převodový olej',   keywords: ['prevodov olej', 'gear oil', 'getriebeoel'] },
+  { id: 42,  label: 'Stěrače',          keywords: ['sterac', 'wiper', 'wischblatt'] },
+  { id: 84,  label: 'Světlomety',       keywords: ['svetlomet', 'headlight', 'scheinwerfer'] },
+  { id: 85,  label: 'Zadní světla',     keywords: ['zadni svetlo', 'tail light', 'heckleuchte'] },
+  { id: 305, label: 'Zrcátka',          keywords: ['zrcatk', 'mirror', 'spiegel'] },
+  { id: 252, label: 'Převodovka',       keywords: ['prevodov', 'transmission', 'getriebe'] },
+  { id: 8,   label: 'Spojka',           keywords: ['spojk', 'clutch', 'kupplung'] },
+];
+
+function classifyTecdoc(item: { name: string; description?: string }): TecdocSection {
+  const hay = (item.name + ' ' + (item.description || ''))
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  for (const sec of TECDOC_SECTIONS) {
+    if (sec.keywords.some((k) => hay.includes(k))) return sec;
+  }
+  return { id: 0, label: 'Ostatní', keywords: [] };
+}
+
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
   return nodes
     .map((node) => {
@@ -880,7 +943,7 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
 
 // ---------- HTTP entry ----------
 const PUBLIC_READ_ACTIONS = new Set([
-  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock'
+  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock', 'partsForEngine'
 ]);
 
 Deno.serve(async (req) => {
@@ -1603,6 +1666,136 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'partsForEngine': {
+        // ALL J+M parts for a given vehicle, classified by TecDoc section.
+        // Output: { items: UnifiedPart[] (each with tecdoc_section), oemSeedsUsed, source }
+        const brand = String(payload.brand || '').trim();
+        const model = String(payload.model || '').trim();
+        const engine = String(payload.engine || '').trim();
+        if (!brand || !model) {
+          result = { items: [], warning: 'brand+model required' };
+          break;
+        }
+        const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
+        try {
+          const { data: cached } = await adminClient
+            .from('api_cache')
+            .select('data, created_at, ttl_seconds')
+            .eq('cache_type', 'jm_parts_for_engine')
+            .eq('cache_key', cacheKey)
+            .maybeSingle();
+          if (cached) {
+            const ageMs = Date.now() - new Date(cached.created_at as string).getTime();
+            if (ageMs < (cached.ttl_seconds ?? 3600) * 1000) {
+              result = { ...(cached.data as any), fromCache: true };
+              break;
+            }
+          }
+        } catch (_) { /* non-blocking */ }
+
+        // Engine variants: "5.7 HEMI" / "5.7L HEMI" / "5.7"
+        const engineVariants = (() => {
+          if (!engine) return [] as string[];
+          const out = new Set<string>([engine]);
+          out.add(engine.replace(/^(\d+\.\d+)(\s)/, '$1L$2'));
+          out.add(engine.replace(/^(\d+\.\d+)L(\s)/, '$1$2'));
+          const m = engine.match(/^(\d+\.\d+)/);
+          if (m) out.add(m[1]);
+          return [...out].filter(Boolean);
+        })();
+
+        // Pull OEM seeds from parts_new (Mopar/7zap/CSV-Mopar). Try with engine first, then without.
+        const fetchSeeds = async (useEngine: boolean): Promise<string[]> => {
+          const variantsToTry = useEngine && engineVariants.length ? engineVariants : [null];
+          for (const variant of variantsToTry) {
+            let q = adminClient.from('parts_new')
+              .select('oem_number, catalog_source, manufacturer')
+              .ilike('compatible_vehicles', `%${brand}%`)
+              .ilike('compatible_vehicles', `%${model}%`)
+              .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
+              .limit(500);
+            if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
+            const { data } = await q;
+            const clean = (data || []).filter((r: any) => {
+              const src = String(r.catalog_source || '').toLowerCase();
+              if (src === 'csv') return String(r.manufacturer || '').trim().toLowerCase() === 'mopar';
+              return true;
+            });
+            const codes = [...new Set(clean.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
+            if (codes.length > 0) return codes;
+          }
+          return [];
+        };
+
+        let oemSeeds = await fetchSeeds(true);
+        if (oemSeeds.length < 20) {
+          const broad = await fetchSeeds(false);
+          oemSeeds = [...new Set([...oemSeeds, ...broad])];
+        }
+        oemSeeds = oemSeeds.slice(0, 80);
+
+        if (oemSeeds.length === 0) {
+          result = { items: [], oemSeedsUsed: 0, warning: `Žádný Mopar OEM seed pro ${brand} ${model}` };
+          break;
+        }
+
+        // Parallel batched calls to Nextis (8 at a time to avoid rate-limit).
+        const BATCH = 8;
+        const collected: UnifiedPart[] = [];
+        const seen = new Set<string>();
+        let totalRaw = 0;
+        for (let i = 0; i < oemSeeds.length; i += BATCH) {
+          const slice = oemSeeds.slice(i, i + BATCH);
+          const results = await Promise.all(
+            slice.map((code) => fetchJmForSpecificCode(code, 'CodeOE')
+              .then((r) => ({ code, ...r }))
+              .catch(() => ({ code, rawCount: 0, items: [] as UnifiedPart[] }))),
+          );
+          for (const r of results) {
+            totalRaw += r.rawCount;
+            for (const it of r.items) {
+              if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
+              const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const sec = classifyTecdoc(it);
+              collected.push({
+                ...it,
+                related_oem_number: it.related_oem_number || r.code,
+                category: sec.label,
+                // @ts-ignore — extra field consumed by frontend
+                tecdoc_section: { id: sec.id, label: sec.label },
+              });
+            }
+          }
+        }
+
+        // Enrich related_oem_number from parts_new where missing
+        const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
+
+        const out = {
+          items: enriched,
+          oemSeedsUsed: oemSeeds.length,
+          totalRawHits: totalRaw,
+          source: 'oem-fallback-grouped',
+        };
+
+        // Cache 1h
+        try {
+          await adminClient.from('api_cache').upsert({
+            cache_type: 'jm_parts_for_engine',
+            cache_key: cacheKey,
+            data: out,
+            ttl_seconds: 3600,
+            created_at: new Date().toISOString(),
+          }, { onConflict: 'cache_type,cache_key' });
+        } catch (_) { /* non-blocking */ }
+
+        result = out;
+        break;
+      }
+
+
       case 'enrichPrices': {
         // Bulk: pull missing-price OEMs from parts_new and enrich them
         const limit = Math.min(Number(payload.limit ?? 100), 500);
@@ -1673,7 +1866,7 @@ Deno.serve(async (req) => {
       default: {
         const known = [
           'ping', 'diagnose', 'syncCategories', 'searchByCode', 'vehicleCategories',
-          'searchByVehicle', 'priceAndStock', 'enrichPrices',
+          'searchByVehicle', 'partsForEngine', 'priceAndStock', 'enrichPrices',
           'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
           'validateOrder', 'createOrder',
         ];
