@@ -1270,6 +1270,327 @@ export type Database = {
         }
         Relationships: []
       }
+      jq_categories: {
+        Row: {
+          created_at: string
+          id: string
+          jq_category_code: string | null
+          level: number
+          name_cs: string
+          name_en: string | null
+          parent_id: string | null
+          slug: string | null
+          sort_order: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          jq_category_code?: string | null
+          level?: number
+          name_cs: string
+          name_en?: string | null
+          parent_id?: string | null
+          slug?: string | null
+          sort_order?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          jq_category_code?: string | null
+          level?: number
+          name_cs?: string
+          name_en?: string | null
+          parent_id?: string | null
+          slug?: string | null
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jq_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "jq_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jq_engine_categories: {
+        Row: {
+          category_id: string
+          engine_id: string
+          id: string
+          part_count: number
+          scraped_at: string | null
+        }
+        Insert: {
+          category_id: string
+          engine_id: string
+          id?: string
+          part_count?: number
+          scraped_at?: string | null
+        }
+        Update: {
+          category_id?: string
+          engine_id?: string
+          id?: string
+          part_count?: number
+          scraped_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jq_engine_categories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "jq_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jq_engine_categories_engine_id_fkey"
+            columns: ["engine_id"]
+            isOneToOne: false
+            referencedRelation: "jq_engines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jq_engines: {
+        Row: {
+          created_at: string
+          displacement_ccm: number | null
+          engine_code: string | null
+          engine_label: string
+          fuel: string | null
+          id: string
+          jq_engine_code: string | null
+          model_id: string
+          power_hp: number | null
+          power_kw: number | null
+          scraped_at: string | null
+          submodel: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          created_at?: string
+          displacement_ccm?: number | null
+          engine_code?: string | null
+          engine_label: string
+          fuel?: string | null
+          id?: string
+          jq_engine_code?: string | null
+          model_id: string
+          power_hp?: number | null
+          power_kw?: number | null
+          scraped_at?: string | null
+          submodel?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          created_at?: string
+          displacement_ccm?: number | null
+          engine_code?: string | null
+          engine_label?: string
+          fuel?: string | null
+          id?: string
+          jq_engine_code?: string | null
+          model_id?: string
+          power_hp?: number | null
+          power_kw?: number | null
+          scraped_at?: string | null
+          submodel?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jq_engines_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "jq_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jq_models: {
+        Row: {
+          brand: string
+          created_at: string
+          id: string
+          jq_model_code: string | null
+          model_name: string
+          model_slug: string | null
+          scraped_at: string | null
+          sort_order: number | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          id?: string
+          jq_model_code?: string | null
+          model_name: string
+          model_slug?: string | null
+          scraped_at?: string | null
+          sort_order?: number | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          id?: string
+          jq_model_code?: string | null
+          model_name?: string
+          model_slug?: string | null
+          scraped_at?: string | null
+          sort_order?: number | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
+      jq_part_engines: {
+        Row: {
+          engine_id: string
+          id: string
+          part_id: string
+          position_label: string | null
+        }
+        Insert: {
+          engine_id: string
+          id?: string
+          part_id: string
+          position_label?: string | null
+        }
+        Update: {
+          engine_id?: string
+          id?: string
+          part_id?: string
+          position_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jq_part_engines_engine_id_fkey"
+            columns: ["engine_id"]
+            isOneToOne: false
+            referencedRelation: "jq_engines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jq_part_engines_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "jq_parts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jq_parts: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          id: string
+          image_url: string | null
+          manufacturer: string | null
+          name: string
+          name_en: string | null
+          notes: string | null
+          oem_number: string
+          scraped_at: string | null
+          tecdoc_number: string | null
+          technical_params: Json | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          manufacturer?: string | null
+          name: string
+          name_en?: string | null
+          notes?: string | null
+          oem_number: string
+          scraped_at?: string | null
+          tecdoc_number?: string | null
+          technical_params?: Json | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          manufacturer?: string | null
+          name?: string
+          name_en?: string | null
+          notes?: string | null
+          oem_number?: string
+          scraped_at?: string | null
+          tecdoc_number?: string | null
+          technical_params?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jq_parts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "jq_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jq_scrape_runs: {
+        Row: {
+          brand: string | null
+          categories_done: number
+          current_step: string | null
+          engines_done: number
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          models_done: number
+          parts_done: number
+          phase: string
+          scope: string
+          started_at: string
+          started_by: string | null
+          status: string
+        }
+        Insert: {
+          brand?: string | null
+          categories_done?: number
+          current_step?: string | null
+          engines_done?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          models_done?: number
+          parts_done?: number
+          phase?: string
+          scope?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+        }
+        Update: {
+          brand?: string | null
+          categories_done?: number
+          current_step?: string | null
+          engines_done?: number
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          models_done?: number
+          parts_done?: number
+          phase?: string
+          scope?: string
+          started_at?: string
+          started_by?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       mechanic_offline_queue: {
         Row: {
           action: string
