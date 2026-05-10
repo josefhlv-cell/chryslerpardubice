@@ -54,15 +54,41 @@ Deno.serve(async (req) => {
     }
 
     if (action === "match-all") {
-      const { data: parts, error } = await supabase
+      // Optional scope filters
+      const brand: string | undefined = body.brand;
+      const model: string | undefined = body.model;
+      const engine: string | undefined = body.engine;
+      const category: string | undefined = body.category;
+      const onlyMissing: boolean = body.onlyMissing !== false; // default true
+
+      let q = supabase
         .from("parts_new")
-        .select("id, oem_number, catalog_source")
-        .in("catalog_source", ["mopar", "mopar_oem", "csv", "epc-ai", "7zap"])
+        .select("id, oem_number, catalog_source, category, compatible_vehicles")
+        .in("catalog_source", ["mopar", "mopar_oem", "csv", "epc-ai", "7zap", "epc-link"])
         .limit(limit);
+
+      if (category) q = q.ilike("category", `%${category}%`);
+      if (brand) q = q.ilike("compatible_vehicles", `%${brand}%`);
+      if (model) q = q.ilike("compatible_vehicles", `%${model}%`);
+      if (engine) q = q.ilike("compatible_vehicles", `%${engine}%`);
+
+      const { data: parts, error } = await q;
       if (error) throw error;
 
+      // If onlyMissing, drop parts already with at least one compatibility row
+      let scope = parts || [];
+      if (onlyMissing && scope.length) {
+        const ids = scope.map((p: any) => p.id);
+        const { data: already } = await supabase
+          .from("catalog_vehicle_compatibility")
+          .select("part_id")
+          .in("part_id", ids);
+        const have = new Set((already || []).map((r: any) => r.part_id));
+        scope = scope.filter((p: any) => !have.has(p.id));
+      }
+
       let exact = 0, super_ = 0, crossref = 0, fuzzy = 0, queued = 0;
-      for (const p of parts || []) {
+      for (const p of scope) {
         const r = await matchSinglePart(supabase, p.id);
         exact += r.exact;
         super_ += r.supersession;
@@ -70,7 +96,13 @@ Deno.serve(async (req) => {
         fuzzy += r.fuzzy;
         queued += r.queued;
       }
-      return json({ ok: true, processed: parts?.length || 0, exact, supersession: super_, crossref, fuzzy, queued });
+      return json({
+        ok: true,
+        scope: { brand, model, engine, category, onlyMissing },
+        candidates: parts?.length || 0,
+        processed: scope.length,
+        exact, supersession: super_, crossref, fuzzy, queued,
+      });
     }
 
     return json({ error: "unknown action" }, 400);

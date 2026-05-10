@@ -307,12 +307,15 @@ export async function globalOemSearch(query: string): Promise<{ oem: CatalogPart
       .select("*")
       .or(`oem_number.ilike.%${q}%,name.ilike.%${q}%`)
       .limit(50);
-    const oemParts = filterDisabledSources((data || []).map(p => normalizeRow(p)));
+    const oemParts = filterDisabledSources((data || []).map(p => normalizeRow(p)))
+      .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99));
     const jmResult = await supabase.functions.invoke('jm-proxy', {
       body: { action: 'searchByCode', payload: { code: q } }
     });
     const jmPayload = unwrapFunctionPayload(jmResult?.data);
-    const jmParts = (jmPayload?.items || []).map((it: any) => normalizeRow(it, 'jm'));
+    const jmParts = (jmPayload?.items || [])
+      .map((it: any) => normalizeRow(it, 'jm'))
+      .sort((a: CatalogPart, b: CatalogPart) => (a.price_with_vat ?? Infinity) - (b.price_with_vat ?? Infinity));
     return { oem: oemParts, jm: jmParts };
   } catch (err) {
     console.error('[globalOemSearch] error:', err);

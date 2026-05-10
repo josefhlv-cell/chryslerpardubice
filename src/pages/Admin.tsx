@@ -32,6 +32,7 @@ const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
 const Admin7zapScraper = lazy(() => import("@/components/admin/Admin7zapScraper"));
 
 const AdminAutoPipeline = lazy(() => import("@/components/admin/AdminAutoPipeline"));
+const AdminCompatMatcher = lazy(() => import("@/components/admin/AdminCompatMatcher"));
 const AdminCatalogHealth = lazy(() => import("@/components/admin/AdminCatalogHealth"));
 const AdminPhotoEnrichment = lazy(() => import("@/components/admin/AdminPhotoEnrichment"));
 const AdminDataFixer = lazy(() => import("@/components/admin/AdminDataFixer"));
@@ -223,7 +224,7 @@ const Admin = () => {
         { key: "catalog-7zap", label: "7zap scraper" },
         { key: "catalog-repair", label: "Opravy & diagnostika" },
         { key: "catalog-health", label: "Zdraví katalogu" },
-        { key: "catalog-pipeline", label: "Auto-pipeline" },
+        { key: "catalog-pipeline", label: "Auto-pipeline & párování" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
         ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "EPC nákresy" }] : []),
         { key: "catalog-settings", label: "Nastavení", icon: Settings2 },
@@ -333,7 +334,7 @@ const Admin = () => {
       case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /><EPCImport /></div></Suspense>;
       case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
       case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
-      case "catalog-pipeline": return <Suspense fallback={<Loader />}><AdminAutoPipeline /></Suspense>;
+      case "catalog-pipeline": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminAutoPipeline /><AdminCompatMatcher /></div></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
       case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminPriceManagement /></div></Suspense>;
       case "catalog-epc": return <Suspense fallback={<Loader />}><AdminEPCDiagrams /></Suspense>;
