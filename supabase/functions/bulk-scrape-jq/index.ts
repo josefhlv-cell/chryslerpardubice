@@ -3,7 +3,7 @@
 // Používá Firecrawl + B2B cookie session (admin uloží JM_ESHOP_COOKIE jako secret po přihlášení).
 // Admin-only. Async přes EdgeRuntime.waitUntil; progress v jq_scrape_progress.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
