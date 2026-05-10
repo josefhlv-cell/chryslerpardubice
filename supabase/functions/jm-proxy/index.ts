@@ -1252,26 +1252,22 @@ Deno.serve(async (req) => {
         })();
 
         let rows: any[] | null = null;
-        for (const variant of (engineVariants.length ? engineVariants : [null])) {
-          let q = adminClient
-            .from('parts_new')
-            .select('oem_number, name, category, description, compatible_vehicles')
-            .ilike('compatible_vehicles', `%${vBrand}%`)
-            .ilike('compatible_vehicles', `%${vModel}%`)
-            .limit(3000);
-          if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
-          const { data, error } = await q;
-          if (error) throw error;
-          if (data && data.length > 0) { rows = data; break; }
+        if (vehicle?.id) {
+          const { data: compatRows, error: compatError } = await adminClient
+            .from('catalog_vehicle_compatibility')
+            .select('parts_new!inner(oem_number, name, category, description, compatible_vehicles)')
+            .eq('nextis_vehicle_id', vehicle.id)
+            .limit(5000);
+          if (compatError) throw compatError;
+          rows = (compatRows || []).map((r: any) => r.parts_new).filter(Boolean);
         }
-        // Final fallback: brand+model only
         if (!rows || rows.length === 0) {
           const fallback = await adminClient
             .from('parts_new')
             .select('oem_number, name, category, description, compatible_vehicles')
             .ilike('compatible_vehicles', `%${vBrand}%`)
             .ilike('compatible_vehicles', `%${vModel}%`)
-            .limit(3000);
+            .limit(5000);
           if (fallback.error) throw fallback.error;
           rows = fallback.data;
         }
