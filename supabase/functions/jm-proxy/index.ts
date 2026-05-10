@@ -64,7 +64,7 @@ function isUsBrand(producer: string | null | undefined): boolean {
 }
 
 // Whitelist of vehicle brands we expose via the curated catalog tree.
-const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "cadillac", "lancia"];
+const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram"];
 
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
@@ -207,6 +207,7 @@ type CategoryNode = {
 };
 
 const PRODUCT_CATEGORY_TREE: CategoryNode[] = [
+  { id: 'safety', label: 'Bezpečnostní systém', level: 0, sectionId: null, path: ['Bezpečnostní systém'], keywords: ['bezpeč', 'bezpec', 'airbag', 'pás', 'pas', 'abs', 'srs'], count: 0 },
   {
     id: 'brakes', label: 'Brzdové zařízení', level: 0, sectionId: null, path: ['Brzdové zařízení'],
     keywords: ['brzd', 'brake', 'abs', 'třmen', 'trmen', 'kotouč', 'kotouc', 'destičk', 'destick'], count: 0,
@@ -233,6 +234,12 @@ const PRODUCT_CATEGORY_TREE: CategoryNode[] = [
   { id: 'electrical', label: 'Elektroinstalace', level: 0, sectionId: null, path: ['Elektroinstalace'], keywords: ['elektr', 'alternátor', 'alternator', 'starter', 'senzor'], count: 0 },
   { id: 'body', label: 'Karoserie', level: 0, sectionId: null, path: ['Karoserie'], keywords: ['karoser', 'body', 'dveře', 'dvere', 'nárazník', 'naraznik'], count: 0 },
   { id: 'hvac', label: 'Klimatizace a topení', level: 0, sectionId: null, path: ['Klimatizace a topení'], keywords: ['klimat', 'topen', 'a/c', 'hvac'], count: 0 },
+  { id: 'fuel', label: 'Palivový systém', level: 0, sectionId: null, path: ['Palivový systém'], keywords: ['paliv', 'fuel', 'vstřik', 'vstrik'], count: 0 },
+  { id: 'exhaust', label: 'Výfuk', level: 0, sectionId: null, path: ['Výfuk'], keywords: ['výfuk', 'vyfuk', 'exhaust', 'katalyz', 'lambda', 'dpf'], count: 0 },
+  { id: 'lighting', label: 'Osvětlení', level: 0, sectionId: null, path: ['Osvětlení'], keywords: ['světl', 'svetl', 'osvět', 'osvet', 'žárov', 'zarov', 'lamp'], count: 0 },
+  { id: 'maintenance', label: 'Údržba', level: 0, sectionId: null, path: ['Údržba'], keywords: ['údrž', 'udrz', 'servis', 'stěrač', 'sterac'], count: 0 },
+  { id: 'fluids', label: 'Kapaliny a oleje', level: 0, sectionId: null, path: ['Kapaliny a oleje'], keywords: ['olej', 'kapalin', 'fluid'], count: 0 },
+  { id: 'other', label: 'Ostatní', level: 0, sectionId: null, path: ['Ostatní'], keywords: ['ostat', 'univerz', 'spojovac'], count: 0 },
 ];
 
 function collectImageUrls(it: any): string[] {
