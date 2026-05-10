@@ -19,7 +19,34 @@ export type CategoryGroup = {
   label: string;
   count: number;
   parts: CatalogPart[]; // OEM-first then J+M, deduped by oem_number
+  children?: CategoryGroup[];
 };
+
+const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+const CATEGORY_RULES: Array<{ id: string; label: string; match: RegExp }> = [
+  { id: "brakes", label: "Brzdové zařízení", match: /brzd|abs|trmen|kotouc|destick|destic|buben|celist|valec/ },
+  { id: "filters", label: "Filtry", match: /filtr/ },
+  { id: "maintenance", label: "Údržba", match: /sterac|udrz|servis|ostriko/ },
+  { id: "engine", label: "Motor", match: /motor|zapal|svick|rozvod|tesnen|hlava|pist|ojnic|klik|vack|ventil|olejova pumpa|sani|turbo|egr/ },
+  { id: "cooling", label: "Chlazení", match: /chlad|vodni cerpad|termostat|radiator|expanz|ventilator chlad|intercooler/ },
+  { id: "axle", label: "Nápravy a odpružení", match: /odpru|tlumic|pruzin|ramen|silentblok|stabiliz|lozisk|naboj|kulov|cep|doraz|pomocny ram/ },
+  { id: "steering", label: "Řízení", match: /rizen|hreben|servo|posilovac|tyce rizeni|manzeta rizeni/ },
+  { id: "drivetrain", label: "Převodovka a pohon", match: /prevod|spojk|poloos|hnaci hridel|kardan|diferencial|setrvacnik|synchron/ },
+  { id: "electrical", label: "Elektroinstalace", match: /elektr|alternator|starter|bater|rele|pojist|snimac|senzor|spinac|konektor|regulator|magneticky/ },
+  { id: "body", label: "Karoserie", match: /karoser|zrcatk|naraznik|kapot|blatnik|dver|sklo|mrizka|zamek|klika|vzpera/ },
+  { id: "hvac", label: "Klimatizace a topení", match: /klimat|ac |kompresor|kondenz|topen|vyparnik|susic|expanzni ventil klima/ },
+  { id: "fuel", label: "Palivový systém", match: /paliv|vstrik|tryska|cerpadlo paliv|lista/ },
+  { id: "exhaust", label: "Výfukový systém", match: /vyfuk|katalyz|lambda|dpf|tlumic vyf/ },
+  { id: "lighting", label: "Osvětlení", match: /svetl|osvet|mlhov|smerov|zarovka|spz/ },
+  { id: "safety", label: "Bezpečnostní systém", match: /bezpec|airbag|pas|srs/ },
+  { id: "fluids", label: "Kapaliny a oleje", match: /olej|kapalin|adblue|def/ },
+];
+
+function parentForSection(label: string): { id: string; label: string } {
+  const n = norm(label);
+  return CATEGORY_RULES.find((r) => r.match.test(n)) || { id: "other", label: "Ostatní" };
+}
 
 type RawJmItem = {
   oem_number: string;
@@ -170,8 +197,8 @@ export async function fetchAllPartsForEngine(opts: {
   const oemByNumber = new Map<string, any>();
   for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
 
-  // 3. Build groups: OEM first, then J+M (deduped, capped per group)
-  const groups: CategoryGroup[] = [];
+  // 3. Build real two-level catalog: parent category → J+M/TecDoc section.
+  const parentMap = new Map<string, CategoryGroup>();
   for (const [id, bucket] of sectionMap) {
     const seenOem = new Set<string>();
     const oemParts: CatalogPart[] = [];
@@ -202,13 +229,25 @@ export async function fetchAllPartsForEngine(opts: {
 
     const parts = [...oemParts, ...jmDeduped];
     if (parts.length === 0) continue;
-    groups.push({ id, label: bucket.label, count: parts.length, parts });
+
+    const parent = parentForSection(bucket.label);
+    if (!parentMap.has(parent.id)) parentMap.set(parent.id, { ...parent, count: 0, parts: [], children: [] });
+    const parentGroup = parentMap.get(parent.id)!;
+    const child: CategoryGroup = { id: `${parent.id}:${id}`, label: bucket.label, count: parts.length, parts };
+    parentGroup.children!.push(child);
+    parentGroup.parts.push(...parts);
+    parentGroup.count += parts.length;
   }
 
-  // Sort: groups with most parts first, "Ostatní" at the end
+  const groups = [...parentMap.values()];
+  for (const group of groups) {
+    group.children = (group.children || []).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "cs"));
+  }
+
+  // Sort: parent groups with most parts first, "Ostatní" at the end
   groups.sort((a, b) => {
-    if (a.id === "0" && b.id !== "0") return 1;
-    if (b.id === "0" && a.id !== "0") return -1;
+    if (a.id === "other" && b.id !== "other") return 1;
+    if (b.id === "other" && a.id !== "other") return -1;
     return b.count - a.count;
   });
 

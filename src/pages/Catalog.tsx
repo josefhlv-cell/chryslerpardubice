@@ -3,10 +3,10 @@
  * Brand → Model → Engine → Category (TecDoc section) → Parts.
  * One round-trip to jm-proxy `partsForEngine`, then OEM-first locally.
  */
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ChevronRight, ChevronLeft, Loader2, Car, Wrench, Cog, Package,
+  ChevronRight, ChevronLeft, ChevronDown, Loader2, Car, Wrench, Cog, Package,
   Snowflake, Zap, Filter as FilterIcon, Droplet, Disc, Gauge, Settings, Box,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -83,6 +83,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
   const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [categoryQuery, setCategoryQuery] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -148,6 +149,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     setSelectedVehicleId(vehicleId);
     setSelectedGroup(null);
     setCategoryQuery("");
+    setExpandedGroups(new Set());
     setLoading(true);
     setPartsLoading(true);
     setWarning(null);
@@ -157,6 +159,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       .then((res) => {
         if (cancelled) return;
         setGroups(res.groups);
+        setExpandedGroups(new Set(res.groups.slice(0, 8).map((g) => g.id)));
         setDebugInfo(res.debug || null);
         if (res.warning) setWarning(res.warning);
         if (res.groups.length === 0) setWarning(res.warning || "Pro toto vozidlo se nepodařilo načíst žádné díly.");
@@ -228,9 +231,19 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   };
 
   const breadcrumb = [brand, model, engine, selectedGroup?.label].filter(Boolean);
-  const visibleGroups = categoryQuery.trim()
-    ? groups.filter((g) => g.label.toLowerCase().includes(categoryQuery.trim().toLowerCase()))
-    : groups;
+  const filteredGroups = useMemo(() => {
+    const query = categoryQuery.trim().toLowerCase();
+    if (!query) return groups;
+    return groups
+      .map((g) => {
+        const childMatches = (g.children || []).filter((c) => c.label.toLowerCase().includes(query));
+        if (g.label.toLowerCase().includes(query)) return g;
+        if (childMatches.length === 0) return null;
+        const count = childMatches.reduce((s, c) => s + c.count, 0);
+        return { ...g, count, parts: childMatches.flatMap((c) => c.parts), children: childMatches };
+      })
+      .filter(Boolean) as CategoryGroup[];
+  }, [groups, categoryQuery]);
 
   const partsItems = selectedGroup
     ? (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all"
@@ -375,21 +388,46 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                       placeholder="Hledat kategorii…" className="pl-9 bg-card border-border/40" />
                   </div>
                   <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
-                    {visibleGroups.length === 0 && (
+                    {filteredGroups.length === 0 && (
                       <div className="p-6 text-center text-xs text-amber-300/80">⚠️ Žádná kategorie nesouhlasí s filtrem.</div>
                     )}
-                    {visibleGroups.map((g) => {
+                    {filteredGroups.map((g) => {
                       const Icon = CATEGORY_ICON[g.label] || Package;
+                      const children = g.children || [];
+                      const isExpanded = expandedGroups.has(g.id) || categoryQuery.trim().length > 0;
                       return (
-                        <button key={g.id} onClick={() => setSelectedGroup(g)}
-                          className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Icon className="w-4 h-4 text-primary/70 shrink-0" />
-                            <span className="text-sm font-medium truncate">{g.label}</span>
-                            <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{g.count}</Badge>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
-                        </button>
+                        <div key={g.id}>
+                          <button onClick={() => children.length ? setExpandedGroups((prev) => {
+                              const next = new Set(prev);
+                              next.has(g.id) ? next.delete(g.id) : next.add(g.id);
+                              return next;
+                            }) : setSelectedGroup(g)}
+                            className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Icon className="w-4 h-4 text-primary/70 shrink-0" />
+                              <span className="text-sm font-semibold truncate">{g.label}</span>
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{g.count}</Badge>
+                            </div>
+                            {children.length ? (
+                              isExpanded ? <ChevronDown className="w-4 h-4 text-primary shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary shrink-0" />
+                            ) : <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />}
+                          </button>
+                          {isExpanded && children.length > 0 && (
+                            <div className="bg-background/35 border-t border-border/20">
+                              {children.map((child) => (
+                                <button key={child.id} onClick={() => setSelectedGroup(child)}
+                                  className="group w-full flex items-center justify-between gap-3 pl-10 pr-4 py-2.5 hover:bg-secondary/50 transition-colors text-left">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                                    <span className="text-xs md:text-sm font-medium truncate">{child.label}</span>
+                                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">{child.count}</Badge>
+                                  </div>
+                                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
