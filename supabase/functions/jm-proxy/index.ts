@@ -1975,6 +1975,14 @@ Deno.serve(async (req) => {
 
           const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
           const durationMs = Date.now() - startedAt;
+          const quotaExceeded = totalRaw === 0 && failedSections.some((s) => /maximum calls per day/i.test(s.error));
+          if (quotaExceeded) {
+            await writeScanProgress(adminClient, cacheKey, {
+              phase: 'quota_exceeded', engineID: resolvedEngineID,
+              sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
+              sectionsHit: 0, totalRawHits: 0, durationMs, partial: true,
+            });
+          } else {
           const out = {
             items: enriched,
             engineID: resolvedEngineID,
@@ -2016,6 +2024,7 @@ Deno.serve(async (req) => {
           });
           result = out;
           break;
+          }
         }
 
         // ===== STRATEGY B: OEM-seed fallback (no engineID set) =====
