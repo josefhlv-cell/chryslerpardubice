@@ -23,11 +23,15 @@ Deno.serve(async (req) => {
 
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
     const authClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
-    const { data: claims } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (!claims?.claims?.sub) return j({ success: false, error: 'Unauthorized' }, 401);
+    
+    // Opravené ověření tokenu
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: userError } = await authClient.auth.getUser(token);
+    if (userError || !user) return j({ success: false, error: 'Unauthorized' }, 401);
+    const userId = user.id;
 
     const admin = createClient(SUPABASE_URL, SERVICE);
-    const { data: role } = await admin.from('user_roles').select('role').eq('user_id', claims.claims.sub).eq('role', 'admin').maybeSingle();
+    const { data: role } = await admin.from('user_roles').select('role').eq('user_id', userId).eq('role', 'admin').maybeSingle();
     if (!role) return j({ success: false, error: 'Forbidden' }, 403);
 
     const { brand, model, year, engine, max_pages = 50 } = await req.json();
@@ -109,7 +113,7 @@ Deno.serve(async (req) => {
       status: 'preview',
       raw_payload: parts,
       parts_count: parts.length,
-      created_by: claims.claims.sub,
+      created_by: userId,
     }).select('id').single();
 
     if (insErr) return j({ success: false, error: insErr.message }, 500);
