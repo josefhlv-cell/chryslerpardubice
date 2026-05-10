@@ -128,12 +128,16 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
       {/* Price block */}
       <div className="rounded-xl bg-secondary p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Cena s DPH</span>
-          <span className="text-xl font-bold">{part.price_with_vat > 0 ? `${part.price_with_vat.toLocaleString("cs")} Kč` : "Na dotaz"}</span>
+          <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+            Cena s DPH
+            {liveLoading && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+            {livePrice && !liveLoading && <span className="text-[9px] text-primary uppercase tracking-wide">live</span>}
+          </span>
+          <span className="text-xl font-bold">{effPriceWithVat > 0 ? `${effPriceWithVat.toLocaleString("cs")} Kč` : "Na objednávku"}</span>
         </div>
-        {part.price_without_vat > 0 && (
+        {effPriceWithoutVat > 0 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Cena bez DPH</span><span>{part.price_without_vat.toLocaleString("cs")} Kč</span>
+            <span>Cena bez DPH</span><span>{effPriceWithoutVat.toLocaleString("cs")} Kč</span>
           </div>
         )}
         {discounted && (
@@ -144,7 +148,7 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
         )}
       </div>
 
-      <AvailabilityDot availability={part.availability} />
+      <AvailabilityDot availability={effAvailability} />
 
       {/* Supersession info */}
       {part.superseded_by && (
