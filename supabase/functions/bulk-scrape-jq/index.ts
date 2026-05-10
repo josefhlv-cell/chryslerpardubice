@@ -262,8 +262,24 @@ Deno.serve(async (req) => {
         });
       }
       const models = parseModels(r.data?.html || "", brand);
+      const html = r.data?.html || "";
+      const hasLoginForm = /name="login"|id="login"|password/i.test(html);
+      const hasModelLinks = /yq-katalog\/model\//i.test(html);
       return new Response(
-        JSON.stringify({ preview: true, brand, count: models.length, models }),
+        JSON.stringify({
+          preview: true,
+          brand,
+          count: models.length,
+          models,
+          debug: {
+            cookieSet: !!JM_ESHOP_COOKIE,
+            cookieLen: JM_ESHOP_COOKIE.length,
+            htmlLen: html.length,
+            hasLoginForm,
+            hasModelLinks,
+            snippet: html.slice(0, 600),
+          },
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
