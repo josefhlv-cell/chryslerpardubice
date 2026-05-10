@@ -1938,6 +1938,10 @@ Deno.serve(async (req) => {
               result = { ...(cached.data as any), fromCache: true };
               break;
             }
+            if (payload.cacheOnly === true || String(payload.cacheOnly || '').toLowerCase() === 'true') {
+              result = { ...(cached.data as any), fromCache: true, staleCache: true };
+              break;
+            }
           }
         } catch (_) { /* non-blocking */ }
 
