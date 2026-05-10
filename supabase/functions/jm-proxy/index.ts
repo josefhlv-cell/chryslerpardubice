@@ -710,6 +710,26 @@ const TECDOC_SECTIONS: TecdocSection[] = [
   { id: 305, label: 'Zrcátka',          keywords: ['zrcatk', 'mirror', 'spiegel'] },
   { id: 252, label: 'Převodovka',       keywords: ['prevodov', 'transmission', 'getriebe'] },
   { id: 8,   label: 'Spojka',           keywords: ['spojk', 'clutch', 'kupplung'] },
+  // Belt drive
+  { id: 532, label: 'Napínací/vodící kladky', keywords: ['napinaci kladk', 'vodici kladk', 'vratna', 'vodici kladka', 'tensioner pulley', 'idler pulley', 'umlenkrolle', 'spannrolle'] },
+  { id: 41,  label: 'Klínové/drážkové řemeny', keywords: ['klinov remen', 'drazkov remen', 'sada remen', 'zebrovany klin', 'v-belt', 'serpentine', 'keilrippen', 'poly-v'] },
+  // Engine misc
+  { id: 60,  label: 'Těsnění motoru',   keywords: ['tesnen', 'gasket', 'dichtung'] },
+  { id: 100, label: 'Sada motorové opravy', keywords: ['sada moto', 'engine kit', 'motorsatz'] },
+  { id: 102, label: 'Olejová vana',     keywords: ['olejova van', 'oil pan', 'olwanne'] },
+  // Chassis misc
+  { id: 539, label: 'Stabilizátor',     keywords: ['stabilizat', 'stabilizer', 'stabilisator', 'sway bar'] },
+  { id: 541, label: 'Hlavový čep',      keywords: ['hlavovy cep', 'strut mount', 'domlager'] },
+  // Body / interior
+  { id: 314, label: 'Zámky a kliky',    keywords: ['zamek dver', 'klika dver', 'door lock', 'turschloss'] },
+  { id: 318, label: 'Kapota / blatník', keywords: ['kapota', 'blatnik', 'fender', 'hood', 'kotflugel'] },
+  { id: 320, label: 'Nárazník',         keywords: ['naraznik', 'bumper', 'stossfanger'] },
+  // Sensors / electronics
+  { id: 1099,label: 'Snímač otáček / klikové hřídele', keywords: ['snimac otacek', 'crankshaft sensor', 'kurbelwellensensor'] },
+  { id: 1109,label: 'Snímač MAP/MAF',   keywords: ['map sensor', 'maf sensor', 'mhd-snimac', 'luftmassen'] },
+  // Cooling extras
+  { id: 230, label: 'Hadice chlazení',  keywords: ['hadic chlad', 'hadice chlad', 'coolant hose', 'kuhlerschlauch'] },
+  { id: 234, label: 'Expanzní nádobka', keywords: ['expanz nadobk', 'expansion tank', 'ausgleichsbehalt'] },
 ];
 
 function classifyTecdoc(item: { name: string; description?: string }): TecdocSection {
@@ -1732,7 +1752,7 @@ Deno.serve(async (req) => {
           const broad = await fetchSeeds(false);
           oemSeeds = [...new Set([...oemSeeds, ...broad])];
         }
-        oemSeeds = oemSeeds.slice(0, 80);
+        oemSeeds = oemSeeds.slice(0, 200);
 
         if (oemSeeds.length === 0) {
           result = { items: [], oemSeedsUsed: 0, warning: `Žádný Mopar OEM seed pro ${brand} ${model}` };
