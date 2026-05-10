@@ -658,6 +658,69 @@ const SECTION_ID_BY_CATEGORY_ID: Record<string, number> = {
   'ac': 244,
 };
 
+// ---- TecDoc-style sections used to group J+M parts client-side ----
+// Each section has an id (TecDoc genArtID), Czech label and keyword regex
+// matched against productName + description (lowercase, no diacritics).
+type TecdocSection = { id: number; label: string; keywords: string[] };
+const TECDOC_SECTIONS: TecdocSection[] = [
+  { id: 402, label: 'Brzdové destičky', keywords: ['destick', 'destic', 'brake pad', 'bremsbelag', 'klotz', 'oblozen brzd'] },
+  { id: 82,  label: 'Brzdové kotouče',  keywords: ['kotouc brzd', 'brake disc', 'brake rotor', 'bremsscheibe'] },
+  { id: 472, label: 'Brzdové třmeny',   keywords: ['trmen', 'caliper', 'bremssattel'] },
+  { id: 95,  label: 'Brzdové hadice',   keywords: ['hadic brzd', 'brake hose', 'brake line'] },
+  { id: 1789,label: 'Brzdová kapalina', keywords: ['brzdov kapalin', 'brake fluid', 'dot 3', 'dot 4', 'dot 5'] },
+  { id: 1226,label: 'ABS senzory',      keywords: ['abs', 'snimac otacek kola'] },
+  { id: 1769,label: 'Brzdový válec',    keywords: ['brzdovy valec', 'wheel cylinder', 'radzylinder'] },
+  { id: 22,  label: 'Olejový filtr',    keywords: ['olejov filtr', 'oil filter', 'oelfilter'] },
+  { id: 26,  label: 'Vzduchový filtr',  keywords: ['vzduchov filtr', 'air filter', 'luftfilter'] },
+  { id: 350, label: 'Filtr kabiny',     keywords: ['filtr kabin', 'cabin filter', 'pollen', 'innenraumfilter'] },
+  { id: 23,  label: 'Palivový filtr',   keywords: ['palivov filtr', 'fuel filter', 'kraftstofffilter'] },
+  { id: 18,  label: 'Zapalovací svíčky',keywords: ['svicka', 'spark plug', 'zundkerze'] },
+  { id: 174, label: 'Zapalovací cívka', keywords: ['cevka zapal', 'ignition coil', 'zundspule'] },
+  { id: 19,  label: 'Žhavící svíčky',   keywords: ['zhavic svic', 'glow plug', 'gluhkerze'] },
+  { id: 213, label: 'Rozvodový řemen',  keywords: ['rozvodov remen', 'timing belt', 'zahnriemen'] },
+  { id: 8929,label: 'Rozvodový řetěz',  keywords: ['rozvodov retez', 'timing chain', 'steuerkette'] },
+  { id: 50,  label: 'Vodní čerpadlo',   keywords: ['vodni cerpad', 'water pump', 'wasserpumpe'] },
+  { id: 195, label: 'Termostat',        keywords: ['termostat', 'thermostat'] },
+  { id: 31,  label: 'Chladič',          keywords: ['chladic mot', 'radiator', 'kuhler'] },
+  { id: 1707,label: 'Chladící kapalina',keywords: ['chladic kapalin', 'coolant', 'antifreeze'] },
+  { id: 300, label: 'AC kompresor',     keywords: ['kompresor klim', 'ac compressor', 'klimakompressor'] },
+  { id: 233, label: 'AC kondenzátor',   keywords: ['kondenz klim', 'ac condenser', 'klimakondensator'] },
+  { id: 71,  label: 'Alternátor',       keywords: ['alternat', 'lichtmaschine', 'generator'] },
+  { id: 72,  label: 'Startér',          keywords: ['starter', 'anlasser'] },
+  { id: 590, label: 'Baterie',          keywords: ['baterie', 'battery', 'batterie'] },
+  { id: 51,  label: 'Tlumiče',          keywords: ['tlumic narazu', 'shock absorber', 'stossdampf'] },
+  { id: 419, label: 'Pružiny',          keywords: ['pruzin', 'spring', 'fahrwerksfeder'] },
+  { id: 423, label: 'Ramena',           keywords: ['rameno zav', 'control arm', 'lenker', 'querlenker'] },
+  { id: 432, label: 'Kulové čepy',      keywords: ['kulov cep', 'ball joint', 'traggelenk'] },
+  { id: 433, label: 'Tyče řízení',      keywords: ['tyc rizen', 'tie rod', 'spurstange'] },
+  { id: 459, label: 'Silentbloky',      keywords: ['silentblok', 'bushing', 'lagerung', 'gummilager'] },
+  { id: 110, label: 'Ložiska kol',      keywords: ['lozisko kola', 'wheel bearing', 'radlager'] },
+  { id: 204, label: 'Poloosy',          keywords: ['poloos', 'cv joint', 'antriebswelle', 'gelenkwelle'] },
+  { id: 64,  label: 'Výfuk',            keywords: ['vyfuk', 'tlumic vyf', 'muffler', 'auspuff', 'schalldampfer'] },
+  { id: 180, label: 'Lambda sonda',     keywords: ['lambda', 'oxygen sensor', 'lambdasonde'] },
+  { id: 2840,label: 'DPF filtr',        keywords: ['dpf', 'particulate filter', 'partikelfilter'] },
+  { id: 104, label: 'Katalyzátor',      keywords: ['katalyz', 'catalyst', 'katalysator'] },
+  { id: 20,  label: 'Palivové čerpadlo',keywords: ['palivov cerpad', 'fuel pump', 'kraftstoffpumpe'] },
+  { id: 29,  label: 'Vstřikovače',      keywords: ['vstrikov', 'injector', 'einspritz'] },
+  { id: 1749,label: 'Motorový olej',    keywords: ['motorov olej', 'motor oil', 'motoroel'] },
+  { id: 2769,label: 'Převodový olej',   keywords: ['prevodov olej', 'gear oil', 'getriebeoel'] },
+  { id: 42,  label: 'Stěrače',          keywords: ['sterac', 'wiper', 'wischblatt'] },
+  { id: 84,  label: 'Světlomety',       keywords: ['svetlomet', 'headlight', 'scheinwerfer'] },
+  { id: 85,  label: 'Zadní světla',     keywords: ['zadni svetlo', 'tail light', 'heckleuchte'] },
+  { id: 305, label: 'Zrcátka',          keywords: ['zrcatk', 'mirror', 'spiegel'] },
+  { id: 252, label: 'Převodovka',       keywords: ['prevodov', 'transmission', 'getriebe'] },
+  { id: 8,   label: 'Spojka',           keywords: ['spojk', 'clutch', 'kupplung'] },
+];
+
+function classifyTecdoc(item: { name: string; description?: string }): TecdocSection {
+  const hay = (item.name + ' ' + (item.description || ''))
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  for (const sec of TECDOC_SECTIONS) {
+    if (sec.keywords.some((k) => hay.includes(k))) return sec;
+  }
+  return { id: 0, label: 'Ostatní', keywords: [] };
+}
+
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
   return nodes
     .map((node) => {
