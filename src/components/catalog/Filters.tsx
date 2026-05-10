@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { sourceLabel } from "@/api/partsAPI";
 import type { SearchMode } from "./SearchBar";
 import type { SearchFilters } from "@/api/partsAPI";
+import MotorizationDetails from "./MotorizationDetails";
 
 // ---- Static data ----
 
