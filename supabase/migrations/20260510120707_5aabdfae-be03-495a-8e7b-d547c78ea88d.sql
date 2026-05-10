@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS public.jq_prices CASCADE;
+DROP TABLE IF EXISTS public.jq_part_details CASCADE;
+DROP TABLE IF EXISTS public.jq_part_engines CASCADE;
+DROP TABLE IF EXISTS public.jq_parts_basic CASCADE;
+DROP TABLE IF EXISTS public.jq_schemas CASCADE;
+DROP TABLE IF EXISTS public.jq_engine_categories CASCADE;
+DROP TABLE IF EXISTS public.jq_categories CASCADE;
+DROP TABLE IF EXISTS public.jq_engines CASCADE;
+DROP TABLE IF EXISTS public.jq_models CASCADE;
+DROP TABLE IF EXISTS public.jq_scrape_progress CASCADE;
