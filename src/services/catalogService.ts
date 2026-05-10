@@ -36,7 +36,7 @@ type RawJmItem = {
   related_oem_number?: string;
   technical_parameters?: Record<string, string>;
   category: string;
-  tecdoc_section?: { id: number; label: string };
+  tecdoc_section?: { id: number | string; label: string };
 };
 
 const normalizeOem = (s: string) =>
@@ -110,9 +110,32 @@ export async function fetchAllPartsForEngine(opts: {
     return { groups: [], totalParts: 0, oemSeedsUsed: 0, warning: error.message };
   }
   const payload = (data?.data || data || {}) as any;
-  const rawItems: RawJmItem[] = payload.items || [];
+  let rawItems: RawJmItem[] = payload.items || [];
   const oemSeedsUsed: number = payload.oemSeedsUsed || 0;
-  const debug = payload.debug;
+  const debug = payload.debug || {};
+
+  // EngineID flow is the exact J+M vehicle catalog. The cached OEM-seed flow often
+  // contains extra J+M hits that J+M also finds by OE/crossref; merge it when cached,
+  // but never trigger more API calls here.
+  if (debug.flow === "engineId") {
+    const { data: fallbackData } = await supabase.functions.invoke("jm-proxy", {
+      body: { action: "partsForEngine", payload: { ...opts, forceOemFallback: true, cacheOnly: true } },
+    });
+    const fallbackPayload = (fallbackData?.data || fallbackData || {}) as any;
+    const fallbackItems: RawJmItem[] = Array.isArray(fallbackPayload.items) ? fallbackPayload.items : [];
+    if (fallbackItems.length > 0) {
+      const seen = new Set(rawItems.map((it) => `${String(it.tecdoc_section?.id || it.category || "0")}::${normalizeOem(it.brand)}::${normalizeOem(it.oem_number)}`));
+      const extra = fallbackItems.filter((it) => {
+        const key = `${String(it.tecdoc_section?.id || it.category || "0")}::${normalizeOem(it.brand)}::${normalizeOem(it.oem_number)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      rawItems = [...rawItems, ...extra];
+      debug.oemFallbackMerged = extra.length;
+      debug.oemFallbackCachedItems = fallbackItems.length;
+    }
+  }
 
 
   // 1. Group J+M items by tecdoc_section.id
