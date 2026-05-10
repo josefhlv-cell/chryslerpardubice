@@ -1752,7 +1752,7 @@ Deno.serve(async (req) => {
           const broad = await fetchSeeds(false);
           oemSeeds = [...new Set([...oemSeeds, ...broad])];
         }
-        oemSeeds = oemSeeds.slice(0, 80);
+        oemSeeds = oemSeeds.slice(0, 200);
 
         if (oemSeeds.length === 0) {
           result = { items: [], oemSeedsUsed: 0, warning: `Žádný Mopar OEM seed pro ${brand} ${model}` };
