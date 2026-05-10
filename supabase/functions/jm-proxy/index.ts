@@ -1912,6 +1912,12 @@ Deno.serve(async (req) => {
           kTypeSource = r.source;
           kTypeMappingId = r.mappingId;
         }
+        const forceOemFallback = payload.forceOemFallback === true || String(payload.forceOemFallback || '').toLowerCase() === 'true';
+        if (forceOemFallback) {
+          resolvedEngineID = 0;
+          kTypeSource = 'forced_oem_fallback';
+          kTypeMappingId = undefined;
+        }
 
         if (!brand || !model) {
           result = { items: [], warning: 'brand+model required' };
