@@ -15,14 +15,16 @@ export default function AdminCompatibility() {
   return (
     <div className="container mx-auto p-4 max-w-6xl">
       <PageHeader title="Kompatibilita dílů" subtitle="Auto-matcher, hromadné připojování a fronta ke kontrole" />
-      <Tabs defaultValue="textmatch" className="mt-4">
+      <Tabs defaultValue="engineid" className="mt-4">
         <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="engineid">Engine ID (TecDoc K-type)</TabsTrigger>
           <TabsTrigger value="textmatch">Text-match shody</TabsTrigger>
           <TabsTrigger value="matcher">Auto-Matcher</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Attach</TabsTrigger>
           <TabsTrigger value="queue">Match Queue</TabsTrigger>
           <TabsTrigger value="stats">Statistiky</TabsTrigger>
         </TabsList>
+        <TabsContent value="engineid"><EngineIdMappingTab /></TabsContent>
         <TabsContent value="textmatch"><TextMatchReviewTab /></TabsContent>
         <TabsContent value="matcher"><MatcherTab /></TabsContent>
         <TabsContent value="bulk"><BulkAttachTab /></TabsContent>
