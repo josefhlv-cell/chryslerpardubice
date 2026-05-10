@@ -1941,6 +1941,15 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* non-blocking */ }
 
+        if (payload.cacheOnly === true || String(payload.cacheOnly || '').toLowerCase() === 'true') {
+          result = {
+            items: [],
+            warning: 'cache miss',
+            debug: { flow: forceOemFallback ? 'oemFallbackCacheOnly' : 'cacheOnly', k_type: resolvedEngineID, k_type_source: kTypeSource },
+          };
+          break;
+        }
+
         // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop (concurrent + retry) =====
         if (resolvedEngineID > 0) {
           const startedAt = Date.now();
