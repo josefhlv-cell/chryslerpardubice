@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json().catch(() => ({}));
     const action = body.action || "match-all";
-    const limit = Math.min(body.limit || 200, 1000);
+    // Hard cap to prevent CPU limit (WORKER_RESOURCE_LIMIT). Heavy work runs in background.
+    const limit = Math.min(body.limit || 25, 100);
 
     if (action === "match-part") {
       const result = await matchSinglePart(supabase, body.part_id);
