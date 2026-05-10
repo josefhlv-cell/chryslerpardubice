@@ -26,7 +26,7 @@ import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
 import VinAndOemSearch from "@/components/catalog/VinAndOemSearch";
 
-const BRAND_ORDER = ["Chrysler", "Dodge", "RAM"];
+const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Lancia"];
 
 const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   "Brzdové zařízení": Disc,
