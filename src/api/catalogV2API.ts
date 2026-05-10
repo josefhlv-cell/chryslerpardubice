@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Lancia"] as const;
+export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM"] as const;
 
 async function logCatalogEvent(params: {
   level?: 'debug' | 'info' | 'warn' | 'error';
@@ -87,6 +87,9 @@ export type NextisVehicle = {
   year_from?: number | null;
   year_to?: number | null;
   power_kw?: number | null;
+  fuel?: string | null;
+  transmission?: string | null;
+  metadata?: Record<string, unknown> | null;
 };
 
 const DE_TO_CS: Record<string, string> = {
@@ -556,7 +559,7 @@ const MAX_JM_TOTAL = 30;
 export function mergeWithJm(oem: CatalogPart[], jm: CatalogPart[]) {
   const oemClean = filterDisabledSources(oem);
   const jmClean = filterDisabledSources(jm);
-  if (oemClean.length === 0) return [];
+  if (oemClean.length === 0) return deduplicateParts(jmClean);
 
   const baseKey = (oem: string) => normalizeOem(oem).replace(/^K/, '').match(/^\d{8}/)?.[0] || normalizeOem(oem);
   const oemBaseSet = new Set(oemClean.map((p) => baseKey(p.oem_number)));
