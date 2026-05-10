@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM"] as const;
+export const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Lancia"] as const;
 
 async function logCatalogEvent(params: {
   level?: 'debug' | 'info' | 'warn' | 'error';

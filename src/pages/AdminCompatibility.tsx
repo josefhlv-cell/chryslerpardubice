@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Play, CheckCircle, XCircle, Wand2, Undo2, Filter as FilterIcon } from "lucide-react";
 
-const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM"] as const;
+const ALLOWED_BRANDS = ["Chrysler", "Dodge", "RAM", "Lancia"] as const;
 
 export default function AdminCompatibility() {
   return (
