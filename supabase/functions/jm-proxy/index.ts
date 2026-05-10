@@ -157,9 +157,162 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
 
   if (!res.ok) {
     const t = await res.text().catch(() => '');
-    throw new Error(`Nextis ${path} ${res.status}: ${t.slice(0, 300)}`);
+    const err = new Error(`Nextis ${path} ${res.status}: ${t.slice(0, 300)}`);
+    (err as any).status = res.status;
+    throw err;
   }
   return await res.json();
+}
+
+// ---------- nextisPost with retry/backoff (used for batch TECDOC scan) ----------
+async function nextisPostWithRetry(
+  path: string,
+  body: Record<string, unknown>,
+  opts: { timeoutMs?: number; maxAttempts?: number } = {},
+): Promise<{ ok: true; data: any; attempts: number } | { ok: false; error: string; attempts: number; timedOut: boolean }> {
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const maxAttempts = opts.maxAttempts ?? 3;
+  const backoff = [250, 750, 2000];
+  let lastErr = '';
+  let timedOut = false;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ token, language: 'cs', ...body }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (res.status === 401) {
+        cachedToken = null;
+        // retry with fresh token next iteration
+        lastErr = '401 unauthorized';
+        await new Promise((r) => setTimeout(r, backoff[attempt - 1] ?? 1000));
+        continue;
+      }
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        lastErr = `${res.status}: ${t.slice(0, 200)}`;
+        // only retry 5xx
+        if (res.status >= 500 && attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, backoff[attempt - 1] ?? 1000));
+          continue;
+        }
+        return { ok: false, error: lastErr, attempts: attempt, timedOut: false };
+      }
+      const data = await res.json();
+      return { ok: true, data, attempts: attempt };
+    } catch (e: any) {
+      lastErr = e?.message || String(e);
+      timedOut = e?.name === 'TimeoutError' || /timeout/i.test(lastErr);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, backoff[attempt - 1] ?? 1000));
+        continue;
+      }
+    }
+  }
+  return { ok: false, error: lastErr, attempts: maxAttempts, timedOut };
+}
+
+// ---------- generic concurrency-limited mapper ----------
+async function runConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, idx: number) => Promise<R>,
+  onEach?: (idx: number, total: number) => void,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  let completed = 0;
+  const total = items.length;
+  const runners = Array.from({ length: Math.min(limit, total) }, async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= total) return;
+      results[idx] = await worker(items[idx], idx);
+      completed++;
+      try { onEach?.(completed, total); } catch (_) { /* noop */ }
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+// ---------- progress writer (write-through to api_cache) ----------
+async function writeScanProgress(adminClient: any, key: string, payload: Record<string, unknown>) {
+  try {
+    await adminClient.from('api_cache').upsert({
+      cache_type: 'jm_scan_progress',
+      cache_key: key,
+      data: { ...payload, updated_at: new Date().toISOString() },
+      ttl_seconds: 300,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'cache_type,cache_key' });
+  } catch (_) { /* non-blocking */ }
+}
+
+// ---------- K-type resolver (vehicle_engine_mappings → nextis_vehicles fallback) ----------
+async function resolveKType(
+  adminClient: any,
+  hint: { brand?: string; model?: string; engine?: string; year?: number; vin?: string; nextisVehicleId?: string },
+): Promise<{ k_type: number; source: 'mapping_vin' | 'mapping_config' | 'nextis_external_id' | 'none'; mappingId?: string }> {
+  const brand = (hint.brand || '').trim();
+  const model = (hint.model || '').trim();
+  const engine = (hint.engine || '').trim();
+  const vin = (hint.vin || '').trim().toUpperCase();
+  const year = Number(hint.year || 0);
+
+  if (brand && model) {
+    try {
+      const { data: mappings } = await adminClient
+        .from('vehicle_engine_mappings')
+        .select('id, k_type, vin_pattern, year_from, year_to, engine')
+        .ilike('brand', brand)
+        .ilike('model', model);
+      if (Array.isArray(mappings) && mappings.length) {
+        // 1. VIN pattern match (most specific)
+        if (vin) {
+          for (const m of mappings) {
+            if (!m.vin_pattern) continue;
+            try {
+              if (new RegExp(m.vin_pattern, 'i').test(vin)) {
+                return { k_type: Number(m.k_type), source: 'mapping_vin', mappingId: m.id };
+              }
+            } catch (_) { /* invalid regex, skip */ }
+          }
+        }
+        // 2. Engine + year window match
+        const engineLower = engine.toLowerCase();
+        const candidates = mappings.filter((m: any) => {
+          const me = String(m.engine || '').toLowerCase();
+          if (engineLower && me && !(me.includes(engineLower) || engineLower.includes(me))) return false;
+          if (year && m.year_from && year < m.year_from) return false;
+          if (year && m.year_to && year > m.year_to) return false;
+          return true;
+        });
+        if (candidates.length) return { k_type: Number(candidates[0].k_type), source: 'mapping_config', mappingId: candidates[0].id };
+        // 3. Fallback first mapping for brand+model
+        return { k_type: Number(mappings[0].k_type), source: 'mapping_config', mappingId: mappings[0].id };
+      }
+    } catch (e) {
+      console.warn('[resolveKType] mapping lookup failed:', (e as Error).message);
+    }
+  }
+
+  // 4. Legacy fallback: nextis_vehicles.external_id
+  if (hint.nextisVehicleId) {
+    try {
+      const { data: v } = await adminClient
+        .from('nextis_vehicles')
+        .select('external_id')
+        .eq('id', hint.nextisVehicleId)
+        .maybeSingle();
+      const ext = String(v?.external_id || '').trim();
+      if (/^\d+$/.test(ext)) return { k_type: Number(ext), source: 'nextis_external_id' };
+    } catch (_) { /* noop */ }
+  }
+  return { k_type: 0, source: 'none' };
 }
 
 // ---------- normalisation ----------
