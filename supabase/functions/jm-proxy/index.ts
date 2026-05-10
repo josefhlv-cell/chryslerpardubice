@@ -1688,15 +1688,36 @@ Deno.serve(async (req) => {
 
       case 'partsForEngine': {
         // ALL J+M parts for a given vehicle, classified by TecDoc section.
-        // Output: { items: UnifiedPart[] (each with tecdoc_section), oemSeedsUsed, source }
-        const brand = String(payload.brand || '').trim();
-        const model = String(payload.model || '').trim();
-        const engine = String(payload.engine || '').trim();
+        // Two strategies:
+        //  A) Nextis engineID (TecDoc K-type) is set on nextis_vehicles.external_id
+        //     → loop TECDOC_SECTIONS, call items-finding-by-vehicle per genArtID
+        //     → clean classification, full section tree (15-20 categories).
+        //  B) No engineID → fall back to OEM-seed flow (parts_new Mopar codes).
+        const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        let brand = String(payload.brand || '').trim();
+        let model = String(payload.model || '').trim();
+        let engine = String(payload.engine || '').trim();
+        let resolvedEngineID = 0;
+        if (nextisVehicleId) {
+          const { data: v } = await adminClient
+            .from('nextis_vehicles')
+            .select('brand, model, engine, external_id')
+            .eq('id', nextisVehicleId)
+            .maybeSingle();
+          if (v) {
+            brand = String(v.brand || brand).trim();
+            model = String(v.model || model).trim();
+            engine = String(v.engine || engine).trim();
+            const ext = String(v.external_id || '').trim();
+            if (/^\d+$/.test(ext)) resolvedEngineID = Number(ext);
+          }
+        }
+        if (Number(payload.engineID || 0) > 0) resolvedEngineID = Number(payload.engineID);
         if (!brand || !model) {
           result = { items: [], warning: 'brand+model required' };
           break;
         }
-        const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
+        const cacheKey = `${brand}|${model}|${engine}|eid:${resolvedEngineID}`.toLowerCase();
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
