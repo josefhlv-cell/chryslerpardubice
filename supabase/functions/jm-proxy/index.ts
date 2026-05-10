@@ -1791,8 +1791,7 @@ Deno.serve(async (req) => {
         result = out;
         break;
       }
-        break;
-      }
+
 
       case 'enrichPrices': {
         // Bulk: pull missing-price OEMs from parts_new and enrich them
