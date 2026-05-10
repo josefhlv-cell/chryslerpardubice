@@ -46,7 +46,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json().catch(() => ({}));
     const action = body.action || "match-all";
-    const limit = Math.min(body.limit || 200, 1000);
+    // Hard cap to prevent CPU limit (WORKER_RESOURCE_LIMIT). Heavy work runs in background.
+    const limit = Math.min(body.limit || 25, 100);
 
     if (action === "match-part") {
       const result = await matchSinglePart(supabase, body.part_id);
@@ -87,21 +88,25 @@ Deno.serve(async (req) => {
         scope = scope.filter((p: any) => !have.has(p.id));
       }
 
-      let exact = 0, super_ = 0, crossref = 0, fuzzy = 0, queued = 0;
-      for (const p of scope) {
-        const r = await matchSinglePart(supabase, p.id);
-        exact += r.exact;
-        super_ += r.supersession;
-        crossref += r.crossref;
-        fuzzy += r.fuzzy;
-        queued += r.queued;
+      // Run heavy work in background to avoid CPU limit (WORKER_RESOURCE_LIMIT)
+      const bgScope = scope.slice(0, limit);
+      const work = (async () => {
+        for (const p of bgScope) {
+          try { await matchSinglePart(supabase, p.id); } catch (_) { /* swallow */ }
+        }
+      })();
+      // @ts-ignore EdgeRuntime available in Supabase edge functions
+      if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any).waitUntil) {
+        // @ts-ignore
+        (EdgeRuntime as any).waitUntil(work);
       }
       return json({
         ok: true,
+        background: true,
         scope: { brand, model, engine, category, onlyMissing },
         candidates: parts?.length || 0,
-        processed: scope.length,
-        exact, supersession: super_, crossref, fuzzy, queued,
+        queued_for_processing: bgScope.length,
+        message: "Matching běží na pozadí. Výsledky se objeví v catalog_vehicle_compatibility během několika minut.",
       });
     }
 
