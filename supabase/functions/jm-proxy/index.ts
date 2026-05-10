@@ -558,6 +558,16 @@ function normalizeCatalogItem(it: any): UnifiedPart {
   const stock = Number(it.qtyAvailableMain ?? it.QtyAvailableMain ?? 0)
               + Number(it.qtyAvailableSupplier ?? it.QtyAvailableSupplier ?? 0);
   const imageUrls = collectImageUrls(it);
+  // Capture TecDoc generic article (section) info if Nextis returns it
+  const genArtId = Number(
+    it.productGenericArticleID ?? it.ProductGenericArticleID ??
+    it.genericArticleID ?? it.GenericArticleID ??
+    it.genArtID ?? it.GenArtID ?? 0,
+  ) || 0;
+  const genArtName = String(
+    it.productGenericArticleName ?? it.ProductGenericArticleName ??
+    it.genericArticleName ?? it.GenericArticleName ?? '',
+  ).trim();
 
   return {
     supplier: 'jm',
@@ -575,6 +585,9 @@ function normalizeCatalogItem(it: any): UnifiedPart {
     image_urls: imageUrls,
     category: '',
     compatible_vehicles: [],
+    // @ts-ignore — extra fields for client-side dynamic grouping
+    gen_art_id: genArtId,
+    gen_art_name: genArtName,
   };
 }
 
@@ -917,6 +930,136 @@ const TECDOC_SECTIONS: TecdocSection[] = [
   // Cooling extras
   { id: 230, label: 'Hadice chlazení',  keywords: ['hadic chlad', 'hadice chlad', 'coolant hose', 'kuhlerschlauch'] },
   { id: 234, label: 'Expanzní nádobka', keywords: ['expanz nadobk', 'expansion tank', 'ausgleichsbehalt'] },
+
+  // ===== Expanded coverage (added 2026-05) - rozšířený seznam TecDoc generic articles =====
+  // Brakes
+  { id: 401, label: 'Brzdové destičky (zadní)', keywords: ['destick zadn'] },
+  { id: 80,  label: 'Brzdové kotouče (zadní)',  keywords: ['kotouc zadn'] },
+  { id: 1091,label: 'Brzdové bubny',            keywords: ['brzd buben', 'brake drum', 'bremstrommel'] },
+  { id: 1092,label: 'Brzdové čelisti',          keywords: ['brzd celist', 'brake shoe', 'bremsbacken'] },
+  { id: 469, label: 'Hlavní brzdový válec',     keywords: ['hlavni brzd valec', 'master cylinder', 'hauptbremszylinder'] },
+  { id: 470, label: 'Posilovač brzd',           keywords: ['posilovac brzd', 'brake booster', 'bremskraftverstark'] },
+  // Engine internals
+  { id: 7,   label: 'Hlava motoru',             keywords: ['hlava motor', 'cylinder head', 'zylinderkopf'] },
+  { id: 13,  label: 'Sada hlavy motoru',        keywords: ['sada hlavy', 'head gasket set', 'zylinderkopfdichtung'] },
+  { id: 16,  label: 'Sací potrubí',             keywords: ['saci potrub', 'intake manifold', 'ansaugkrumm'] },
+  { id: 17,  label: 'Výfukové potrubí',         keywords: ['vyfukov potrub', 'exhaust manifold', 'auspuffkrumm'] },
+  { id: 25,  label: 'Olejová pumpa',            keywords: ['olejova pumpa', 'oil pump', 'olpumpe'] },
+  { id: 28,  label: 'Setrvačník',               keywords: ['setrvacnik', 'flywheel', 'schwungrad'] },
+  { id: 30,  label: 'Pístní kroužky',           keywords: ['pistni krouzk', 'piston ring', 'kolbenring'] },
+  { id: 32,  label: 'Vodní hadice',             keywords: ['vodni hadic', 'water hose'] },
+  { id: 38,  label: 'Píst',                     keywords: ['pist motor', 'piston', 'kolben'] },
+  { id: 39,  label: 'Ojnice',                   keywords: ['ojnice', 'connecting rod', 'pleuel'] },
+  { id: 40,  label: 'Klikový hřídel',           keywords: ['klikovy hridel', 'crankshaft', 'kurbelwelle'] },
+  { id: 43,  label: 'Vačkový hřídel',           keywords: ['vackovy hridel', 'camshaft', 'nockenwelle'] },
+  { id: 44,  label: 'Ventily',                  keywords: ['ventil motor', 'engine valve'] },
+  { id: 45,  label: 'Pružina ventilu',          keywords: ['pruzina ventil', 'valve spring'] },
+  { id: 46,  label: 'Vodítko ventilu',          keywords: ['voditko ventil', 'valve guide'] },
+  { id: 47,  label: 'Zdvihátko ventilu',        keywords: ['zdvihatko', 'valve lifter', 'tassenstossel'] },
+  { id: 48,  label: 'Hydraulické zdvihátko',    keywords: ['hydraulick zdvih', 'hydraulic lifter'] },
+  { id: 49,  label: 'Vahadlo ventilu',          keywords: ['vahadlo ventil', 'rocker arm', 'kipphebel'] },
+  { id: 53,  label: 'Ventilátor chlazení',      keywords: ['ventilator chlad', 'cooling fan', 'kuhlergeblase'] },
+  { id: 54,  label: 'Spojka ventilátoru',       keywords: ['spojka ventilat', 'fan clutch', 'visco kupplung'] },
+  { id: 55,  label: 'Termoswitch',              keywords: ['termospinac', 'temp switch', 'thermoschalter'] },
+  { id: 56,  label: 'Snímač teploty chladiva',  keywords: ['snimac teplot', 'coolant temp', 'kuhlmittel'] },
+  { id: 57,  label: 'EGR ventil',               keywords: ['egr', 'agr ventil'] },
+  { id: 58,  label: 'Turbodmychadlo',           keywords: ['turbo', 'turbocharger', 'lader'] },
+  { id: 59,  label: 'Mezichladič / intercooler',keywords: ['mezichladic', 'intercooler', 'ladeluftkuhler'] },
+  { id: 61,  label: 'Tlumič výfuku',            keywords: ['tlumic vyf', 'silencer', 'auspufftopf'] },
+  { id: 62,  label: 'Výfukový sběrač',          keywords: ['vyfuk sber'] },
+  { id: 63,  label: 'Sada výfuku',              keywords: ['sada vyfuk'] },
+  { id: 67,  label: 'Spalovací komora',         keywords: ['kovove tesneni'] },
+  { id: 73,  label: 'Regulátor alternátoru',    keywords: ['regulator alternat', 'alternator regulator'] },
+  { id: 74,  label: 'Spínač zapalování',        keywords: ['spinac zapal', 'ignition switch', 'zundschloss'] },
+  { id: 75,  label: 'Magnetický spínač starteru', keywords: ['magneticky spinac', 'starter solenoid'] },
+  { id: 76,  label: 'Uhlíky alternátoru',       keywords: ['uhlik alternat', 'carbon brush'] },
+  { id: 77,  label: 'Pastorek startéru',        keywords: ['pastorek start', 'starter drive'] },
+  // Suspension extras
+  { id: 78,  label: 'Náboj kola',               keywords: ['nabok kola', 'wheel hub', 'radnabe'] },
+  { id: 81,  label: 'Šroub kola',               keywords: ['sroub kola', 'wheel bolt', 'radschraube'] },
+  { id: 83,  label: 'Matice kola',              keywords: ['matice kola', 'wheel nut', 'radmutter'] },
+  { id: 86,  label: 'Hnací hřídel',             keywords: ['hnaci hridel', 'drive shaft', 'antriebswelle'] },
+  { id: 87,  label: 'Manžeta poloosy',          keywords: ['manzeta polos', 'cv boot', 'achsmanschette'] },
+  { id: 88,  label: 'Křížový kloub',            keywords: ['krizovy kloub', 'universal joint'] },
+  { id: 89,  label: 'Středový ložisko hřídele', keywords: ['stredove lozisko', 'center bearing'] },
+  { id: 90,  label: 'Pružinové uložení',        keywords: ['pruzin ulozen', 'spring mount'] },
+  { id: 91,  label: 'Doraz / odbojník',         keywords: ['doraz', 'odbojnik', 'bump stop'] },
+  { id: 92,  label: 'Pomocný rám',              keywords: ['pomocny ram', 'subframe', 'achstrager'] },
+  { id: 93,  label: 'Tlumič řízení',            keywords: ['tlumic rizen', 'steering damper'] },
+  { id: 94,  label: 'Manžeta řízení',           keywords: ['manzeta rizen', 'rack boot'] },
+  { id: 96,  label: 'Hřebenové řízení',         keywords: ['hreben rizen', 'steering rack', 'lenkgetriebe'] },
+  { id: 97,  label: 'Čerpadlo posilovače',      keywords: ['cerpadlo posilov', 'power steering pump', 'servopumpe'] },
+  { id: 98,  label: 'Olej posilovače',          keywords: ['olej posilov', 'power steering fluid'] },
+  // Cooling extras
+  { id: 235, label: 'Víčko nádobky chladiva',   keywords: ['vicko nadob', 'expansion tank cap'] },
+  { id: 236, label: 'Olejový chladič',          keywords: ['olejovy chladic', 'oil cooler', 'olkuhler'] },
+  { id: 237, label: 'EGR chladič',              keywords: ['egr chladic', 'egr cooler'] },
+  // Fuel system
+  { id: 21,  label: 'Vstřikovací tryska',       keywords: ['tryska', 'nozzle', 'einspritz'] },
+  { id: 24,  label: 'Snímač hladiny paliva',    keywords: ['snimac hladiny paliva', 'fuel level sensor'] },
+  { id: 27,  label: 'Plovák paliva',            keywords: ['plovak paliv'] },
+  { id: 33,  label: 'Sací jednotka palivové nádrže', keywords: ['saci jednotka palivov'] },
+  { id: 34,  label: 'Palivová lišta',           keywords: ['palivova lista', 'fuel rail'] },
+  { id: 36,  label: 'Vysokotlaké čerpadlo',     keywords: ['vysokotlake cerpadlo', 'high pressure fuel pump'] },
+  // Electrics extras
+  { id: 78,  label: 'Pojistka',                 keywords: ['pojistka', 'fuse', 'sicherung'] },
+  { id: 99,  label: 'Relé',                     keywords: ['rele', 'relay'] },
+  { id: 101, label: 'Žárovka',                  keywords: ['zarovka', 'bulb', 'gluhlampe'] },
+  { id: 103, label: 'Spínač',                   keywords: ['spinac', 'switch', 'schalter'] },
+  { id: 105, label: 'Konektor',                 keywords: ['konektor', 'connector'] },
+  { id: 106, label: 'Snímač tlaku oleje',       keywords: ['snimac tlaku oleje', 'oil pressure sensor'] },
+  { id: 107, label: 'Snímač hladiny oleje',     keywords: ['snimac hladiny oleje', 'oil level sensor'] },
+  { id: 108, label: 'Snímač polohy škrt. klapky', keywords: ['snimac polohy', 'throttle position', 'tps'] },
+  { id: 109, label: 'Snímač klepání',           keywords: ['snimac klepani', 'knock sensor', 'klopfsensor'] },
+  // Lighting extras
+  { id: 111, label: 'Mlhovka',                  keywords: ['mlhovk', 'fog light', 'nebelschein'] },
+  { id: 112, label: 'Směrovka',                 keywords: ['smerov', 'turn signal', 'blinker'] },
+  { id: 113, label: 'Brzdové světlo',           keywords: ['brzd svetl', 'brake light'] },
+  { id: 114, label: 'SPZ osvětlení',            keywords: ['spz osvet', 'license plate light'] },
+  { id: 115, label: 'Vnitřní osvětlení',        keywords: ['vnitrni osvet', 'interior light'] },
+  // Wipers extras
+  { id: 116, label: 'Stěrač zadního skla',      keywords: ['sterac zadni', 'rear wiper'] },
+  { id: 117, label: 'Motor stěračů',            keywords: ['motor sterac', 'wiper motor', 'wischermotor'] },
+  { id: 118, label: 'Mechanika stěračů',        keywords: ['mechanika sterac', 'wiper linkage'] },
+  { id: 119, label: 'Čerpadlo ostřikovače',     keywords: ['cerpadlo ostrikov', 'washer pump'] },
+  { id: 120, label: 'Tryska ostřikovače',       keywords: ['tryska ostrikov', 'washer nozzle'] },
+  // Glass / mirrors
+  { id: 121, label: 'Sklo zrcátka',             keywords: ['sklo zrcat', 'mirror glass'] },
+  { id: 122, label: 'Čelní sklo',               keywords: ['celni sklo', 'windshield', 'windscreen'] },
+  // HVAC extras
+  { id: 245, label: 'Topení interiéru',         keywords: ['topen inter', 'heater core'] },
+  { id: 246, label: 'Ventilátor interiéru',     keywords: ['ventilator inter', 'blower motor'] },
+  { id: 247, label: 'Sušič klimatizace',        keywords: ['susic klim', 'ac dryer', 'klimatrockner'] },
+  { id: 248, label: 'Expanzní ventil klima',    keywords: ['expanz ventil klim', 'ac expansion valve'] },
+  { id: 249, label: 'Snímač tlaku klima',       keywords: ['snimac tlaku klim', 'ac pressure sensor'] },
+  // Body / interior extras
+  { id: 315, label: 'Plynový vzpěra kapoty',    keywords: ['vzper kapot', 'hood strut', 'gasdruckfeder'] },
+  { id: 316, label: 'Vzpěra zad. dveří',        keywords: ['vzper zad dveri', 'tailgate strut'] },
+  { id: 317, label: 'Závěs dveří',              keywords: ['zaves dveri', 'door hinge'] },
+  { id: 319, label: 'Stěrač gumička',           keywords: ['sterac gumicka', 'wiper rubber'] },
+  { id: 321, label: 'Mřížka chladiče',          keywords: ['mrizka chladic', 'grille'] },
+  { id: 322, label: 'Klapka palivové nádrže',   keywords: ['klapka paliv', 'fuel filler flap'] },
+  { id: 323, label: 'Lemy blatníků',            keywords: ['lemy blatnik', 'fender flare'] },
+  // Transmission extras
+  { id: 250, label: 'Synchron',                 keywords: ['synchron', 'synchronizer ring'] },
+  { id: 251, label: 'Tažné lano',               keywords: ['tahne lano', 'tow rope'] },
+  { id: 253, label: 'Spojkový kotouč',          keywords: ['spojkovy kotouc', 'clutch disc', 'kupplungsscheibe'] },
+  { id: 254, label: 'Přítlačný talíř',          keywords: ['pritlacny talir', 'pressure plate', 'kupplungsdruckplatte'] },
+  { id: 255, label: 'Vysoušecí ložisko',        keywords: ['vysousec lozisko', 'release bearing', 'ausrucklager'] },
+  { id: 256, label: 'Hlavní spojkový válec',    keywords: ['hlavni spojkovy valec', 'clutch master cylinder'] },
+  { id: 257, label: 'Pomocný spojkový válec',   keywords: ['pomocny spojkovy valec', 'clutch slave cylinder'] },
+  { id: 258, label: 'Diferenciál',              keywords: ['diferencial', 'differential'] },
+  { id: 259, label: 'Olej převodovky / diff',   keywords: ['atf', 'gear oil', 'getriebeoel'] },
+  // Heated/Glow & Sensors
+  { id: 1100,label: 'Snímač vačkového hřídele', keywords: ['snimac vackov', 'camshaft sensor'] },
+  { id: 1101,label: 'Snímač ABS (zadní)',       keywords: ['snimac abs zadn'] },
+  { id: 1102,label: 'Snímač rychlosti vozidla', keywords: ['snimac rychlosti', 'speed sensor', 'tachosensor'] },
+  { id: 1103,label: 'Snímač parkovací (PDC)',   keywords: ['parkovaci snimac', 'parking sensor', 'pdc'] },
+  { id: 1104,label: 'Volant / airbag',          keywords: ['volant', 'steering wheel', 'lenkrad'] },
+  { id: 1105,label: 'Bezpečnostní pás',         keywords: ['bezpec pas', 'seat belt', 'sicherheitsgurt'] },
+  // Misc fluids
+  { id: 1750,label: 'Aditivum DEF/AdBlue',      keywords: ['adblue', 'def fluid'] },
+  { id: 1751,label: 'Hydraulická kapalina',     keywords: ['hydraulicka kapalin', 'hydraulic fluid'] },
 ];
 
 function classifyTecdoc(item: { name: string; description?: string }): TecdocSection {
@@ -1952,6 +2095,81 @@ Deno.serve(async (req) => {
             debug: { flow: forceOemFallback ? 'oemFallbackCacheOnly' : 'cacheOnly', k_type: resolvedEngineID, k_type_source: kTypeSource },
           };
           break;
+        }
+
+        // ===== STRATEGY A0: single byVehicle call without genArtID (returns ALL sections) =====
+        // Pokud Nextis API podporuje volání bez filtru sekce, dostaneme všechny díly v jednom requestu
+        // a sekce poskládáme dynamicky podle productGenericArticleID/Name vrácených v každém dílu.
+        if (resolvedEngineID > 0) {
+          try {
+            const startedAt0 = Date.now();
+            const reqBody0 = { engineID: resolvedEngineID, getOECodes: true, target: 'P' };
+            const res0 = await nextisPostWithRetry('/catalogs/items-finding-by-vehicle', reqBody0, {
+              timeoutMs: 25_000,
+              maxAttempts: 2,
+            });
+            if (res0.ok) {
+              const all = normalizeItems(res0.data);
+              const filtered = all.filter((it) => it.oem_number && isAllowedBrand(it.brand));
+              // Group by gen_art_id (TecDoc section) - dynamic, no hard-coded list
+              const seenA: Set<string> = new Set();
+              const grouped: Record<string, { id: number; label: string; items: UnifiedPart[] }> = {};
+              for (const it of filtered) {
+                const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+                if (seenA.has(key)) continue;
+                seenA.add(key);
+                // @ts-ignore - extras
+                const gid = Number(it.gen_art_id || 0);
+                // @ts-ignore - extras
+                const gname = String(it.gen_art_name || '').trim() || 'Ostatní';
+                const k = String(gid || gname);
+                if (!grouped[k]) grouped[k] = { id: gid, label: gname, items: [] };
+                grouped[k].items.push({ ...it, category: gname,
+                  // @ts-ignore
+                  tecdoc_section: { id: gid, label: gname } });
+              }
+              const sectionsList = Object.values(grouped);
+              const collectedAll = sectionsList.flatMap((s) => s.items);
+              if (collectedAll.length > 0) {
+                const enriched = await enrichItemsWithRelatedOem(adminClient, collectedAll);
+                const out = {
+                  items: enriched,
+                  engineID: resolvedEngineID,
+                  sectionsScanned: 1,
+                  sectionsHit: sectionsList.length,
+                  totalRawHits: filtered.length,
+                  source: 'engineID-single-call',
+                  sections: sectionsList.map((s) => ({ id: s.id, label: s.label, count: s.items.length })),
+                  debug: {
+                    flow: 'engineId-fullscan',
+                    k_type: resolvedEngineID,
+                    k_type_source: kTypeSource,
+                    k_type_mapping_id: kTypeMappingId,
+                    durationMs: Date.now() - startedAt0,
+                    sectionsHit: sectionsList.length,
+                    totalRawHits: filtered.length,
+                  },
+                };
+                try {
+                  await adminClient.from('api_cache').upsert({
+                    cache_type: 'jm_parts_for_engine',
+                    cache_key: cacheKey,
+                    data: out,
+                    ttl_seconds: 3600,
+                    created_at: new Date().toISOString(),
+                  }, { onConflict: 'cache_type,cache_key' });
+                } catch (_) { /* non-blocking */ }
+                result = out;
+                break;
+              }
+              // 0 items returned bez genArtID → spadneme do strategy A níže
+              console.warn('[partsForEngine] full-scan returned 0 items for engineID', resolvedEngineID, '- falling back to multi-section loop');
+            } else {
+              console.warn('[partsForEngine] full-scan call failed for engineID', resolvedEngineID, ':', res0.error, '- falling back to multi-section loop');
+            }
+          } catch (e) {
+            console.warn('[partsForEngine] full-scan threw, falling back:', (e as Error).message);
+          }
         }
 
         // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop (concurrent + retry) =====
