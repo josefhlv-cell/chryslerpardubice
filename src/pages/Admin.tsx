@@ -25,6 +25,7 @@ import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
 // Lazy admin moduly (zachované)
 const AdminCatalogUnified = lazy(() => import("@/components/admin/AdminCatalogUnified"));
 const AdminCatalogHub = lazy(() => import("@/components/admin/AdminCatalogHub"));
+const AdminCompatibility = lazy(() => import("@/pages/AdminCompatibility"));
 const AdminJmOrders = lazy(() => import("@/components/admin/AdminJmOrders"));
 const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
 const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
@@ -218,16 +219,15 @@ const Admin = () => {
   const tree: AdminTreeNode[] = [
     { key: "overview", label: "Přehled", icon: LayoutDashboard },
     {
-      key: "catalog", label: "Katalog", icon: Package, children: [
+      key: "catalog", label: "Katalog (J+M)", icon: Package, children: [
         { key: "catalog-overview", label: "Přehled", icon: LayoutDashboard },
-        { key: "catalog-import", label: "Import" },
-        { key: "catalog-7zap", label: "7zap scraper" },
-        { key: "catalog-repair", label: "Opravy & diagnostika" },
-        { key: "catalog-health", label: "Zdraví katalogu" },
-        { key: "catalog-pipeline", label: "Auto-pipeline & párování" },
+        { key: "catalog-engine-id", label: "Engine ID / K-type", icon: Database },
+        { key: "catalog-settings", label: "J+M sync & nastavení", icon: Settings2 },
+        { key: "catalog-health", label: "Zdraví katalogu", icon: Activity },
+        { key: "catalog-repair", label: "Diagnostika & opravy" },
+        { key: "catalog-import", label: "Import OEM/CSV" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
-        ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "EPC nákresy" }] : []),
-        { key: "catalog-settings", label: "Nastavení", icon: Settings2 },
+        ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "OEM EPC nákresy" }] : []),
       ],
     },
     {
@@ -331,6 +331,7 @@ const Admin = () => {
       // ----- CATALOG -----
       case "catalog":
       case "catalog-overview": return <Suspense fallback={<Loader />}><AdminCatalogHub /></Suspense>;
+      case "catalog-engine-id": return <Suspense fallback={<Loader />}><AdminCompatibility /></Suspense>;
       case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /><EPCImport /></div></Suspense>;
       case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
       case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
