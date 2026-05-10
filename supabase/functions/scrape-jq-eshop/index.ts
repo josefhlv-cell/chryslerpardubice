@@ -62,7 +62,7 @@ function cookieHeader(jar: Record<string, string>): string {
 async function loginFresh(): Promise<CachedCookie> {
   // 1) GET login page – grab __VIEWSTATE / __EVENTVALIDATION + initial cookies
   const r1 = await fetch(BASE + LOGIN_PATH, {
-    headers: { "User-Agent": "Mozilla/5.0 (Lovable scrape-jq-eshop)" },
+    headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" },
   });
   const html1 = await r1.text();
   const jar = parseSetCookie(r1.headers);
@@ -97,7 +97,7 @@ async function loginFresh(): Promise<CachedCookie> {
       "Content-Length": String(new TextEncoder().encode(body).length),
       "Cookie": cookieHeader(jar),
       "Referer": BASE + LOGIN_PATH,
-      "User-Agent": "Mozilla/5.0 (Lovable scrape-jq-eshop)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
     body,
   });
@@ -112,7 +112,7 @@ async function loginFresh(): Promise<CachedCookie> {
   const r3 = await fetch(BASE + LOGIN_PATH, {
     headers: {
       "Cookie": cookieHeader(jar),
-      "User-Agent": "Mozilla/5.0 (Lovable scrape-jq-eshop)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     },
   });
   const html3 = await r3.text();
@@ -161,7 +161,7 @@ async function fetchLoggedIn(path: string, retry = true): Promise<{ status: numb
   const r = await fetch(BASE + path, {
     headers: {
       "Cookie": c.cookie,
-      "User-Agent": "Mozilla/5.0 (Lovable scrape-jq-eshop)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       "Referer": BASE + LOGIN_PATH,
     },
   });
