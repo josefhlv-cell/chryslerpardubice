@@ -1864,7 +1864,7 @@ Deno.serve(async (req) => {
       default: {
         const known = [
           'ping', 'diagnose', 'syncCategories', 'searchByCode', 'vehicleCategories',
-          'searchByVehicle', 'priceAndStock', 'enrichPrices',
+          'searchByVehicle', 'partsForEngine', 'priceAndStock', 'enrichPrices',
           'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
           'validateOrder', 'createOrder',
         ];
