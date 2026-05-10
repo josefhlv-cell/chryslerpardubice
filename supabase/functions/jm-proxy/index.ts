@@ -64,7 +64,7 @@ function isUsBrand(producer: string | null | undefined): boolean {
 }
 
 // Whitelist of vehicle brands we expose via the curated catalog tree.
-const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram"];
+const ALLOWED_BRANDS: readonly string[] = ["chrysler", "dodge", "ram", "lancia"];
 
 // ---------- token cache ----------
 let cachedToken: { token: string; expiresAt: number } | null = null;
