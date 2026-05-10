@@ -74,7 +74,7 @@ function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean 
 
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
-  const { user, canPlaceOrder } = useAuth();
+  const { user, canPlaceOrder, isAdmin } = useAuth();
 
   const [brands, setBrands] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -93,6 +93,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const [loading, setLoading] = useState(false);
   const [partsLoading, setPartsLoading] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [brakeSubtype, setBrakeSubtype] = useState<string>("all");
 
   // Brands
@@ -156,6 +157,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       .then((res) => {
         if (cancelled) return;
         setGroups(res.groups);
+        setDebugInfo(res.debug || null);
         if (res.warning) setWarning(res.warning);
         if (res.groups.length === 0) setWarning(res.warning || "Pro toto vozidlo se nepodařilo načíst žádné díly.");
       })
@@ -341,6 +343,19 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                   </button>
                 );})}
               </div>
+        )}
+
+        {step === "category" && isAdmin && debugInfo && (
+          <div className="mb-3 px-3 py-2 rounded-md border border-amber-500/30 bg-amber-500/5 text-[11px] font-mono text-amber-200/90 flex flex-wrap gap-x-3 gap-y-1">
+            <span>🔧 flow: <strong>{debugInfo.flow}</strong></span>
+            {debugInfo.k_type > 0 && <span>K-type: <strong>{debugInfo.k_type}</strong> ({debugInfo.k_type_source})</span>}
+            <span>sekce: <strong>{debugInfo.sectionsHit}/{debugInfo.sectionsScanned}</strong></span>
+            <span>raw hity: <strong>{debugInfo.totalRawHits}</strong></span>
+            {debugInfo.durationMs !== undefined && <span>{(debugInfo.durationMs / 1000).toFixed(1)}s</span>}
+            {debugInfo.timedOutSections?.length > 0 && <span className="text-destructive">timeout: {debugInfo.timedOutSections.length}</span>}
+            {debugInfo.retriedSections?.length > 0 && <span className="text-yellow-400">retry: {debugInfo.retriedSections.length}</span>}
+            {debugInfo.partial && <span className="text-destructive">⚠ částečné</span>}
+          </div>
         )}
 
         {step === "category" && (

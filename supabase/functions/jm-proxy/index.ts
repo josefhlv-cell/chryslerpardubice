@@ -157,9 +157,162 @@ async function nextisPost(path: string, body: Record<string, unknown>): Promise<
 
   if (!res.ok) {
     const t = await res.text().catch(() => '');
-    throw new Error(`Nextis ${path} ${res.status}: ${t.slice(0, 300)}`);
+    const err = new Error(`Nextis ${path} ${res.status}: ${t.slice(0, 300)}`);
+    (err as any).status = res.status;
+    throw err;
   }
   return await res.json();
+}
+
+// ---------- nextisPost with retry/backoff (used for batch TECDOC scan) ----------
+async function nextisPostWithRetry(
+  path: string,
+  body: Record<string, unknown>,
+  opts: { timeoutMs?: number; maxAttempts?: number } = {},
+): Promise<{ ok: true; data: any; attempts: number } | { ok: false; error: string; attempts: number; timedOut: boolean }> {
+  const timeoutMs = opts.timeoutMs ?? 8000;
+  const maxAttempts = opts.maxAttempts ?? 3;
+  const backoff = [250, 750, 2000];
+  let lastErr = '';
+  let timedOut = false;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ token, language: 'cs', ...body }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (res.status === 401) {
+        cachedToken = null;
+        // retry with fresh token next iteration
+        lastErr = '401 unauthorized';
+        await new Promise((r) => setTimeout(r, backoff[attempt - 1] ?? 1000));
+        continue;
+      }
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        lastErr = `${res.status}: ${t.slice(0, 200)}`;
+        // only retry 5xx
+        if (res.status >= 500 && attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, backoff[attempt - 1] ?? 1000));
+          continue;
+        }
+        return { ok: false, error: lastErr, attempts: attempt, timedOut: false };
+      }
+      const data = await res.json();
+      return { ok: true, data, attempts: attempt };
+    } catch (e: any) {
+      lastErr = e?.message || String(e);
+      timedOut = e?.name === 'TimeoutError' || /timeout/i.test(lastErr);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, backoff[attempt - 1] ?? 1000));
+        continue;
+      }
+    }
+  }
+  return { ok: false, error: lastErr, attempts: maxAttempts, timedOut };
+}
+
+// ---------- generic concurrency-limited mapper ----------
+async function runConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T, idx: number) => Promise<R>,
+  onEach?: (idx: number, total: number) => void,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  let completed = 0;
+  const total = items.length;
+  const runners = Array.from({ length: Math.min(limit, total) }, async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= total) return;
+      results[idx] = await worker(items[idx], idx);
+      completed++;
+      try { onEach?.(completed, total); } catch (_) { /* noop */ }
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+// ---------- progress writer (write-through to api_cache) ----------
+async function writeScanProgress(adminClient: any, key: string, payload: Record<string, unknown>) {
+  try {
+    await adminClient.from('api_cache').upsert({
+      cache_type: 'jm_scan_progress',
+      cache_key: key,
+      data: { ...payload, updated_at: new Date().toISOString() },
+      ttl_seconds: 300,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'cache_type,cache_key' });
+  } catch (_) { /* non-blocking */ }
+}
+
+// ---------- K-type resolver (vehicle_engine_mappings → nextis_vehicles fallback) ----------
+async function resolveKType(
+  adminClient: any,
+  hint: { brand?: string; model?: string; engine?: string; year?: number; vin?: string; nextisVehicleId?: string },
+): Promise<{ k_type: number; source: 'mapping_vin' | 'mapping_config' | 'nextis_external_id' | 'none'; mappingId?: string }> {
+  const brand = (hint.brand || '').trim();
+  const model = (hint.model || '').trim();
+  const engine = (hint.engine || '').trim();
+  const vin = (hint.vin || '').trim().toUpperCase();
+  const year = Number(hint.year || 0);
+
+  if (brand && model) {
+    try {
+      const { data: mappings } = await adminClient
+        .from('vehicle_engine_mappings')
+        .select('id, k_type, vin_pattern, year_from, year_to, engine')
+        .ilike('brand', brand)
+        .ilike('model', model);
+      if (Array.isArray(mappings) && mappings.length) {
+        // 1. VIN pattern match (most specific)
+        if (vin) {
+          for (const m of mappings) {
+            if (!m.vin_pattern) continue;
+            try {
+              if (new RegExp(m.vin_pattern, 'i').test(vin)) {
+                return { k_type: Number(m.k_type), source: 'mapping_vin', mappingId: m.id };
+              }
+            } catch (_) { /* invalid regex, skip */ }
+          }
+        }
+        // 2. Engine + year window match
+        const engineLower = engine.toLowerCase();
+        const candidates = mappings.filter((m: any) => {
+          const me = String(m.engine || '').toLowerCase();
+          if (engineLower && me && !(me.includes(engineLower) || engineLower.includes(me))) return false;
+          if (year && m.year_from && year < m.year_from) return false;
+          if (year && m.year_to && year > m.year_to) return false;
+          return true;
+        });
+        if (candidates.length) return { k_type: Number(candidates[0].k_type), source: 'mapping_config', mappingId: candidates[0].id };
+        // 3. Fallback first mapping for brand+model
+        return { k_type: Number(mappings[0].k_type), source: 'mapping_config', mappingId: mappings[0].id };
+      }
+    } catch (e) {
+      console.warn('[resolveKType] mapping lookup failed:', (e as Error).message);
+    }
+  }
+
+  // 4. Legacy fallback: nextis_vehicles.external_id
+  if (hint.nextisVehicleId) {
+    try {
+      const { data: v } = await adminClient
+        .from('nextis_vehicles')
+        .select('external_id')
+        .eq('id', hint.nextisVehicleId)
+        .maybeSingle();
+      const ext = String(v?.external_id || '').trim();
+      if (/^\d+$/.test(ext)) return { k_type: Number(ext), source: 'nextis_external_id' };
+    } catch (_) { /* noop */ }
+  }
+  return { k_type: 0, source: 'none' };
 }
 
 // ---------- normalisation ----------
@@ -1694,29 +1847,43 @@ Deno.serve(async (req) => {
         //     → clean classification, full section tree (15-20 categories).
         //  B) No engineID → fall back to OEM-seed flow (parts_new Mopar codes).
         const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        const vinHint = String(payload.vin || '').trim();
+        const yearHint = Number(payload.year || 0);
         let brand = String(payload.brand || '').trim();
         let model = String(payload.model || '').trim();
         let engine = String(payload.engine || '').trim();
-        let resolvedEngineID = 0;
         if (nextisVehicleId) {
           const { data: v } = await adminClient
             .from('nextis_vehicles')
-            .select('brand, model, engine, external_id')
+            .select('brand, model, engine')
             .eq('id', nextisVehicleId)
             .maybeSingle();
           if (v) {
             brand = String(v.brand || brand).trim();
             model = String(v.model || model).trim();
             engine = String(v.engine || engine).trim();
-            const ext = String(v.external_id || '').trim();
-            if (/^\d+$/.test(ext)) resolvedEngineID = Number(ext);
           }
         }
-        if (Number(payload.engineID || 0) > 0) resolvedEngineID = Number(payload.engineID);
+
+        // K-type resolver: vehicle_engine_mappings (VIN → config) → nextis_vehicles fallback → payload.
+        let resolvedEngineID = 0;
+        let kTypeSource: string = 'none';
+        let kTypeMappingId: string | undefined;
+        if (Number(payload.engineID || 0) > 0) {
+          resolvedEngineID = Number(payload.engineID);
+          kTypeSource = 'payload';
+        } else {
+          const r = await resolveKType(adminClient, { brand, model, engine, year: yearHint, vin: vinHint, nextisVehicleId });
+          resolvedEngineID = r.k_type;
+          kTypeSource = r.source;
+          kTypeMappingId = r.mappingId;
+        }
+
         if (!brand || !model) {
           result = { items: [], warning: 'brand+model required' };
           break;
         }
+
         const cacheKey = `${brand}|${model}|${engine}|eid:${resolvedEngineID}`.toLowerCase();
         try {
           const { data: cached } = await adminClient
@@ -1734,47 +1901,80 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* non-blocking */ }
 
-        // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop =====
+        // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop (concurrent + retry) =====
         if (resolvedEngineID > 0) {
-          console.log(`[partsForEngine] engineID=${resolvedEngineID} sections=${TECDOC_SECTIONS.length}`);
-          const BATCH_SECT = 8;
+          const startedAt = Date.now();
+          const GLOBAL_BUDGET_MS = 45_000;
+          const CONCURRENCY = 6;
+          const PER_CALL_TIMEOUT_MS = 8_000;
+          const aborted = { value: false };
           const collected: UnifiedPart[] = [];
           const seen = new Set<string>();
           let totalRaw = 0;
           let sectionsHit = 0;
+          const timedOutSections: number[] = [];
+          const retriedSections: number[] = [];
+          const failedSections: { id: number; error: string }[] = [];
 
-          for (let i = 0; i < TECDOC_SECTIONS.length; i += BATCH_SECT) {
-            const slice = TECDOC_SECTIONS.slice(i, i + BATCH_SECT);
-            const results = await Promise.all(slice.map(async (sec) => {
-              try {
-                const reqBody = { engineID: resolvedEngineID, genArtID: sec.id, getOECodes: true, target: 'P' };
-                const raw = await nextisPost('/catalogs/items-finding-by-vehicle', reqBody);
-                const rawList = raw?.items || raw?.Items || [];
-                return { sec, rawCount: rawList.length, items: normalizeItems(raw) };
-              } catch (e) {
-                console.warn(`[partsForEngine] genArtID=${sec.id} failed:`, (e as Error).message);
+          await writeScanProgress(adminClient, cacheKey, {
+            phase: 'starting', engineID: resolvedEngineID,
+            sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: 0,
+          });
+
+          const budgetTimer = setTimeout(() => { aborted.value = true; }, GLOBAL_BUDGET_MS);
+
+          const sectionResults = await runConcurrent(
+            TECDOC_SECTIONS,
+            CONCURRENCY,
+            async (sec) => {
+              if (aborted.value) return { sec, rawCount: 0, items: [] as UnifiedPart[], skipped: true };
+              const reqBody = { engineID: resolvedEngineID, genArtID: sec.id, getOECodes: true, target: 'P' };
+              const res = await nextisPostWithRetry('/catalogs/items-finding-by-vehicle', reqBody, {
+                timeoutMs: PER_CALL_TIMEOUT_MS,
+                maxAttempts: 3,
+              });
+              if (!res.ok) {
+                if (res.timedOut) timedOutSections.push(sec.id);
+                else failedSections.push({ id: sec.id, error: res.error });
                 return { sec, rawCount: 0, items: [] as UnifiedPart[] };
               }
-            }));
-            for (const r of results) {
-              totalRaw += r.rawCount;
-              if (r.items.length > 0) sectionsHit++;
-              for (const it of r.items) {
-                if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
-                const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                collected.push({
-                  ...it,
-                  category: r.sec.label,
-                  // @ts-ignore — extra field consumed by frontend
-                  tecdoc_section: { id: r.sec.id, label: r.sec.label },
+              if (res.attempts > 1) retriedSections.push(sec.id);
+              const rawList = res.data?.items || res.data?.Items || [];
+              return { sec, rawCount: rawList.length, items: normalizeItems(res.data) };
+            },
+            (done, total) => {
+              if (done % 4 === 0 || done === total) {
+                writeScanProgress(adminClient, cacheKey, {
+                  phase: 'scanning', engineID: resolvedEngineID,
+                  sectionsTotal: total, sectionsDone: done,
+                  sectionsHit, totalRawHits: totalRaw,
+                  elapsedMs: Date.now() - startedAt,
+                  aborted: aborted.value,
                 });
               }
+            },
+          );
+          clearTimeout(budgetTimer);
+
+          for (const r of sectionResults) {
+            totalRaw += r.rawCount;
+            if (r.items.length > 0) sectionsHit++;
+            for (const it of r.items) {
+              if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
+              const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              collected.push({
+                ...it,
+                category: r.sec.label,
+                // @ts-ignore — extra field consumed by frontend
+                tecdoc_section: { id: r.sec.id, label: r.sec.label },
+              });
             }
           }
 
           const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
+          const durationMs = Date.now() - startedAt;
           const out = {
             items: enriched,
             engineID: resolvedEngineID,
@@ -1782,6 +1982,22 @@ Deno.serve(async (req) => {
             sectionsHit,
             totalRawHits: totalRaw,
             source: 'engineID-multi-genart',
+            debug: {
+              flow: 'engineId',
+              k_type: resolvedEngineID,
+              k_type_source: kTypeSource,
+              k_type_mapping_id: kTypeMappingId,
+              sectionsScanned: TECDOC_SECTIONS.length,
+              sectionsHit,
+              totalRawHits: totalRaw,
+              durationMs,
+              timedOutSections,
+              retriedSections,
+              failedSections,
+              partial: aborted.value,
+              concurrency: CONCURRENCY,
+              perCallTimeoutMs: PER_CALL_TIMEOUT_MS,
+            },
           };
           try {
             await adminClient.from('api_cache').upsert({
@@ -1792,6 +2008,12 @@ Deno.serve(async (req) => {
               created_at: new Date().toISOString(),
             }, { onConflict: 'cache_type,cache_key' });
           } catch (_) { /* non-blocking */ }
+          await writeScanProgress(adminClient, cacheKey, {
+            phase: 'done', engineID: resolvedEngineID,
+            sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
+            sectionsHit, totalRawHits: totalRaw,
+            durationMs, partial: aborted.value,
+          });
           result = out;
           break;
         }
@@ -1903,6 +2125,15 @@ Deno.serve(async (req) => {
           oemSeedsUsed: oemSeeds.length,
           totalRawHits: totalRaw,
           source: 'oem-fallback-grouped',
+          debug: {
+            flow: 'oemFallback',
+            k_type: 0,
+            k_type_source: 'none',
+            sectionsScanned: 0,
+            sectionsHit: 0,
+            totalRawHits: totalRaw,
+            oemSeedsUsed: oemSeeds.length,
+          },
         };
 
         // Cache 1h

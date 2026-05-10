@@ -1,83 +1,128 @@
 ## Cíl
 
-Funkční katalog pro všech 5 značek, jeden centrální flow: motor → všechny díly → strom kategorií → OEM první, J+M druhé.
+Stabilizovat a zrychlit `partsForEngine` flow s TecDoc Engine ID (K-type), zavést mapování K-type na konkrétní vehicle konfigurace, přidat diagnostiku, K-type lookup z Nextisu a uklidit admin/katalog menu.
 
-## Co se mění
+## 1. DB: nová tabulka `vehicle_engine_mappings`
 
-### 1. `supabase/functions/jm-proxy/index.ts` — nová akce `partsForEngine`
-
-Jediný účel: vrátit **všechny J+M díly pro danou motorizaci v jednom volání**, obohacené o OEM párování.
-
-Vstup: `{ brand, model, engine, nextisVehicleId? }`
-Výstup: `{ items: UnifiedPart[], totalRawHits, oemSeedsUsed }`
-
-Logika:
-1. Načti z `parts_new` všechny Mopar/7zap OEM kódy pro daný brand+model (fuzzy engine match přes existující `queryLocalOemCodes`).
-2. Pro každý OEM zavolej `items-finding-by-code` s `searchTarget=CodeOE` (paralelně, batch po 8, max 80 OEM).
-3. Sloučit, deduplikovat (přes `dedupeUnifiedParts`).
-4. Obohatit přes `enrichItemsWithRelatedOem` → každý J+M má `related_oem_number`.
-5. Pro každý item určit `genArtID` post-hoc z **rozšířeného slovníku** klíčových slov v `productName`/`productDescription` (rozšířit `PRODUCT_CATEGORY_TREE` v jm-proxy o `genArtID` pro každý leaf — TecDoc 80+ ID: `brake-pads=402, brake-discs=82, brake-calipers=472, brake-hoses=95, brake-fluid=1789, abs-sensor=1226, oil-filter=22, air-filter=26, cabin-filter=350, fuel-filter=23, spark-plugs=18, ignition-coil=174, glow-plugs=19, timing-belt=213, timing-chain=8929, water-pump=50, thermostat=195, radiator=31, ac-compressor=300, ac-condenser=233, alternator=71, starter=72, battery=590, shock-absorbers=51, springs=419, control-arms=423, ball-joints=432, tie-rods=433, bushings=459, wheel-bearings=110, cv-joints=204, drive-shafts=204, exhaust-muffler=64, lambda-sensor=180, dpf=2840, catalyst=104, fuel-pump=20, injector=29, transmission-oil=2769, engine-oil=1749, coolant=1707, brake-fluid-dot=1789, wiper-blades=42, headlights=84, taillights=85, mirrors=305, door-handles=2245`).
-6. Vrátit položky s polem `tecdoc_section: { id: number, name: string }`.
-
-Cache: 1h v `api_cache` per `(brand|model|engine)`.
-
-### 2. `src/services/catalogService.ts` — nový soubor
-
-```typescript
-export type CategoryGroup = {
-  id: string;            // tecdoc_section.id as string, or 'other'
-  label: string;         // tecdoc_section.name
-  count: number;
-  partsByOem: Map<string, { oem: CatalogPart[]; jm: CatalogPart[] }>;
-};
-
-export async function fetchAllPartsForEngine(opts: {
-  brand: string; model: string; engine: string; nextisVehicleId?: string;
-}): Promise<{ groups: CategoryGroup[]; totalParts: number }> {
-  // 1. invoke jm-proxy { action: 'partsForEngine', payload: opts }
-  // 2. extract unique tecdoc_section → groups
-  // 3. for each group, batch-fetch OEM rows from parts_new where oem_number IN (jm.oe_numbers ∪ jm.related_oem_number)
-  // 4. groupů: partsByOem keyed by OEM number, with [oem first, then jm replacements]
-}
+```sql
+CREATE TABLE public.vehicle_engine_mappings (
+  id uuid PK,
+  brand text NOT NULL,
+  model text NOT NULL,
+  engine text NOT NULL,           -- normalizovaný název (5.7L V8 HEMI)
+  year_from int,
+  year_to int,
+  power_kw int,
+  fuel text,
+  vin_pattern text,               -- volitelný regex pro variantu (např. ^2C3.*H.*$)
+  k_type bigint NOT NULL,         -- TecDoc Engine ID
+  k_type_label text,              -- popis vrácený Nextisem
+  source text DEFAULT 'manual',   -- manual | nextis_lookup
+  verified_at timestamptz,
+  notes text,
+  created_at, updated_at
+);
+-- index brand+model+engine, unique (brand, model, engine, COALESCE(vin_pattern,''), k_type)
 ```
 
-OEM marže: žádná (cena přímo z `parts_new.price_with_vat`).
-J+M marže: už aplikovaná v jm-proxy `normalizeCatalogItem` (70 %/40 %, beze změny).
+RLS: admin manage, public select.
+`nextis_vehicles.external_id` zůstává jako fallback (legacy).
 
-### 3. `src/pages/Catalog.tsx` — zjednodušení
+## 2. Edge function `jm-proxy` — optimalizace TECDOC scanu
 
-Po výběru motoru:
-- 1× volání `fetchAllPartsForEngine` (place loading state na celý strom).
-- Smazat: `fetchJmCategoryTree`, `listPartsForVehicle`, `fetchJmByCodes`, `mergeWithJm` jakožto sekvenční chain.
-- Strom = `groups` z výsledku, klik filtruje `partsByOem` daného groupu.
-- Počty v navigaci = `group.count`.
-- V kartách: nejprve OEM řádky (badge ORIGINÁL, cena z parts_new), pod nimi J+M (badge NÁHRADA, cena s marží).
+Resolver K-type pro request:
+1. Pokud má vozidlo VIN → najdi nejlepší match v `vehicle_engine_mappings` (vin_pattern → konfigurace).
+2. Fallback: match jen brand+model+engine (+ rok).
+3. Fallback: `nextis_vehicles.external_id`.
+4. Jinak OEM-seed flow (legacy).
 
-### 4. `src/api/catalogV2API.ts` — vyčistit
+Batched paralelní volání `items-finding-by-vehicle` pro `TECDOC_SECTIONS`:
+- **Concurrency limit 6** (semaphore) místo `Promise.all` všeho najednou.
+- **Per-call timeout 8s** (`AbortController`).
+- **Retry s exponenciálním backoffem** (3 pokusy: 250ms / 750ms / 2s, jen pro 5xx/timeout).
+- **Global budget 45s** — přerušit zbytek a vrátit částečný výsledek.
+- **Progres** zapisovat do `api_cache` (`jm_scan_progress::cacheKey`) — UI může polling.
 
-Smazat (mrtvý kód): `fetchLocalCategoryTree`, `fetchJmCategoryTree`, `isJmTreeFlagEnabled`, `mergeWithJm`, `listPartsForVehicle`, `fetchJmByCodes`. Zachovat: `fetchBrands`, `fetchModelsForBrand`, `fetchEnginesForModel`, `fetchNextisVehicles`, `globalOemSearch`, `searchCatalog`, `normalizeRow` (přesunout do `catalogService`).
+Přidat do response:
+```ts
+{ items, categories, debug: {
+  flow: 'engineId' | 'oemFallback',
+  k_type: 12345,
+  sectionsScanned, sectionsHit, totalRawHits,
+  durationMs, timedOutSections, retriedSections
+}}
+```
 
-### 5. Motorizace v MotorizationDetails
+## 3. Edge function `nextis-ktype-lookup` (nová)
 
-Beze změny — už čte z `nextis_vehicles` přesně co user chce (kW, palivo, ccm, kód, roky).
+Endpoint `POST /nextis-ktype-lookup`:
+- Vstup: `{ brand, model, engine?, yearFrom?, yearTo?, powerKw? }`
+- Volá Nextis `vehicles-by-brand-model` (a/nebo `vehicles-search`), filtruje podle motoru/výkonu/let.
+- Vrátí seznam kandidátů: `[{ k_type, label, engine, power_kw, fuel, year_from, year_to, score }]`.
+- 7d cache v `api_cache`.
 
-## Co se NEdělá
+Validace endpoint: `POST /nextis-ktype-validate` — zavolá `sections-by-vehicle` s K-type, vrátí `{ valid, sectionsAvailable }`.
 
-- ❌ Nic v `catalog_categories` (nepoužívá se).
-- ❌ Žádný scraping, cookies, Firecrawl.
-- ❌ Žádné nové DB tabulky (existující `jq_*` zůstanou nedotčeny — ten experiment se nepoužívá).
-- ❌ Žádné AI pro kategorizaci ani překlady jmen J+M (jména přicházejí z Nextis česky).
+## 4. Admin UI `AdminCompatibility.tsx` — Engine ID tab přepsat
 
-## Test (Chrysler 300C 5.7 HEMI)
+- Místo „K-type per nextis_vehicle" → CRUD nad `vehicle_engine_mappings`.
+- Form: brand → model (autocomplete z `nextis_vehicles`) → engine → roky/výkon → VIN pattern (volitelně).
+- Tlačítko **„Najít K-type"** → volá `nextis-ktype-lookup`, ukáže kandidáty s confidence skóre, admin klikne „Použít".
+- Tlačítko **„Ověřit"** → `nextis-ktype-validate`, ukáže kolik TECDOC sekcí je dostupných.
+- Seznam existujících mappingů s filtrem brand/model.
+- Tlačítko clear cache pro `jm_parts_for_engine` + `jm_scan_progress`.
 
-1. Vyber motorizaci → roky/kW/palivo viditelné z `nextis_vehicles`.
-2. Po načtení: očekávám 8–15 kategorií se 2–30+ díly každá.
-3. Klik na "Brzdy" → vidím Mopar OEM destičky/kotouče první, pod nimi J+M Frenkit/Brembo s marží.
-4. Klik na "Filtry" → olejové, vzduchové, kabinové.
-5. Při 0 výsledcích: kategorie skryté (nezobrazují se prázdné).
+## 5. Catalog UI — debug badge pro adminy
 
-## Rizika / co může selhat
+V `src/pages/Catalog.tsx`:
+- Pokud `useAuth().isAdmin` a v response je `debug` → pod hlavičkou zobrazit malý badge:
+  > 🔧 K-type 12345 · 47/52 sekcí · 312 surových hitů · 4.2s
+- Při běžícím scanu (progres v `api_cache`) zobrazit lineární progress bar.
 
-- Nextis OEM-fallback je pomalý (až 80 paralelních volání). Cache 1h zmírní opakování, ale **první načtení nového motoru = 5–15 s**. Přidám overlay loading.
-- Klíčová slova pro genArtID nejsou 100 %. Díly bez matche → kategorie "Ostatní" (nezatajovat).
-- Pokud `parts_new` neobsahuje žádné Mopar OEM pro daný motor → nemáme seed → 0 J+M dílů. Tomu předejdeme tím, že fallback rozšíří hledání na brand+model bez engine match (`queryLocalOemCodes` už to umí jako 2. fáze).
+## 6. Testy
+
+`supabase/functions/jm-proxy/index.test.ts`:
+- **Mock test (CI)**: stub `fetch` pro Nextis endpointy, ověř že:
+  - engineId flow rozparalelní volání s limitem ≤6,
+  - response má `debug.sectionsScanned > 0`, `flow === 'engineId'`,
+  - retry funguje při 503,
+  - timeout přeruší a označí sekci v `timedOutSections`.
+- **Live test za flagem `LIVE_NEXTIS_TEST=1`**: zavolá deployed `jm-proxy` pro Chrysler 300C 5.7 HEMI s K-type, ověří že vrátí ≥10 unikátních kategorií.
+
+## 7. Cleanup admin katalogu
+
+Skrýt ze sidebaru / `src/components/admin/AdminSidebar.tsx`:
+- Makro nástroje (`/admin/makro*`)
+- SAG nástroje (`/admin/sag*`)
+- AutoKelly nástroje (`/admin/autokelly*`)
+- AI-aftermarket (`/admin/ai-aftermarket`)
+- Starý EPC generation queue (`/admin/epc-queue`)
+
+Routy ponechat (data v DB), ale schované za feature flag `legacy_aftermarket_admin` (default off). Sekce sidebaru sjednotit do nové „**Katalog (J+M)**":
+- Kategorie a kompatibilita (`/admin/compatibility`)
+- Engine ID mapování (`/admin/compatibility?tab=ktype`)
+- J+M sync (`/admin/jm-sync`)
+- Diagnostika katalogu (`/admin/catalog-diagnostics`)
+- Cache & progres (nový mini panel)
+
+## 8. Memory update
+
+Aktualizovat `mem://catalog/oem-compatibility-mapping` a přidat `mem://catalog/engine-id-mapping` s pravidly K-type lookupu a vehicle_engine_mappings schématem.
+
+---
+
+### Soubory dotčené
+
+- **Migrace**: `vehicle_engine_mappings` + RLS + indexy + feature flag
+- **Edge fn**: `supabase/functions/jm-proxy/index.ts` (optimalizace + debug + resolver)
+- **Edge fn (nová)**: `supabase/functions/nextis-ktype-lookup/index.ts`
+- **Test**: `supabase/functions/jm-proxy/index.test.ts`
+- **Admin UI**: `src/pages/AdminCompatibility.tsx`, `src/components/admin/AdminSidebar.tsx`
+- **Catalog UI**: `src/pages/Catalog.tsx` (debug badge + progres)
+- **Service**: `src/services/catalogService.ts` (přenos `debug` pole)
+- **Memory**: `mem://catalog/engine-id-mapping`, update indexu
+
+### Co NEdělám
+- Neměním OEM/Mopar/EPC flow.
+- Nemažu data z `nextis_vehicles.external_id` — zůstává jako fallback.
+- Aftermarket routy (Makro/SAG/AK) zůstávají v kódu, jen schované.

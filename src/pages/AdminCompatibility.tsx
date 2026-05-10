@@ -463,90 +463,235 @@ function EngineIdMappingTab() {
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [form, setForm] = useState({
+    brand: "Chrysler", model: "", engine: "", year_from: "", year_to: "",
+    power_kw: "", fuel: "", vin_pattern: "", k_type: "", k_type_label: "", notes: "",
+  });
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [validateState, setValidateState] = useState<Record<string, { valid?: boolean; sampleHits?: number; loading?: boolean }>>({});
 
   async function load() {
     setLoading(true);
     const { data, error } = await supabase
-      .from("nextis_vehicles")
-      .select("id, brand, model, engine, year_from, year_to, external_id")
-      .in("brand", ALLOWED_BRANDS as unknown as string[])
-      .order("brand").order("model").order("engine");
+      .from("vehicle_engine_mappings")
+      .select("id, brand, model, engine, year_from, year_to, power_kw, fuel, vin_pattern, k_type, k_type_label, source, verified_at, notes, created_at")
+      .order("brand").order("model").order("year_from", { ascending: false });
     setLoading(false);
     if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
     setRows(data || []);
-    const init: Record<string, string> = {};
-    for (const r of data || []) init[r.id] = r.external_id || "";
-    setDrafts(init);
   }
   useEffect(() => { load(); }, []);
 
-  async function save(id: string) {
-    const value = drafts[id]?.trim() || null;
-    if (value && !/^\d+$/.test(value)) {
-      return toast({ title: "Neplatné ID", description: "Musí to být číslo (TecDoc K-type).", variant: "destructive" });
+  async function lookup() {
+    if (!form.brand || !form.model) {
+      return toast({ title: "Vyplň brand + model", variant: "destructive" });
     }
-    const { error } = await supabase.from("nextis_vehicles").update({ external_id: value }).eq("id", id);
+    setLookupLoading(true);
+    setCandidates([]);
+    const { data, error } = await supabase.functions.invoke("nextis-ktype-lookup", {
+      body: {
+        action: "lookup",
+        brand: form.brand, model: form.model, engine: form.engine,
+        yearFrom: form.year_from ? Number(form.year_from) : undefined,
+        yearTo: form.year_to ? Number(form.year_to) : undefined,
+        powerKw: form.power_kw ? Number(form.power_kw) : undefined,
+        fuel: form.fuel || undefined,
+      },
+    });
+    setLookupLoading(false);
+    if (error) return toast({ title: "Lookup selhal", description: error.message, variant: "destructive" });
+    const list = (data as any)?.candidates || [];
+    setCandidates(list);
+    toast({ title: `${list.length} kandidátů`, description: `Z ${(data as any)?.total ?? 0} vozidel v Nextisu` });
+  }
+
+  function pickCandidate(c: any) {
+    setForm(f => ({
+      ...f,
+      k_type: String(c.k_type),
+      k_type_label: c.label || `${c.engine} ${c.power_kw}kW`,
+      power_kw: String(c.power_kw || f.power_kw || ""),
+      fuel: c.fuel || f.fuel,
+      year_from: String(c.year_from || f.year_from || ""),
+      year_to: String(c.year_to || f.year_to || ""),
+    }));
+  }
+
+  async function save() {
+    if (!form.brand || !form.model || !form.engine || !form.k_type) {
+      return toast({ title: "Vyplň brand, model, motor a K-type", variant: "destructive" });
+    }
+    if (!/^\d+$/.test(form.k_type)) {
+      return toast({ title: "K-type musí být číslo", variant: "destructive" });
+    }
+    const payload: any = {
+      brand: form.brand.trim(), model: form.model.trim(), engine: form.engine.trim(),
+      year_from: form.year_from ? Number(form.year_from) : null,
+      year_to: form.year_to ? Number(form.year_to) : null,
+      power_kw: form.power_kw ? Number(form.power_kw) : null,
+      fuel: form.fuel || null,
+      vin_pattern: form.vin_pattern || null,
+      k_type: Number(form.k_type),
+      k_type_label: form.k_type_label || null,
+      notes: form.notes || null,
+      source: candidates.length ? "nextis_lookup" : "manual",
+      verified_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("vehicle_engine_mappings").insert(payload);
     if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
-    toast({ title: "Uloženo", description: value ? `Engine ID = ${value}` : "Engine ID smazáno" });
-    setRows(prev => prev.map(r => r.id === id ? { ...r, external_id: value } : r));
+    toast({ title: "Uloženo" });
+    setForm(f => ({ ...f, k_type: "", k_type_label: "", vin_pattern: "", notes: "" }));
+    setCandidates([]);
+    load();
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Smazat mapování?")) return;
+    const { error } = await supabase.from("vehicle_engine_mappings").delete().eq("id", id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    setRows(r => r.filter(x => x.id !== id));
+  }
+
+  async function validate(id: string, kType: number) {
+    setValidateState(s => ({ ...s, [id]: { ...s[id], loading: true } }));
+    const { data, error } = await supabase.functions.invoke("nextis-ktype-lookup", {
+      body: { action: "validate", kType },
+    });
+    setValidateState(s => ({
+      ...s,
+      [id]: { loading: false, valid: !error && (data as any)?.valid, sampleHits: (data as any)?.sampleHits },
+    }));
   }
 
   async function clearCache() {
-    const { error } = await supabase.from("api_cache").delete().eq("cache_type", "jm_parts_for_engine");
-    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
-    toast({ title: "Cache vymazána", description: "partsForEngine se příště přepočítá z Nextis API." });
+    await supabase.from("api_cache").delete().eq("cache_type", "jm_parts_for_engine");
+    await supabase.from("api_cache").delete().eq("cache_type", "jm_scan_progress");
+    toast({ title: "Cache vymazána", description: "partsForEngine i scan progress." });
   }
 
   const filtered = rows.filter(r => {
     if (!filter) return true;
-    const hay = `${r.brand} ${r.model} ${r.engine}`.toLowerCase();
+    const hay = `${r.brand} ${r.model} ${r.engine} ${r.k_type}`.toLowerCase();
     return hay.includes(filter.toLowerCase());
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">Nextis Engine ID (TecDoc K-type)</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Pokud vyplníš číselný TecDoc K-type, partsForEngine zavolá Nextis <code>items-finding-by-vehicle</code>
-          pro každou TecDoc sekci a vrátí čistý strom 15–20 kategorií. Bez vyplnění se použije OEM-seed fallback.
-          Hodnoty získáš z TecDoc katalogu (např. Chrysler 300C 5.7 HEMI = K-type čekající na vyplnění).
-        </p>
-        <div className="flex items-center gap-2">
-          <Input placeholder="Hledat brand / model / motor…" value={filter} onChange={e => setFilter(e.target.value)} className="max-w-xs" />
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Načíst"}
-          </Button>
-          <Button variant="destructive" size="sm" onClick={clearCache}>Vymazat cache</Button>
-        </div>
-        <div className="border rounded-md overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40">
-              <tr><th className="text-left p-2">Brand</th><th className="text-left p-2">Model</th><th className="text-left p-2">Motor</th><th className="text-left p-2">Roky</th><th className="text-left p-2">Engine ID</th><th></th></tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => (
-                <tr key={r.id} className="border-t">
-                  <td className="p-2">{r.brand}</td>
-                  <td className="p-2">{r.model}</td>
-                  <td className="p-2">{r.engine}</td>
-                  <td className="p-2 text-muted-foreground">{r.year_from || "?"}–{r.year_to || "?"}</td>
-                  <td className="p-2">
-                    <Input value={drafts[r.id] || ""} onChange={e => setDrafts(d => ({ ...d, [r.id]: e.target.value }))} className="h-8 w-32" placeholder="K-type" />
-                  </td>
-                  <td className="p-2">
-                    <Button size="sm" variant="outline" onClick={() => save(r.id)} disabled={(drafts[r.id] || "") === (r.external_id || "")}>Uložit</Button>
-                  </td>
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Nové mapování (vehicle_engine_mappings → TecDoc K-type)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Mapuje konkrétní konfiguraci (značka, model, motor, výkon, roky, případně VIN regex) na TecDoc K-type (Engine ID).
+            Použito v partsForEngine pro získání plného stromu sekcí z Nextisu.
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <select value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} className="h-9 px-2 rounded border bg-background text-sm">
+              {ALLOWED_BRANDS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+            <Input placeholder="Model (300C)" value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+            <Input placeholder="Motor (5.7L V8 HEMI)" value={form.engine} onChange={e => setForm(f => ({ ...f, engine: e.target.value }))} />
+            <Input placeholder="Výkon kW" value={form.power_kw} onChange={e => setForm(f => ({ ...f, power_kw: e.target.value }))} />
+            <Input placeholder="Rok od" value={form.year_from} onChange={e => setForm(f => ({ ...f, year_from: e.target.value }))} />
+            <Input placeholder="Rok do" value={form.year_to} onChange={e => setForm(f => ({ ...f, year_to: e.target.value }))} />
+            <Input placeholder="Palivo (benzín/diesel)" value={form.fuel} onChange={e => setForm(f => ({ ...f, fuel: e.target.value }))} />
+            <Input placeholder="VIN pattern (regex, volitelné)" value={form.vin_pattern} onChange={e => setForm(f => ({ ...f, vin_pattern: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={lookup} disabled={lookupLoading} variant="default">
+              {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
+              Najít K-type v Nextisu
+            </Button>
+            <Input placeholder="K-type (číslo)" value={form.k_type} onChange={e => setForm(f => ({ ...f, k_type: e.target.value }))} className="w-40" />
+            <Input placeholder="Popis K-type" value={form.k_type_label} onChange={e => setForm(f => ({ ...f, k_type_label: e.target.value }))} className="flex-1 min-w-48" />
+            <Button onClick={save} variant="default"><CheckCircle className="h-4 w-4 mr-2" />Uložit</Button>
+          </div>
+          {candidates.length > 0 && (
+            <div className="border rounded-md p-2 bg-muted/30 max-h-72 overflow-auto">
+              <div className="text-xs font-medium mb-2">Kandidáti z Nextisu (klikni pro výběr):</div>
+              <div className="space-y-1">
+                {candidates.map((c, i) => (
+                  <button key={i} onClick={() => pickCandidate(c)}
+                    className="w-full text-left p-2 hover:bg-amber-500/10 rounded text-sm border border-transparent hover:border-amber-500/30 flex items-center gap-3">
+                    <Badge variant="outline">K-type {c.k_type}</Badge>
+                    <span className="font-medium">{c.label || c.engine}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {c.power_kw ? `${c.power_kw}kW` : ""}{c.power_hp ? ` (${c.power_hp}HP)` : ""}
+                      {c.year_from || c.year_to ? ` · ${c.year_from || "?"}–${c.year_to || "?"}` : ""}
+                      {c.fuel ? ` · ${c.fuel}` : ""}
+                    </span>
+                    <Badge className="ml-auto" variant={c.score >= 50 ? "default" : "secondary"}>skóre {c.score}</Badge>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Existující mapování ({rows.length})</span>
+            <div className="flex gap-2">
+              <Input placeholder="Filtr…" value={filter} onChange={e => setFilter(e.target.value)} className="w-48" />
+              <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Načíst"}
+              </Button>
+              <Button variant="destructive" size="sm" onClick={clearCache}>Vymazat cache</Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="border rounded-md overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="text-left p-2">Vozidlo</th>
+                  <th className="text-left p-2">Roky</th>
+                  <th className="text-left p-2">Výkon/Palivo</th>
+                  <th className="text-left p-2">VIN pattern</th>
+                  <th className="text-left p-2">K-type</th>
+                  <th className="text-left p-2">Zdroj</th>
+                  <th></th>
                 </tr>
-              ))}
-              {filtered.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">Žádná vozidla</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+              </thead>
+              <tbody>
+                {filtered.map(r => {
+                  const v = validateState[r.id];
+                  return (
+                    <tr key={r.id} className="border-t">
+                      <td className="p-2"><strong>{r.brand}</strong> {r.model}<br /><span className="text-muted-foreground text-xs">{r.engine}</span></td>
+                      <td className="p-2 text-muted-foreground">{r.year_from || "?"}–{r.year_to || "?"}</td>
+                      <td className="p-2 text-muted-foreground">{r.power_kw ? `${r.power_kw}kW` : "—"}{r.fuel ? ` · ${r.fuel}` : ""}</td>
+                      <td className="p-2 text-xs"><code>{r.vin_pattern || "—"}</code></td>
+                      <td className="p-2"><Badge variant="outline">{r.k_type}</Badge>{r.k_type_label && <div className="text-xs text-muted-foreground mt-0.5">{r.k_type_label}</div>}</td>
+                      <td className="p-2"><Badge variant={r.source === "nextis_lookup" ? "default" : "secondary"}>{r.source}</Badge></td>
+                      <td className="p-2">
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="outline" onClick={() => validate(r.id, r.k_type)} disabled={v?.loading}>
+                            {v?.loading ? <Loader2 className="h-3 w-3 animate-spin" /> :
+                              v?.valid === true ? <CheckCircle className="h-3 w-3 text-green-500" /> :
+                              v?.valid === false ? <XCircle className="h-3 w-3 text-destructive" /> :
+                              <Play className="h-3 w-3" />}
+                            <span className="ml-1">Test</span>
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => remove(r.id)}><Undo2 className="h-3 w-3" /></Button>
+                        </div>
+                        {v?.sampleHits !== undefined && <div className="text-xs text-muted-foreground mt-1">{v.sampleHits} hitů</div>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filtered.length === 0 && <tr><td colSpan={7} className="p-4 text-center text-muted-foreground">Žádná mapování</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
+

@@ -99,7 +99,9 @@ export async function fetchAllPartsForEngine(opts: {
   model: string;
   engine: string;
   nextisVehicleId?: string;
-}): Promise<{ groups: CategoryGroup[]; totalParts: number; oemSeedsUsed: number; warning?: string }> {
+  vin?: string;
+  year?: number;
+}): Promise<{ groups: CategoryGroup[]; totalParts: number; oemSeedsUsed: number; warning?: string; debug?: any }> {
   const { data, error } = await supabase.functions.invoke("jm-proxy", {
     body: { action: "partsForEngine", payload: opts },
   });
@@ -110,6 +112,8 @@ export async function fetchAllPartsForEngine(opts: {
   const payload = (data?.data || data || {}) as any;
   const rawItems: RawJmItem[] = payload.items || [];
   const oemSeedsUsed: number = payload.oemSeedsUsed || 0;
+  const debug = payload.debug;
+
 
   // 1. Group J+M items by tecdoc_section.id
   const sectionMap = new Map<string, { id: string; label: string; jmItems: RawJmItem[] }>();
@@ -191,5 +195,6 @@ export async function fetchAllPartsForEngine(opts: {
     totalParts,
     oemSeedsUsed,
     warning: payload.warning,
+    debug,
   };
 }
