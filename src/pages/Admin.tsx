@@ -32,6 +32,7 @@ const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
 const Admin7zapScraper = lazy(() => import("@/components/admin/Admin7zapScraper"));
 
 const AdminAutoPipeline = lazy(() => import("@/components/admin/AdminAutoPipeline"));
+const AdminCompatMatcher = lazy(() => import("@/components/admin/AdminCompatMatcher"));
 const AdminCatalogHealth = lazy(() => import("@/components/admin/AdminCatalogHealth"));
 const AdminPhotoEnrichment = lazy(() => import("@/components/admin/AdminPhotoEnrichment"));
 const AdminDataFixer = lazy(() => import("@/components/admin/AdminDataFixer"));
