@@ -3352,6 +3352,63 @@ export type Database = {
         }
         Relationships: []
       }
+      vehicle_engine_mappings: {
+        Row: {
+          brand: string
+          created_at: string
+          engine: string
+          fuel: string | null
+          id: string
+          k_type: number
+          k_type_label: string | null
+          model: string
+          notes: string | null
+          power_kw: number | null
+          source: string
+          updated_at: string
+          verified_at: string | null
+          vin_pattern: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          engine: string
+          fuel?: string | null
+          id?: string
+          k_type: number
+          k_type_label?: string | null
+          model: string
+          notes?: string | null
+          power_kw?: number | null
+          source?: string
+          updated_at?: string
+          verified_at?: string | null
+          vin_pattern?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          engine?: string
+          fuel?: string | null
+          id?: string
+          k_type?: number
+          k_type_label?: string | null
+          model?: string
+          notes?: string | null
+          power_kw?: number | null
+          source?: string
+          updated_at?: string
+          verified_at?: string | null
+          vin_pattern?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
       vehicle_import_requests: {
         Row: {
           admin_note: string | null
