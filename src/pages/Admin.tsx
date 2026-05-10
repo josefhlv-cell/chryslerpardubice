@@ -29,6 +29,7 @@ const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
 const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
 const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
 const Admin7zapScraper = lazy(() => import("@/components/admin/Admin7zapScraper"));
+const AdminJqScraper = lazy(() => import("@/components/admin/AdminJqScraper"));
 const AdminAutoPipeline = lazy(() => import("@/components/admin/AdminAutoPipeline"));
 const AdminCatalogHealth = lazy(() => import("@/components/admin/AdminCatalogHealth"));
 const AdminPhotoEnrichment = lazy(() => import("@/components/admin/AdminPhotoEnrichment"));
@@ -328,7 +329,7 @@ const Admin = () => {
       case "catalog":
       case "catalog-overview": return <Suspense fallback={<Loader />}><AdminCatalogHub /></Suspense>;
       case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /><EPCImport /></div></Suspense>;
-      case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
+      case "catalog-7zap": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminJqScraper /><Admin7zapScraper /></div></Suspense>;
       case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
       case "catalog-pipeline": return <Suspense fallback={<Loader />}><AdminAutoPipeline /></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
