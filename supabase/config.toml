@@ -77,3 +77,12 @@ verify_jwt = false
 
 [functions.auto-pipeline-worker]
 verify_jwt = false
+
+[functions.bulk-scrape-jq]
+verify_jwt = false
+
+[functions.get-part-price]
+verify_jwt = false
+
+[functions.jm-admin-order]
+verify_jwt = false
