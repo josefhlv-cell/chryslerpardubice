@@ -25,6 +25,7 @@ import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
 // Lazy admin moduly (zachované)
 const AdminCatalogUnified = lazy(() => import("@/components/admin/AdminCatalogUnified"));
 const AdminCatalogHub = lazy(() => import("@/components/admin/AdminCatalogHub"));
+const AdminJmOrders = lazy(() => import("@/components/admin/AdminJmOrders"));
 const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
 const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
 const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
@@ -243,6 +244,7 @@ const Admin = () => {
     {
       key: "orders", label: "Objednávky", icon: ShoppingCart, children: [
         { key: "orders-list", label: "Seznam objednávek", badge: orders.filter((o) => o.status === "nova").length },
+        { key: "orders-jm", label: "Odeslané do J+M" },
       ],
     },
     {
@@ -369,6 +371,8 @@ const Admin = () => {
       case "service-history": return <Suspense fallback={<Loader />}><AdminServiceHistory /></Suspense>;
       case "service-reviews": return <Suspense fallback={<Loader />}><AdminReviews /></Suspense>;
       case "service-stats": return <Suspense fallback={<Loader />}><AdminServiceStatistics /></Suspense>;
+
+      case "orders-jm": return <Suspense fallback={<Loader />}><AdminJmOrders /></Suspense>;
 
       // ----- ORDERS -----
       case "orders":

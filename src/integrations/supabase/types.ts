@@ -1163,6 +1163,68 @@ export type Database = {
         }
         Relationships: []
       }
+      jm_orders: {
+        Row: {
+          attempts: number
+          created_at: string
+          error_message: string | null
+          id: string
+          items: Json
+          nextis_order_id: string | null
+          order_id: string
+          request_payload: Json | null
+          response_payload: Json | null
+          sent_at: string | null
+          status: string
+          total_price: number | null
+          updated_at: string
+          user_id: string
+          user_note: string | null
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          items?: Json
+          nextis_order_id?: string | null
+          order_id: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          sent_at?: string | null
+          status?: string
+          total_price?: number | null
+          updated_at?: string
+          user_id: string
+          user_note?: string | null
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          items?: Json
+          nextis_order_id?: string | null
+          order_id?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          sent_at?: string | null
+          status?: string
+          total_price?: number | null
+          updated_at?: string
+          user_id?: string
+          user_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jm_orders_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jm_tree_sync_runs: {
         Row: {
           categories_created: number

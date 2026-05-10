@@ -1628,11 +1628,51 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'validateOrder':
+      case 'createOrder': {
+        // Items: [{ code, brand?, qty, userNote? }]
+        const rawItems = Array.isArray(payload.items) ? payload.items : [];
+        if (!rawItems.length) throw new Error('items required');
+        const items = rawItems.slice(0, 100).map((it: any, idx: number) => ({
+          code: String(it.code || it.oem || '').trim(),
+          brand: it.brand ? String(it.brand).trim() : undefined,
+          qty: Number(it.qty || it.quantity || 1),
+          pairID: Number.isFinite(it.pairID) ? it.pairID : idx + 1,
+          userNote: it.userNote ? String(it.userNote).slice(0, 400) : undefined,
+        })).filter((i: any) => i.code && i.qty > 0);
+        if (!items.length) throw new Error('no valid items');
+
+        const path = action === 'validateOrder' ? '/orders/validation' : '/orders/sending';
+        const reqBody: Record<string, unknown> = {
+          items,
+          orderType: payload.orderType || 'General',
+          userNote: payload.userNote ? String(payload.userNote).slice(0, 600) : undefined,
+          userOrder: payload.userOrder ? String(payload.userOrder).slice(0, 75) : undefined,
+          keepBackOrder: payload.keepBackOrder !== false,
+          trySearchWithoutManufacturer: payload.trySearchWithoutManufacturer === true,
+        };
+        const raw = await nextisPost(path, reqBody);
+        const nextisOrderId =
+          raw?.orderID ?? raw?.OrderID ?? raw?.orderId ?? raw?.OrderId ??
+          raw?.orderNumber ?? raw?.OrderNumber ?? null;
+        result = {
+          action,
+          path,
+          nextisOrderId: nextisOrderId != null ? String(nextisOrderId) : null,
+          status: raw?.status ?? raw?.Status ?? null,
+          statusText: raw?.statusText ?? raw?.StatusText ?? null,
+          itemsResult: raw?.items ?? raw?.Items ?? [],
+          raw,
+        };
+        break;
+      }
+
       default: {
         const known = [
           'ping', 'diagnose', 'syncCategories', 'searchByCode', 'vehicleCategories',
           'searchByVehicle', 'priceAndStock', 'enrichPrices',
           'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
+          'validateOrder', 'createOrder',
         ];
         return new Response(
           JSON.stringify({
