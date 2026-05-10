@@ -93,6 +93,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const [loading, setLoading] = useState(false);
   const [partsLoading, setPartsLoading] = useState(false);
   const [warning, setWarning] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [brakeSubtype, setBrakeSubtype] = useState<string>("all");
 
   // Brands
