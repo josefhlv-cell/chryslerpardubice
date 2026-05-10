@@ -558,6 +558,16 @@ function normalizeCatalogItem(it: any): UnifiedPart {
   const stock = Number(it.qtyAvailableMain ?? it.QtyAvailableMain ?? 0)
               + Number(it.qtyAvailableSupplier ?? it.QtyAvailableSupplier ?? 0);
   const imageUrls = collectImageUrls(it);
+  // Capture TecDoc generic article (section) info if Nextis returns it
+  const genArtId = Number(
+    it.productGenericArticleID ?? it.ProductGenericArticleID ??
+    it.genericArticleID ?? it.GenericArticleID ??
+    it.genArtID ?? it.GenArtID ?? 0,
+  ) || 0;
+  const genArtName = String(
+    it.productGenericArticleName ?? it.ProductGenericArticleName ??
+    it.genericArticleName ?? it.GenericArticleName ?? '',
+  ).trim();
 
   return {
     supplier: 'jm',
@@ -575,6 +585,9 @@ function normalizeCatalogItem(it: any): UnifiedPart {
     image_urls: imageUrls,
     category: '',
     compatible_vehicles: [],
+    // @ts-ignore — extra fields for client-side dynamic grouping
+    gen_art_id: genArtId,
+    gen_art_name: genArtName,
   };
 }
 
