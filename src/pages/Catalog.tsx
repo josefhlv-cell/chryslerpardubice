@@ -204,8 +204,11 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   useEffect(() => {
     if (!brand || !model) { setEngines([]); return; }
     setLoading(true);
-    fetchEnginesForModel(brand, model)
-      .then(setEngines)
+    fetchNextisVehicles(brand, model)
+      .then((rows) => {
+        setVehicles(rows);
+        setEngines([...new Set(rows.map((r) => r.engine).filter(Boolean))] as string[]);
+      })
       .catch((e) => toast.error("Nelze načíst motorizace: " + e.message))
       .finally(() => setLoading(false));
   }, [brand, model]);
