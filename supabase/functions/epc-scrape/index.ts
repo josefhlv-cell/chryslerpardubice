@@ -40,21 +40,25 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Auth check - require admin role
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
-    }
-    const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
-    const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (claimsError || !claimsData?.claims?.sub) {
-      return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
-    }
-    const adminCheckClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', claimsData.claims.sub).eq('role', 'admin').maybeSingle();
-    if (!roleData) {
-      return jsonResponse({ success: false, error: 'Forbidden: admin required' }, 403);
+    // Auth: allow internal service-role calls (recursive generate-all), otherwise require admin user
+    const authHeader = req.headers.get('Authorization') || '';
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const isInternal = authHeader === `Bearer ${SERVICE_ROLE_KEY}`;
+    if (!isInternal) {
+      if (!authHeader.startsWith('Bearer ')) {
+        return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
+      }
+      const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+      if (claimsError || !claimsData?.claims?.sub) {
+        return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
+      }
+      const adminCheckClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, SERVICE_ROLE_KEY);
+      const { data: roleData } = await adminCheckClient.from('user_roles').select('role').eq('user_id', claimsData.claims.sub).eq('role', 'admin').maybeSingle();
+      if (!roleData) {
+        return jsonResponse({ success: false, error: 'Forbidden: admin required' }, 403);
+      }
     }
 
     const body = await req.json();

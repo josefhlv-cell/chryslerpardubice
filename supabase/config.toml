@@ -68,3 +68,12 @@ verify_jwt = false
 
 [functions.diagnose-part]
 verify_jwt = false
+
+[functions.scrape-7zap-bulk]
+verify_jwt = false
+
+[functions.apply-scrape-preview]
+verify_jwt = false
+
+[functions.auto-pipeline-worker]
+verify_jwt = false

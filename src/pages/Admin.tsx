@@ -28,6 +28,9 @@ const AdminCatalogHub = lazy(() => import("@/components/admin/AdminCatalogHub"))
 const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
 const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
 const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
+const Admin7zapScraper = lazy(() => import("@/components/admin/Admin7zapScraper"));
+const AdminAutoPipeline = lazy(() => import("@/components/admin/AdminAutoPipeline"));
+const AdminCatalogHealth = lazy(() => import("@/components/admin/AdminCatalogHealth"));
 const AdminPhotoEnrichment = lazy(() => import("@/components/admin/AdminPhotoEnrichment"));
 const AdminDataFixer = lazy(() => import("@/components/admin/AdminDataFixer"));
 const AdminCatalogQualityExport = lazy(() => import("@/components/admin/AdminCatalogQualityExport"));
@@ -215,7 +218,10 @@ const Admin = () => {
       key: "catalog", label: "Katalog", icon: Package, children: [
         { key: "catalog-overview", label: "Přehled", icon: LayoutDashboard },
         { key: "catalog-import", label: "Import" },
+        { key: "catalog-7zap", label: "7zap scraper" },
         { key: "catalog-repair", label: "Opravy & diagnostika" },
+        { key: "catalog-health", label: "Zdraví katalogu" },
+        { key: "catalog-pipeline", label: "Auto-pipeline" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
         ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "EPC nákresy" }] : []),
         { key: "catalog-settings", label: "Nastavení", icon: Settings2 },
@@ -322,6 +328,9 @@ const Admin = () => {
       case "catalog":
       case "catalog-overview": return <Suspense fallback={<Loader />}><AdminCatalogHub /></Suspense>;
       case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /><EPCImport /></div></Suspense>;
+      case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
+      case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
+      case "catalog-pipeline": return <Suspense fallback={<Loader />}><AdminAutoPipeline /></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
       case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminPriceManagement /></div></Suspense>;
       case "catalog-epc": return <Suspense fallback={<Loader />}><AdminEPCDiagrams /></Suspense>;

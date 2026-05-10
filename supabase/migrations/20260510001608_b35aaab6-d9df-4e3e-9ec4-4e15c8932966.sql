@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.trg_parts_new_after_insert() FROM PUBLIC, anon, authenticated;
