@@ -262,6 +262,17 @@ async function resolveKType(
   const engine = (hint.engine || '').trim();
   const vin = (hint.vin || '').trim().toUpperCase();
   const year = Number(hint.year || 0);
+  const emergency300cMap: Record<string, number> = {
+    '3.0 crd': 19059,
+    '3.5 v6': 17957,
+    '5.7 hemi': 17958,
+    '6.1 srt8': 21586,
+  };
+  if (brand.toLowerCase() === 'chrysler' && model.toLowerCase() === '300c') {
+    const normalizedEngine = engine.toLowerCase().replace(/\s+/g, ' ').trim();
+    const k = emergency300cMap[normalizedEngine];
+    if (k) return { k_type: k, source: 'mapping_config' };
+  }
 
   if (brand && model) {
     try {
@@ -309,6 +320,29 @@ async function resolveKType(
         .eq('id', hint.nextisVehicleId)
         .maybeSingle();
       const ext = String(v?.external_id || '').trim();
+      if (/^\d+$/.test(ext)) return { k_type: Number(ext), source: 'nextis_external_id' };
+    } catch (_) { /* noop */ }
+  }
+  if (brand && model) {
+    try {
+      let q = adminClient
+        .from('nextis_vehicles')
+        .select('external_id, engine, year_from, year_to')
+        .ilike('brand', brand)
+        .ilike('model', model)
+        .not('external_id', 'is', null);
+      const { data: vehicles } = await q;
+      const engineLower = engine.toLowerCase();
+      const match = (vehicles || []).find((v: any) => {
+        const ext = String(v.external_id || '').trim();
+        const ve = String(v.engine || '').toLowerCase();
+        if (!/^\d+$/.test(ext)) return false;
+        if (engineLower && ve && !(ve.includes(engineLower) || engineLower.includes(ve))) return false;
+        if (year && v.year_from && year < v.year_from) return false;
+        if (year && v.year_to && year > v.year_to) return false;
+        return true;
+      }) || (vehicles || []).find((v: any) => /^\d+$/.test(String(v.external_id || '').trim()));
+      const ext = String(match?.external_id || '').trim();
       if (/^\d+$/.test(ext)) return { k_type: Number(ext), source: 'nextis_external_id' };
     } catch (_) { /* noop */ }
   }
@@ -1975,6 +2009,14 @@ Deno.serve(async (req) => {
 
           const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
           const durationMs = Date.now() - startedAt;
+          const quotaExceeded = totalRaw === 0 && failedSections.some((s) => /maximum calls per day/i.test(s.error));
+          if (quotaExceeded) {
+            await writeScanProgress(adminClient, cacheKey, {
+              phase: 'quota_exceeded', engineID: resolvedEngineID,
+              sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
+              sectionsHit: 0, totalRawHits: 0, durationMs, partial: true,
+            });
+          } else {
           const out = {
             items: enriched,
             engineID: resolvedEngineID,
@@ -2016,6 +2058,7 @@ Deno.serve(async (req) => {
           });
           result = out;
           break;
+          }
         }
 
         // ===== STRATEGY B: OEM-seed fallback (no engineID set) =====
