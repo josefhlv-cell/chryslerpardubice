@@ -108,7 +108,12 @@ Deno.serve(async (req) => {
     for (const oem of oemCodes.slice(0, 10)) {
       const cleanOem = oem.replace(/[\s-]/g, '').toUpperCase();
       const padded = cleanOem.length <= 9 ? `0${cleanOem}` : cleanOem;
-      const searchVariants = [...new Set([`K${padded}`, `K${cleanOem}`, padded, cleanOem])];
+      // Věrnostsevyplaci.cz vyžaduje K-prefix u dealer Mopar OEM kódů.
+      // Pokud OEM už začíná na K (K + číslice), nepřidáváme druhé K.
+      const alreadyK = /^K\d/.test(cleanOem);
+      const searchVariants = alreadyK
+        ? [...new Set([cleanOem, padded, cleanOem.replace(/^K/, '')])]
+        : [...new Set([`K${padded}`, `K${cleanOem}`, padded, cleanOem])];
 
       // Check cache in DB
       const { data: cached } = await supabase
