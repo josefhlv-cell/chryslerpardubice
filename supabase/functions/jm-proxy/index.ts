@@ -1688,15 +1688,36 @@ Deno.serve(async (req) => {
 
       case 'partsForEngine': {
         // ALL J+M parts for a given vehicle, classified by TecDoc section.
-        // Output: { items: UnifiedPart[] (each with tecdoc_section), oemSeedsUsed, source }
-        const brand = String(payload.brand || '').trim();
-        const model = String(payload.model || '').trim();
-        const engine = String(payload.engine || '').trim();
+        // Two strategies:
+        //  A) Nextis engineID (TecDoc K-type) is set on nextis_vehicles.external_id
+        //     → loop TECDOC_SECTIONS, call items-finding-by-vehicle per genArtID
+        //     → clean classification, full section tree (15-20 categories).
+        //  B) No engineID → fall back to OEM-seed flow (parts_new Mopar codes).
+        const nextisVehicleId = String(payload.nextisVehicleId || '').trim();
+        let brand = String(payload.brand || '').trim();
+        let model = String(payload.model || '').trim();
+        let engine = String(payload.engine || '').trim();
+        let resolvedEngineID = 0;
+        if (nextisVehicleId) {
+          const { data: v } = await adminClient
+            .from('nextis_vehicles')
+            .select('brand, model, engine, external_id')
+            .eq('id', nextisVehicleId)
+            .maybeSingle();
+          if (v) {
+            brand = String(v.brand || brand).trim();
+            model = String(v.model || model).trim();
+            engine = String(v.engine || engine).trim();
+            const ext = String(v.external_id || '').trim();
+            if (/^\d+$/.test(ext)) resolvedEngineID = Number(ext);
+          }
+        }
+        if (Number(payload.engineID || 0) > 0) resolvedEngineID = Number(payload.engineID);
         if (!brand || !model) {
           result = { items: [], warning: 'brand+model required' };
           break;
         }
-        const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
+        const cacheKey = `${brand}|${model}|${engine}|eid:${resolvedEngineID}`.toLowerCase();
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
@@ -1713,7 +1734,70 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* non-blocking */ }
 
-        // Engine variants: "5.7 HEMI" / "5.7L HEMI" / "5.7"
+        // ===== STRATEGY A: engineID + multi-genArtID byVehicle loop =====
+        if (resolvedEngineID > 0) {
+          console.log(`[partsForEngine] engineID=${resolvedEngineID} sections=${TECDOC_SECTIONS.length}`);
+          const BATCH_SECT = 8;
+          const collected: UnifiedPart[] = [];
+          const seen = new Set<string>();
+          let totalRaw = 0;
+          let sectionsHit = 0;
+
+          for (let i = 0; i < TECDOC_SECTIONS.length; i += BATCH_SECT) {
+            const slice = TECDOC_SECTIONS.slice(i, i + BATCH_SECT);
+            const results = await Promise.all(slice.map(async (sec) => {
+              try {
+                const reqBody = { engineID: resolvedEngineID, genArtID: sec.id, getOECodes: true, target: 'P' };
+                const raw = await nextisPost('/catalogs/items-finding-by-vehicle', reqBody);
+                const rawList = raw?.items || raw?.Items || [];
+                return { sec, rawCount: rawList.length, items: normalizeItems(raw) };
+              } catch (e) {
+                console.warn(`[partsForEngine] genArtID=${sec.id} failed:`, (e as Error).message);
+                return { sec, rawCount: 0, items: [] as UnifiedPart[] };
+              }
+            }));
+            for (const r of results) {
+              totalRaw += r.rawCount;
+              if (r.items.length > 0) sectionsHit++;
+              for (const it of r.items) {
+                if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
+                const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                collected.push({
+                  ...it,
+                  category: r.sec.label,
+                  // @ts-ignore — extra field consumed by frontend
+                  tecdoc_section: { id: r.sec.id, label: r.sec.label },
+                });
+              }
+            }
+          }
+
+          const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
+          const out = {
+            items: enriched,
+            engineID: resolvedEngineID,
+            sectionsScanned: TECDOC_SECTIONS.length,
+            sectionsHit,
+            totalRawHits: totalRaw,
+            source: 'engineID-multi-genart',
+          };
+          try {
+            await adminClient.from('api_cache').upsert({
+              cache_type: 'jm_parts_for_engine',
+              cache_key: cacheKey,
+              data: out,
+              ttl_seconds: 3600,
+              created_at: new Date().toISOString(),
+            }, { onConflict: 'cache_type,cache_key' });
+          } catch (_) { /* non-blocking */ }
+          result = out;
+          break;
+        }
+
+        // ===== STRATEGY B: OEM-seed fallback (no engineID set) =====
+
         const engineVariants = (() => {
           if (!engine) return [] as string[];
           const out = new Set<string>([engine]);

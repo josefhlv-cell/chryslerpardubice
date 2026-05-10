@@ -15,14 +15,16 @@ export default function AdminCompatibility() {
   return (
     <div className="container mx-auto p-4 max-w-6xl">
       <PageHeader title="Kompatibilita dílů" subtitle="Auto-matcher, hromadné připojování a fronta ke kontrole" />
-      <Tabs defaultValue="textmatch" className="mt-4">
+      <Tabs defaultValue="engineid" className="mt-4">
         <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="engineid">Engine ID (TecDoc K-type)</TabsTrigger>
           <TabsTrigger value="textmatch">Text-match shody</TabsTrigger>
           <TabsTrigger value="matcher">Auto-Matcher</TabsTrigger>
           <TabsTrigger value="bulk">Bulk Attach</TabsTrigger>
           <TabsTrigger value="queue">Match Queue</TabsTrigger>
           <TabsTrigger value="stats">Statistiky</TabsTrigger>
         </TabsList>
+        <TabsContent value="engineid"><EngineIdMappingTab /></TabsContent>
         <TabsContent value="textmatch"><TextMatchReviewTab /></TabsContent>
         <TabsContent value="matcher"><MatcherTab /></TabsContent>
         <TabsContent value="bulk"><BulkAttachTab /></TabsContent>
@@ -454,5 +456,97 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <label className="text-xs text-muted-foreground block mb-1">{label}</label>
       {children}
     </div>
+  );
+}
+
+function EngineIdMappingTab() {
+  const [rows, setRows] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [filter, setFilter] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  async function load() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("nextis_vehicles")
+      .select("id, brand, model, engine, year_from, year_to, external_id")
+      .in("brand", ALLOWED_BRANDS as unknown as string[])
+      .order("brand").order("model").order("engine");
+    setLoading(false);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    setRows(data || []);
+    const init: Record<string, string> = {};
+    for (const r of data || []) init[r.id] = r.external_id || "";
+    setDrafts(init);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save(id: string) {
+    const value = drafts[id]?.trim() || null;
+    if (value && !/^\d+$/.test(value)) {
+      return toast({ title: "Neplatné ID", description: "Musí to být číslo (TecDoc K-type).", variant: "destructive" });
+    }
+    const { error } = await supabase.from("nextis_vehicles").update({ external_id: value }).eq("id", id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Uloženo", description: value ? `Engine ID = ${value}` : "Engine ID smazáno" });
+    setRows(prev => prev.map(r => r.id === id ? { ...r, external_id: value } : r));
+  }
+
+  async function clearCache() {
+    const { error } = await supabase.from("api_cache").delete().eq("cache_type", "jm_parts_for_engine");
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Cache vymazána", description: "partsForEngine se příště přepočítá z Nextis API." });
+  }
+
+  const filtered = rows.filter(r => {
+    if (!filter) return true;
+    const hay = `${r.brand} ${r.model} ${r.engine}`.toLowerCase();
+    return hay.includes(filter.toLowerCase());
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">Nextis Engine ID (TecDoc K-type)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Pokud vyplníš číselný TecDoc K-type, partsForEngine zavolá Nextis <code>items-finding-by-vehicle</code>
+          pro každou TecDoc sekci a vrátí čistý strom 15–20 kategorií. Bez vyplnění se použije OEM-seed fallback.
+          Hodnoty získáš z TecDoc katalogu (např. Chrysler 300C 5.7 HEMI = K-type čekající na vyplnění).
+        </p>
+        <div className="flex items-center gap-2">
+          <Input placeholder="Hledat brand / model / motor…" value={filter} onChange={e => setFilter(e.target.value)} className="max-w-xs" />
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Načíst"}
+          </Button>
+          <Button variant="destructive" size="sm" onClick={clearCache}>Vymazat cache</Button>
+        </div>
+        <div className="border rounded-md overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr><th className="text-left p-2">Brand</th><th className="text-left p-2">Model</th><th className="text-left p-2">Motor</th><th className="text-left p-2">Roky</th><th className="text-left p-2">Engine ID</th><th></th></tr>
+            </thead>
+            <tbody>
+              {filtered.map(r => (
+                <tr key={r.id} className="border-t">
+                  <td className="p-2">{r.brand}</td>
+                  <td className="p-2">{r.model}</td>
+                  <td className="p-2">{r.engine}</td>
+                  <td className="p-2 text-muted-foreground">{r.year_from || "?"}–{r.year_to || "?"}</td>
+                  <td className="p-2">
+                    <Input value={drafts[r.id] || ""} onChange={e => setDrafts(d => ({ ...d, [r.id]: e.target.value }))} className="h-8 w-32" placeholder="K-type" />
+                  </td>
+                  <td className="p-2">
+                    <Button size="sm" variant="outline" onClick={() => save(r.id)} disabled={(drafts[r.id] || "") === (r.external_id || "")}>Uložit</Button>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && <tr><td colSpan={6} className="p-4 text-center text-muted-foreground">Žádná vozidla</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
