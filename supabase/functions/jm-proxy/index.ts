@@ -1666,6 +1666,134 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'partsForEngine': {
+        // ALL J+M parts for a given vehicle, classified by TecDoc section.
+        // Output: { items: UnifiedPart[] (each with tecdoc_section), oemSeedsUsed, source }
+        const brand = String(payload.brand || '').trim();
+        const model = String(payload.model || '').trim();
+        const engine = String(payload.engine || '').trim();
+        if (!brand || !model) {
+          result = { items: [], warning: 'brand+model required' };
+          break;
+        }
+        const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
+        try {
+          const { data: cached } = await adminClient
+            .from('api_cache')
+            .select('data, created_at, ttl_seconds')
+            .eq('cache_type', 'jm_parts_for_engine')
+            .eq('cache_key', cacheKey)
+            .maybeSingle();
+          if (cached) {
+            const ageMs = Date.now() - new Date(cached.created_at as string).getTime();
+            if (ageMs < (cached.ttl_seconds ?? 3600) * 1000) {
+              result = { ...(cached.data as any), fromCache: true };
+              break;
+            }
+          }
+        } catch (_) { /* non-blocking */ }
+
+        // Engine variants: "5.7 HEMI" / "5.7L HEMI" / "5.7"
+        const engineVariants = (() => {
+          if (!engine) return [] as string[];
+          const out = new Set<string>([engine]);
+          out.add(engine.replace(/^(\d+\.\d+)(\s)/, '$1L$2'));
+          out.add(engine.replace(/^(\d+\.\d+)L(\s)/, '$1$2'));
+          const m = engine.match(/^(\d+\.\d+)/);
+          if (m) out.add(m[1]);
+          return [...out].filter(Boolean);
+        })();
+
+        // Pull OEM seeds from parts_new (Mopar/7zap/CSV-Mopar). Try with engine first, then without.
+        const fetchSeeds = async (useEngine: boolean): Promise<string[]> => {
+          const variantsToTry = useEngine && engineVariants.length ? engineVariants : [null];
+          for (const variant of variantsToTry) {
+            let q = adminClient.from('parts_new')
+              .select('oem_number, catalog_source, manufacturer')
+              .ilike('compatible_vehicles', `%${brand}%`)
+              .ilike('compatible_vehicles', `%${model}%`)
+              .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
+              .limit(500);
+            if (variant) q = q.ilike('compatible_vehicles', `%${variant}%`);
+            const { data } = await q;
+            const clean = (data || []).filter((r: any) => {
+              const src = String(r.catalog_source || '').toLowerCase();
+              if (src === 'csv') return String(r.manufacturer || '').trim().toLowerCase() === 'mopar';
+              return true;
+            });
+            const codes = [...new Set(clean.map((r: any) => String(r.oem_number || '').trim()).filter(Boolean))];
+            if (codes.length > 0) return codes;
+          }
+          return [];
+        };
+
+        let oemSeeds = await fetchSeeds(true);
+        if (oemSeeds.length === 0) oemSeeds = await fetchSeeds(false);
+        oemSeeds = oemSeeds.slice(0, 80);
+
+        if (oemSeeds.length === 0) {
+          result = { items: [], oemSeedsUsed: 0, warning: `Žádný Mopar OEM seed pro ${brand} ${model}` };
+          break;
+        }
+
+        // Parallel batched calls to Nextis (8 at a time to avoid rate-limit).
+        const BATCH = 8;
+        const collected: UnifiedPart[] = [];
+        const seen = new Set<string>();
+        let totalRaw = 0;
+        for (let i = 0; i < oemSeeds.length; i += BATCH) {
+          const slice = oemSeeds.slice(i, i + BATCH);
+          const results = await Promise.all(
+            slice.map((code) => fetchJmForSpecificCode(code, 'CodeOE')
+              .then((r) => ({ code, ...r }))
+              .catch(() => ({ code, rawCount: 0, items: [] as UnifiedPart[] }))),
+          );
+          for (const r of results) {
+            totalRaw += r.rawCount;
+            for (const it of r.items) {
+              if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
+              const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const sec = classifyTecdoc(it);
+              collected.push({
+                ...it,
+                related_oem_number: it.related_oem_number || r.code,
+                category: sec.label,
+                // @ts-ignore — extra field consumed by frontend
+                tecdoc_section: { id: sec.id, label: sec.label },
+              });
+            }
+          }
+        }
+
+        // Enrich related_oem_number from parts_new where missing
+        const enriched = await enrichItemsWithRelatedOem(adminClient, collected);
+
+        const out = {
+          items: enriched,
+          oemSeedsUsed: oemSeeds.length,
+          totalRawHits: totalRaw,
+          source: 'oem-fallback-grouped',
+        };
+
+        // Cache 1h
+        try {
+          await adminClient.from('api_cache').upsert({
+            cache_type: 'jm_parts_for_engine',
+            cache_key: cacheKey,
+            data: out,
+            ttl_seconds: 3600,
+            created_at: new Date().toISOString(),
+          }, { onConflict: 'cache_type,cache_key' });
+        } catch (_) { /* non-blocking */ }
+
+        result = out;
+        break;
+      }
+        break;
+      }
+
       case 'enrichPrices': {
         // Bulk: pull missing-price OEMs from parts_new and enrich them
         const limit = Math.min(Number(payload.limit ?? 100), 500);
