@@ -2125,6 +2125,15 @@ Deno.serve(async (req) => {
           oemSeedsUsed: oemSeeds.length,
           totalRawHits: totalRaw,
           source: 'oem-fallback-grouped',
+          debug: {
+            flow: 'oemFallback',
+            k_type: 0,
+            k_type_source: 'none',
+            sectionsScanned: 0,
+            sectionsHit: 0,
+            totalRawHits: totalRaw,
+            oemSeedsUsed: oemSeeds.length,
+          },
         };
 
         // Cache 1h
