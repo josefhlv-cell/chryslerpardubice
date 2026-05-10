@@ -3,10 +3,10 @@
  * Brand → Model → Engine → Category (TecDoc section) → Parts.
  * One round-trip to jm-proxy `partsForEngine`, then OEM-first locally.
  */
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ChevronRight, ChevronLeft, Loader2, Car, Wrench, Cog, Package,
+  ChevronRight, ChevronLeft, ChevronDown, Loader2, Car, Wrench, Cog, Package,
   Snowflake, Zap, Filter as FilterIcon, Droplet, Disc, Gauge, Settings, Box,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
