@@ -456,17 +456,15 @@ async function processPart(
     }
   }
 
-  // Search variants with zero-padding + extra prefix coverage (K, 6, SP)
-  // K = standard catalog prefix, 6 = engine/Mopar OEM family, SP = service-pack
-  const padded = partNumber.length <= 9 ? `0${partNumber}` : partNumber;
-  const variantList: string[] = [
-    `K${padded}`,
-    `K${partNumber}`,
-    `6${partNumber}`,
-    `SP${partNumber}`,
-    padded,
-    partNumber,
-  ];
+  // Search variants. Věrnostsevyplaci.cz dealer katalog vyžaduje K-prefix
+  // (např. 4743116AA → K4743116AA). Pokud OEM už K-prefix má, nepřidáváme druhé K.
+  // 6 = engine/Mopar OEM family, SP = service-pack.
+  const cleanPN = partNumber.replace(/[\s-]/g, '').toUpperCase();
+  const padded = cleanPN.length <= 9 ? `0${cleanPN}` : cleanPN;
+  const alreadyK = /^K\d/.test(cleanPN);
+  const variantList: string[] = alreadyK
+    ? [cleanPN, padded, cleanPN.replace(/^K/, ''), `6${cleanPN.replace(/^K/, '')}`, `SP${cleanPN.replace(/^K/, '')}`]
+    : [`K${padded}`, `K${cleanPN}`, `6${cleanPN}`, `SP${cleanPN}`, padded, cleanPN];
   const searchVariants = [...new Set(variantList)];
 
   let searchHtml = '';
