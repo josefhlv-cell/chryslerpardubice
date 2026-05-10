@@ -26,7 +26,19 @@ import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
 import VinAndOemSearch from "@/components/catalog/VinAndOemSearch";
 
-const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Lancia"];
+const BRAND_ORDER = ["Chrysler", "Dodge", "RAM"];
+
+function formatVehicleDetails(vehicle?: NextisVehicle) {
+  if (!vehicle) return "";
+  const metadata = (vehicle.metadata || {}) as Record<string, unknown>;
+  const kw = vehicle.power_kw ? `${vehicle.power_kw} kW` : "";
+  const hp = vehicle.power_kw ? `${Math.round(vehicle.power_kw * 1.341)} HP` : "";
+  const fuel = String(vehicle.fuel || metadata.fuel || (/crd|diesel/i.test(vehicle.engine || "") ? "Nafta" : "Benzín"));
+  const displacement = String(metadata.displacement || metadata.displacement_cc || "");
+  const engineCode = String(metadata.engine_code || metadata.engineCode || "");
+  const years = vehicle.year_from ? `${vehicle.year_from}${vehicle.year_to ? `-${vehicle.year_to}` : "+"}` : "";
+  return [kw && hp ? `${kw} / ${hp}` : kw, fuel, displacement, engineCode, years].filter(Boolean).join(" · ");
+}
 
 const CATEGORY_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   "Brzdové zařízení": Disc,
@@ -192,8 +204,11 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   useEffect(() => {
     if (!brand || !model) { setEngines([]); return; }
     setLoading(true);
-    fetchEnginesForModel(brand, model)
-      .then(setEngines)
+    fetchNextisVehicles(brand, model)
+      .then((rows) => {
+        setVehicles(rows);
+        setEngines([...new Set(rows.map((r) => r.engine).filter(Boolean))] as string[]);
+      })
       .catch((e) => toast.error("Nelze načíst motorizace: " + e.message))
       .finally(() => setLoading(false));
   }, [brand, model]);
@@ -468,16 +483,22 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           engines.length === 0
             ? <div className="text-center py-16 text-sm text-muted-foreground">Žádné motorizace pro <strong>{brand} {model}</strong>.</div>
             : <div className="rounded-xl border border-border/40 bg-card divide-y divide-border/30 overflow-hidden">
-                {engines.map((e) => (
+                {engines.map((e) => {
+                  const vehicle = vehicles.find((v) => v.engine === e);
+                  const details = formatVehicleDetails(vehicle);
+                  return (
                   <button key={e} onClick={() => setEngine(e)}
                     className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left">
                     <div className="flex items-center gap-3 min-w-0">
                       <Cog className="w-4 h-4 text-primary/70 shrink-0" />
-                      <span className="text-sm font-medium truncate">{e}</span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium truncate">{e}</span>
+                        {details && <span className="block text-[11px] text-muted-foreground truncate">{details}</span>}
+                      </span>
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
                   </button>
-                ))}
+                );})}
               </div>
         )}
 
