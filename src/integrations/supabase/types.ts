@@ -194,6 +194,45 @@ export type Database = {
         }
         Relationships: []
       }
+      auto_pipeline_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error_message: string | null
+          id: string
+          job_type: string
+          oem_number: string | null
+          part_id: string | null
+          payload: Json | null
+          processed_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_type: string
+          oem_number?: string | null
+          part_id?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          oem_number?: string | null
+          part_id?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       cars_for_sale: {
         Row: {
           brand: string
@@ -2007,6 +2046,57 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      scrape_preview_jobs: {
+        Row: {
+          applied_at: string | null
+          applied_count: number
+          brand: string | null
+          created_at: string
+          created_by: string | null
+          engine: string | null
+          error_message: string | null
+          id: string
+          model: string | null
+          parts_count: number
+          raw_payload: Json
+          source: string
+          status: string
+          year: number | null
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_count?: number
+          brand?: string | null
+          created_at?: string
+          created_by?: string | null
+          engine?: string | null
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          parts_count?: number
+          raw_payload?: Json
+          source: string
+          status?: string
+          year?: number | null
+        }
+        Update: {
+          applied_at?: string | null
+          applied_count?: number
+          brand?: string | null
+          created_at?: string
+          created_by?: string | null
+          engine?: string | null
+          error_message?: string | null
+          id?: string
+          model?: string | null
+          parts_count?: number
+          raw_payload?: Json
+          source?: string
+          status?: string
+          year?: number | null
         }
         Relationships: []
       }
