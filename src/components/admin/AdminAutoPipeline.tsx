@@ -151,13 +151,13 @@ export default function AdminAutoPipeline() {
   const retryFailed = async () => {
     setRetrying(true);
     try {
-      const { error, count } = await supabase
+      const { error, data } = await supabase
         .from("auto_pipeline_queue")
         .update({ status: "pending", attempts: 0, error_message: null })
         .eq("status", "failed")
-        .select("id", { count: "exact", head: true });
+        .select("id");
       if (error) throw error;
-      toast({ title: "Restart selhaných úloh", description: `${count ?? 0} úloh přesunuto zpět do fronty.` });
+      toast({ title: "Restart selhaných úloh", description: `${data?.length ?? 0} úloh přesunuto zpět do fronty.` });
       await load();
     } catch (e: any) {
       toast({ title: "Chyba", description: e.message, variant: "destructive" });
@@ -169,16 +169,15 @@ export default function AdminAutoPipeline() {
   const unstuckProcessing = async () => {
     setUnstucking(true);
     try {
-      // Anything stuck in 'processing' over 30 min is treated as orphaned.
       const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-      const { error, count } = await supabase
+      const { error, data } = await supabase
         .from("auto_pipeline_queue")
         .update({ status: "pending", attempts: 0, error_message: null })
         .eq("status", "processing")
         .lt("created_at", cutoff)
-        .select("id", { count: "exact", head: true });
+        .select("id");
       if (error) throw error;
-      toast({ title: "Zaseklé úlohy uvolněny", description: `${count ?? 0} úloh vráceno na pending.` });
+      toast({ title: "Zaseklé úlohy uvolněny", description: `${data?.length ?? 0} úloh vráceno na pending.` });
       await load();
     } catch (e: any) {
       toast({ title: "Chyba", description: e.message, variant: "destructive" });
