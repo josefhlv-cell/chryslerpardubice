@@ -3,7 +3,7 @@
 // Uloží záznam do jq_orders (vytvoří se jednoduchá tabulka v migration později pokud bude třeba),
 // teď jen proxy do jm-proxy/createOrder.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
