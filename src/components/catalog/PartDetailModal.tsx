@@ -56,6 +56,39 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
   const [crossRefLoading, setCrossRefLoading] = useState(false);
   const [crossRefLoaded, setCrossRefLoaded] = useState(false);
 
+  // Live price + stock refresh for J+M items
+  const [livePrice, setLivePrice] = useState<{ price_with_vat: number; price_without_vat: number; availability: string } | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  useEffect(() => {
+    if ((part.catalog_source || "").toLowerCase() !== "jm" || !part.oem_number) return;
+    let cancelled = false;
+    (async () => {
+      setLiveLoading(true);
+      try {
+        const { data } = await supabase.functions.invoke("jm-proxy", {
+          body: { action: "priceAndStock", codes: [part.oem_number] },
+        });
+        const item = (data?.data?.items || data?.items || [])[0];
+        if (!cancelled && item) {
+          const pwv = Number(item.price_with_vat ?? item.priceWithVat ?? 0);
+          const pwov = Number(item.price_without_vat ?? item.priceWithoutVat ?? (pwv ? pwv / 1.21 : 0));
+          const stock = Number(item.stock ?? item.qty ?? 0);
+          setLivePrice({
+            price_with_vat: pwv,
+            price_without_vat: Math.round(pwov * 100) / 100,
+            availability: stock > 0 ? "available" : pwv > 0 ? "on_order" : "unavailable",
+          });
+        }
+      } catch (e) {
+        console.warn("[PartDetailModal] live JM price failed", e);
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [part.catalog_source, part.oem_number]);
+
   const loadCrossRef = async () => {
     setCrossRefLoading(true);
     setCrossRefLoaded(true);
@@ -64,8 +97,12 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
     setCrossRefLoading(false);
   };
 
+  const effPriceWithVat = livePrice?.price_with_vat ?? part.price_with_vat;
+  const effPriceWithoutVat = livePrice?.price_without_vat ?? part.price_without_vat;
+  const effAvailability = livePrice?.availability ?? part.availability;
+
   const discounted = discountPercent > 0 ? {
-    withVat: Math.round(part.price_without_vat * (1 - discountPercent / 100) * 1.21 * 100) / 100,
+    withVat: Math.round(effPriceWithoutVat * (1 - discountPercent / 100) * 1.21 * 100) / 100,
   } : null;
 
   return (
