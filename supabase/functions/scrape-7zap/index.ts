@@ -3,6 +3,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function jsonResponse(body: any, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
 // 7zap.com uses subdomain-based URLs: {brand}.7zap.com/en/{region}/
 const BRAND_SLUGS: Record<string, string> = {
   'Chrysler': 'chrysler',
@@ -116,38 +126,21 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
     }
     const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-
-  const authClient = createAuthClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: authHeader } } }
-  );
-  
-  const {
-    data: { user },
-    error: userError
-  } = await authClient.auth.getUser();
-  
-    if (userError || !user) {
+    const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+    
+    // OPRAVENÁ AUTENTIZACE
+    const token = authHeader.replace('Bearer ', '');
+    const { data: userData, error: userError } = await authClient.auth.getUser(token);
+    
+    if (userError || !userData?.user?.id) {
       return jsonResponse({ success: false, error: 'Unauthorized' }, 401);
-  }
-  
-  const adminCheck = createAuthClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  );
-  
-  const { data: roleData } = await adminCheck
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .eq('role', 'admin')
-    .maybeSingle();
-  
+    }
+    
+    const adminCheck = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const { data: roleData } = await adminCheck.from('user_roles').select('role').eq('user_id', userData.user.id).eq('role', 'admin').maybeSingle();
+    
     if (!roleData) {
       return jsonResponse({ success: false, error: 'Forbidden: admin required' }, 403);
-  
-
     }
 
     const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
@@ -613,13 +606,6 @@ function parsePartsFromMarkdown(md: string): Array<{ oem_number: string; name: s
       }
     }
   }
-
+  
   return parts;
-}
-
-function jsonResponse(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
 }
