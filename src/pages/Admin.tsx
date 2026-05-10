@@ -224,7 +224,7 @@ const Admin = () => {
         { key: "catalog-7zap", label: "7zap scraper" },
         { key: "catalog-repair", label: "Opravy & diagnostika" },
         { key: "catalog-health", label: "Zdraví katalogu" },
-        { key: "catalog-pipeline", label: "Auto-pipeline" },
+        { key: "catalog-pipeline", label: "Auto-pipeline & párování" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
         ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "EPC nákresy" }] : []),
         { key: "catalog-settings", label: "Nastavení", icon: Settings2 },
