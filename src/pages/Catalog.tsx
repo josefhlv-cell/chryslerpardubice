@@ -83,6 +83,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
   const [groups, setGroups] = useState<CategoryGroup[]>([]);
   const [categoryQuery, setCategoryQuery] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   const [brand, setBrand] = useState("");
   const [model, setModel] = useState("");
@@ -148,6 +149,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     setSelectedVehicleId(vehicleId);
     setSelectedGroup(null);
     setCategoryQuery("");
+    setExpandedGroups(new Set());
     setLoading(true);
     setPartsLoading(true);
     setWarning(null);
@@ -157,6 +159,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       .then((res) => {
         if (cancelled) return;
         setGroups(res.groups);
+        setExpandedGroups(new Set(res.groups.slice(0, 8).map((g) => g.id)));
         setDebugInfo(res.debug || null);
         if (res.warning) setWarning(res.warning);
         if (res.groups.length === 0) setWarning(res.warning || "Pro toto vozidlo se nepodařilo načíst žádné díly.");
@@ -231,6 +234,19 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const visibleGroups = categoryQuery.trim()
     ? groups.filter((g) => g.label.toLowerCase().includes(categoryQuery.trim().toLowerCase()))
     : groups;
+  const filteredGroups = useMemo(() => {
+    const query = categoryQuery.trim().toLowerCase();
+    if (!query) return groups;
+    return groups
+      .map((g) => {
+        const childMatches = (g.children || []).filter((c) => c.label.toLowerCase().includes(query));
+        if (g.label.toLowerCase().includes(query)) return g;
+        if (childMatches.length === 0) return null;
+        const count = childMatches.reduce((s, c) => s + c.count, 0);
+        return { ...g, count, parts: childMatches.flatMap((c) => c.parts), children: childMatches };
+      })
+      .filter(Boolean) as CategoryGroup[];
+  }, [groups, categoryQuery]);
 
   const partsItems = selectedGroup
     ? (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all"
