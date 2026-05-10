@@ -1,121 +1,93 @@
-## Záloha
-✅ Hotovo: `daily/backup-2026-05-09_20-17-39.json` (36 tabulek, 21 846 řádků, 12 MB).
+## Cíl
+1. Opravit chybu `Unauthorized` v AI generátoru EPC (viz screenshot — "X Unauthorized" u každé kategorie).
+2. Přidat admin nástroj **7zap OEM Scraper** s preview → sync workflow.
+3. Sjednotit všechny scraping nástroje na vzor **Preview → Sync**.
+4. Auto-pipeline: nový OEM → automaticky kategorizace + dotažení cen z vernostsevyplaci.cz.
+5. Bonus nástroje pro katalog.
 
-## Co postavím v jednom velkém PR
+---
 
-### A) Redesign Adminu — sidebar navigace se stromem
-Nahradí současné horizontální taby. Levý sloupec (na mobilu sbalitelný drawer), strom v hloubkách:
+## A) Oprava `Unauthorized` v EPC generátoru
 
-```text
-Admin
-├─ 📊 Přehled (dashboard, daily report, KPI)
-├─ 📦 Katalog
-│   ├─ Přehled
-│   ├─ Import (CSV / AI / EPC)
-│   ├─ Opravy & Diagnostika
-│   │   ├─ Foto enrichment
-│   │   ├─ Data fixer
-│   │   ├─ Quality export
-│   │   └─ Command center
-│   ├─ Ceny
-│   │   ├─ Statistiky
-│   │   ├─ Bulk sync (běhy)
-│   │   ├─ Spustit sync
-│   │   └─ Manuální správa
-│   ├─ EPC nákresy
-│   └─ Nastavení
-├─ 🛠️ Servis
-│   ├─ Rezervace
-│   ├─ Zakázky
-│   ├─ Plánovač (mechanik × zvedák)
-│   ├─ Šablony úkonů
-│   └─ TSB databáze (NOVÉ)
-├─ 🚗 Vozy
-│   ├─ Nabídka
-│   ├─ Výkup / Dovoz
-│   └─ Hlášení závad
-├─ 👥 Zákazníci & Role
-│   ├─ Profily
-│   ├─ Zaměstnanci
-│   └─ Schvalování firem
-├─ 🔬 Diagnostika (NOVÉ)
-│   ├─ Vzdálené OBD live
-│   ├─ DTC knihovna (CZ)
-│   └─ Diag protokoly (PDF)
-├─ 📱 Mobil & Nástroje (NOVÉ)
-│   ├─ VIN/QR scanner
-│   ├─ Push & notifikace
-│   └─ Offline cache (mechanik)
-└─ ⚙️ Systém
-    ├─ Feature flags
-    ├─ Zálohy
-    ├─ Audit log
-    └─ Cron / Sync stav
-```
+**Příčina:** `epc-generate-batch` (volaná z fronty / per kategorie) má auth check `Bearer` token, ale při volání z UI v batchi se nepředává správně user JWT, nebo edge function nenačte admin roli.
 
-Implementace: nový `src/components/admin/AdminLayout.tsx` se Shadcn `Sidebar`, perzistence rozbalení v `localStorage`, aktivní cesta z URL hash (`/admin#diagnostics/dtc`).
+**Fix:**
+- Sjednotit auth pattern přesně jako v `epc-generate/index.ts` (getClaims + check user_roles).
+- V `AdminEpcManager.tsx` (volající UI) vždy posílat `supabase.functions.invoke()` (nikoliv raw fetch) — automaticky přidá Authorization header.
+- Per-kategorie generování (loop) nahradit jediným voláním fronty + polling stavu z `epc_generation_queue` (zabrání 401 race + edge limit 60s).
+- UI: u každé kategorie zobrazit `pending → running → done/failed` místo okamžitého "Unauthorized".
 
-### B) Funkce — 8 nových modulů
+---
 
-**1. Vzdálená diagnostika (live OBD)**
-- Migrace: `obd_live_sessions` (user_id, vehicle_id, started_at, ended_at, last_seen, payload jsonb), `obd_live_consents` (user_id, granted, granted_at, revoked_at).
-- Profil: nový switch „Povolit servisu vzdálenou diagnostiku".
-- Realtime: zákazník při běžící OBD relaci publikuje PIDs do Supabase channel `obd:{user_id}`. Admin v `AdminRemoteDiag` poslouchá.
-- RLS: zápis jen `auth.uid() = user_id`, čtení admin + vlastník. Bez consentu admin SELECT zablokovaný (kontrola v policy přes `obd_live_consents.granted = true`).
+## B) Nový nástroj: **7zap OEM Bulk Scraper**
 
-**2. DTC knihovna (CZ)**
-- Migrace: `dtc_codes` (code, system, severity, title_cs, description_cs, causes_cs, solution_cs, affected_models text[], source).
-- Seed: ~150 nejčastějších Chrysler/Dodge/RAM kódů (P0xxx, U0xxx, B0xxx) přes seed SQL.
-- UI admin: CRUD tabulka + import CSV. Public read pro `/garage` a AI Mechanika (Tonda už dnes řeší DTC — propojím).
+Cíl: stáhnout všechny OEM čísla daného modelu z `*.7zap.com` (Mopar/Chrysler/Dodge/RAM tree) jediným kliknutím, s preview před vložením.
 
-**3. Diagnostické protokoly PDF**
-- Edge function `diag-protocol-pdf`: bere `service_order_id` nebo `obd_session_id`, generuje PDF (jspdf v edge) s hlavičkou CHDP, VIN, DTCs, doporučení, podpis mechanika.
-- Uloží do `service-order-photos` bucketu, vrací signed URL.
-- Tlačítko v detailu zakázky a v OBD historii.
+**Edge function** `scrape-7zap-bulk`:
+- Vstup: `{brand, model, year?, engine?}`
+- Použije Firecrawl `crawl` endpoint na `https://{brand}.7zap.com/en/global/{model}-parts-catalog/` s depth 3.
+- Extrahuje OEM + název + kategorii + diagram URL.
+- Vrátí strukturovaný JSON (NEukládá hned!).
 
-**4. TSB databáze podle VIN**
-- Migrace: `tsbs` (tsb_number, title_cs, summary_cs, vin_pattern text, model, year_from, year_to, system, full_text, source_url, published_at).
-- Edge `tsb-search` přijímá VIN → dekóduje (existující NHTSA cache) → matchuje pattern/model/rok.
-- Admin UI: tabulka + import (CSV / Firecrawl scrape z workshop-manuals.com — funkce už existuje).
-- Public route `/garage/tsb?vin=...`.
+**Tabulka `scrape_preview_jobs`**:
+- `id, source ('7zap'|'mopar'|'sag'|'ak'|'jm'), brand, model, status, raw_payload jsonb, parts_count, created_by, created_at`.
+- Slouží jako mezisklad pro Preview → Sync.
 
-**5. Admin mobile view**
-- `AdminLayout` má responsive break: <768px → bottom-sheet menu + zjednodušené karty.
-- Nová stránka `/admin/mobile` s rychlým schvalováním objednávek/zakázek (swipe-akce přes `react-swipeable`), velká tlačítka, telefon-friendly.
+**Admin UI komponenta `Admin7zapScraper.tsx`** v sekci `Katalog → Import → 7zap`:
+1. Form: brand, model, year, engine.
+2. Tlačítko **"Stáhnout náhled"** → uloží do `scrape_preview_jobs`, zobrazí tabulku všech nalezených OEM (počet, vzorek 50 řádků, kategorie).
+3. Tlačítko **"Synchronizovat s katalogem"** → edge `apply-scrape-preview` (insertuje do `parts_new` s `catalog_source='7zap'`, `price_with_vat=0` → "Na objednávku").
+4. Po insertu automaticky enqueue do nových triggerů (viz D).
 
-**6. VIN/QR scanner v admin appce**
-- Komponenta `AdminVinScanner` využívá `@capacitor/camera` + `@capacitor-mlkit/barcode-scanning` (přidat plugin) a fallback na webový `BarcodeDetector` API.
-- Po sejmutí VIN automaticky otevře detail vozu nebo formulář nové zakázky.
+---
 
-**7. Push notifikace pro admina (web + native)**
-- Web Push: rozšířit existující `PushNotificationToggle` → nová tabulka `admin_push_subscriptions`.
-- Capacitor FCM: přidat `@capacitor/push-notifications`, registrace tokenů do `admin_fcm_tokens`.
-- Edge `notify-admin` (existuje) doplnit o broadcast přes obě brány — trigger na nové order/zakázku/fault_report.
-- *Pozn.*: FCM vyžaduje Firebase projekt + `google-services.json`. Po nasazení požádám tě o nahrání souboru.
+## C) Sjednocený **Preview → Sync** pattern
 
-**8. Offline režim pro mechaniky**
-- Service Worker (vite-plugin-pwa už máme) – přidat strategii `CacheFirst` pro `/mechanic-dashboard` data.
-- IndexedDB store (přes `idb`) pro: přiřazené zakázky, fotky, čas-tracking. Sync queue se odešle při online.
-- Indikátor stavu „🟢 Online / 🔴 Offline – 3 změny ve frontě".
+Refaktor stávajících scraperů (Makro, SAG, AutoKelly) aby všechny prošly mezikrokem `scrape_preview_jobs`:
+- `AdminMakroScraper`, `AdminSagSync`, `AdminAutoKellyScraper` → přidat fázi "Náhled" před skutečným insertem.
+- Společná komponenta `ScrapePreviewTable.tsx` pro zobrazení (filtr značky, hledání OEM, sloupce: OEM, Název, Kategorie, Cena, Akce).
+- Tlačítko **"Vyřadit"** per řádek + bulk **"Schválit a synchronizovat"**.
 
-### C) Bezpečnost & ostatní
-- RLS policy review pro všechny nové tabulky (`has_role admin` + vlastník).
-- Audit log už existuje? Pokud ne, vytvořím `admin_audit_log` jako bonus do Systém větve.
-- Memory update: nové větve, OBD consent rule, DTC zdroj.
+---
 
-## Co NEBUDU dělat (mimo scope tohoto PR)
-- Skutečné FCM klíče (potřebuju od tebe Firebase setup → vyžádám si po nasazení).
-- Plnění DTC knihovny stovkami kódů ručně — udělám seed základních + admin UI pro doplňování.
-- Plnění TSB obsahu — připravím schéma + scrape, ty doplníš obsah.
+## D) Auto-pipeline po vložení nových OEM
 
-## Pořadí prací v PR
-1. Migrace DB (8 nových tabulek + RLS)
-2. Sidebar layout + přesun všech stávajících tabů
-3. Edge funkce (diag-protocol-pdf, tsb-search)
-4. UI moduly diagnostiky (Live, DTC, PDF, TSB)
-5. Mobile view + VIN scanner
-6. Push (web kompletní, FCM scaffold)
-7. Offline PWA pro mechaniky
-8. QA + memory update
+**Postgres trigger `parts_new_after_insert`**:
+1. Pokud `category IS NULL` → enqueue do `auto_categorize_queue` (zpracuje deterministický classifier `jm-classify-parts`).
+2. Pokud `price_with_vat <= 0 AND catalog_source != 'jm'` → enqueue do `price_fetch_queue` (volá `price-sync` pro vernostsevyplaci.cz).
+3. Pokud OEM neexistuje v `catalog_part_categories` → enqueue do `compat_match_queue` (`compat-matcher`).
 
-Po schválení rovnou pojedu — bude to 30-50 souborů, ale po dokončení dostaneš přehledný admin a všechny požadované funkce v jednom dni.
+**Edge function `auto-pipeline-worker`** (cron každé 2 min):
+- Vezme batch 100 položek z každé fronty.
+- Spustí příslušnou logiku (kategorizace / cena / kompatibilita).
+- Loguje do `admin_audit_log`.
+
+**UI:** v `AdminCatalogSettings` nová karta **"Auto-pipeline status"** se 3 frontami a posledními 20 zpracovanými.
+
+---
+
+## E) Bonus nástroje (přidám)
+
+1. **OEM Bulk Validator** — zkontroluje všechny OEM v DB proti 7zap a označí mrtvé (`is_obsolete=true`).
+2. **Duplicate OEM Cleaner** — najde duplicity podle normalizovaného OEM (alfanumerické), zobrazí preview a sloučí.
+3. **Catalog Health Dashboard** — % dílů s cenou, % s kategorií, % s fotkou, top-10 nejstarších záznamů bez aktualizace.
+4. **Smart Re-pricing Scheduler** — admin si vybere brand/model/kategorii a naplánuje hromadnou aktualizaci cen na pg_cron (např. "RAM 1500 každou neděli 3:00").
+5. **Cross-source OEM Diff** — porovná OEM seznam mezi Mopar vs 7zap vs J+M, ukáže chybějící.
+
+---
+
+## F) Pořadí prací (paralelně v jednom PR)
+
+1. DB migrace: `scrape_preview_jobs`, `auto_categorize_queue`, `price_fetch_queue`, `compat_match_queue`, trigger `parts_new_after_insert`, pg_cron job pro `auto-pipeline-worker`.
+2. Oprava `epc-generate-batch` auth + UI status polling.
+3. Edge `scrape-7zap-bulk` + `apply-scrape-preview` + `auto-pipeline-worker`.
+4. UI: `Admin7zapScraper.tsx`, `ScrapePreviewTable.tsx`, refaktor Makro/SAG/AK na preview-first.
+5. UI: `AdminCatalogHealth.tsx`, `AdminOemValidator.tsx`, `AdminDuplicateCleaner.tsx`, `AdminRepricingScheduler.tsx`, `AdminOemDiff.tsx`.
+6. Zařadit do sidebar stromu: `Katalog → Import → [Náhled scrapů, 7zap, Makro, SAG, AK, CSV]`, `Katalog → Údržba → [Health, Validator, Duplicates, Repricing, Diff]`.
+
+---
+
+## Vyloučení / pozn.
+- Nepřidávám aftermarket katalogové zdroje (per `mem://constraints/aftermarket-sources-disabled` — jen J+M zůstává jako aftermarket strom, 7zap je OEM).
+- Ceny stále NIKDY z AI (per `mem://constraints/pricing-integrity`) — vernostsevyplaci.cz crawler je jediný zdroj.
+- Backup proběhl v předchozím requestu, není potřeba znovu.
