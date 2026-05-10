@@ -25,6 +25,7 @@ import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
 // Lazy admin moduly (zachované)
 const AdminCatalogUnified = lazy(() => import("@/components/admin/AdminCatalogUnified"));
 const AdminCatalogHub = lazy(() => import("@/components/admin/AdminCatalogHub"));
+const AdminJmOrders = lazy(() => import("@/components/admin/AdminJmOrders"));
 const CatalogImport = lazy(() => import("@/components/admin/CatalogImport"));
 const AICatalogImport = lazy(() => import("@/components/admin/AICatalogImport"));
 const EPCImport = lazy(() => import("@/components/admin/EPCImport"));
