@@ -56,6 +56,39 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
   const [crossRefLoading, setCrossRefLoading] = useState(false);
   const [crossRefLoaded, setCrossRefLoaded] = useState(false);
 
+  // Live price + stock refresh for J+M items
+  const [livePrice, setLivePrice] = useState<{ price_with_vat: number; price_without_vat: number; availability: string } | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  useEffect(() => {
+    if ((part.catalog_source || "").toLowerCase() !== "jm" || !part.oem_number) return;
+    let cancelled = false;
+    (async () => {
+      setLiveLoading(true);
+      try {
+        const { data } = await supabase.functions.invoke("jm-proxy", {
+          body: { action: "priceAndStock", codes: [part.oem_number] },
+        });
+        const item = (data?.data?.items || data?.items || [])[0];
+        if (!cancelled && item) {
+          const pwv = Number(item.price_with_vat ?? item.priceWithVat ?? 0);
+          const pwov = Number(item.price_without_vat ?? item.priceWithoutVat ?? (pwv ? pwv / 1.21 : 0));
+          const stock = Number(item.stock ?? item.qty ?? 0);
+          setLivePrice({
+            price_with_vat: pwv,
+            price_without_vat: Math.round(pwov * 100) / 100,
+            availability: stock > 0 ? "available" : pwv > 0 ? "on_order" : "unavailable",
+          });
+        }
+      } catch (e) {
+        console.warn("[PartDetailModal] live JM price failed", e);
+      } finally {
+        if (!cancelled) setLiveLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [part.catalog_source, part.oem_number]);
+
   const loadCrossRef = async () => {
     setCrossRefLoading(true);
     setCrossRefLoaded(true);
@@ -64,8 +97,12 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
     setCrossRefLoading(false);
   };
 
+  const effPriceWithVat = livePrice?.price_with_vat ?? part.price_with_vat;
+  const effPriceWithoutVat = livePrice?.price_without_vat ?? part.price_without_vat;
+  const effAvailability = livePrice?.availability ?? part.availability;
+
   const discounted = discountPercent > 0 ? {
-    withVat: Math.round(part.price_without_vat * (1 - discountPercent / 100) * 1.21 * 100) / 100,
+    withVat: Math.round(effPriceWithoutVat * (1 - discountPercent / 100) * 1.21 * 100) / 100,
   } : null;
 
   return (
@@ -91,12 +128,16 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
       {/* Price block */}
       <div className="rounded-xl bg-secondary p-4 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Cena s DPH</span>
-          <span className="text-xl font-bold">{part.price_with_vat > 0 ? `${part.price_with_vat.toLocaleString("cs")} Kč` : "Na dotaz"}</span>
+          <span className="text-sm text-muted-foreground flex items-center gap-1.5">
+            Cena s DPH
+            {liveLoading && <Loader2 className="w-3 h-3 animate-spin text-primary" />}
+            {livePrice && !liveLoading && <span className="text-[9px] text-primary uppercase tracking-wide">live</span>}
+          </span>
+          <span className="text-xl font-bold">{effPriceWithVat > 0 ? `${effPriceWithVat.toLocaleString("cs")} Kč` : "Na objednávku"}</span>
         </div>
-        {part.price_without_vat > 0 && (
+        {effPriceWithoutVat > 0 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Cena bez DPH</span><span>{part.price_without_vat.toLocaleString("cs")} Kč</span>
+            <span>Cena bez DPH</span><span>{effPriceWithoutVat.toLocaleString("cs")} Kč</span>
           </div>
         )}
         {discounted && (
@@ -107,7 +148,7 @@ const DetailContent = ({ part, onClose, onPhotoClick, onOrderNew, onOrderUsed, o
         )}
       </div>
 
-      <AvailabilityDot availability={part.availability} />
+      <AvailabilityDot availability={effAvailability} />
 
       {/* Supersession info */}
       {part.superseded_by && (
