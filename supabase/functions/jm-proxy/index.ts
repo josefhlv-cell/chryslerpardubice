@@ -1796,16 +1796,16 @@ Deno.serve(async (req) => {
             totalRaw += r.rawCount;
             for (const it of r.items) {
               if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
-              const key = `${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
+              const seedCategory = seedCategoryByCode.get(normalizeOemCode(r.code)) || 'Ostatní';
+              const key = `${normalizeOemCode(seedCategory)}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
               if (seen.has(key)) continue;
               seen.add(key);
-              const seedCategory = seedCategoryByCode.get(normalizeOemCode(r.code)) || 'Ostatní';
               collected.push({
                 ...it,
                 related_oem_number: it.related_oem_number || r.code,
                 category: seedCategory,
                 // @ts-ignore — extra field consumed by frontend
-                tecdoc_section: { id: normalizeOemCode(seedCategory).length, label: seedCategory },
+                tecdoc_section: { id: seedCategory, label: seedCategory },
               });
             }
           }
