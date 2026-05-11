@@ -25,22 +25,22 @@ export type CategoryGroup = {
 const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const CATEGORY_RULES: Array<{ id: string; label: string; match: RegExp }> = [
-  { id: "brakes", label: "Brzdové zařízení", match: /brzd|abs|trmen|kotouc|destick|destic|buben|celist|valec/ },
-  { id: "filters", label: "Filtry", match: /filtr/ },
-  { id: "maintenance", label: "Údržba", match: /sterac|udrz|servis|ostriko/ },
-  { id: "engine", label: "Motor", match: /motor|zapal|svick|rozvod|tesnen|hlava|pist|ojnic|klik|vack|ventil|olejova pumpa|sani|turbo|egr/ },
-  { id: "cooling", label: "Chlazení", match: /chlad|vodni cerpad|termostat|radiator|expanz|ventilator chlad|intercooler/ },
-  { id: "axle", label: "Nápravy a odpružení", match: /odpru|tlumic|pruzin|ramen|silentblok|stabiliz|lozisk|naboj|kulov|cep|doraz|pomocny ram/ },
-  { id: "steering", label: "Řízení", match: /rizen|hreben|servo|posilovac|tyce rizeni|manzeta rizeni/ },
-  { id: "drivetrain", label: "Převodovka a pohon", match: /prevod|spojk|poloos|hnaci hridel|kardan|diferencial|setrvacnik|synchron/ },
-  { id: "electrical", label: "Elektroinstalace", match: /elektr|alternator|starter|bater|rele|pojist|snimac|senzor|spinac|konektor|regulator|magneticky/ },
-  { id: "body", label: "Karoserie", match: /karoser|zrcatk|naraznik|kapot|blatnik|dver|sklo|mrizka|zamek|klika|vzpera/ },
-  { id: "hvac", label: "Klimatizace a topení", match: /klimat|ac |kompresor|kondenz|topen|vyparnik|susic|expanzni ventil klima/ },
-  { id: "fuel", label: "Palivový systém", match: /paliv|vstrik|tryska|cerpadlo paliv|lista/ },
+  { id: "body", label: "Karosérie", match: /karoser|zrcatk|naraznik|kapot|blatnik|dver|sklo|mrizka|zamek|klika|vzpera|svetl|osvet|mlhov|smerov|zarovka|spz/ },
+  { id: "engine", label: "Motor", match: /motor|rozvod|tesnen|hlava|pist|ojnic|klik|vack|ventil|olejova pumpa|sani|turbo|egr|olejova van|motorov olej|olejovy filtr/ },
+  { id: "drivetrain", label: "Přenos síly", match: /prevod|spojk|poloos|hnaci hridel|kardan|diferencial|setrvacnik|synchron|atf|prevodovy olej/ },
+  { id: "filters", label: "Filtr", match: /filtr/ },
+  { id: "windows", label: "Okna / čištění čelního skla", match: /sterac|ostriko|sklo|celni sklo|gumicka/ },
+  { id: "fuel", label: "Příprava paliva", match: /paliv|vstrik|tryska|cerpadlo paliv|lista|vysokotlake/ },
+  { id: "suspension", label: "Zavěšení", match: /odpru|tlumic|pruzin|ramen|silentblok|stabiliz|lozisk|naboj|kulov|cep|doraz|pomocny ram/ },
+  { id: "brakes", label: "Brzdy", match: /brzd|abs|trmen|kotouc|destick|destic|buben|celist|valec|posilovac brzd/ },
   { id: "exhaust", label: "Výfukový systém", match: /vyfuk|katalyz|lambda|dpf|tlumic vyf/ },
-  { id: "lighting", label: "Osvětlení", match: /svetl|osvet|mlhov|smerov|zarovka|spz/ },
-  { id: "safety", label: "Bezpečnostní systém", match: /bezpec|airbag|pas|srs/ },
-  { id: "fluids", label: "Kapaliny a oleje", match: /olej|kapalin|adblue|def/ },
+  { id: "cooling_hvac", label: "Chlazení / Klimatizace", match: /chlad|vodni cerpad|termostat|radiator|expanz|ventilator chlad|intercooler|klimat|ac |kompresor|kondenz|topen|vyparnik|susic|expanzni ventil klima/ },
+  { id: "steering", label: "Řízení", match: /rizen|hreben|servo|posilovac|tyce rizeni|manzeta rizeni/ },
+  { id: "interior", label: "Vnitřní vybavení", match: /interier|sedad|palub|airbag|pas|volant|bezpec/ },
+  { id: "electrical", label: "Elektroinstalace", match: /elektr|alternator|starter|bater|rele|pojist|snimac|senzor|spinac|konektor|regulator|magneticky/ },
+  { id: "ignition", label: "Zapalování / žhavicí zařízení", match: /zapal|svick|zhavic|cevka/ },
+  { id: "accessories", label: "Příslušenství", match: /prislusen|univerz|sroub|matice|spojovac|adblue|def|aditiv/ },
+  { id: "service", label: "Servis", match: /servis|udrz|kapalin/ },
 ];
 
 function parentForSection(label: string): { id: string; label: string } {
