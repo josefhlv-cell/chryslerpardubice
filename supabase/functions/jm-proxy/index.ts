@@ -252,11 +252,133 @@ async function writeScanProgress(adminClient: any, key: string, payload: Record<
   } catch (_) { /* non-blocking */ }
 }
 
-// ---------- K-type resolver (vehicle_engine_mappings → nextis_vehicles fallback) ----------
+// ---------- K-type resolver (vehicle_engine_mappings → nextis_vehicles → public J+M selector) ----------
+type KTypeSource = 'mapping_vin' | 'mapping_config' | 'nextis_external_id' | 'jm_eshop' | 'none';
+
+const JM_PUBLIC_MANUFACTURER_IDS: Record<string, number> = {
+  chrysler: 20,
+  dodge: 29,
+  ram: 3689,
+  lancia: 64,
+};
+
+function normRoute(s: string): string {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function normLoose(s: string): string {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9.]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function htmlDecode(s: string): string {
+  return String(s || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+}
+
+async function jmPublicPostApi(path: string, params: Record<string, string | number | boolean>): Promise<string> {
+  const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString();
+  const res = await fetch(`https://eshop.jmautodily.cz/ajax-api/${path}?${qs}`, {
+    method: 'POST',
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Content-Type': 'application/json; charset=utf-8',
+      'X-Requested-With': 'XMLHttpRequest',
+      Accept: 'application/json, text/javascript, */*; q=0.01',
+      Referer: 'https://eshop.jmautodily.cz/cs',
+    },
+    body: '',
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!res.ok) throw new Error(`J+M public selector ${res.status}`);
+  const text = await res.text();
+  const parsed = JSON.parse(text);
+  return typeof parsed === 'string' ? parsed : String(parsed || '');
+}
+
+function parseSelectOptions(html: string, selectId: string): Array<{ id: number; label: string; route: string; meta: string }> {
+  const reSelect = new RegExp(`<select[^>]+id=["']${selectId}["'][\\s\\S]*?<\\/select>`, 'i');
+  const block = html.match(reSelect)?.[0] || '';
+  const out: Array<{ id: number; label: string; route: string; meta: string }> = [];
+  const re = /<option\s+([^>]*?)>([\s\S]*?)<\/option>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    const attrs = m[1] || '';
+    const id = Number(attrs.match(/value=["']([^"']+)/i)?.[1] || 0);
+    if (!id || id < 0) continue;
+    out.push({
+      id,
+      route: htmlDecode(attrs.match(/data-flex-route-name=["']([^"']*)/i)?.[1] || ''),
+      meta: htmlDecode(attrs.match(/data-flex-additional-text=["']([^"']*)/i)?.[1] || ''),
+      label: htmlDecode((m[2] || '').replace(/<[^>]+>/g, '').trim()),
+    });
+  }
+  return out;
+}
+
+async function resolveKTypeFromJmPublicSelector(adminClient: any, hint: { brand: string; model: string; engine: string; year?: number }): Promise<{ k_type: number; source: KTypeSource } | null> {
+  const brandKey = normLoose(hint.brand).replace(/\s+/g, '');
+  const manufacturerID = JM_PUBLIC_MANUFACTURER_IDS[brandKey];
+  if (!manufacturerID || !hint.model || !hint.engine) return null;
+  const cacheKey = `jm_public_ktype:${hint.brand}|${hint.model}|${hint.engine}|${hint.year || ''}`.toLowerCase();
+  try {
+    const { data: cached } = await adminClient.from('api_cache').select('data, created_at, ttl_seconds')
+      .eq('cache_type', 'jm_public_ktype').eq('cache_key', cacheKey).maybeSingle();
+    if (cached && Date.now() - new Date(cached.created_at).getTime() < (cached.ttl_seconds ?? 2592000) * 1000) {
+      const k = Number((cached.data as any)?.k_type || 0);
+      if (k > 0) return { k_type: k, source: 'jm_eshop' };
+    }
+  } catch (_) { /* noop */ }
+
+  const htmlModels = await jmPublicPostApi('tecdoc/get-select-vehicle-wizard-steps', { manufacturerID, modelID: -1, engineID: -1 });
+  const modelNeedle = normLoose(hint.model).replace(/\b(grand|town|country|and)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const models = parseSelectOptions(htmlModels, 'ModelSelector')
+    .map((m) => {
+      const label = normLoose(m.label);
+      const route = normRoute(m.route);
+      let score = 0;
+      for (const token of modelNeedle.split(' ').filter((t) => t.length > 1)) if (label.includes(token) || route.includes(token)) score += 20;
+      if (normLoose(hint.model).includes('town') && label.includes('voyager')) score += 25;
+      if (hint.year && m.meta) {
+        const years = [...m.meta.matchAll(/(\d{4})/g)].map((x) => Number(x[1]));
+        if (years.length && hint.year >= (years[0] || 0) && (!years[1] || hint.year <= years[1])) score += 15;
+      }
+      return { ...m, score };
+    })
+    .filter((m) => m.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const model = models[0];
+  if (!model) return null;
+
+  const htmlEngines = await jmPublicPostApi('tecdoc/get-select-vehicle-wizard-steps', { manufacturerID, modelID: model.id, engineID: -1 });
+  const engineNeedle = normLoose(hint.engine).replace(/\b(v6|v8|hemi|srt|crd|td|tdi|hybrid)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const displacement = hint.engine.match(/\d+[.,]\d+/)?.[0]?.replace(',', '.');
+  const engines = parseSelectOptions(htmlEngines, 'EngineSelector')
+    .map((e) => {
+      const hay = normLoose(`${e.label} ${e.route} ${e.meta}`);
+      let score = 0;
+      if (displacement && hay.includes(displacement)) score += 60;
+      for (const token of engineNeedle.split(' ').filter((t) => t.length > 1)) if (hay.includes(token)) score += 12;
+      if (/hemi/i.test(hint.engine) && /hemi/i.test(`${e.label} ${e.meta}`)) score += 25;
+      if (/crd|diesel/i.test(hint.engine) && /crd|diesel/i.test(`${e.label} ${e.meta}`)) score += 25;
+      return { ...e, score };
+    })
+    .filter((e) => e.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const engine = engines[0];
+  if (!engine) return null;
+  try {
+    await adminClient.from('api_cache').upsert({
+      cache_type: 'jm_public_ktype', cache_key: cacheKey,
+      data: { k_type: engine.id, model_id: model.id, model: model.label, engine: engine.label, route_model: model.route, route_engine: engine.route },
+      ttl_seconds: 60 * 60 * 24 * 30, created_at: new Date().toISOString(),
+    }, { onConflict: 'cache_type,cache_key' });
+  } catch (_) { /* noop */ }
+  return { k_type: engine.id, source: 'jm_eshop' };
+}
+
 async function resolveKType(
   adminClient: any,
   hint: { brand?: string; model?: string; engine?: string; year?: number; vin?: string; nextisVehicleId?: string },
-): Promise<{ k_type: number; source: 'mapping_vin' | 'mapping_config' | 'nextis_external_id' | 'none'; mappingId?: string }> {
+): Promise<{ k_type: number; source: KTypeSource; mappingId?: string }> {
   const brand = (hint.brand || '').trim();
   const model = (hint.model || '').trim();
   const engine = (hint.engine || '').trim();
@@ -345,6 +467,14 @@ async function resolveKType(
       const ext = String(match?.external_id || '').trim();
       if (/^\d+$/.test(ext)) return { k_type: Number(ext), source: 'nextis_external_id' };
     } catch (_) { /* noop */ }
+  }
+  if (brand && model && engine) {
+    try {
+      const jm = await resolveKTypeFromJmPublicSelector(adminClient, { brand, model, engine, year });
+      if (jm?.k_type) return jm;
+    } catch (e) {
+      console.warn('[resolveKType] J+M public selector failed:', (e as Error).message);
+    }
   }
   return { k_type: 0, source: 'none' };
 }
