@@ -2206,13 +2206,17 @@ Deno.serve(async (req) => {
             .eq('cache_key', cacheKey)
             .maybeSingle();
           if (cached) {
+            const cachedData = (cached.data as any) || {};
+            const cachedItems = Array.isArray(cachedData.items) ? cachedData.items : [];
+            const cachedFlow = String(cachedData.debug?.flow || '');
+            const poisonedEmptyFallback = resolvedEngineID > 0 && cachedFlow === 'oemFallback' && cachedItems.length === 0;
             const ageMs = Date.now() - new Date(cached.created_at as string).getTime();
-            if (ageMs < (cached.ttl_seconds ?? 3600) * 1000) {
-              result = { ...(cached.data as any), fromCache: true };
+            if (!poisonedEmptyFallback && ageMs < (cached.ttl_seconds ?? 3600) * 1000) {
+              result = { ...cachedData, fromCache: true };
               break;
             }
-            if (payload.cacheOnly === true || String(payload.cacheOnly || '').toLowerCase() === 'true') {
-              result = { ...(cached.data as any), fromCache: true, staleCache: true };
+            if (!poisonedEmptyFallback && (payload.cacheOnly === true || String(payload.cacheOnly || '').toLowerCase() === 'true')) {
+              result = { ...cachedData, fromCache: true, staleCache: true };
               break;
             }
           }
@@ -2383,6 +2387,24 @@ Deno.serve(async (req) => {
               sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
               sectionsHit: 0, totalRawHits: 0, durationMs, partial: true,
             });
+            result = {
+              items: [],
+              engineID: resolvedEngineID,
+              sectionsScanned: TECDOC_SECTIONS.length,
+              sectionsHit: 0,
+              totalRawHits: 0,
+              source: 'engineID-quota-blocked',
+              warning: 'J+M/Nextis denní limit je vyčerpaný; katalog nebyl přepsán prázdným fallbackem.',
+              debug: {
+                flow: 'engineIdQuotaBlocked',
+                k_type: resolvedEngineID,
+                k_type_source: kTypeSource,
+                k_type_mapping_id: kTypeMappingId,
+                durationMs,
+                failedSections,
+              },
+            };
+            break;
           } else {
           const out = {
             items: enriched,
