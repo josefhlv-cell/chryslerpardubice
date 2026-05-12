@@ -57,6 +57,7 @@ const AdminServiceHistory = lazy(() => import("@/components/admin/AdminServiceHi
 const AdminReviews = lazy(() => import("@/components/admin/AdminReviews"));
 
 const AdminVehicleOffers = lazy(() => import("@/components/admin/AdminVehicleOffers"));
+const AdminVehicleListings = lazy(() => import("@/components/admin/AdminVehicleListings"));
 const AdminFaultReports = lazy(() => import("@/components/admin/AdminFaultReports"));
 
 const AdminEmployees = lazy(() => import("@/components/admin/AdminEmployees"));
@@ -251,6 +252,7 @@ const Admin = () => {
     },
     {
       key: "vehicles", label: "Vozy", icon: Car, children: [
+        { key: "vehicles-listings", label: "Nabídka vozů", icon: Car },
         ...(isEnabled("vehicle_offers") ? [
           { key: "vehicles-inquiries", label: "Poptávky" },
           { key: "vehicles-offers", label: "Výkup / Dovoz", icon: ArrowDownUp },
@@ -437,6 +439,7 @@ const Admin = () => {
             ))}
           </div>
         );
+      case "vehicles-listings": return <Suspense fallback={<Loader />}><AdminVehicleListings /></Suspense>;
       case "vehicles-offers": return <Suspense fallback={<Loader />}><AdminVehicleOffers /></Suspense>;
       case "vehicles-faults": return <Suspense fallback={<Loader />}><AdminFaultReports /></Suspense>;
 
