@@ -418,16 +418,9 @@ function parseListingMarkdown(md: string): VehicleRecord[] {
       else if (plainMatch) price = Number(plainMatch[1].replace(/[\s\u00a0]/g, ""));
       if (!price || isNaN(price)) price = 0;
 
-      // Images: first img from card alt; we add 0..6 by convention since Chrysler stores by index.
+      // Only first/primary image — user explicitly wants no full gallery
       const imgs: string[] = [];
       if (firstImg) imgs.push(firstImg);
-      // try to derive base from firstImg, e.g. .../vehicles/{uuid}/0.jpg
-      const baseMatch = firstImg.match(/^(https?:\/\/[^?]+\/vehicles\/[0-9a-f-]{36}\/)\d+\.(jpg|jpeg|png|webp)/i);
-      if (baseMatch) {
-        const base = baseMatch[1];
-        const ext = baseMatch[2];
-        for (let i = 1; i <= 6; i++) imgs.push(`${base}${i}.${ext}`);
-      }
 
       out.push({
         external_id: uuid,
