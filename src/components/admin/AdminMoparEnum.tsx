@@ -103,6 +103,13 @@ const AdminMoparEnum = () => {
   };
 
   const activeRun = runs.find(r => r.status === 'running');
+  const queuedRuns = runs.filter(r => r.status === 'queued' || r.status === 'pending');
+  const completedRuns = runs.filter(r => r.status === 'completed');
+  const failedRuns = runs.filter(r => r.status === 'failed');
+  const totalQueries = runs.reduce((sum, r) => sum + (r.processed || 0), 0);
+  const totalFound = runs.reduce((sum, r) => sum + (r.found || 0), 0);
+  const totalErrors = runs.reduce((sum, r) => sum + (r.errors || 0), 0);
+  const lastError = runs.find(r => r.last_error)?.last_error;
 
   return (
     <div className="space-y-6">
@@ -114,6 +121,43 @@ const AdminMoparEnum = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Stav přehled */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="rounded-md border border-border p-2 text-center">
+              <div className="text-xs text-muted-foreground">Ve frontě</div>
+              <div className="text-lg font-bold">{queuedRuns.length}</div>
+            </div>
+            <div className="rounded-md border border-primary/40 bg-primary/5 p-2 text-center">
+              <div className="text-xs text-muted-foreground">Běží</div>
+              <div className="text-lg font-bold flex items-center justify-center gap-1">
+                {activeRun && <Loader2 className="h-4 w-4 animate-spin" />}
+                {activeRun ? 1 : 0}
+              </div>
+            </div>
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-2 text-center">
+              <div className="text-xs text-muted-foreground">Dokončeno</div>
+              <div className="text-lg font-bold text-emerald-500">{completedRuns.length}</div>
+            </div>
+            <div className="rounded-md border border-border p-2 text-center">
+              <div className="text-xs text-muted-foreground">Dotazů celkem</div>
+              <div className="text-lg font-bold">{totalQueries.toLocaleString('cs-CZ')}</div>
+            </div>
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-center">
+              <div className="text-xs text-muted-foreground">Chyb / Failed</div>
+              <div className="text-lg font-bold text-destructive">{totalErrors} / {failedRuns.length}</div>
+            </div>
+          </div>
+
+          {lastError && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-xs flex gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold text-destructive mb-1">Poslední chyba</div>
+                <div className="font-mono break-all">{lastError}</div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-muted/40 border border-border rounded-md p-3 text-sm space-y-1">
             <p>🔍 Hledá nové Mopar OEM v <b>numerických sousedech</b> existujících dílů (např. 68229000 → testuje 68228995..68229005).</p>
             <p>📦 Nálezy se ukládají do staging tabulky — <b>nic se neimportuje automaticky</b> do katalogu.</p>
