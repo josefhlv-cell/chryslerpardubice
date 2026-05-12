@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import {
-  RefreshCw, Shield, ShoppingCart, Wrench, Car, Users, CheckCircle, XCircle,
+  RefreshCw, Shield, ShieldCheck, ShoppingCart, Wrench, Car, Users, CheckCircle, XCircle,
   Bell, History, AlertTriangle, ArrowDownUp, ClipboardList, BarChart3,
   UserCog, Calendar, BookOpen, Star, TrendingUp, Settings2, Database,
   LayoutDashboard, Package, Activity, FileText, ScanLine, Smartphone,
@@ -46,6 +46,7 @@ const AdminMoparEnum = lazy(() => import("@/components/admin/AdminMoparEnum"));
 const AdminPriceManagement = lazy(() => import("@/components/admin/AdminPriceManagement"));
 const AdminEPCDiagrams = lazy(() => import("@/components/admin/AdminEPCDiagrams"));
 const AdminCatalogSettings = lazy(() => import("@/components/admin/AdminCatalogSettings"));
+const AdminCatalogJmAudit = lazy(() => import("@/components/admin/AdminCatalogJmAudit"));
 
 const AdminServiceOrders = lazy(() => import("@/components/admin/AdminServiceOrders"));
 const AdminServiceScheduler = lazy(() => import("@/components/admin/AdminServiceScheduler"));
@@ -226,6 +227,7 @@ const Admin = () => {
         { key: "catalog-engine-id", label: "Engine ID / K-type", icon: Database },
         { key: "catalog-settings", label: "J+M sync & nastavení", icon: Settings2 },
         { key: "catalog-health", label: "Zdraví katalogu", icon: Activity },
+        { key: "catalog-jm-audit", label: "Audit J+M 1:1", icon: ShieldCheck },
         { key: "catalog-repair", label: "Diagnostika & opravy" },
         { key: "catalog-import", label: "Import OEM/CSV" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
@@ -338,6 +340,7 @@ const Admin = () => {
       case "catalog-import": return <Suspense fallback={<Loader />}><div className="space-y-4"><AICatalogImport /><CatalogImport /></div></Suspense>;
       case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
       case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
+      case "catalog-jm-audit": return <Suspense fallback={<Loader />}><AdminCatalogJmAudit /></Suspense>;
       case "catalog-pipeline": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminAutoPipeline /><AdminCompatMatcher /></div></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
       case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminMoparEnum /><AdminPriceManagement /></div></Suspense>;
