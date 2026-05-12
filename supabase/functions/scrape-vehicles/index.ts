@@ -30,6 +30,12 @@ type VehicleRecord = {
   ev_no: string | null;
   images: string[];
   listing_url: string;
+  // enriched from detail page
+  engine?: string | null;
+  power?: string | null;
+  transmission?: string | null;
+  color?: string | null;
+  description?: string | null;
 };
 
 type JobStatus = {
@@ -220,9 +226,32 @@ async function runVehicleSync(
     const vehicles = parseListingMarkdown(markdown);
     console.log(`Parsed ${vehicles.length} vehicles from listing`);
 
+    // Enrich with detail-page data (engine, power, transmission, color, description)
     await upsertJobStatus(supabase, jobId, {
-      status: "running", phase: "saving", progress: 80,
-      message: vehicles.length ? `Nalezeno ${vehicles.length} vozů, ukládám…` : "Žádné vozy k uložení.",
+      status: "running", phase: "extracting", progress: 65,
+      message: `Stahuji detaily ${vehicles.length} vozů z chrysler.cz…`,
+      vehicles: vehicles.length, started_at: startedAt, user_id: userId, trigger: isCron ? "cron" : "manual",
+    });
+
+    const CONCURRENCY = 3;
+    let detailIdx = 0;
+    async function worker() {
+      while (detailIdx < vehicles.length) {
+        const i = detailIdx++;
+        const v = vehicles[i];
+        try {
+          const detail = await fetchVehicleDetail(firecrawlApiKey, v.listing_url);
+          Object.assign(v, detail);
+        } catch (e) {
+          console.warn(`Detail fetch failed for ${v.listing_url}:`, e);
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+
+    await upsertJobStatus(supabase, jobId, {
+      status: "running", phase: "saving", progress: 85,
+      message: vehicles.length ? `Detaily načteny, ukládám ${vehicles.length} vozů…` : "Žádné vozy k uložení.",
       vehicles: vehicles.length, started_at: startedAt, user_id: userId, trigger: isCron ? "cron" : "manual",
     });
 
@@ -249,8 +278,13 @@ async function runVehicleSync(
       const payload: Record<string, unknown> = {
         brand: v.brand, model: v.model, year: v.year, price: v.price,
         mileage: v.mileage, fuel: v.fuel, vin: v.vin,
-        description: v.title, // use title as short description; full text not on listing
-        images: v.images, listing_url: v.listing_url,
+        engine: v.engine ?? null,
+        power: v.power ?? null,
+        transmission: v.transmission ?? null,
+        color: v.color ?? null,
+        description: v.description || v.title,
+        images: v.images.slice(0, 1), // keep only the first/primary photo
+        listing_url: v.listing_url,
         is_active: true, updated_at: new Date().toISOString(),
       };
 
@@ -384,16 +418,9 @@ function parseListingMarkdown(md: string): VehicleRecord[] {
       else if (plainMatch) price = Number(plainMatch[1].replace(/[\s\u00a0]/g, ""));
       if (!price || isNaN(price)) price = 0;
 
-      // Images: first img from card alt; we add 0..6 by convention since Chrysler stores by index.
+      // Only first/primary image — user explicitly wants no full gallery
       const imgs: string[] = [];
       if (firstImg) imgs.push(firstImg);
-      // try to derive base from firstImg, e.g. .../vehicles/{uuid}/0.jpg
-      const baseMatch = firstImg.match(/^(https?:\/\/[^?]+\/vehicles\/[0-9a-f-]{36}\/)\d+\.(jpg|jpeg|png|webp)/i);
-      if (baseMatch) {
-        const base = baseMatch[1];
-        const ext = baseMatch[2];
-        for (let i = 1; i <= 6; i++) imgs.push(`${base}${i}.${ext}`);
-      }
 
       out.push({
         external_id: uuid,
@@ -451,6 +478,42 @@ async function firecrawlRequest(apiKey: string, body: Record<string, unknown>) {
     throw new Error(message);
   }
   return data;
+}
+
+// ---------- Detail-page enrichment ----------
+async function fetchVehicleDetail(apiKey: string, url: string): Promise<{
+  engine: string | null; power: string | null; transmission: string | null;
+  color: string | null; description: string | null;
+}> {
+  const out = { engine: null as string | null, power: null as string | null,
+    transmission: null as string | null, color: null as string | null,
+    description: null as string | null };
+  try {
+    const data = await firecrawlRequest(apiKey, {
+      url, formats: ["markdown"], onlyMainContent: true, timeout: 60000, waitFor: 4000,
+    });
+    const md: string = (data?.data as any)?.markdown || (data as any)?.markdown || "";
+    if (!md) return out;
+    const lines = md.split(/\r?\n/);
+    const grab = (re: RegExp): string | null => {
+      for (const l of lines) {
+        const m = l.match(re);
+        if (m && m[1]) return m[1].trim().replace(/^[:\-–\s]+/, "").replace(/\s+/g, " ");
+      }
+      return null;
+    };
+    out.engine = grab(/(?:^|\|\s*)Motor\s*[:|\s]\s*([^\n|]+)/i) ||
+      grab(/Objem(?:\s*motoru)?\s*[:|\s]\s*([^\n|]+)/i);
+    out.power = grab(/V[ýy]kon\s*[:|\s]\s*([^\n|]+)/i);
+    out.transmission = grab(/P[řr]evodovka\s*[:|\s]\s*([^\n|]+)/i);
+    out.color = grab(/Barva\s*[:|\s]\s*([^\n|]+)/i);
+    // Description: take a long paragraph that mentions vůz/výbava/automobil
+    const paras = md.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 80 && /vůz|výbav|auto|nabíz/i.test(p));
+    if (paras.length) out.description = paras.slice(0, 2).join("\n\n");
+  } catch (e) {
+    console.warn("fetchVehicleDetail failed:", e);
+  }
+  return out;
 }
 
 function json(data: unknown, status = 200) {
