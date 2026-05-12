@@ -103,6 +103,13 @@ const AdminMoparEnum = () => {
   };
 
   const activeRun = runs.find(r => r.status === 'running');
+  const queuedRuns = runs.filter(r => r.status === 'queued' || r.status === 'pending');
+  const completedRuns = runs.filter(r => r.status === 'completed');
+  const failedRuns = runs.filter(r => r.status === 'failed');
+  const totalQueries = runs.reduce((sum, r) => sum + (r.processed || 0), 0);
+  const totalFound = runs.reduce((sum, r) => sum + (r.found || 0), 0);
+  const totalErrors = runs.reduce((sum, r) => sum + (r.errors || 0), 0);
+  const lastError = runs.find(r => r.last_error)?.last_error;
 
   return (
     <div className="space-y-6">
