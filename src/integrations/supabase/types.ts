@@ -1754,6 +1754,99 @@ export type Database = {
           },
         ]
       }
+      mopar_enum_runs: {
+        Row: {
+          batch_id: string
+          errors: number
+          finished_at: string | null
+          found: number
+          id: string
+          last_error: string | null
+          mode: string
+          not_found: number
+          processed: number
+          started_at: string
+          status: string
+          total_candidates: number
+        }
+        Insert: {
+          batch_id: string
+          errors?: number
+          finished_at?: string | null
+          found?: number
+          id?: string
+          last_error?: string | null
+          mode?: string
+          not_found?: number
+          processed?: number
+          started_at?: string
+          status?: string
+          total_candidates?: number
+        }
+        Update: {
+          batch_id?: string
+          errors?: number
+          finished_at?: string | null
+          found?: number
+          id?: string
+          last_error?: string | null
+          mode?: string
+          not_found?: number
+          processed?: number
+          started_at?: string
+          status?: string
+          total_candidates?: number
+        }
+        Relationships: []
+      }
+      mopar_price_staging: {
+        Row: {
+          catalog_name: string | null
+          enum_batch: string | null
+          exists_in_parts_new: boolean | null
+          found_at: string
+          id: string
+          imported_at: string | null
+          notes: string | null
+          oem_number: string
+          price_with_vat: number | null
+          price_without_vat: number | null
+          reviewed_at: string | null
+          search_variant: string | null
+          status: string
+        }
+        Insert: {
+          catalog_name?: string | null
+          enum_batch?: string | null
+          exists_in_parts_new?: boolean | null
+          found_at?: string
+          id?: string
+          imported_at?: string | null
+          notes?: string | null
+          oem_number: string
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          reviewed_at?: string | null
+          search_variant?: string | null
+          status?: string
+        }
+        Update: {
+          catalog_name?: string | null
+          enum_batch?: string | null
+          exists_in_parts_new?: boolean | null
+          found_at?: string
+          id?: string
+          imported_at?: string | null
+          notes?: string | null
+          oem_number?: string
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          reviewed_at?: string | null
+          search_variant?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       new_part_orders: {
         Row: {
           admin_note: string | null
