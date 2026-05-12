@@ -59,6 +59,36 @@ export default function AdminVehicleListings() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+
+  const missingFields = (v: Vehicle): string[] => {
+    const m: string[] = [];
+    if (!v.engine) m.push("motor");
+    if (!v.power) m.push("výkon");
+    if (!v.transmission) m.push("převodovka");
+    if (!v.color) m.push("barva");
+    if (!v.fuel) m.push("palivo");
+    if (!v.description || v.description.length < 30) m.push("popis");
+    if (!v.images || v.images.length === 0) m.push("foto");
+    if (!v.vin) m.push("VIN");
+    if (!v.listing_url) m.push("zdroj");
+    return m;
+  };
+
+  const refreshOne = async (v: Vehicle) => {
+    setRefreshingId(v.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-vehicles", { body: { refreshOne: v.id } });
+      if (error || !(data as any)?.success) throw new Error(error?.message || (data as any)?.error || "Refresh selhal");
+      toast({ title: "Vůz aktualizován", description: `Doplněna pole: ${((data as any).fields || []).join(", ")}` });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Chyba", description: e?.message, variant: "destructive" });
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);
@@ -149,8 +179,9 @@ export default function AdminVehicleListings() {
   const stats = {
     active: vehicles.filter((v) => v.is_active).length,
     inactive: vehicles.filter((v) => !v.is_active).length,
-    incomplete: vehicles.filter((v) => v.is_active && (!v.engine || !v.transmission || !v.color)).length,
+    incomplete: vehicles.filter((v) => v.is_active && missingFields(v).length > 0).length,
   };
+
 
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
