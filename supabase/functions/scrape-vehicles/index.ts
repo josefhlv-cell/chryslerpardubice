@@ -480,6 +480,42 @@ async function firecrawlRequest(apiKey: string, body: Record<string, unknown>) {
   return data;
 }
 
+// ---------- Detail-page enrichment ----------
+async function fetchVehicleDetail(apiKey: string, url: string): Promise<{
+  engine: string | null; power: string | null; transmission: string | null;
+  color: string | null; description: string | null;
+}> {
+  const out = { engine: null as string | null, power: null as string | null,
+    transmission: null as string | null, color: null as string | null,
+    description: null as string | null };
+  try {
+    const data = await firecrawlRequest(apiKey, {
+      url, formats: ["markdown"], onlyMainContent: true, timeout: 60000, waitFor: 4000,
+    });
+    const md: string = (data?.data as any)?.markdown || (data as any)?.markdown || "";
+    if (!md) return out;
+    const lines = md.split(/\r?\n/);
+    const grab = (re: RegExp): string | null => {
+      for (const l of lines) {
+        const m = l.match(re);
+        if (m && m[1]) return m[1].trim().replace(/^[:\-–\s]+/, "").replace(/\s+/g, " ");
+      }
+      return null;
+    };
+    out.engine = grab(/(?:^|\|\s*)Motor\s*[:|\s]\s*([^\n|]+)/i) ||
+      grab(/Objem(?:\s*motoru)?\s*[:|\s]\s*([^\n|]+)/i);
+    out.power = grab(/V[ýy]kon\s*[:|\s]\s*([^\n|]+)/i);
+    out.transmission = grab(/P[řr]evodovka\s*[:|\s]\s*([^\n|]+)/i);
+    out.color = grab(/Barva\s*[:|\s]\s*([^\n|]+)/i);
+    // Description: take a long paragraph that mentions vůz/výbava/automobil
+    const paras = md.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 80 && /vůz|výbav|auto|nabíz/i.test(p));
+    if (paras.length) out.description = paras.slice(0, 2).join("\n\n");
+  } catch (e) {
+    console.warn("fetchVehicleDetail failed:", e);
+  }
+  return out;
+}
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status, headers: { ...corsHeaders, "Content-Type": "application/json" },
