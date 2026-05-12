@@ -278,8 +278,13 @@ async function runVehicleSync(
       const payload: Record<string, unknown> = {
         brand: v.brand, model: v.model, year: v.year, price: v.price,
         mileage: v.mileage, fuel: v.fuel, vin: v.vin,
-        description: v.title, // use title as short description; full text not on listing
-        images: v.images, listing_url: v.listing_url,
+        engine: v.engine ?? null,
+        power: v.power ?? null,
+        transmission: v.transmission ?? null,
+        color: v.color ?? null,
+        description: v.description || v.title,
+        images: v.images.slice(0, 1), // keep only the first/primary photo
+        listing_url: v.listing_url,
         is_active: true, updated_at: new Date().toISOString(),
       };
 
