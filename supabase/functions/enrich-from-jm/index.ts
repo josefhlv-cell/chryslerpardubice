@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
   const url = new URL(req.url);
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "100"), 500);
+  // Smaller batches → respect Nextis quota across multiple runs.
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
   const onlyMissingImage = url.searchParams.get("scope") !== "all";
 
   // Fetch parts that need enrichment (missing image OR description).

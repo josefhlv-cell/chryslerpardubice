@@ -94,6 +94,28 @@ Deno.serve(async (req) => {
       return json({ success: true, jobId: body.jobId.trim(), ...status });
     }
 
+    // Refresh single vehicle from chrysler.cz (per-row "Re-fetch detail")
+    if (typeof body?.refreshOne === "string" && body.refreshOne.trim()) {
+      const fcKey = Deno.env.get("FIRECRAWL_API_KEY");
+      if (!fcKey) return json({ success: false, error: "Firecrawl není nakonfigurován." }, 500);
+      const { data: row } = await adminClient.from("vehicles").select("id, listing_url").eq("id", body.refreshOne.trim()).maybeSingle();
+      if (!row?.listing_url) return json({ success: false, error: "Vůz nemá listing_url" }, 400);
+      try {
+        const detail = await fetchVehicleDetail(fcKey, row.listing_url);
+        const upd: Record<string, unknown> = { updated_at: new Date().toISOString() };
+        for (const k of ["engine","power","transmission","color","description","images","fuel","mileage","price","year","vin"] as const) {
+          if ((detail as any)[k] !== undefined && (detail as any)[k] !== null && (detail as any)[k] !== "") {
+            upd[k] = k === "images" ? ((detail as any).images || []).slice(0, 1) : (detail as any)[k];
+          }
+        }
+        await adminClient.from("vehicles").update(upd).eq("id", row.id);
+        return json({ success: true, refreshed: row.id, fields: Object.keys(upd) });
+      } catch (e) {
+        return json({ success: false, error: String((e as Error)?.message || e) }, 500);
+      }
+    }
+
+
     // Don't allow two manual runs in parallel for same user
     if (!isCron && userId) {
       const existing = await getRunningJob(adminClient, userId);

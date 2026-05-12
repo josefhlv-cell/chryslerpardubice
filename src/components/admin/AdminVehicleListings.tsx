@@ -59,6 +59,36 @@ export default function AdminVehicleListings() {
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+
+  const missingFields = (v: Vehicle): string[] => {
+    const m: string[] = [];
+    if (!v.engine) m.push("motor");
+    if (!v.power) m.push("výkon");
+    if (!v.transmission) m.push("převodovka");
+    if (!v.color) m.push("barva");
+    if (!v.fuel) m.push("palivo");
+    if (!v.description || v.description.length < 30) m.push("popis");
+    if (!v.images || v.images.length === 0) m.push("foto");
+    if (!v.vin) m.push("VIN");
+    if (!v.listing_url) m.push("zdroj");
+    return m;
+  };
+
+  const refreshOne = async (v: Vehicle) => {
+    setRefreshingId(v.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("scrape-vehicles", { body: { refreshOne: v.id } });
+      if (error || !(data as any)?.success) throw new Error(error?.message || (data as any)?.error || "Refresh selhal");
+      toast({ title: "Vůz aktualizován", description: `Doplněna pole: ${((data as any).fields || []).join(", ")}` });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Chyba", description: e?.message, variant: "destructive" });
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
 
   const load = async () => {
     setLoading(true);
@@ -149,8 +179,9 @@ export default function AdminVehicleListings() {
   const stats = {
     active: vehicles.filter((v) => v.is_active).length,
     inactive: vehicles.filter((v) => !v.is_active).length,
-    incomplete: vehicles.filter((v) => v.is_active && (!v.engine || !v.transmission || !v.color)).length,
+    incomplete: vehicles.filter((v) => v.is_active && missingFields(v).length > 0).length,
   };
+
 
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
@@ -215,7 +246,8 @@ export default function AdminVehicleListings() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((v) => {
             const img = v.images?.[0];
-            const incomplete = !v.engine || !v.transmission || !v.color;
+            const miss = missingFields(v);
+            const incomplete = miss.length > 0;
             return (
               <Card key={v.id} className={!v.is_active ? "opacity-60" : ""}>
                 <CardContent className="p-3 space-y-2">
@@ -234,13 +266,24 @@ export default function AdminVehicleListings() {
                     <span className="font-bold text-primary">{fmtPrice(Number(v.price))}</span>
                     <div className="flex gap-1">
                       {!v.is_active && <Badge variant="outline">Skryto</Badge>}
-                      {incomplete && v.is_active && <Badge variant="outline" className="border-warning/50 text-warning">Neúplné</Badge>}
+                      {incomplete && v.is_active && (
+                        <Badge variant="outline" className="border-warning/50 text-warning" title={miss.join(", ")}>
+                          Chybí: {miss.length}
+                        </Badge>
+                      )}
                     </div>
                   </div>
+                  {incomplete && (
+                    <p className="text-[10px] text-warning truncate" title={miss.join(", ")}>Chybí: {miss.join(", ")}</p>
+                  )}
                   <p className="text-[11px] text-muted-foreground truncate">VIN: {v.vin || "—"}</p>
                   <div className="grid grid-cols-2 gap-1 pt-1">
                     <Button size="sm" variant="outline" onClick={() => setEdit(v)} className="gap-1">
                       <Pencil className="w-3.5 h-3.5" /> Upravit
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => refreshOne(v)} disabled={refreshingId === v.id || !v.listing_url} className="gap-1">
+                      {refreshingId === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      Re-fetch
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => toggleActive(v)} className="gap-1">
                       {v.is_active ? <><EyeOff className="w-3.5 h-3.5" />Skrýt</> : <><Eye className="w-3.5 h-3.5" />Publikovat</>}
@@ -250,7 +293,7 @@ export default function AdminVehicleListings() {
                         <a href={v.listing_url} target="_blank" rel="noreferrer"><ExternalLink className="w-3.5 h-3.5" /> Zdroj</a>
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => removeVehicle(v)} className="gap-1 text-destructive">
+                    <Button size="sm" variant="ghost" onClick={() => removeVehicle(v)} className="gap-1 text-destructive col-span-2">
                       <Trash2 className="w-3.5 h-3.5" /> Smazat
                     </Button>
                   </div>
