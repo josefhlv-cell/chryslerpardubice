@@ -71,27 +71,25 @@ Deno.serve(async (req) => {
   }
   const ktypeResults: any[] = [];
   for (const v of candidates) {
-    const r = await callFn("nextis-ktype-lookup", {
-      action: "lookup",
-      brand: v.brand,
-      model: v.model,
-      engine: v.engine || "",
-      yearFrom: v.year_from || 0,
-      yearTo: v.year_to || 0,
-    }, 15_000);
-    const top = (r.body?.candidates || [])[0];
-    if (top?.k_type) {
-      // validate + write
-      const val = await callFn("nextis-ktype-lookup", { action: "validate", kType: top.k_type }, 10_000);
-      if (val.body?.valid) {
-        await supabase.from("nextis_vehicles")
-          .update({ external_id: String(top.k_type) })
-          .eq("id", v.id);
-        ktypeResults.push({ vehicle: `${v.brand} ${v.model} ${v.engine}`, k_type: top.k_type, ok: true });
-        continue;
-      }
+    const r = await callFn("jm-proxy", {
+      action: "resolveKType",
+      payload: {
+        brand: v.brand,
+        model: v.model,
+        engine: v.engine || "",
+        year: v.year_from || undefined,
+      },
+    }, 20_000);
+    const data = r.body?.data ?? r.body;
+    const k = Number(data?.k_type || 0);
+    if (k > 0) {
+      await supabase.from("nextis_vehicles")
+        .update({ external_id: String(k) })
+        .eq("id", v.id);
+      ktypeResults.push({ vehicle: `${v.brand} ${v.model} ${v.engine}`, k_type: k, source: data?.source, ok: true });
+    } else {
+      ktypeResults.push({ vehicle: `${v.brand} ${v.model} ${v.engine}`, ok: false, error: data?.error || "no_match" });
     }
-    ktypeResults.push({ vehicle: `${v.brand} ${v.model} ${v.engine}`, ok: false });
   }
   report.ktype_backfill = {
     attempted: candidates.length,
