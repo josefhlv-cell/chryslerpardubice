@@ -246,7 +246,8 @@ export default function AdminVehicleListings() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((v) => {
             const img = v.images?.[0];
-            const incomplete = !v.engine || !v.transmission || !v.color;
+            const miss = missingFields(v);
+            const incomplete = miss.length > 0;
             return (
               <Card key={v.id} className={!v.is_active ? "opacity-60" : ""}>
                 <CardContent className="p-3 space-y-2">
@@ -265,13 +266,24 @@ export default function AdminVehicleListings() {
                     <span className="font-bold text-primary">{fmtPrice(Number(v.price))}</span>
                     <div className="flex gap-1">
                       {!v.is_active && <Badge variant="outline">Skryto</Badge>}
-                      {incomplete && v.is_active && <Badge variant="outline" className="border-warning/50 text-warning">Neúplné</Badge>}
+                      {incomplete && v.is_active && (
+                        <Badge variant="outline" className="border-warning/50 text-warning" title={miss.join(", ")}>
+                          Chybí: {miss.length}
+                        </Badge>
+                      )}
                     </div>
                   </div>
+                  {incomplete && (
+                    <p className="text-[10px] text-warning truncate" title={miss.join(", ")}>Chybí: {miss.join(", ")}</p>
+                  )}
                   <p className="text-[11px] text-muted-foreground truncate">VIN: {v.vin || "—"}</p>
                   <div className="grid grid-cols-2 gap-1 pt-1">
                     <Button size="sm" variant="outline" onClick={() => setEdit(v)} className="gap-1">
                       <Pencil className="w-3.5 h-3.5" /> Upravit
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => refreshOne(v)} disabled={refreshingId === v.id || !v.listing_url} className="gap-1">
+                      {refreshingId === v.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      Re-fetch
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => toggleActive(v)} className="gap-1">
                       {v.is_active ? <><EyeOff className="w-3.5 h-3.5" />Skrýt</> : <><Eye className="w-3.5 h-3.5" />Publikovat</>}
@@ -281,7 +293,7 @@ export default function AdminVehicleListings() {
                         <a href={v.listing_url} target="_blank" rel="noreferrer"><ExternalLink className="w-3.5 h-3.5" /> Zdroj</a>
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => removeVehicle(v)} className="gap-1 text-destructive">
+                    <Button size="sm" variant="ghost" onClick={() => removeVehicle(v)} className="gap-1 text-destructive col-span-2">
                       <Trash2 className="w-3.5 h-3.5" /> Smazat
                     </Button>
                   </div>
