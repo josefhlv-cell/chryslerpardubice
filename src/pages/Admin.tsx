@@ -42,6 +42,7 @@ const AdminCatalogCommandCenter = lazy(() => import("@/components/admin/AdminCat
 const AdminPriceSyncStats = lazy(() => import("@/components/admin/AdminPriceSyncStats"));
 const AdminBulkPriceSyncRuns = lazy(() => import("@/components/admin/AdminBulkPriceSyncRuns"));
 const AdminBulkPriceSync = lazy(() => import("@/components/admin/AdminBulkPriceSync"));
+const AdminMoparEnum = lazy(() => import("@/components/admin/AdminMoparEnum"));
 const AdminPriceManagement = lazy(() => import("@/components/admin/AdminPriceManagement"));
 const AdminEPCDiagrams = lazy(() => import("@/components/admin/AdminEPCDiagrams"));
 const AdminCatalogSettings = lazy(() => import("@/components/admin/AdminCatalogSettings"));
