@@ -59,13 +59,14 @@ Deno.serve(async (req) => {
   // ============ STEP 1: K-type backfill ============
   const { data: missing } = await supabase
     .from("nextis_vehicles")
-    .select("id, brand, model, engine, year_from, year_to")
-    .or("external_id.is.null,external_id.not.like.%0%")
-    .limit(200);
+    .select("id, brand, model, engine, year_from, year_to, external_id")
+    .limit(500);
 
-  // Filter: external_id needs to be NULL OR non-numeric
+  // Filter: external_id is NULL OR non-numeric
   const candidates: any[] = [];
   for (const v of missing ?? []) {
+    const ext = (v.external_id ?? "").toString().trim();
+    if (ext && /^\d+$/.test(ext)) continue;
     candidates.push(v);
     if (candidates.length >= KTYPE_LIMIT) break;
   }
