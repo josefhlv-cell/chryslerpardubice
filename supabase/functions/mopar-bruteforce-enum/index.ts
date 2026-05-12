@@ -46,9 +46,9 @@ Deno.serve(async (req) => {
     if (!isServiceRole) {
       if (!authHeader.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401);
       const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
-      const { data: claims } = await userClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-      if (!claims?.claims?.sub) return json({ error: 'Unauthorized' }, 401);
-      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', claims.claims.sub).eq('role', 'admin').maybeSingle();
+      const { data: userData, error: userErr } = await userClient.auth.getUser();
+      if (userErr || !userData?.user?.id) return json({ error: 'Unauthorized' }, 401);
+      const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', userData.user.id).eq('role', 'admin').maybeSingle();
       if (!roleRow) return json({ error: 'Forbidden: admin only' }, 403);
     }
 
