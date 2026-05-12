@@ -24,13 +24,13 @@ const CANONICAL_CATEGORIES = [
 
 async function setCache(supabase: any, key: string, value: any, ttl = 3600) {
   await supabase.from("api_cache").upsert(
-    { cache_key: key, cache_value: value, ttl_seconds: ttl, created_at: new Date().toISOString() },
-    { onConflict: "cache_key" },
+    { cache_type: "audit", cache_key: key, data: value, ttl_seconds: ttl, created_at: new Date().toISOString() },
+    { onConflict: "cache_type,cache_key" },
   );
 }
 async function getCache(supabase: any, key: string) {
-  const { data } = await supabase.from("api_cache").select("cache_value").eq("cache_key", key).maybeSingle();
-  return data?.cache_value || null;
+  const { data } = await supabase.from("api_cache").select("data").eq("cache_type", "audit").eq("cache_key", key).maybeSingle();
+  return (data as any)?.data || null;
 }
 
 async function runStructuralAudit(supabase: any) {
