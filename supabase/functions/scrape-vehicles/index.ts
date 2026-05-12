@@ -30,6 +30,12 @@ type VehicleRecord = {
   ev_no: string | null;
   images: string[];
   listing_url: string;
+  // enriched from detail page
+  engine?: string | null;
+  power?: string | null;
+  transmission?: string | null;
+  color?: string | null;
+  description?: string | null;
 };
 
 type JobStatus = {
@@ -220,9 +226,32 @@ async function runVehicleSync(
     const vehicles = parseListingMarkdown(markdown);
     console.log(`Parsed ${vehicles.length} vehicles from listing`);
 
+    // Enrich with detail-page data (engine, power, transmission, color, description)
     await upsertJobStatus(supabase, jobId, {
-      status: "running", phase: "saving", progress: 80,
-      message: vehicles.length ? `Nalezeno ${vehicles.length} vozů, ukládám…` : "Žádné vozy k uložení.",
+      status: "running", phase: "extracting", progress: 65,
+      message: `Stahuji detaily ${vehicles.length} vozů z chrysler.cz…`,
+      vehicles: vehicles.length, started_at: startedAt, user_id: userId, trigger: isCron ? "cron" : "manual",
+    });
+
+    const CONCURRENCY = 3;
+    let detailIdx = 0;
+    async function worker() {
+      while (detailIdx < vehicles.length) {
+        const i = detailIdx++;
+        const v = vehicles[i];
+        try {
+          const detail = await fetchVehicleDetail(firecrawlApiKey, v.listing_url);
+          Object.assign(v, detail);
+        } catch (e) {
+          console.warn(`Detail fetch failed for ${v.listing_url}:`, e);
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+
+    await upsertJobStatus(supabase, jobId, {
+      status: "running", phase: "saving", progress: 85,
+      message: vehicles.length ? `Detaily načteny, ukládám ${vehicles.length} vozů…` : "Žádné vozy k uložení.",
       vehicles: vehicles.length, started_at: startedAt, user_id: userId, trigger: isCron ? "cron" : "manual",
     });
 
