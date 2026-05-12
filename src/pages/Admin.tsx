@@ -338,7 +338,7 @@ const Admin = () => {
       case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
       case "catalog-pipeline": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminAutoPipeline /><AdminCompatMatcher /></div></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
-      case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminPriceManagement /></div></Suspense>;
+      case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminMoparEnum /><AdminPriceManagement /></div></Suspense>;
       case "catalog-epc": return <Suspense fallback={<Loader />}><AdminEPCDiagrams /></Suspense>;
       case "catalog-settings": return <Suspense fallback={<Loader />}><AdminCatalogSettings /></Suspense>;
 
