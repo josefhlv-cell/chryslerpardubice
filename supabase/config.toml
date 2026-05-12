@@ -86,3 +86,9 @@ verify_jwt = false
 
 [functions.jm-admin-order]
 verify_jwt = false
+
+[functions.catalog-auto-maintenance]
+verify_jwt = false
+
+[functions.nextis-ktype-lookup]
+verify_jwt = false
