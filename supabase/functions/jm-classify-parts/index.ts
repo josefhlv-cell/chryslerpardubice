@@ -12,7 +12,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 500;
+const DELETE_CHUNK = 80; // PostgREST URL limit safety
+const UPSERT_CHUNK = 200;
 
 const CATEGORY_TO_GLOBAL: Record<string, string> = {
   "Brzdové zařízení": "Brzdový systém",
@@ -131,18 +133,30 @@ Deno.serve(async (req) => {
       .filter((r: any) => !!r.category_id);
 
     let inserted = 0;
+    let errors = 0;
     for (let i = 0; i < inserts.length; i += PAGE_SIZE) {
       const batch = inserts.slice(i, i + PAGE_SIZE);
       const ids = batch.map((r: any) => r.part_id);
-      const { error: deleteError } = await supabase.from("catalog_part_categories").delete().in("part_id", ids);
-      if (deleteError) throw deleteError;
-      const { error } = await supabase.from("catalog_part_categories").upsert(batch, { onConflict: "part_id,category_id" });
-      if (error) throw error;
+      // Chunked DELETE to avoid PostgREST URL/SQL length 500s
+      for (let j = 0; j < ids.length; j += DELETE_CHUNK) {
+        const slice = ids.slice(j, j + DELETE_CHUNK);
+        const { error: delErr } = await supabase
+          .from("catalog_part_categories").delete().in("part_id", slice);
+        if (delErr) { errors++; console.warn("[classify] delete chunk err:", delErr.message); }
+      }
+      // Chunked UPSERT
+      for (let j = 0; j < batch.length; j += UPSERT_CHUNK) {
+        const slice = batch.slice(j, j + UPSERT_CHUNK);
+        const { error } = await supabase
+          .from("catalog_part_categories")
+          .upsert(slice, { onConflict: "part_id,category_id" });
+        if (error) { errors++; console.warn("[classify] upsert chunk err:", error.message); }
+      }
       inserted += batch.length;
       await supabase.from("jm_tree_sync_runs").update({
         vehicles_done: Math.min(parts.length, inserted),
         parts_classified: inserted,
-        current_step: `${inserted}/${parts.length} dílů přemapováno`,
+        current_step: `${inserted}/${parts.length} dílů přemapováno (err:${errors})`,
       }).eq("id", run.id);
     }
 
