@@ -12,7 +12,8 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const CHUNK_SIZE = 12; // vehicles processed per invocation without AI/network waits
+// Smaller chunks = lower memory + safer self-invocation. Resume continues from vehicles_done.
+const CHUNK_SIZE = 6;
 
 const DEFAULT_TREE = [
   { name: "Brzdové zařízení", subcategories: ["Brzdové destičky", "Brzdové kotouče", "Brzdové třmeny", "Brzdové hadice a trubky", "ABS senzory", "Parkovací brzda"] },
