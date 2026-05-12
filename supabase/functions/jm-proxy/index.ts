@@ -1483,6 +1483,17 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'resolveKType': {
+        const { brand, model, engine, year, vin, nextisVehicleId } = (payload || {}) as Record<string, any>;
+        try {
+          const r = await resolveKType(adminClient, { brand, model, engine, year, vin, nextisVehicleId });
+          result = { ok: true, ...r };
+        } catch (e) {
+          result = { ok: false, error: (e as Error).message };
+        }
+        break;
+      }
+
       case 'diagnose': {
         // EMERGENCY DEBUG — prove the API can return ANY part.
         const credCheck = {
