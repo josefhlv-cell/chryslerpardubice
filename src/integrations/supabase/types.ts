@@ -281,6 +281,69 @@ export type Database = {
         }
         Relationships: []
       }
+      catalog_anomalies: {
+        Row: {
+          ai_confidence: number | null
+          ai_reason: string | null
+          anomaly_type: string
+          created_at: string
+          current_value: string | null
+          field: string | null
+          id: string
+          oem_number: string | null
+          part_id: string | null
+          resolved_at: string | null
+          severity: string
+          status: string
+          suggested_value: string | null
+        }
+        Insert: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          anomaly_type: string
+          created_at?: string
+          current_value?: string | null
+          field?: string | null
+          id?: string
+          oem_number?: string | null
+          part_id?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          suggested_value?: string | null
+        }
+        Update: {
+          ai_confidence?: number | null
+          ai_reason?: string | null
+          anomaly_type?: string
+          created_at?: string
+          current_value?: string | null
+          field?: string | null
+          id?: string
+          oem_number?: string | null
+          part_id?: string | null
+          resolved_at?: string | null
+          severity?: string
+          status?: string
+          suggested_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_anomalies_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_anomalies_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "parts_new_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_categories: {
         Row: {
           created_at: string
@@ -582,6 +645,45 @@ export type Database = {
         }
         Relationships: []
       }
+      catalog_fix_log: {
+        Row: {
+          affected_count: number | null
+          after_value: Json | null
+          before_value: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          fix_type: string
+          id: string
+          reason: string | null
+          run_id: string | null
+        }
+        Insert: {
+          affected_count?: number | null
+          after_value?: Json | null
+          before_value?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          fix_type: string
+          id?: string
+          reason?: string | null
+          run_id?: string | null
+        }
+        Update: {
+          affected_count?: number | null
+          after_value?: Json | null
+          before_value?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          fix_type?: string
+          id?: string
+          reason?: string | null
+          run_id?: string | null
+        }
+        Relationships: []
+      }
       catalog_part_categories: {
         Row: {
           category_id: string
@@ -634,6 +736,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      catalog_snapshots: {
+        Row: {
+          category_count: number | null
+          compat_count: number | null
+          created_at: string
+          id: string
+          label: string
+          notes: string | null
+          parts_count: number | null
+          price_missing: number | null
+          stats: Json
+          trigger: string | null
+          vehicles_count: number | null
+        }
+        Insert: {
+          category_count?: number | null
+          compat_count?: number | null
+          created_at?: string
+          id?: string
+          label: string
+          notes?: string | null
+          parts_count?: number | null
+          price_missing?: number | null
+          stats?: Json
+          trigger?: string | null
+          vehicles_count?: number | null
+        }
+        Update: {
+          category_count?: number | null
+          compat_count?: number | null
+          created_at?: string
+          id?: string
+          label?: string
+          notes?: string | null
+          parts_count?: number | null
+          price_missing?: number | null
+          stats?: Json
+          trigger?: string | null
+          vehicles_count?: number | null
+        }
+        Relationships: []
       }
       catalog_vehicle_compatibility: {
         Row: {
