@@ -4112,6 +4112,12 @@ export type Database = {
       }
       can_place_order: { Args: { _user_id: string }; Returns: boolean }
       cleanup_expired_api_cache: { Args: never; Returns: number }
+      dedupe_catalog_compat: {
+        Args: never
+        Returns: {
+          removed: number
+        }[]
+      }
       find_or_create_nextis_vehicle: {
         Args: {
           _brand: string
