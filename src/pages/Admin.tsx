@@ -47,6 +47,7 @@ const AdminPriceManagement = lazy(() => import("@/components/admin/AdminPriceMan
 const AdminEPCDiagrams = lazy(() => import("@/components/admin/AdminEPCDiagrams"));
 const AdminCatalogSettings = lazy(() => import("@/components/admin/AdminCatalogSettings"));
 const AdminCatalogJmAudit = lazy(() => import("@/components/admin/AdminCatalogJmAudit"));
+const AdminCatalogInspector = lazy(() => import("@/components/admin/AdminCatalogInspector"));
 
 const AdminServiceOrders = lazy(() => import("@/components/admin/AdminServiceOrders"));
 const AdminServiceScheduler = lazy(() => import("@/components/admin/AdminServiceScheduler"));
@@ -228,6 +229,7 @@ const Admin = () => {
         { key: "catalog-settings", label: "J+M sync & nastavení", icon: Settings2 },
         { key: "catalog-health", label: "Zdraví katalogu", icon: Activity },
         { key: "catalog-jm-audit", label: "Audit J+M 1:1", icon: ShieldCheck },
+        { key: "catalog-inspector", label: "Inspektor & opravy (AI)", icon: Brain },
         { key: "catalog-repair", label: "Diagnostika & opravy" },
         { key: "catalog-import", label: "Import OEM/CSV" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
@@ -341,6 +343,7 @@ const Admin = () => {
       case "catalog-7zap": return <Suspense fallback={<Loader />}><Admin7zapScraper /></Suspense>;
       case "catalog-health": return <Suspense fallback={<Loader />}><AdminCatalogHealth /></Suspense>;
       case "catalog-jm-audit": return <Suspense fallback={<Loader />}><AdminCatalogJmAudit /></Suspense>;
+      case "catalog-inspector": return <Suspense fallback={<Loader />}><AdminCatalogInspector /></Suspense>;
       case "catalog-pipeline": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminAutoPipeline /><AdminCompatMatcher /></div></Suspense>;
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
       case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminMoparEnum /><AdminPriceManagement /></div></Suspense>;
