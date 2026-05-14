@@ -2208,7 +2208,8 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const cacheKey = `${brand}|${model}|${engine}|eid:${resolvedEngineID}`.toLowerCase();
+        // Unified cache key per vehicle (brand|model|engine) — shared across A0/A/oemFallback flows.
+        const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
@@ -2307,8 +2308,26 @@ Deno.serve(async (req) => {
                 result = out;
                 break;
               }
-              // 0 items returned bez genArtID → spadneme do strategy A níže
-              console.warn('[partsForEngine] full-scan returned 0 items for engineID', resolvedEngineID, '- falling back to multi-section loop');
+              // 0 items returned bez genArtID → krátkodobě zacacheuj prázdný výsledek (zabraňuje opakovanému 175-volání loopu)
+              try {
+                await adminClient.from('api_cache').upsert({
+                  cache_type: 'jm_parts_for_engine',
+                  cache_key: cacheKey,
+                  data: {
+                    items: [],
+                    engineID: resolvedEngineID,
+                    sectionsScanned: 1,
+                    sectionsHit: 0,
+                    totalRawHits: 0,
+                    source: 'engineID-single-call-empty',
+                    sections: [],
+                    debug: { flow: 'engineId-fullscan-empty', k_type: resolvedEngineID, k_type_source: kTypeSource, durationMs: Date.now() - startedAt0 },
+                  },
+                  ttl_seconds: 600,
+                  created_at: new Date().toISOString(),
+                }, { onConflict: 'cache_type,cache_key' });
+              } catch (_) { /* non-blocking */ }
+              console.warn('[partsForEngine] full-scan returned 0 items for engineID', resolvedEngineID, '- cached empty (10min) and falling back to multi-section loop');
             } else {
               console.warn('[partsForEngine] full-scan call failed for engineID', resolvedEngineID, ':', res0.error, '- falling back to multi-section loop');
             }

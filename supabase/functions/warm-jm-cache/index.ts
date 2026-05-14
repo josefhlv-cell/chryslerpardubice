@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ALLOWED = ["Chrysler", "Dodge", "RAM", "Lancia", "Cadillac"];
+const DEFAULT_ALLOWED = ["Chrysler", "Dodge", "RAM", "Lancia", "Cadillac"];
 const PROGRESS_KEY = "warm_jm_progress";
 
 async function getProgress(sb: any) {
@@ -64,9 +64,10 @@ Deno.serve(async (req) => {
   }
 
   if (action === "start" || body.reset) {
+    const brands = Array.isArray(body.brands) && body.brands.length > 0 ? body.brands : DEFAULT_ALLOWED;
     const { count } = await sb.from("nextis_vehicles")
-      .select("*", { count: "exact", head: true }).in("brand", ALLOWED);
-    const fresh = { offset: 0, total: count || 0, ok: 0, fail: 0, done: false, errors: [], started_at: new Date().toISOString() };
+      .select("*", { count: "exact", head: true }).in("brand", brands);
+    const fresh = { offset: 0, total: count || 0, ok: 0, fail: 0, done: false, errors: [], started_at: new Date().toISOString(), brands };
     await setProgress(sb, fresh);
     selfInvoke();
     return new Response(JSON.stringify({ success: true, progress: fresh }),
@@ -77,9 +78,10 @@ Deno.serve(async (req) => {
   const work = async () => {
     const p = await getProgress(sb);
     if (p.done) return;
+    const brands = Array.isArray(p.brands) && p.brands.length > 0 ? p.brands : DEFAULT_ALLOWED;
     const { data: vehicles } = await sb.from("nextis_vehicles")
       .select("id, brand, model, engine, year_from")
-      .in("brand", ALLOWED)
+      .in("brand", brands)
       .order("brand").order("model").order("engine")
       .range(p.offset, p.offset);
     const v = (vehicles || [])[0];
