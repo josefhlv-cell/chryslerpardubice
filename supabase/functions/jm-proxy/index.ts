@@ -2210,6 +2210,8 @@ Deno.serve(async (req) => {
 
         // Unified cache key per vehicle (brand|model|engine) — shared across A0/A/oemFallback flows.
         const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
+        // Hold last known cache (even expired) so we can return stale data when API quota blocks fresh fetch.
+        let lastKnownCache: { data: any; created_at: string } | null = null;
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
@@ -2222,8 +2224,12 @@ Deno.serve(async (req) => {
             const cachedItems = Array.isArray(cachedData.items) ? cachedData.items : [];
             const cachedFlow = String(cachedData.debug?.flow || '');
             const poisonedEmptyFallback = resolvedEngineID > 0 && cachedFlow === 'oemFallback' && cachedItems.length === 0;
+            // Only remember non-empty cached data as "last known good"
+            if (cachedItems.length > 0) {
+              lastKnownCache = { data: cachedData, created_at: cached.created_at as string };
+            }
             const ageMs = Date.now() - new Date(cached.created_at as string).getTime();
-            if (!poisonedEmptyFallback && ageMs < (cached.ttl_seconds ?? 3600) * 1000) {
+            if (!poisonedEmptyFallback && ageMs < (cached.ttl_seconds ?? 604800) * 1000) {
               result = { ...cachedData, fromCache: true };
               break;
             }
