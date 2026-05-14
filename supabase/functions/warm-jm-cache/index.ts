@@ -93,6 +93,11 @@ Deno.serve(async (req) => {
   const work = async () => {
     const p = await getProgress(sb);
     if (p.done) return;
+    // If a previous tick paused due to quota and we're still before the next reset, skip work.
+    if (p.paused_until && new Date(p.paused_until).getTime() > Date.now()) {
+      console.log(`[warm] paused until ${p.paused_until} (quota), skipping tick`);
+      return;
+    }
     const brands = Array.isArray(p.brands) && p.brands.length > 0 ? p.brands : DEFAULT_ALLOWED;
     const { data: vehicles } = await sb.from("nextis_vehicles")
       .select("id, brand, model, engine, year_from")
@@ -105,6 +110,19 @@ Deno.serve(async (req) => {
       return;
     }
     const res = await callPartsForEngine(v);
+    // Quota auto-pause: stop warming until the daily reset, do NOT advance offset (retry same vehicle next round).
+    if (res.quotaExceeded) {
+      const resetIso = nextResetIso();
+      console.warn(`[warm] external API daily quota exhausted at ${v.brand} ${v.model} ${v.engine || ""} — pausing until ${resetIso}`);
+      await setProgress(sb, {
+        ...p,
+        paused_until: resetIso,
+        quota_blocked_at: new Date().toISOString(),
+        last_pause_at_offset: p.offset,
+        errors: [...(p.errors || []), `QUOTA at offset=${p.offset} (${v.brand} ${v.model}): paused until ${resetIso}`].slice(-30),
+      });
+      return; // no self-invoke; nightly cron will resume after reset
+    }
     p.offset += 1;
     if (res.ok) p.ok += 1;
     else {
