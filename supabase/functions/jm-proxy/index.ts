@@ -2423,6 +2423,19 @@ Deno.serve(async (req) => {
               sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
               sectionsHit: 0, totalRawHits: 0, durationMs, partial: true,
             });
+            // STALE-WHILE-ERROR: pokud máme starší úspěšná data v cache, vrátíme je s flagem stale=true
+            if (lastKnownCache && Array.isArray(lastKnownCache.data?.items) && lastKnownCache.data.items.length > 0) {
+              const ageHours = Math.round((Date.now() - new Date(lastKnownCache.created_at).getTime()) / 3600000);
+              result = {
+                ...lastKnownCache.data,
+                fromCache: true,
+                stale: true,
+                staleAgeHours: ageHours,
+                staleSince: lastKnownCache.created_at,
+                warning: `Externí katalog má vyčerpaný denní limit. Zobrazujeme poslední známá data (stáří ~${ageHours} h). Aktualizace po půlnoci.`,
+              };
+              break;
+            }
             result = {
               items: [],
               engineID: resolvedEngineID,
@@ -2430,7 +2443,7 @@ Deno.serve(async (req) => {
               sectionsHit: 0,
               totalRawHits: 0,
               source: 'engineID-quota-blocked',
-              warning: 'J+M/Nextis denní limit je vyčerpaný; katalog nebyl přepsán prázdným fallbackem.',
+              warning: 'Externí katalog má vyčerpaný denní limit; pro tento vůz zatím nejsou v cache žádná data. Zkuste to po půlnoci.',
               debug: {
                 flow: 'engineIdQuotaBlocked',
                 k_type: resolvedEngineID,
