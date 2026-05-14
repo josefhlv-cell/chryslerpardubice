@@ -81,9 +81,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Count target — pouze podporované zdroje
-      // 7zap & ai-epc sources are NOT in vernostsevyplaci.cz Mopar dealer catalog → exclude.
-      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link'];
+      // Count target — všechny zdroje s autentickými Mopar OEM čísly.
+      // 7zap, epc-ai, ai-epc, makro obsahují originální OEM čísla → vernostsevyplaci.cz je umí ocenit.
+      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
