@@ -1,0 +1,16 @@
+REVOKE EXECUTE ON FUNCTION public.has_role(uuid, app_role) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.can_place_order(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_cron_job_status() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.manage_price_sync_cron(text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.release_stuck_price_sync_runs() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.cleanup_expired_api_cache() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.bulk_attach_part_to_vehicles(uuid, text, text, text, integer, integer, boolean) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.dedupe_catalog_compat() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.find_or_create_nextis_vehicle(text, text, text, integer, integer, text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.trg_dispatch_jm_order() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.trg_parts_new_after_insert() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_admins_fault_report() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_admins_vehicle_request() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.notify_customer_fault_status() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.orders_calculate_price() FROM PUBLIC;
