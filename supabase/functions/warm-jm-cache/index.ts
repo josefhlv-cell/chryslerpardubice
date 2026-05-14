@@ -23,7 +23,7 @@ async function setProgress(sb: any, p: any) {
   }, { onConflict: "cache_type,cache_key" });
 }
 
-async function callPartsForEngine(v: any): Promise<{ ok: boolean; count: number; err?: string }> {
+async function callPartsForEngine(v: any): Promise<{ ok: boolean; count: number; err?: string; quotaExceeded?: boolean }> {
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/jm-proxy`, {
       method: "POST",
@@ -36,11 +36,26 @@ async function callPartsForEngine(v: any): Promise<{ ok: boolean; count: number;
     if (!r.ok) return { ok: false, count: 0, err: `HTTP ${r.status}` };
     const j = await r.json();
     if (!j?.success) return { ok: false, count: 0, err: j?.error || "no success" };
-    const items = j.data?.items || [];
-    return { ok: true, count: items.length };
+    const data = j.data || {};
+    const items = data.items || [];
+    // Detect upstream quota exhaustion (Nextis "Maximum calls per day exceeded")
+    const warning = String(data.warning || "");
+    const debug = data.debug || {};
+    const failedSections: any[] = Array.isArray(debug.failedSections) ? debug.failedSections : [];
+    const quotaHit = /denní limit|maximum calls per day|quota/i.test(warning)
+      || debug.flow === "engineIdQuotaBlocked"
+      || failedSections.some((s: any) => /maximum calls per day/i.test(String(s?.error || "")));
+    return { ok: true, count: items.length, quotaExceeded: quotaHit };
   } catch (e) {
     return { ok: false, count: 0, err: String((e as Error).message).slice(0, 200) };
   }
+}
+
+function nextResetIso(): string {
+  // Nextis daily quota resets at 00:00 UTC. Compute next reset.
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 5, 0));
+  return next.toISOString();
 }
 
 function selfInvoke() {
