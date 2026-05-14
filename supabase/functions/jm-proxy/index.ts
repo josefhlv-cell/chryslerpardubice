@@ -2307,7 +2307,7 @@ Deno.serve(async (req) => {
                     cache_type: 'jm_parts_for_engine',
                     cache_key: cacheKey,
                     data: out,
-                    ttl_seconds: 3600,
+                    ttl_seconds: 604800,
                     created_at: new Date().toISOString(),
                   }, { onConflict: 'cache_type,cache_key' });
                 } catch (_) { /* non-blocking */ }
