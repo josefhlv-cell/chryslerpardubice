@@ -2208,7 +2208,8 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const cacheKey = `${brand}|${model}|${engine}|eid:${resolvedEngineID}`.toLowerCase();
+        // Unified cache key per vehicle (brand|model|engine) — shared across A0/A/oemFallback flows.
+        const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
