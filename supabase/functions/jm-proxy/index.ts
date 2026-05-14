@@ -2210,6 +2210,8 @@ Deno.serve(async (req) => {
 
         // Unified cache key per vehicle (brand|model|engine) — shared across A0/A/oemFallback flows.
         const cacheKey = `${brand}|${model}|${engine}`.toLowerCase();
+        // Hold last known cache (even expired) so we can return stale data when API quota blocks fresh fetch.
+        let lastKnownCache: { data: any; created_at: string } | null = null;
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
@@ -2222,8 +2224,12 @@ Deno.serve(async (req) => {
             const cachedItems = Array.isArray(cachedData.items) ? cachedData.items : [];
             const cachedFlow = String(cachedData.debug?.flow || '');
             const poisonedEmptyFallback = resolvedEngineID > 0 && cachedFlow === 'oemFallback' && cachedItems.length === 0;
+            // Only remember non-empty cached data as "last known good"
+            if (cachedItems.length > 0) {
+              lastKnownCache = { data: cachedData, created_at: cached.created_at as string };
+            }
             const ageMs = Date.now() - new Date(cached.created_at as string).getTime();
-            if (!poisonedEmptyFallback && ageMs < (cached.ttl_seconds ?? 3600) * 1000) {
+            if (!poisonedEmptyFallback && ageMs < (cached.ttl_seconds ?? 604800) * 1000) {
               result = { ...cachedData, fromCache: true };
               break;
             }
@@ -2301,7 +2307,7 @@ Deno.serve(async (req) => {
                     cache_type: 'jm_parts_for_engine',
                     cache_key: cacheKey,
                     data: out,
-                    ttl_seconds: 3600,
+                    ttl_seconds: 604800,
                     created_at: new Date().toISOString(),
                   }, { onConflict: 'cache_type,cache_key' });
                 } catch (_) { /* non-blocking */ }
@@ -2417,6 +2423,19 @@ Deno.serve(async (req) => {
               sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
               sectionsHit: 0, totalRawHits: 0, durationMs, partial: true,
             });
+            // STALE-WHILE-ERROR: pokud máme starší úspěšná data v cache, vrátíme je s flagem stale=true
+            if (lastKnownCache && Array.isArray(lastKnownCache.data?.items) && lastKnownCache.data.items.length > 0) {
+              const ageHours = Math.round((Date.now() - new Date(lastKnownCache.created_at).getTime()) / 3600000);
+              result = {
+                ...lastKnownCache.data,
+                fromCache: true,
+                stale: true,
+                staleAgeHours: ageHours,
+                staleSince: lastKnownCache.created_at,
+                warning: `Externí katalog má vyčerpaný denní limit. Zobrazujeme poslední známá data (stáří ~${ageHours} h). Aktualizace po půlnoci.`,
+              };
+              break;
+            }
             result = {
               items: [],
               engineID: resolvedEngineID,
@@ -2424,7 +2443,7 @@ Deno.serve(async (req) => {
               sectionsHit: 0,
               totalRawHits: 0,
               source: 'engineID-quota-blocked',
-              warning: 'J+M/Nextis denní limit je vyčerpaný; katalog nebyl přepsán prázdným fallbackem.',
+              warning: 'Externí katalog má vyčerpaný denní limit; pro tento vůz zatím nejsou v cache žádná data. Zkuste to po půlnoci.',
               debug: {
                 flow: 'engineIdQuotaBlocked',
                 k_type: resolvedEngineID,
@@ -2465,7 +2484,7 @@ Deno.serve(async (req) => {
               cache_type: 'jm_parts_for_engine',
               cache_key: cacheKey,
               data: out,
-              ttl_seconds: 3600,
+              ttl_seconds: 604800,
               created_at: new Date().toISOString(),
             }, { onConflict: 'cache_type,cache_key' });
           } catch (_) { /* non-blocking */ }
@@ -2604,7 +2623,7 @@ Deno.serve(async (req) => {
             cache_type: 'jm_parts_for_engine',
             cache_key: cacheKey,
             data: out,
-            ttl_seconds: 3600,
+            ttl_seconds: 604800,
             created_at: new Date().toISOString(),
           }, { onConflict: 'cache_type,cache_key' });
         } catch (_) { /* non-blocking */ }
