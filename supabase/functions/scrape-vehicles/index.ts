@@ -516,19 +516,36 @@ async function fetchVehicleDetail(apiKey: string, url: string): Promise<{
     });
     const md: string = (data?.data as any)?.markdown || (data as any)?.markdown || "";
     if (!md) return out;
-    const lines = md.split(/\r?\n/);
-    const grab = (re: RegExp): string | null => {
-      for (const l of lines) {
+    const rawLines = md.split(/\r?\n/).map((l) => l.trim());
+    // chrysler.cz detail uses "Label\n\nValue" pattern. Build label→value map by
+    // scanning non-empty lines and pairing each known label with the following non-empty line.
+    const KNOWN = new Set([
+      "motor", "výkon", "vykon", "převodovka", "prevodovka",
+      "barva", "palivo", "tachometr", "vin", "objem", "objem motoru",
+    ]);
+    const map: Record<string, string> = {};
+    const lines = rawLines.filter((l) => l.length > 0);
+    for (let i = 0; i < lines.length - 1; i++) {
+      const key = lines[i].toLowerCase().replace(/[:\-–]+$/, "").trim();
+      if (KNOWN.has(key)) {
+        const val = lines[i + 1].replace(/^[:\-–\s]+/, "").replace(/\s+/g, " ").trim();
+        // Skip if next line is also a known label (means value missing)
+        if (val && !KNOWN.has(val.toLowerCase())) map[key] = val;
+      }
+    }
+    // Fallback: same-line "Label: value" / "Label | value"
+    const sameLine = (re: RegExp): string | null => {
+      for (const l of rawLines) {
         const m = l.match(re);
         if (m && m[1]) return m[1].trim().replace(/^[:\-–\s]+/, "").replace(/\s+/g, " ");
       }
       return null;
     };
-    out.engine = grab(/(?:^|\|\s*)Motor\s*[:|\s]\s*([^\n|]+)/i) ||
-      grab(/Objem(?:\s*motoru)?\s*[:|\s]\s*([^\n|]+)/i);
-    out.power = grab(/V[ýy]kon\s*[:|\s]\s*([^\n|]+)/i);
-    out.transmission = grab(/P[řr]evodovka\s*[:|\s]\s*([^\n|]+)/i);
-    out.color = grab(/Barva\s*[:|\s]\s*([^\n|]+)/i);
+    out.engine = map["motor"] || map["objem"] || map["objem motoru"] ||
+      sameLine(/(?:^|\|\s*)Motor\s*[:|]\s*([^\n|]+)/i);
+    out.power = map["výkon"] || map["vykon"] || sameLine(/V[ýy]kon\s*[:|]\s*([^\n|]+)/i);
+    out.transmission = map["převodovka"] || map["prevodovka"] || sameLine(/P[řr]evodovka\s*[:|]\s*([^\n|]+)/i);
+    out.color = map["barva"] || sameLine(/Barva\s*[:|]\s*([^\n|]+)/i);
     // Description: take a long paragraph that mentions vůz/výbava/automobil
     const paras = md.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 80 && /vůz|výbav|auto|nabíz/i.test(p));
     if (paras.length) out.description = paras.slice(0, 2).join("\n\n");
