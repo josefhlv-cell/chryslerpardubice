@@ -42,7 +42,7 @@ const VehicleDetail = () => {
   const heroImage = vehicle.images?.[0] || "/placeholder.svg";
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-44">
       <PageHeader title={`${vehicle.brand} ${vehicle.model}`} showBack />
 
       {/* Hero image */}
