@@ -1,0 +1,1 @@
+DELETE FROM public.api_cache WHERE cache_type='jm_part_detail';
