@@ -302,12 +302,20 @@ export async function fetchAllPartsForEngine(opts: {
 
       const parentGroup = parentMap.get(parent.id);
       if (parentGroup?.children?.length) {
-        // Pick the longest matching child label whose first significant token appears in OEM name
+        // Match against the most specific (longest) token of each child label that
+        // doesn't share a prefix with the parent label (skip generic words like "brzdove").
+        const parentRoot = norm(parentGroup.label).slice(0, 4);
         const candidates = parentGroup.children
           .map((c) => {
-            const tokens = norm(c.label).split(/\s+/).filter((t) => t.length >= 4);
-            const hit = tokens.find((t) => nameNorm.includes(t));
-            return hit ? { childId: c.id, score: hit.length } : null;
+            const tokens = norm(c.label)
+              .split(/\s+/)
+              .filter((t) => t.length >= 5 && !t.startsWith(parentRoot));
+            // Try each specific token; pick the longest that appears in the OEM name
+            let bestLen = 0;
+            for (const t of tokens) {
+              if (nameNorm.includes(t) && t.length > bestLen) bestLen = t.length;
+            }
+            return bestLen > 0 ? { childId: c.id, score: bestLen } : null;
           })
           .filter(Boolean) as { childId: string; score: number }[];
         if (candidates.length > 0) {
