@@ -358,24 +358,12 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               </div>
         )}
 
-        {step === "category" && isAdmin && debugInfo && (
-          <div className="mb-3 px-3 py-2 rounded-md border border-amber-500/30 bg-amber-500/5 text-[11px] font-mono text-amber-200/90 flex flex-wrap gap-x-3 gap-y-1">
-            <span>🔧 flow: <strong>{debugInfo.flow}</strong></span>
-            {debugInfo.k_type > 0 && <span>K-type: <strong>{debugInfo.k_type}</strong> ({debugInfo.k_type_source})</span>}
-            <span>sekce: <strong>{debugInfo.sectionsHit}/{debugInfo.sectionsScanned}</strong></span>
-            <span>raw hity: <strong>{debugInfo.totalRawHits}</strong></span>
-            {debugInfo.durationMs !== undefined && <span>{(debugInfo.durationMs / 1000).toFixed(1)}s</span>}
-            {debugInfo.timedOutSections?.length > 0 && <span className="text-destructive">timeout: {debugInfo.timedOutSections.length}</span>}
-            {debugInfo.retriedSections?.length > 0 && <span className="text-yellow-400">retry: {debugInfo.retriedSections.length}</span>}
-            {debugInfo.partial && <span className="text-destructive">⚠ částečné</span>}
-          </div>
-        )}
 
         {step === "category" && (
           loading
             ? <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                <p className="text-xs text-muted-foreground">Načítám díly z J+M (TecDoc) …</p>
+                <p className="text-xs text-muted-foreground">Načítání…</p>
               </div>
             : groups.length === 0
               ? <div className="text-center py-16 text-sm text-muted-foreground">
