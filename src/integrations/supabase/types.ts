@@ -855,6 +855,51 @@ export type Database = {
           },
         ]
       }
+      catcar_test: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          image_url: string | null
+          name: string | null
+          oem_number: string
+          position: string | null
+          price_found: boolean | null
+          price_variant: string | null
+          price_with_vat: number | null
+          subcategory: string | null
+          vehicle: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          oem_number: string
+          position?: string | null
+          price_found?: boolean | null
+          price_variant?: string | null
+          price_with_vat?: number | null
+          subcategory?: string | null
+          vehicle?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          name?: string | null
+          oem_number?: string
+          position?: string | null
+          price_found?: boolean | null
+          price_variant?: string | null
+          price_with_vat?: number | null
+          subcategory?: string | null
+          vehicle?: string | null
+        }
+        Relationships: []
+      }
       compatibility_match_queue: {
         Row: {
           created_at: string
