@@ -1,0 +1,1 @@
+ALTER TABLE public.user_vehicles ADD COLUMN transmission text DEFAULT null;

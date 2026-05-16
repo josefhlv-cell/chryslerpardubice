@@ -1,0 +1,132 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Search, Calendar, Fuel, Gauge, ArrowDownUp, ExternalLink } from "lucide-react";
+import { fetchVehicles } from "@/lib/api";
+
+const Vehicles = () => {
+  const navigate = useNavigate();
+  const [brandFilter, setBrandFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const { data: vehicles = [], isLoading } = useQuery({
+    queryKey: ["vehicles", brandFilter, searchQuery],
+    queryFn: () => fetchVehicles({ brand: brandFilter, search: searchQuery }),
+  });
+
+  const marqueeText = "Prověřené vozy se zárukou Chrysler Pardubice — • Důkladná prověrka: Každé vozidlo u nás prochází kompletní výstupní kontrolou všech mechanických skupin. Nic nenecháváme náhodě. — • Bezvadný stav: Poškozené nebo nadměrně opotřebované díly neprodleně opravujeme či měníme za nové. — • Osobní garance: Za kvalitou si stojíme. Na každý vůz vystavujeme kupujícímu garanční list přímo naší společností Chrysler Pardubice. — • GARANCE 100 000 km: Tato garance je platná po dobu 1 roku nebo do nájezdu 100 000 km, podle toho, co nastane dříve.";
+
+  return (
+    <div className="min-h-screen pb-20">
+      <div className="p-4 space-y-4 max-w-lg mx-auto">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-center justify-between mb-3">
+            <h1 className="font-display text-2xl font-bold">Skladové vozy</h1>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => navigate("/vehicle-offer")}>
+              <ArrowDownUp className="w-3.5 h-3.5" />
+              Výkup / Dovoz
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Pečlivě vybrané vozy Chrysler – Dodge připravené k předání
+          </p>
+          <div className="overflow-hidden rounded-md border border-border/40 bg-card/50 py-2 mb-3">
+            <div className="animate-marquee whitespace-nowrap text-xs text-primary/90 font-medium">
+              <span className="mx-8">{marqueeText}</span>
+              <span className="mx-8">{marqueeText}</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Hledat vůz..." className="pl-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            </div>
+            <Select value={brandFilter} onValueChange={setBrandFilter}>
+              <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Vše</SelectItem>
+                <SelectItem value="Chrysler">Chrysler</SelectItem>
+                <SelectItem value="Dodge">Dodge</SelectItem>
+                <SelectItem value="RAM">RAM</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </motion.div>
+
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Načítám vozy...</div>
+        ) : (
+          <div className="space-y-3">
+            {vehicles.map((vehicle, i) => (
+              <motion.div
+                key={vehicle.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.06 }}
+                onClick={() => navigate(`/vehicles/${vehicle.id}`)}
+                className="glass-card overflow-hidden cursor-pointer hover:border-primary/40 transition-all duration-300 group"
+              >
+                <div className="relative h-44 overflow-hidden">
+                  <img
+                    src={vehicle.images?.[0] || "/placeholder.svg"}
+                    alt={`${vehicle.brand} ${vehicle.model}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/images/badge-logo.webp"
+                    alt=""
+                    className="absolute top-2 left-2 w-10 h-auto opacity-80 drop-shadow-lg pointer-events-none"
+                  />
+                </div>
+                <div className="p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-display font-semibold text-sm truncate">{vehicle.brand} {vehicle.model}</h3>
+                      <span className="text-xs text-muted-foreground">{vehicle.condition}</span>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-lg font-display font-bold text-gradient">
+                        {(vehicle.price / 1000).toFixed(0)}tis Kč
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{vehicle.year}</span>
+                    {vehicle.mileage && <span className="flex items-center gap-1"><Gauge className="w-3 h-3" />{(vehicle.mileage / 1000).toFixed(0)}tis km</span>}
+                    {vehicle.fuel && <span className="flex items-center gap-1"><Fuel className="w-3 h-3" />{vehicle.fuel}</span>}
+                    {vehicle.power && <span>{vehicle.power}</span>}
+                    {vehicle.listing_url && (
+                      <a
+                        href={vehicle.listing_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="ml-auto flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <ExternalLink className="w-3 h-3" />chrysler.cz
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {!isLoading && vehicles.length === 0 && (
+          <div className="text-center py-12 text-muted-foreground">
+            <p>Žádné vozy nenalezeny</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Vehicles;

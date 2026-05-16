@@ -1,0 +1,1 @@
+DELETE FROM parts_new WHERE oem_number = '68218951AA';

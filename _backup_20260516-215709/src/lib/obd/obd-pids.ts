@@ -1,0 +1,111 @@
+// OBD-II PID definitions optimized for Chrysler T&C / Pacifica
+
+export type PIDDefinition = {
+  pid: string;
+  name: string;
+  shortName: string;
+  unit: string;
+  min: number;
+  max: number;
+  formula: (bytes: number[]) => number;
+  category: 'engine' | 'vehicle' | 'fuel' | 'emissions' | 'electrical';
+};
+
+export const PIDS: Record<string, PIDDefinition> = {
+  '010C': {
+    pid: '010C',
+    name: 'Engine RPM',
+    shortName: 'RPM',
+    unit: 'rpm',
+    min: 0,
+    max: 8000,
+    formula: (b) => ((b[0] * 256) + b[1]) / 4,
+    category: 'engine',
+  },
+  '010D': {
+    pid: '010D',
+    name: 'Vehicle Speed',
+    shortName: 'SPD',
+    unit: 'km/h',
+    min: 0,
+    max: 255,
+    formula: (b) => b[0],
+    category: 'vehicle',
+  },
+  '0105': {
+    pid: '0105',
+    name: 'Coolant Temperature',
+    shortName: 'CLT',
+    unit: '°C',
+    min: -40,
+    max: 215,
+    formula: (b) => b[0] - 40,
+    category: 'engine',
+  },
+  '0111': {
+    pid: '0111',
+    name: 'Throttle Position',
+    shortName: 'TPS',
+    unit: '%',
+    min: 0,
+    max: 100,
+    formula: (b) => (b[0] * 100) / 255,
+    category: 'engine',
+  },
+  '0142': {
+    pid: '0142',
+    name: 'Battery Voltage',
+    shortName: 'BATT',
+    unit: 'V',
+    min: 0,
+    max: 65.535,
+    formula: (b) => ((b[0] * 256) + b[1]) / 1000,
+    category: 'electrical',
+  },
+  '0146': {
+    pid: '0146',
+    name: 'Ambient Air Temp',
+    shortName: 'AAT',
+    unit: '°C',
+    min: -40,
+    max: 215,
+    formula: (b) => b[0] - 40,
+    category: 'vehicle',
+  },
+  '0151': {
+    pid: '0151',
+    name: 'Fuel Type',
+    shortName: 'FUEL',
+    unit: '',
+    min: 0,
+    max: 23,
+    formula: (b) => b[0],
+    category: 'fuel',
+  },
+};
+
+export const LIVE_PIDS = ['010C', '010D', '0105', '0111', '0142'];
+
+export function parsePIDResponse(pid: string, rawHex: string): number | null {
+  const def = PIDS[pid];
+  if (!def) return null;
+
+  // Strip header (first 3 bytes = 6 hex chars for 7E8 header + service byte + pid byte)
+  const clean = rawHex.replace(/\s/g, '');
+  // Find data bytes after the response header
+  // Response format: HEADER + 41 + PID + DATA
+  const idx41 = clean.indexOf('41');
+  if (idx41 === -1) return null;
+
+  const pidHex = pid.substring(2); // e.g., '0C' from '010C'
+  const dataStart = idx41 + 2 + pidHex.length;
+  const dataHex = clean.substring(dataStart);
+
+  const bytes: number[] = [];
+  for (let i = 0; i < dataHex.length; i += 2) {
+    bytes.push(parseInt(dataHex.substring(i, i + 2), 16));
+  }
+
+  if (bytes.length === 0) return null;
+  return def.formula(bytes);
+}

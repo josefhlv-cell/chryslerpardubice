@@ -1,0 +1,12 @@
+UPDATE public.parts_new SET category = regexp_replace(category, '\s*\([A-Za-z/ ]+\)\s*$', '') WHERE category ~ '\([A-Za-z/ ]+\)$';
+UPDATE public.parts_new SET category='Brzdový systém' WHERE category IN ('Brzdy','Brzdové zařízení');
+UPDATE public.parts_new SET category='Výfuk' WHERE category='Výfukový systém';
+UPDATE public.parts_new SET category='Odpružení' WHERE category IN ('Tlumiče a pružiny','Podvozek','Náprava','Pohon nápravy');
+UPDATE public.parts_new SET category='Náplně a kapaliny' WHERE category IN ('Náplně a maziva','Kapaliny a oleje','Náplně');
+UPDATE public.parts_new SET category='Motor' WHERE category='Rozvody';
+UPDATE public.parts_new SET category='Elektroinstalace' WHERE category IN ('Zapalování','Zapalování / žhavení');
+UPDATE public.parts_new SET category='Převodovka' WHERE category='Spojka';
+UPDATE public.parts_new SET category='Chlazení' WHERE category IN ('Chladící systém','Chladicí systém');
+UPDATE public.parts_new SET category='Klimatizace' WHERE category IN ('Klimatizace/Topení','Topení');
+UPDATE public.parts_new SET category='Pneumatiky a disky' WHERE category IN ('Pneumatiky','Kola a disky');
+UPDATE public.parts_new SET category='Příslušenství a nářadí' WHERE category IN ('Přepravní vybavení','Příslušenství');

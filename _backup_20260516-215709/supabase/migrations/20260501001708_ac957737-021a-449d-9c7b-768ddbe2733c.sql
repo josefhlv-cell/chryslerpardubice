@@ -1,0 +1,1 @@
+UPDATE catalog_categories SET slug = 'brzdove-oblozeni' WHERE slug = 'brzdove-obuk';

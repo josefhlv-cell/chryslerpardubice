@@ -1,0 +1,341 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
+import { Settings, CheckCircle, Save, Activity, Database, Wifi, Clock, RefreshCw, Download } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { jmAdapter } from "@/lib/catalog/adapters/jm";
+
+type CatalogConfig = {
+  id: string;
+  name: string;
+  description: string;
+  flagKey: string; // feature_flags key
+  enabled: boolean;
+  ready: boolean;
+};
+
+const defaultCatalogs: CatalogConfig[] = [
+  { id: "mopar", name: "Mopar EPC", description: "Originální díly Chrysler, Dodge, RAM", flagKey: "catalog", enabled: true, ready: true },
+  { id: "jm", name: "J+M Autodíly (Nextis)", description: "Aftermarket náhrady (Bosch, TRW, MANN…)", flagKey: "catalog_jm", enabled: true, ready: true },
+];
+
+const alternativeFlagKeys = ["catalog_jm"] as const;
+
+type DiagResult = {
+  mopar: { status: string; responseTime: number };
+  sag: { status: string; responseTime: number };
+  autokelly: { status: string; responseTime: number };
+  intercars: { status: string; responseTime: number };
+};
+
+const AdminCatalogSettings = () => {
+  const [catalogs, setCatalogs] = useState<CatalogConfig[]>(defaultCatalogs);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagResult, setDiagResult] = useState<DiagResult | null>(null);
+  const [partsCount, setPartsCount] = useState({ parts_new: 0, parts_catalog: 0, supersessions: 0 });
+  const [jmSyncing, setJmSyncing] = useState(false);
+  const [jmStats, setJmStats] = useState({ vehicles: 0, categories: 0 });
+
+  const loadJmStats = async () => {
+    const [vh, cat] = await Promise.all([
+      supabase.from("nextis_vehicles").select("id", { count: "exact", head: true }),
+      supabase.from("catalog_categories").select("id", { count: "exact", head: true }).eq("source", "jm"),
+    ]);
+    setJmStats({ vehicles: vh.count ?? 0, categories: cat.count ?? 0 });
+  };
+
+  const runJmSync = async () => {
+    setJmSyncing(true);
+    try {
+      const result = await jmAdapter.syncCategories();
+      toast({
+        title: "J+M synchronizace dokončena",
+        description: `Naimportováno ${result.synced} uzlů (přeskočeno ${result.skipped}).`,
+      });
+      await loadJmStats();
+    } catch (err: any) {
+      toast({ title: "Chyba J+M sync", description: err.message, variant: "destructive" });
+    }
+    setJmSyncing(false);
+  };
+
+  useEffect(() => {
+    loadSettings();
+    loadCounts();
+    loadJmStats();
+  }, []);
+
+  // Load catalog enabled states from feature_flags
+  const loadSettings = async () => {
+    const { data, error } = await supabase
+      .from("feature_flags")
+      .select("feature_key, enabled")
+      .in("feature_key", defaultCatalogs.map(c => c.flagKey));
+
+    if (error) {
+      toast({
+        title: "Nepodařilo se načíst nastavení katalogů",
+        description: error.message,
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    if (data) {
+      const flagMap: Record<string, boolean> = {};
+      (data as { feature_key: string; enabled: boolean }[]).forEach(f => {
+        flagMap[f.feature_key] = f.enabled;
+      });
+
+      setCatalogs(prev => prev.map(c => ({
+        ...c,
+        enabled: flagMap[c.flagKey] !== undefined ? flagMap[c.flagKey] : c.enabled,
+      })));
+    }
+    setLoading(false);
+  };
+
+  const loadCounts = async () => {
+    const [pn, pc, ss] = await Promise.all([
+      supabase.from("parts_new").select("id", { count: "exact", head: true }),
+      supabase.from("parts_catalog").select("id", { count: "exact", head: true }),
+      supabase.from("part_supersessions").select("id", { count: "exact", head: true }),
+    ]);
+    setPartsCount({
+      parts_new: pn.count ?? 0,
+      parts_catalog: pc.count ?? 0,
+      supersessions: ss.count ?? 0,
+    });
+  };
+
+  const toggleCatalog = (id: string) => {
+    setCatalogs(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
+    setHasChanges(true);
+  };
+
+  const saveChanges = async () => {
+    try {
+      const flagPayload = catalogs.map((catalog) => ({
+        feature_key: catalog.flagKey,
+        enabled: catalog.enabled,
+        description: catalog.description,
+      }));
+
+      const anyAltEnabled = catalogs.some(
+        (catalog) => alternativeFlagKeys.includes(catalog.flagKey as typeof alternativeFlagKeys[number]) && catalog.enabled
+      );
+
+      const [{ error: flagsError }, { error: alternativesError }] = await Promise.all([
+        supabase
+          .from("feature_flags")
+          .upsert(flagPayload as any, { onConflict: "feature_key" }),
+        supabase
+          .from("feature_flags")
+          .upsert({
+            feature_key: "catalog_alternatives",
+            enabled: anyAltEnabled,
+            description: "Zobrazit režim Náhrady za OEM v katalogu dílů (SAG, AutoKelly)",
+          } as any, { onConflict: "feature_key" }),
+      ]);
+
+      if (flagsError || alternativesError) {
+        throw new Error(flagsError?.message || alternativesError?.message || "Uložení selhalo");
+      }
+
+      await loadSettings();
+      setHasChanges(false);
+      toast({ title: "Nastavení katalogů uloženo" });
+    } catch (err: any) {
+      toast({
+        title: "Nepodařilo se uložit nastavení katalogů",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const runDiagnostics = async () => {
+    setDiagRunning(true);
+    try {
+      const start = Date.now();
+      const { data, error } = await supabase.functions.invoke("catalog-search", {
+        body: { oemCodes: ["68218951AA"], mode: "force" },
+      });
+      const elapsed = Date.now() - start;
+
+      if (error) throw error;
+
+      setDiagResult(data?.diagnostics || {
+        mopar: { status: 'unknown', responseTime: elapsed },
+        sag: { status: 'disabled', responseTime: 0 },
+        autokelly: { status: 'disabled', responseTime: 0 },
+        intercars: { status: 'disabled', responseTime: 0 },
+      });
+      await loadCounts();
+      toast({ title: "Diagnostika dokončena" });
+    } catch (err: any) {
+      toast({ title: "Chyba diagnostiky", description: err.message, variant: "destructive" });
+      setDiagResult({
+        mopar: { status: 'error', responseTime: 0 },
+        sag: { status: 'disabled', responseTime: 0 },
+        autokelly: { status: 'disabled', responseTime: 0 },
+        intercars: { status: 'disabled', responseTime: 0 },
+      });
+    }
+    setDiagRunning(false);
+  };
+
+  const statusBadge = (status: string) => {
+    if (status === 'ok') return <Badge className="bg-green-100 text-green-800 text-[10px]"><CheckCircle className="w-3 h-3 mr-0.5" />OK</Badge>;
+    if (status === 'disabled') return <Badge variant="outline" className="text-[10px]">Vypnuto</Badge>;
+    return <Badge className="bg-red-100 text-red-800 text-[10px]">Chyba</Badge>;
+  };
+
+  if (loading) {
+    return <div className="text-center py-4 text-sm text-muted-foreground">Načítám nastavení...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Settings className="w-4 h-4 text-primary" />
+        <h3 className="font-display font-semibold text-sm">Nastavení katalogů</h3>
+      </div>
+
+      {catalogs.map(c => (
+        <Card key={c.id} className={c.enabled ? "border-primary/40" : ""}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-sm">{c.name}</p>
+                  {c.enabled && <Badge className="bg-green-100 text-green-800 text-[10px]"><CheckCircle className="w-3 h-3 mr-0.5" />Aktivní</Badge>}
+                  {!c.enabled && c.ready && <Badge variant="outline" className="text-[10px]">Připraveno</Badge>}
+                  {!c.enabled && !c.ready && <Badge variant="outline" className="text-[10px] text-muted-foreground">Vyžaduje konfiguraci</Badge>}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{c.description}</p>
+              </div>
+              <Switch checked={c.enabled} onCheckedChange={() => toggleCatalog(c.id)} disabled={!c.ready && !c.enabled} />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+
+      <Button className="w-full" onClick={saveChanges} disabled={!hasChanges}>
+        <Save className="w-4 h-4 mr-2" />
+        Uložit nastavení katalogů
+      </Button>
+
+      {/* J+M Nextis Sync */}
+      <Card className="border-primary/40">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-sm flex items-center gap-1.5">
+                <Download className="w-4 h-4 text-primary" />
+                J+M Autodíly (Nextis) – synchronizace katalogu
+              </h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Stáhne hierarchii Značka → Model → Motor z Nextis API do lokálního stromu katalogu.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold">{jmStats.vehicles}</p>
+              <p className="text-[10px] text-muted-foreground">Vozidla v DB</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold">{jmStats.categories}</p>
+              <p className="text-[10px] text-muted-foreground">Uzly katalogu</p>
+            </div>
+          </div>
+
+          <Button className="w-full" variant="outline" onClick={runJmSync} disabled={jmSyncing}>
+            {jmSyncing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+            {jmSyncing ? "Synchronizuji…" : "Spustit J+M synchronizaci"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Diagnostics */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-sm flex items-center gap-1.5">
+              <Activity className="w-4 h-4 text-primary" />
+              Diagnostika katalogů
+            </h4>
+            <Button size="sm" variant="outline" onClick={runDiagnostics} disabled={diagRunning}>
+              {diagRunning ? <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" /> : <Wifi className="w-3.5 h-3.5 mr-1" />}
+              {diagRunning ? "Testuji..." : "Spustit test"}
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <Database className="w-4 h-4 mx-auto text-primary mb-1" />
+                <p className="text-lg font-bold">{partsCount.parts_new}</p>
+                <p className="text-[10px] text-muted-foreground">Díly (cache)</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <Database className="w-4 h-4 mx-auto text-primary mb-1" />
+                <p className="text-lg font-bold">{partsCount.parts_catalog}</p>
+                <p className="text-[10px] text-muted-foreground">Díly (CSV)</p>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-2 text-center">
+                <RefreshCw className="w-4 h-4 mx-auto text-primary mb-1" />
+                <p className="text-lg font-bold">{partsCount.supersessions}</p>
+                <p className="text-[10px] text-muted-foreground">Náhrady</p>
+              </div>
+            </div>
+
+            {diagResult && (
+              <div className="space-y-1.5 mt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span>Mopar EPC</span>
+                  <div className="flex items-center gap-2">
+                    {statusBadge(diagResult.mopar.status)}
+                    {diagResult.mopar.responseTime > 0 && (
+                      <span className="text-muted-foreground flex items-center gap-0.5">
+                        <Clock className="w-3 h-3" />{diagResult.mopar.responseTime}ms
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span>SAG Connect</span>
+                  {statusBadge(diagResult.sag.status)}
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span>AutoKelly</span>
+                  {statusBadge(diagResult.autokelly?.status || 'disabled')}
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span>InterCars</span>
+                  {statusBadge(diagResult.intercars?.status || 'disabled')}
+                </div>
+              </div>
+            )}
+
+            {!diagResult && (
+              <p className="text-xs text-muted-foreground text-center py-2">
+                Klikněte na "Spustit test" pro ověření katalogů
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default AdminCatalogSettings;

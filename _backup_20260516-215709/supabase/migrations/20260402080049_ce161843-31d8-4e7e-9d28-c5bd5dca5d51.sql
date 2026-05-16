@@ -1,0 +1,1 @@
+ALTER VIEW public.vehicles_public SET (security_invoker = on);

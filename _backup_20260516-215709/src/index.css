@@ -1,0 +1,305 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* BACKUP original: --background: 0 0% 4%; --card: 0 0% 8%; --popover: 0 0% 7%; --secondary: 0 0% 10%; --muted: 0 0% 12%; --input: 0 0% 12%; --border: 0 0% 14%; --sidebar-background: 0 0% 3%; --sidebar-accent: 0 0% 10%; --sidebar-border: 0 0% 12%; */
+    --background: 220 30% 6%;
+    --foreground: 0 0% 95%;
+
+    --card: 220 25% 10%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 220 28% 9%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 32 80% 50%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 220 25% 12%;
+    --secondary-foreground: 0 0% 55%;
+
+    --muted: 220 20% 14%;
+    --muted-foreground: 0 0% 50%;
+
+    --accent: 32 80% 50%;
+    --accent-foreground: 0 0% 4%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 16%;
+    --input: 220 20% 14%;
+    --ring: 32 80% 50%;
+
+    --radius: 0.75rem;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --sidebar-background: 220 32% 5%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 32 80% 50%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 220 25% 12%;
+    --sidebar-accent-foreground: 0 0% 85%;
+    --sidebar-border: 220 20% 14%;
+    --sidebar-ring: 32 80% 50%;
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+  }
+
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 0 0% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 32 80% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 40%;
+    --muted: 0 0% 92%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 32 80% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 88%;
+    --input: 0 0% 90%;
+    --ring: 32 80% 45%;
+    --success: 142 71% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 100%;
+    --sidebar-background: 0 0% 97%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 32 80% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 94%;
+    --sidebar-accent-foreground: 0 0% 30%;
+    --sidebar-border: 0 0% 88%;
+    --sidebar-ring: 32 80% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(0, 0%, 20%);
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  /* ---- Glass morphism cards ---- */
+  .glass-card {
+    @apply bg-card/60 border border-border/20 rounded-xl;
+    box-shadow: 0 1px 3px 0 hsl(0 0% 0% / 0.3), inset 0 1px 0 0 hsl(0 0% 100% / 0.02);
+  }
+
+  .glass-card-elevated {
+    @apply bg-card/80 border border-border/25 rounded-xl;
+    box-shadow: 0 4px 24px -4px hsl(0 0% 0% / 0.5), 0 1px 2px 0 hsl(0 0% 0% / 0.3), inset 0 1px 0 0 hsl(0 0% 100% / 0.03);
+  }
+
+  /* ---- Luxury card with chrome edge ---- */
+  .luxury-card {
+    @apply bg-card/70 border border-border/30 rounded-xl relative overflow-hidden;
+    box-shadow: 0 4px 20px -4px hsl(0 0% 0% / 0.4), inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
+  }
+  .luxury-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(32, 60%, 50% / 0.3), transparent);
+  }
+
+  /* ---- Gradients ---- */
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(32, 70%, 45%), hsl(28, 65%, 35%));
+  }
+
+  .gradient-accent {
+    background: linear-gradient(135deg, hsl(32, 70%, 48%), hsl(24, 65%, 38%));
+  }
+
+  .gradient-bronze {
+    background: linear-gradient(135deg, hsl(32, 55%, 48%), hsl(25, 50%, 35%));
+  }
+
+  .gradient-dark {
+    background: linear-gradient(180deg, hsl(220, 30%, 7%), hsl(220, 30%, 5%));
+  }
+
+  .gradient-card {
+    background: linear-gradient(135deg, hsl(220, 25%, 11%), hsl(220, 25%, 8%));
+  }
+
+  .gradient-chrome {
+    background: linear-gradient(180deg, hsl(220, 15%, 22%), hsl(220, 20%, 12%));
+  }
+
+  .gradient-surface {
+    background: linear-gradient(180deg, hsl(220, 25%, 9%), hsl(220, 28%, 7%));
+  }
+
+  /* ---- Text gradients ---- */
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(32, 70%, 55%), hsl(32, 60%, 70%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-accent {
+    background: linear-gradient(135deg, hsl(32, 70%, 50%), hsl(24, 60%, 55%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-chrome {
+    background: linear-gradient(180deg, hsl(0, 0%, 95%), hsl(0, 0%, 60%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ---- Safe areas ---- */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /* ---- Glow effects ---- */
+  .shimmer {
+    background: linear-gradient(90deg, transparent, hsl(32, 70%, 50% / 0.04), transparent);
+    animation: shimmer 2s infinite;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 15px hsl(32, 70%, 50% / 0.1), 0 0 40px hsl(32, 70%, 50% / 0.03);
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 20px hsl(32, 70%, 50% / 0.15), 0 0 60px hsl(32, 70%, 50% / 0.05);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 15px hsl(142, 71%, 45% / 0.12);
+  }
+
+  /* ---- Focus ring gold ---- */
+  .focus-gold:focus-within {
+    box-shadow: 0 0 0 2px hsl(32, 70%, 50% / 0.3);
+    border-color: hsl(32, 70%, 50% / 0.5);
+  }
+
+  /* ---- Brushed metal texture ---- */
+  .brushed-metal {
+    background: linear-gradient(135deg, hsl(220 25% 12%), hsl(220 25% 10%));
+    background-image: repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 2px,
+      hsl(0 0% 100% / 0.008) 2px,
+      hsl(0 0% 100% / 0.008) 3px
+    );
+  }
+
+  /* ---- Chrome border ---- */
+  .border-chrome {
+    border-color: hsl(0 0% 25%);
+  }
+
+  .border-gold {
+    border-color: hsl(32, 60%, 40% / 0.4);
+  }
+
+  /* ---- Scrollbar hiding ---- */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ---- Animations ---- */
+  .pulse-ring {
+    animation: pulseRing 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .fade-in {
+    animation: fadeIn 0.4s ease-out;
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes pulseRing {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(32, 70%, 50% / 0.2); }
+  50% { box-shadow: 0 0 0 6px hsl(32, 70%, 50% / 0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Print styles for presentation */
+@media print {
+  body { background: white !important; color: black !important; }
+  .no-print, nav, header, [class*="BottomNav"], [class*="TopBar"], [class*="DesktopSidebar"] { display: none !important; }
+  .print-slide {
+    page-break-after: always;
+    break-after: page;
+    min-height: 100vh;
+    background: white !important;
+    color: black !important;
+  }
+  .print-slide:last-child { page-break-after: auto; break-after: auto; }
+  .print-slide img { max-height: 35vh !important; }
+  .print-presentation { background: white !important; }
+  @page { size: A4 portrait; margin: 12mm; }
+}
