@@ -2796,8 +2796,9 @@ Deno.serve(async (req) => {
         // Lazy enrichment: full info (images, OE numbers, technical_parameters)
         // for a single J+M item. Used by the catalog detail panel.
         const code = String(payload.code || payload.oem_number || '').trim();
+        const brand = String(payload.brand || payload.manufacturer || '').trim();
         if (!code) { result = { item: null }; break; }
-        const cacheKey = `detail:${normalizeOemCode(code)}`;
+        const cacheKey = `detail:${normalizeOemCode(brand)}:${normalizeOemCode(code)}`;
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
@@ -2814,14 +2815,23 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* non-blocking */ }
 
-        // Try CodeProduct (item code from supplier) first, then CodeOE (OE number).
-        let direct = await fetchJmForSpecificCode(code, 'CodeProduct').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
+        // Exact product check first: this returns the concrete supplier item instead of a list of alternatives.
+        const exact = await fetchJmExactItem(code, brand).catch(() => null);
+        let direct = { rawCount: exact ? 1 : 0, items: exact ? [exact] : [] as UnifiedPart[] };
+        if (!direct.items.length) {
+          direct = await fetchJmForSpecificCode(code, 'CodeProduct').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
+        }
         if (!direct.items.length) {
           direct = await fetchJmForSpecificCode(code, 'CodeOE').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
         }
-        // Pick best match: exact OEM match wins, otherwise first
+        // Pick best match: exact product code + brand wins, otherwise exact code, otherwise first.
         const norm = normalizeOemCode(code);
-        const best = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm) || direct.items[0] || null;
+        const brandNorm = normalizeOemCode(brand);
+        const base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm && (!brandNorm || normalizeOemCode(it.brand) === brandNorm))
+          || direct.items.find((it) => normalizeOemCode(it.oem_number) === norm)
+          || direct.items[0]
+          || null;
+        const best = base ? await enrichJmItemFromEshop(base, code).catch(() => base) : null;
 
         if (best) {
           try {
