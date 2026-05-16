@@ -197,6 +197,30 @@ export async function fetchAllPartsForEngine(opts: {
   const oemByNumber = new Map<string, any>();
   for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
 
+  // 2b. Vehicle-compat OEM rows (Mopar/7zap originals linked to this nextis_vehicle_id),
+  // independent of J+M crossrefs. These are added as ORIGINÁL rows under matching parent.
+  let vehicleOemRows: any[] = [];
+  if (opts.nextisVehicleId) {
+    const { data: compatRows } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .select("part_id")
+      .eq("nextis_vehicle_id", opts.nextisVehicleId)
+      .eq("is_oem", true)
+      .limit(3000);
+    const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    if (partIds.length > 0) {
+      const { data: rows } = await supabase
+        .from("parts_new_public")
+        .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description")
+        .in("id", partIds);
+      vehicleOemRows = (rows || []).filter((r: any) => {
+        const src = String(r.catalog_source || "").toLowerCase();
+        return ["mopar", "mopar_oem", "7zap", "csv", "epc-link"].includes(src);
+      });
+    }
+    debug.vehicleOemRows = vehicleOemRows.length;
+  }
+
   // 3. Build real two-level catalog: parent category → J+M/TecDoc section.
   const parentMap = new Map<string, CategoryGroup>();
   for (const [id, bucket] of sectionMap) {
