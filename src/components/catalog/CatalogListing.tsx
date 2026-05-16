@@ -1,13 +1,15 @@
 /**
  * CatalogListing — unified OEM-first part list (Mopar + J+M only).
  * Each row shows badge ORIGINÁL (OEM, rank 1) or NÁHRADA (J+M, rank 5).
- * Clicking the row expands to show description + technical_parameters.
+ * Always visible: photo, manufacturer, stock pill, OE preview, TecDoc section.
+ * On expand: lazy fetches full J+M detail (images, all OE numbers, tech params).
  */
-import { useState } from "react";
-import { ShieldCheck, RefreshCw, Package, ShoppingCart, ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ShieldCheck, RefreshCw, Package, ShoppingCart, ChevronDown, Loader2, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
 
 interface Props {
@@ -49,14 +51,76 @@ const TechParams = ({ params }: { params: Record<string, string> }) => {
   );
 };
 
+const StockPill = ({ stock, hasPrice }: { stock?: number | null; hasPrice: boolean }) => {
+  if (stock && stock > 0) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+        {stock} ks skladem
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+      {hasPrice ? "Na objednávku" : "Na dotaz"}
+    </span>
+  );
+};
+
 const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p: CatalogPart) => void; supersededCount?: number }) => {
   const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState<Partial<CatalogPart> | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailLoaded, setDetailLoaded] = useState(false);
+
   const isOem = p.is_oem;
-  const photo = p.image_urls?.[0];
-  const hasDetails =
-    !!p.description ||
-    (p.technical_parameters && Object.keys(p.technical_parameters).length > 0) ||
-    (p.oe_numbers && p.oe_numbers.length > 0);
+  const isJm = p.catalog_source?.toLowerCase() === "jm";
+
+  // Merge what we have with lazily-fetched detail
+  const m = { ...p, ...(detail || {}) } as CatalogPart;
+  const photo = m.image_urls?.[0];
+  const oePreview = (m.oe_numbers || []).slice(0, 3);
+  const hasPrice = !!(m.price_with_vat && m.price_with_vat > 0);
+
+  // Lazy-load full J+M detail on first expand (images, OE numbers, tech params).
+  useEffect(() => {
+    if (!open || detailLoaded || !isJm) return;
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailLoaded(true);
+    (async () => {
+      try {
+        const { data } = await supabase.functions.invoke("jm-proxy", {
+          body: { action: "partDetail", payload: { code: p.oem_number } },
+        });
+        const item = data?.data?.item || data?.item;
+        if (!cancelled && item) {
+          setDetail({
+            image_urls: Array.isArray(item.image_urls) && item.image_urls.length > 0 ? item.image_urls : p.image_urls,
+            oe_numbers: Array.isArray(item.oe_numbers) && item.oe_numbers.length > 0 ? item.oe_numbers : p.oe_numbers,
+            technical_parameters: item.technical_parameters && Object.keys(item.technical_parameters).length > 0
+              ? item.technical_parameters
+              : p.technical_parameters,
+            description: item.description || p.description,
+            stock: typeof item.stock === "number" ? item.stock : p.stock,
+          });
+        }
+      } catch (e) {
+        console.warn("[CatalogListing] partDetail failed", e);
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, detailLoaded, isJm, p.oem_number]);
+
+  const hasExpandableDetail =
+    !!m.description ||
+    (m.technical_parameters && Object.keys(m.technical_parameters).length > 0) ||
+    (m.oe_numbers && m.oe_numbers.length > 0) ||
+    (m.image_urls && m.image_urls.length > 1) ||
+    isJm;
 
   return (
     <div
@@ -70,15 +134,23 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
       )}
 
       <div className="flex gap-3">
-        <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/40 overflow-hidden flex items-center justify-center">
+        <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/40 overflow-hidden flex items-center justify-center border border-border/30">
           {photo ? (
             <img
               src={photo}
-              alt={p.name}
+              alt={m.name}
               className="w-full h-full object-contain"
               loading="lazy"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
+                const img = e.currentTarget as HTMLImageElement;
+                img.style.display = "none";
+                const parent = img.parentElement;
+                if (parent && !parent.querySelector(".photo-fallback")) {
+                  const div = document.createElement("div");
+                  div.className = "photo-fallback flex items-center justify-center w-full h-full";
+                  div.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-muted-foreground/40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>';
+                  parent.appendChild(div);
+                }
               }}
             />
           ) : (
@@ -87,7 +159,8 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
-          <div className="flex items-start gap-2 mb-1 flex-wrap">
+          {/* Top badges: ORIGINÁL/NÁHRADA + manufacturer + stock + TecDoc */}
+          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
             <Badge
               variant={isOem ? "default" : "secondary"}
               className={cn(
@@ -98,26 +171,31 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
               {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
               {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
             </Badge>
-            {!isOem && p.manufacturer && (
+            {m.manufacturer && (
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 h-5 shrink-0 border-amber-500/40 text-amber-600 dark:text-amber-400 font-semibold uppercase tracking-wide"
-                title="Výrobce náhradního dílu"
+                className={cn(
+                  "text-[10px] px-1.5 py-0 h-5 shrink-0 font-semibold uppercase tracking-wide",
+                  isOem
+                    ? "border-primary/30 text-primary"
+                    : "border-amber-500/40 text-amber-600 dark:text-amber-400"
+                )}
+                title="Výrobce"
               >
-                {p.manufacturer}
+                {m.manufacturer}
               </Badge>
             )}
-            {isOem && p.manufacturer && (
-              <span className="text-[10px] text-muted-foreground truncate">{p.manufacturer}</span>
-            )}
-            {p.category && (
-              <span className="text-[10px] text-muted-foreground/70 truncate ml-auto">{p.category}</span>
+            <StockPill stock={m.stock} hasPrice={hasPrice} />
+            {(m.tecdoc_section || m.category) && (
+              <span className="text-[10px] text-muted-foreground/70 truncate ml-auto" title="TecDoc sekce">
+                {m.tecdoc_section || m.category}
+              </span>
             )}
           </div>
 
-          <h3 className="text-sm font-medium leading-snug line-clamp-2">{p.name}</h3>
+          <h3 className="text-sm font-medium leading-snug line-clamp-2">{m.name}</h3>
           <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-            {p.oem_number}
+            {m.oem_number}
             {supersededCount && supersededCount > 0 ? (
               <span className="ml-2 text-[10px] text-muted-foreground/70 font-sans">
                 (nejnovější revize, +{supersededCount} starších)
@@ -125,57 +203,118 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
             ) : null}
           </p>
 
+          {/* OE numbers preview (first 3) — always visible when available */}
+          {oePreview.length > 0 && (
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">OE:</span>
+              {oePreview.map((oe) => (
+                <span key={oe} className="text-[10px] font-mono bg-secondary/60 text-foreground/80 px-1 py-px rounded">
+                  {oe}
+                </span>
+              ))}
+              {(m.oe_numbers?.length || 0) > 3 && (
+                <span className="text-[10px] text-muted-foreground/70">+{(m.oe_numbers!.length - 3)}</span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-end justify-between mt-auto pt-2 gap-2">
             <div>
               <div className={cn("text-sm font-bold", isOem ? "text-primary" : "text-foreground")}>
-                {formatPrice(p.price_with_vat)}
+                {formatPrice(m.price_with_vat)}
               </div>
-              {p.price_without_vat !== null && p.price_without_vat !== undefined && (
+              {m.price_without_vat !== null && m.price_without_vat !== undefined && (
                 <div className="text-[10px] text-muted-foreground">
-                  {formatPrice(p.price_without_vat)} bez DPH
+                  {formatPrice(m.price_without_vat)} bez DPH
                 </div>
               )}
             </div>
-            <Button size="sm" className="h-7 text-xs px-2" onClick={() => onOrder(p)}>
+            <Button size="sm" className="h-7 text-xs px-2" onClick={() => onOrder(m)}>
               <ShoppingCart className="w-3 h-3 mr-1" />
-              {(!p.price_with_vat || p.price_with_vat <= 0) ? "Poptat" : "Objednat"}
+              {hasPrice ? "Objednat" : "Poptat"}
             </Button>
           </div>
         </div>
       </div>
 
-      {hasDetails && (
+      {hasExpandableDetail && (
         <>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors self-start"
           >
-            <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
-            {open ? "Skrýt detaily" : "Zobrazit detaily"}
+            {detailLoading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
+            )}
+            {open ? "Skrýt detaily" : "Zobrazit detaily a parametry"}
           </button>
           {open && (
-            <div className="border-t border-border/30 pt-2">
-              {p.description && (
+            <div className="border-t border-border/30 pt-2 space-y-2">
+              {/* Photo gallery */}
+              {m.image_urls && m.image_urls.length > 1 && (
+                <div className="flex gap-1 overflow-x-auto pb-1">
+                  {m.image_urls.slice(0, 8).map((url, i) => (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener"
+                      className="w-16 h-16 shrink-0 rounded border border-border/30 bg-secondary/40 overflow-hidden flex items-center justify-center hover:border-primary/40 transition-colors"
+                    >
+                      <img src={url} alt={`${m.name} ${i + 1}`} className="w-full h-full object-contain" loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {detailLoading && (
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Načítám plný detail z J+M…
+                </div>
+              )}
+
+              {m.description && (
                 <p className="text-[11px] text-foreground/90 leading-relaxed whitespace-pre-line">
-                  {p.description}
+                  {m.description}
                 </p>
               )}
-              {p.technical_parameters && Object.keys(p.technical_parameters).length > 0 && (
-                <TechParams params={p.technical_parameters} />
-              )}
-              {p.compatible_vehicles && (
-                <p className="text-[10px] text-muted-foreground mt-2">
-                  <span className="font-medium">Kompatibilní:</span> {p.compatible_vehicles}
-                </p>
-              )}
-              {p.oe_numbers && p.oe_numbers.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-border/20">
+
+              {m.technical_parameters && Object.keys(m.technical_parameters).length > 0 && (
+                <div>
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                    OE čísla (originální výrobci)
+                    Technické parametry
+                  </p>
+                  <TechParams params={m.technical_parameters} />
+                </div>
+              )}
+
+              {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Kompatibilní vozidla
+                  </p>
+                  <ul className="text-[11px] text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
+                    {m.compatible_vehicles.slice(0, 20).map((v, i) => (
+                      <li key={i}>• {v}</li>
+                    ))}
+                    {m.compatible_vehicles.length > 20 && (
+                      <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 20} dalších</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {m.oe_numbers && m.oe_numbers.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Všechna OE čísla ({m.oe_numbers.length})
                   </p>
                   <div className="flex flex-wrap gap-1">
-                    {p.oe_numbers.slice(0, 12).map((oe) => (
+                    {m.oe_numbers.map((oe) => (
                       <span
                         key={oe}
                         className="text-[10px] font-mono bg-secondary/60 text-foreground px-1.5 py-0.5 rounded"
@@ -183,13 +322,14 @@ const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p:
                         {oe}
                       </span>
                     ))}
-                    {p.oe_numbers.length > 12 && (
-                      <span className="text-[10px] text-muted-foreground">
-                        +{p.oe_numbers.length - 12} dalších
-                      </span>
-                    )}
                   </div>
                 </div>
+              )}
+
+              {!detailLoading && isJm && !m.description && (!m.technical_parameters || Object.keys(m.technical_parameters).length === 0) && (!m.oe_numbers || m.oe_numbers.length === 0) && (
+                <p className="text-[11px] text-muted-foreground italic">
+                  Dodavatel pro tuto položku neposkytuje další detail.
+                </p>
               )}
             </div>
           )}

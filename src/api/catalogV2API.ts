@@ -52,6 +52,8 @@ export type CatalogPart = {
   compatible_vehicles?: string[] | null;
   related_oem_number?: string | null;
   oe_numbers?: string[] | null;
+  stock?: number | null;
+  tecdoc_section?: string | null;
 };
 
 export type CatalogCategoryNode = {
