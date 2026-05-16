@@ -973,10 +973,49 @@ async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPa
   return items[0];
 }
 
+function isRealImageUrl(url: string): boolean {
+  if (!url) return false;
+  if (/FlexPictureNotFound/i.test(url)) return false;
+  if (/placeholder|no.?image|noimage/i.test(url)) return false;
+  return /^https?:\/\//i.test(url);
+}
+
+async function scrapeEshopProductPageImages(href: string): Promise<string[]> {
+  try {
+    const url = href.startsWith('http') ? href : `https://eshop.jmautodily.cz${href.startsWith('/') ? '' : '/'}${href}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ChryslerCD/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const out = new Set<string>();
+    // gallery <img> and lazy attrs
+    const patterns = [
+      /data-flex-async-image-src=["']([^"']+)["']/gi,
+      /data-zoom-image=["']([^"']+)["']/gi,
+      /data-large=["']([^"']+)["']/gi,
+      /<img[^>]+src=["']([^"']*partsdata\.nextis\.cz[^"']+)["']/gi,
+      /<a[^>]+href=["']([^"']*partsdata\.nextis\.cz[^"']+\.(?:jpg|jpeg|png|webp))["']/gi,
+    ];
+    for (const re of patterns) {
+      for (const m of html.matchAll(re)) {
+        const u = htmlDecode(m[1]);
+        if (isRealImageUrl(u)) out.add(u);
+      }
+    }
+    return [...out];
+  } catch (_) { return []; }
+}
+
 async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): Promise<UnifiedPart> {
   const code = item.oem_number || fallbackCode;
-  const images = new Set<string>(item.image_urls || []);
+  const images = new Set<string>((item.image_urls || []).filter(isRealImageUrl));
   let productId = Number(item.jm_internal_id || 0) || 0;
+  let detailHref = '';
 
   try {
     const whisper = parseJsonStringMaybe(await jmPublicPostApi('search/get-smart-search-whispers-products', {
@@ -985,8 +1024,12 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
       showHistory: false,
     }));
     const html = String(whisper?.WhispererHTMLContent || '');
-    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) images.add(htmlDecode(m[1]));
+    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) {
+      const u = htmlDecode(m[1]);
+      if (isRealImageUrl(u)) images.add(u);
+    }
     const href = html.match(/href=["']([^"']*\/hledani\/[^"']+)["']/i)?.[1] || '';
+    if (href) detailHref = htmlDecode(href);
     const idFromHref = Number(href.match(/\/(\d+)(?:[?#]?)$/)?.[1] || 0);
     if (idFromHref) productId = idFromHref;
   } catch (_) { /* optional eshop enrichment */ }
@@ -1004,7 +1047,16 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
     }));
   }
 
-  if (!productId) return { ...item, image_urls: [...images], image: [...images][0] || item.image };
+  // HTML fallback: if API gave no real photos, scrape the public product page.
+  if (images.size === 0 && detailHref) {
+    const scraped = await scrapeEshopProductPageImages(detailHref);
+    for (const u of scraped) images.add(u);
+  }
+
+  if (!productId) {
+    const arr = [...images];
+    return { ...item, image_urls: arr, image: arr[0] || item.image };
+  }
 
   const [attributesHtml, oeHtml, applicationsHtml, descriptionHtml] = await Promise.all([
     jmPublicPostApi('tecdoc/get-product-detail-attributes', { groupID: productId, tecDocCodePair: code, tecDocBrandID: 0, articleLinkID: productId, manufacturerID: 0, modelID: 0, engineID: 0 }).catch(() => ''),
@@ -1018,10 +1070,11 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
   const compatibleVehicles = parseApplicationsHtml(String(applicationsHtml || ''));
   const description = cleanHtmlText(String(descriptionHtml || ''));
 
+  const arr = [...images];
   return {
     ...item,
-    image: [...images][0] || item.image,
-    image_urls: [...images],
+    image: arr[0] || item.image,
+    image_urls: arr,
     technical_parameters: Object.keys(technicalParameters).length ? technicalParameters : item.technical_parameters,
     oe_numbers: oeNumbers.length ? oeNumbers : item.oe_numbers,
     compatible_vehicles: compatibleVehicles.length ? compatibleVehicles : item.compatible_vehicles,
