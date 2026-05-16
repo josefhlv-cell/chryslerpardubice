@@ -1,13 +1,14 @@
 /**
- * CatalogListing — unified OEM-first part list (Mopar + J+M only).
- * Each row shows badge ORIGINÁL (OEM, rank 1) or NÁHRADA (J+M, rank 5).
- * Always visible: photo, manufacturer, stock pill, OE preview, TecDoc section.
- * On expand: lazy fetches full J+M detail (images, all OE numbers, tech params).
+ * CatalogListing — unified OEM-first part list.
+ * Card shows: photo, manufacturer, name, OE preview, stock, price.
+ * Detail (gallery, all OE, technical parameters, description) opens in a modal
+ * with client-side cache, 3s timeout, and background prefetch of top items.
  */
-import { useEffect, useState } from "react";
-import { ShieldCheck, RefreshCw, Package, ShoppingCart, ChevronDown, Loader2, ImageOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ShieldCheck, RefreshCw, Package, ShoppingCart, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
@@ -23,6 +24,55 @@ const formatPrice = (n: number | null | undefined) =>
   n === null || n === undefined || n <= 0
     ? "Na dotaz"
     : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
+
+// --------- Detail cache + fetch (with 3s timeout) ---------
+type DetailPatch = Partial<Pick<CatalogPart, "image_urls" | "oe_numbers" | "technical_parameters" | "description" | "stock">>;
+const detailCache = new Map<string, DetailPatch | "unavailable">();
+const inflight = new Map<string, Promise<DetailPatch | "unavailable">>();
+
+function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | "unavailable"> {
+  if (!code) return Promise.resolve("unavailable");
+  const cached = detailCache.get(code);
+  if (cached !== undefined) return Promise.resolve(cached);
+  const ongoing = inflight.get(code);
+  if (ongoing) return ongoing;
+
+  const run = (async (): Promise<DetailPatch | "unavailable"> => {
+    try {
+      const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), timeoutMs));
+      const call = supabase.functions.invoke("jm-proxy", {
+        body: { action: "partDetail", payload: { code } },
+      });
+      const res = await Promise.race([call, timeout]);
+      if (res === "timeout") {
+        // Do not cache timeouts — give user a chance to retry on next open.
+        return "unavailable";
+      }
+      const { data } = res as any;
+      const item = data?.data?.item || data?.item;
+      if (!item) {
+        detailCache.set(code, "unavailable");
+        return "unavailable";
+      }
+      const patch: DetailPatch = {
+        image_urls: Array.isArray(item.image_urls) && item.image_urls.length > 0 ? item.image_urls : undefined,
+        oe_numbers: Array.isArray(item.oe_numbers) && item.oe_numbers.length > 0 ? item.oe_numbers : undefined,
+        technical_parameters:
+          item.technical_parameters && Object.keys(item.technical_parameters).length > 0 ? item.technical_parameters : undefined,
+        description: item.description || undefined,
+        stock: typeof item.stock === "number" ? item.stock : undefined,
+      };
+      detailCache.set(code, patch);
+      return patch;
+    } catch {
+      return "unavailable";
+    } finally {
+      inflight.delete(code);
+    }
+  })();
+  inflight.set(code, run);
+  return run;
+}
 
 const SkeletonCard = () => (
   <div className="flex gap-3 p-3 rounded-xl border border-border/30 bg-card animate-pulse">
@@ -68,285 +118,310 @@ const StockPill = ({ stock, hasPrice }: { stock?: number | null; hasPrice: boole
   );
 };
 
-const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p: CatalogPart) => void; supersededCount?: number }) => {
-  const [open, setOpen] = useState(false);
-  const [detail, setDetail] = useState<Partial<CatalogPart> | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailLoaded, setDetailLoaded] = useState(false);
+// --------- Detail modal ---------
+const PartDetailModal = ({
+  open,
+  onOpenChange,
+  part,
+  onOrder,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  part: CatalogPart;
+  onOrder: (p: CatalogPart) => void;
+}) => {
+  const isJm = part.catalog_source?.toLowerCase() === "jm";
+  const [patch, setPatch] = useState<DetailPatch | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
 
-  const isOem = p.is_oem;
-  const isJm = p.catalog_source?.toLowerCase() === "jm";
-
-  // Merge what we have with lazily-fetched detail
-  const m = { ...p, ...(detail || {}) } as CatalogPart;
-  const photo = m.image_urls?.[0];
-  const oePreview = (m.oe_numbers || []).slice(0, 3);
-  const hasPrice = !!(m.price_with_vat && m.price_with_vat > 0);
-
-  // Lazy-load full J+M detail on first expand (images, OE numbers, tech params).
   useEffect(() => {
-    if (!open || detailLoaded || !isJm) return;
+    if (!open || !isJm) return;
+    const cached = detailCache.get(part.oem_number);
+    if (cached && cached !== "unavailable") {
+      setPatch(cached);
+      setState("ready");
+      return;
+    }
+    setState("loading");
     let cancelled = false;
-    setDetailLoading(true);
-    setDetailLoaded(true);
-    (async () => {
-      try {
-        const { data } = await supabase.functions.invoke("jm-proxy", {
-          body: { action: "partDetail", payload: { code: p.oem_number } },
-        });
-        const item = data?.data?.item || data?.item;
-        if (!cancelled && item) {
-          setDetail({
-            image_urls: Array.isArray(item.image_urls) && item.image_urls.length > 0 ? item.image_urls : p.image_urls,
-            oe_numbers: Array.isArray(item.oe_numbers) && item.oe_numbers.length > 0 ? item.oe_numbers : p.oe_numbers,
-            technical_parameters: item.technical_parameters && Object.keys(item.technical_parameters).length > 0
-              ? item.technical_parameters
-              : p.technical_parameters,
-            description: item.description || p.description,
-            stock: typeof item.stock === "number" ? item.stock : p.stock,
-          });
-        }
-      } catch (e) {
-        console.warn("[CatalogListing] partDetail failed", e);
-      } finally {
-        if (!cancelled) setDetailLoading(false);
+    fetchPartDetail(part.oem_number).then((res) => {
+      if (cancelled) return;
+      if (res === "unavailable") {
+        setState("unavailable");
+      } else {
+        setPatch(res);
+        setState("ready");
       }
-    })();
+    });
     return () => { cancelled = true; };
-  }, [open, detailLoaded, isJm, p.oem_number]);
+  }, [open, isJm, part.oem_number]);
 
-  const hasExpandableDetail =
-    !!m.description ||
-    (m.technical_parameters && Object.keys(m.technical_parameters).length > 0) ||
-    (m.oe_numbers && m.oe_numbers.length > 0) ||
-    (m.image_urls && m.image_urls.length > 1) ||
-    isJm;
+  const m = { ...part, ...(patch || {}) } as CatalogPart;
+  const photos = (m.image_urls && m.image_urls.length > 0 ? m.image_urls : []).filter(Boolean);
+  const hasPrice = !!(m.price_with_vat && m.price_with_vat > 0);
+  const isOem = m.is_oem;
 
   return (
-    <div
-      className={cn(
-        "relative flex flex-col gap-2 p-3 rounded-xl border bg-card transition-all",
-        isOem ? "border-primary/40 shadow-sm" : "border-border/40"
-      )}
-    >
-      {isOem && (
-        <div className="absolute -top-px left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
-      )}
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-base leading-snug pr-6">{m.name}</DialogTitle>
+        </DialogHeader>
 
-      <div className="flex gap-3">
-        <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/40 overflow-hidden flex items-center justify-center border border-border/30">
-          {photo ? (
-            <img
-              src={photo}
-              alt={m.name}
-              className="w-full h-full object-contain"
-              loading="lazy"
-              onError={(e) => {
-                const img = e.currentTarget as HTMLImageElement;
-                img.style.display = "none";
-                const parent = img.parentElement;
-                if (parent && !parent.querySelector(".photo-fallback")) {
-                  const div = document.createElement("div");
-                  div.className = "photo-fallback flex items-center justify-center w-full h-full";
-                  div.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-muted-foreground/40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>';
-                  parent.appendChild(div);
-                }
-              }}
-            />
-          ) : (
-            <Package className="w-8 h-8 text-muted-foreground/40" />
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge
+            variant={isOem ? "default" : "secondary"}
+            className={cn("text-[10px] px-1.5 py-0 h-5", isOem ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}
+          >
+            {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+            {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
+          </Badge>
+          {m.manufacturer && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 font-semibold uppercase">
+              {m.manufacturer}
+            </Badge>
           )}
+          <StockPill stock={m.stock} hasPrice={hasPrice} />
+          <span className="text-[10px] text-muted-foreground font-mono ml-auto">{m.oem_number}</span>
         </div>
 
-        <div className="flex-1 min-w-0 flex flex-col">
-          {/* Top badges: ORIGINÁL/NÁHRADA + manufacturer + stock + TecDoc */}
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <Badge
-              variant={isOem ? "default" : "secondary"}
-              className={cn(
-                "text-[10px] px-1.5 py-0 h-5 shrink-0",
-                isOem ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-              )}
-            >
-              {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
-              {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
-            </Badge>
-            {m.manufacturer && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-[10px] px-1.5 py-0 h-5 shrink-0 font-semibold uppercase tracking-wide",
-                  isOem
-                    ? "border-primary/30 text-primary"
-                    : "border-amber-500/40 text-amber-600 dark:text-amber-400"
-                )}
-                title="Výrobce"
+        {/* Photo gallery */}
+        {photos.length > 0 ? (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {photos.slice(0, 12).map((url, i) => (
+              <a
+                key={i}
+                href={url}
+                target="_blank"
+                rel="noopener"
+                className="w-28 h-28 shrink-0 rounded border border-border/30 bg-secondary/40 overflow-hidden flex items-center justify-center hover:border-primary/40 transition-colors"
               >
-                {m.manufacturer}
-              </Badge>
-            )}
-            <StockPill stock={m.stock} hasPrice={hasPrice} />
-            {(m.tecdoc_section || m.category) && (
-              <span className="text-[10px] text-muted-foreground/70 truncate ml-auto" title="TecDoc sekce">
-                {m.tecdoc_section || m.category}
-              </span>
-            )}
+                <img src={url} alt={`${m.name} ${i + 1}`} className="w-full h-full object-contain" loading="lazy" />
+              </a>
+            ))}
           </div>
+        ) : (
+          <div className="w-full h-40 rounded bg-secondary/40 flex items-center justify-center text-muted-foreground/60">
+            <Package className="w-10 h-10" />
+          </div>
+        )}
 
-          <h3 className="text-sm font-medium leading-snug line-clamp-2">{m.name}</h3>
-          <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
-            {m.oem_number}
-            {supersededCount && supersededCount > 0 ? (
-              <span className="ml-2 text-[10px] text-muted-foreground/70 font-sans">
-                (nejnovější revize, +{supersededCount} starších)
-              </span>
-            ) : null}
-          </p>
+        {/* Loading / unavailable states */}
+        {state === "loading" && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Načítám detail…
+          </div>
+        )}
+        {state === "unavailable" && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2">
+            <AlertTriangle className="w-4 h-4" />
+            Detail dočasně nedostupný. Zkuste to prosím za chvíli.
+          </div>
+        )}
 
-          {/* OE numbers preview (first 3) — always visible when available */}
-          {oePreview.length > 0 && (
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
-              <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">OE:</span>
-              {oePreview.map((oe) => (
-                <span key={oe} className="text-[10px] font-mono bg-secondary/60 text-foreground/80 px-1 py-px rounded">
+        {m.description && (
+          <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">{m.description}</p>
+        )}
+
+        {m.technical_parameters && Object.keys(m.technical_parameters).length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Technické parametry
+            </p>
+            <TechParams params={m.technical_parameters} />
+          </div>
+        )}
+
+        {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Kompatibilní vozidla
+            </p>
+            <ul className="text-xs text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
+              {m.compatible_vehicles.slice(0, 30).map((v, i) => (
+                <li key={i}>• {v}</li>
+              ))}
+              {m.compatible_vehicles.length > 30 && (
+                <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 30} dalších</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {m.oe_numbers && m.oe_numbers.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              OE čísla ({m.oe_numbers.length})
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {m.oe_numbers.map((oe) => (
+                <span key={oe} className="text-[10px] font-mono bg-secondary/60 text-foreground px-1.5 py-0.5 rounded">
                   {oe}
                 </span>
               ))}
-              {(m.oe_numbers?.length || 0) > 3 && (
-                <span className="text-[10px] text-muted-foreground/70">+{(m.oe_numbers!.length - 3)}</span>
-              )}
             </div>
-          )}
-
-          <div className="flex items-end justify-between mt-auto pt-2 gap-2">
-            <div>
-              <div className={cn("text-sm font-bold", isOem ? "text-primary" : "text-foreground")}>
-                {formatPrice(m.price_with_vat)}
-              </div>
-              {m.price_without_vat !== null && m.price_without_vat !== undefined && (
-                <div className="text-[10px] text-muted-foreground">
-                  {formatPrice(m.price_without_vat)} bez DPH
-                </div>
-              )}
-            </div>
-            <Button size="sm" className="h-7 text-xs px-2" onClick={() => onOrder(m)}>
-              <ShoppingCart className="w-3 h-3 mr-1" />
-              {hasPrice ? "Objednat" : "Poptat"}
-            </Button>
           </div>
-        </div>
-      </div>
+        )}
 
-      {hasExpandableDetail && (
-        <>
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors self-start"
-          >
-            {detailLoading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <ChevronDown className={cn("w-3 h-3 transition-transform", open && "rotate-180")} />
-            )}
-            {open ? "Skrýt detaily" : "Zobrazit detaily a parametry"}
-          </button>
-          {open && (
-            <div className="border-t border-border/30 pt-2 space-y-2">
-              {/* Photo gallery */}
-              {m.image_urls && m.image_urls.length > 1 && (
-                <div className="flex gap-1 overflow-x-auto pb-1">
-                  {m.image_urls.slice(0, 8).map((url, i) => (
-                    <a
-                      key={i}
-                      href={url}
-                      target="_blank"
-                      rel="noopener"
-                      className="w-16 h-16 shrink-0 rounded border border-border/30 bg-secondary/40 overflow-hidden flex items-center justify-center hover:border-primary/40 transition-colors"
-                    >
-                      <img src={url} alt={`${m.name} ${i + 1}`} className="w-full h-full object-contain" loading="lazy" />
-                    </a>
-                  ))}
-                </div>
-              )}
-
-              {detailLoading && (
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Načítám plný detail z J+M…
-                </div>
-              )}
-
-              {m.description && (
-                <p className="text-[11px] text-foreground/90 leading-relaxed whitespace-pre-line">
-                  {m.description}
-                </p>
-              )}
-
-              {m.technical_parameters && Object.keys(m.technical_parameters).length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                    Technické parametry
-                  </p>
-                  <TechParams params={m.technical_parameters} />
-                </div>
-              )}
-
-              {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                    Kompatibilní vozidla
-                  </p>
-                  <ul className="text-[11px] text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
-                    {m.compatible_vehicles.slice(0, 20).map((v, i) => (
-                      <li key={i}>• {v}</li>
-                    ))}
-                    {m.compatible_vehicles.length > 20 && (
-                      <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 20} dalších</li>
-                    )}
-                  </ul>
-                </div>
-              )}
-
-              {m.oe_numbers && m.oe_numbers.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-                    Všechna OE čísla ({m.oe_numbers.length})
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {m.oe_numbers.map((oe) => (
-                      <span
-                        key={oe}
-                        className="text-[10px] font-mono bg-secondary/60 text-foreground px-1.5 py-0.5 rounded"
-                      >
-                        {oe}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!detailLoading && isJm && !m.description && (!m.technical_parameters || Object.keys(m.technical_parameters).length === 0) && (!m.oe_numbers || m.oe_numbers.length === 0) && (
-                <p className="text-[11px] text-muted-foreground italic">
-                  Dodavatel pro tuto položku neposkytuje další detail.
-                </p>
-              )}
+        <div className="flex items-center justify-between pt-2 border-t border-border/30">
+          <div>
+            <div className={cn("text-lg font-bold", isOem ? "text-primary" : "text-foreground")}>
+              {formatPrice(m.price_with_vat)}
             </div>
-          )}
-        </>
-      )}
-    </div>
+            {m.price_without_vat !== null && m.price_without_vat !== undefined && (
+              <div className="text-[10px] text-muted-foreground">{formatPrice(m.price_without_vat)} bez DPH</div>
+            )}
+          </div>
+          <Button onClick={() => onOrder(m)}>
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            {hasPrice ? "Objednat" : "Poptat"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
-/**
- * Aggressive OEM grouping ("one card" rule):
- * - Primary key is the base Mopar number: first 8 digits, without K prefix/revision suffix.
- * - For brake pads/discs and similar catalog noise, also collapse functionally identical
- *   names (front/rear + part type), so old Mopar number families like 68029806AA and
- *   68029875AB do not render as separate duplicate cards.
- * - Non-OEM (J+M aftermarket) items are never grouped.
- */
+// --------- Row (no inline lazy load — modal-only) ---------
+const PartRow = ({ p, onOrder, supersededCount }: { p: CatalogPart; onOrder: (p: CatalogPart) => void; supersededCount?: number }) => {
+  const [open, setOpen] = useState(false);
+  const isOem = p.is_oem;
+  const photo = p.image_urls?.[0];
+  const oePreview = (p.oe_numbers || []).slice(0, 3);
+  const hasPrice = !!(p.price_with_vat && p.price_with_vat > 0);
+
+  return (
+    <>
+      <div
+        className={cn(
+          "relative flex flex-col gap-2 p-3 rounded-xl border bg-card transition-all cursor-pointer hover:border-primary/40",
+          isOem ? "border-primary/40 shadow-sm" : "border-border/40"
+        )}
+        onClick={() => setOpen(true)}
+      >
+        {isOem && (
+          <div className="absolute -top-px left-3 right-3 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+        )}
+
+        <div className="flex gap-3">
+          <div className="w-20 h-20 shrink-0 rounded-lg bg-secondary/40 overflow-hidden flex items-center justify-center border border-border/30">
+            {photo ? (
+              <img
+                src={photo}
+                alt={p.name}
+                className="w-full h-full object-contain"
+                loading="lazy"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <Package className="w-8 h-8 text-muted-foreground/40" />
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+              <Badge
+                variant={isOem ? "default" : "secondary"}
+                className={cn(
+                  "text-[10px] px-1.5 py-0 h-5 shrink-0",
+                  isOem ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                )}
+              >
+                {isOem ? <ShieldCheck className="w-3 h-3 mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                {isOem ? "ORIGINÁL ⭐" : "NÁHRADA"}
+              </Badge>
+              {p.manufacturer && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[10px] px-1.5 py-0 h-5 shrink-0 font-semibold uppercase tracking-wide",
+                    isOem ? "border-primary/30 text-primary" : "border-amber-500/40 text-amber-600 dark:text-amber-400"
+                  )}
+                >
+                  {p.manufacturer}
+                </Badge>
+              )}
+              <StockPill stock={p.stock} hasPrice={hasPrice} />
+              {(p.tecdoc_section || p.category) && (
+                <span className="text-[10px] text-muted-foreground/70 truncate ml-auto">
+                  {p.tecdoc_section || p.category}
+                </span>
+              )}
+            </div>
+
+            <h3 className="text-sm font-medium leading-snug line-clamp-2">{p.name}</h3>
+            <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
+              {p.oem_number}
+              {supersededCount && supersededCount > 0 ? (
+                <span className="ml-2 text-[10px] text-muted-foreground/70 font-sans">
+                  (nejnovější revize, +{supersededCount} starších)
+                </span>
+              ) : null}
+            </p>
+
+            {oePreview.length > 0 && (
+              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                <span className="text-[9px] uppercase tracking-wide text-muted-foreground/70 font-semibold">OE:</span>
+                {oePreview.map((oe) => (
+                  <span key={oe} className="text-[10px] font-mono bg-secondary/60 text-foreground/80 px-1 py-px rounded">
+                    {oe}
+                  </span>
+                ))}
+                {(p.oe_numbers?.length || 0) > 3 && (
+                  <span className="text-[10px] text-muted-foreground/70">+{(p.oe_numbers!.length - 3)}</span>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-end justify-between mt-auto pt-2 gap-2">
+              <div>
+                <div className={cn("text-sm font-bold", isOem ? "text-primary" : "text-foreground")}>
+                  {formatPrice(p.price_with_vat)}
+                </div>
+                {p.price_without_vat !== null && p.price_without_vat !== undefined && (
+                  <div className="text-[10px] text-muted-foreground">
+                    {formatPrice(p.price_without_vat)} bez DPH
+                  </div>
+                )}
+              </div>
+              <Button
+                size="sm"
+                className="h-7 text-xs px-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOrder(p);
+                }}
+              >
+                <ShoppingCart className="w-3 h-3 mr-1" />
+                {hasPrice ? "Objednat" : "Poptat"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors self-start"
+        >
+          Zobrazit detaily →
+        </button>
+      </div>
+
+      {open && (
+        <PartDetailModal open={open} onOpenChange={setOpen} part={p} onOrder={onOrder} />
+      )}
+    </>
+  );
+};
+
+// --------- Grouping (unchanged) ---------
 const normalizeOem = (oem: string): string =>
   (oem || "").toUpperCase().replace(/[\s\-._/]/g, "").replace(/^K/, "");
 
@@ -354,10 +429,7 @@ const baseEightDigits = (oem: string): string =>
   normalizeOem(oem).match(/^\d{8}/)?.[0] || normalizeOem(oem).replace(/[A-Z]{1,3}$/i, "");
 
 const normalizeText = (value: string): string =>
-  (value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  (value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 const functionalOemGroup = (p: CatalogPart): string => {
   const text = normalizeText(`${p.name} ${p.category || ""}`);
@@ -419,6 +491,52 @@ const collapseSupersessions = (items: CatalogPart[]): Array<CatalogPart & { supe
 };
 
 const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
+  const prefetchedKeyRef = useRef<string>("");
+
+  const grouped = useMemo(() => (items.length > 0 ? collapseSupersessions(items) : []), [items]);
+
+  const sorted = useMemo(
+    () =>
+      [...grouped].sort((a, b) => {
+        const oemA = a.is_oem ? 1 : 0;
+        const oemB = b.is_oem ? 1 : 0;
+        if (oemA !== oemB) return oemB - oemA;
+        const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
+        const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
+        if (priceA !== priceB) return priceB - priceA;
+        return 0;
+      }),
+    [grouped],
+  );
+
+  // Background prefetch: warm detail cache for the top 10 most relevant aftermarket items.
+  useEffect(() => {
+    if (sorted.length === 0) return;
+    const key = sorted
+      .slice(0, 10)
+      .map((p) => p.oem_number)
+      .join("|");
+    if (key === prefetchedKeyRef.current) return;
+    prefetchedKeyRef.current = key;
+
+    const codes = sorted
+      .filter((p) => p.catalog_source?.toLowerCase() === "jm")
+      .slice(0, 10)
+      .map((p) => p.oem_number);
+
+    let cancelled = false;
+    // Stagger so we don't burst the proxy with parallel calls.
+    (async () => {
+      for (const code of codes) {
+        if (cancelled) break;
+        if (detailCache.has(code)) continue;
+        fetchPartDetail(code).catch(() => {});
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sorted]);
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -435,19 +553,6 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
       </div>
     );
   }
-
-  const grouped = collapseSupersessions(items);
-
-  // J+M mirror rule: genuine OEM first, then priced aftermarket, then on-order items.
-  const sorted = [...grouped].sort((a, b) => {
-    const oemA = a.is_oem ? 1 : 0;
-    const oemB = b.is_oem ? 1 : 0;
-    if (oemA !== oemB) return oemB - oemA;
-    const priceA = (a.price_with_vat ?? 0) > 0 ? 1 : 0;
-    const priceB = (b.price_with_vat ?? 0) > 0 ? 1 : 0;
-    if (priceA !== priceB) return priceB - priceA;
-    return 0;
-  });
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
