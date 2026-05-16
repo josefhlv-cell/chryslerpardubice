@@ -1566,7 +1566,7 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
 
 // ---------- HTTP entry ----------
 const PUBLIC_READ_ACTIONS = new Set([
-  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock', 'partsForEngine'
+  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock', 'partsForEngine', 'partDetail'
 ]);
 
 Deno.serve(async (req) => {
@@ -2906,7 +2906,7 @@ Deno.serve(async (req) => {
         const known = [
           'ping', 'diagnose', 'syncCategories', 'searchByCode', 'vehicleCategories',
           'searchByVehicle', 'partsForEngine', 'priceAndStock', 'enrichPrices',
-          'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
+          'partDetail', 'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
           'validateOrder', 'createOrder',
         ];
         return new Response(
