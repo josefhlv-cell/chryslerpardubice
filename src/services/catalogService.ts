@@ -197,6 +197,30 @@ export async function fetchAllPartsForEngine(opts: {
   const oemByNumber = new Map<string, any>();
   for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
 
+  // 2b. Vehicle-compat OEM rows (Mopar/7zap originals linked to this nextis_vehicle_id),
+  // independent of J+M crossrefs. These are added as ORIGINÁL rows under matching parent.
+  let vehicleOemRows: any[] = [];
+  if (opts.nextisVehicleId) {
+    const { data: compatRows } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .select("part_id")
+      .eq("nextis_vehicle_id", opts.nextisVehicleId)
+      .eq("is_oem", true)
+      .limit(3000);
+    const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
+    if (partIds.length > 0) {
+      const { data: rows } = await supabase
+        .from("parts_new_public")
+        .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description")
+        .in("id", partIds);
+      vehicleOemRows = (rows || []).filter((r: any) => {
+        const src = String(r.catalog_source || "").toLowerCase();
+        return ["mopar", "mopar_oem", "7zap", "csv", "epc-link"].includes(src);
+      });
+    }
+    debug.vehicleOemRows = vehicleOemRows.length;
+  }
+
   // 3. Build real two-level catalog: parent category → J+M/TecDoc section.
   const parentMap = new Map<string, CategoryGroup>();
   for (const [id, bucket] of sectionMap) {
@@ -237,6 +261,48 @@ export async function fetchAllPartsForEngine(opts: {
     parentGroup.children!.push(child);
     parentGroup.parts.push(...parts);
     parentGroup.count += parts.length;
+  }
+
+  // 3b. Inject vehicle-compatible OEM rows that weren't already added via J+M crossref.
+  // Bucket by parent category derived from the OEM row's `category` text.
+  if (vehicleOemRows.length > 0) {
+    // Track OEM numbers already added (per parent) to avoid duplicates with J+M-linked OEM
+    const addedOemByParent = new Map<string, Set<string>>();
+    for (const [pid, pg] of parentMap) {
+      const set = new Set<string>();
+      for (const p of pg.parts) if (p.is_oem && p.oem_number) set.add(normalizeOem(p.oem_number));
+      addedOemByParent.set(pid, set);
+    }
+
+    const oemByParent = new Map<string, CatalogPart[]>();
+    for (const row of vehicleOemRows) {
+      const parent = parentForSection(row.category || "Ostatní");
+      const key = normalizeOem(row.oem_number);
+      const existing = addedOemByParent.get(parent.id);
+      if (key && existing?.has(key)) continue;
+      if (!oemByParent.has(parent.id)) oemByParent.set(parent.id, []);
+      oemByParent.get(parent.id)!.push(oemRowToCatalogPart(row));
+      if (existing && key) existing.add(key);
+    }
+
+    for (const [pid, oemList] of oemByParent) {
+      if (oemList.length === 0) continue;
+      const parentInfo = CATEGORY_RULES.find((r) => r.id === pid) || { id: pid, label: "Ostatní" };
+      if (!parentMap.has(pid)) {
+        parentMap.set(pid, { id: pid, label: parentInfo.label, count: 0, parts: [], children: [] });
+      }
+      const pg = parentMap.get(pid)!;
+      const childId = `${pid}:oem-vehicle`;
+      const child: CategoryGroup = {
+        id: childId,
+        label: "Originální díly (Mopar)",
+        count: oemList.length,
+        parts: oemList,
+      };
+      pg.children!.unshift(child);
+      pg.parts = [...oemList, ...pg.parts];
+      pg.count += oemList.length;
+    }
   }
 
   const groups = [...parentMap.values()];
