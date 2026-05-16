@@ -1,13 +1,15 @@
 /**
  * CatalogListing — unified OEM-first part list (Mopar + J+M only).
  * Each row shows badge ORIGINÁL (OEM, rank 1) or NÁHRADA (J+M, rank 5).
- * Clicking the row expands to show description + technical_parameters.
+ * Always visible: photo, manufacturer, stock pill, OE preview, TecDoc section.
+ * On expand: lazy fetches full J+M detail (images, all OE numbers, tech params).
  */
-import { useState } from "react";
-import { ShieldCheck, RefreshCw, Package, ShoppingCart, ChevronDown } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ShieldCheck, RefreshCw, Package, ShoppingCart, ChevronDown, Loader2, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
 
 interface Props {
