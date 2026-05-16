@@ -2710,6 +2710,7 @@ Deno.serve(async (req) => {
       }
 
 
+      case 'getCategoryTree':
       case 'fetchCategoryTree':
       case 'categoryTree': {
         const { data, error } = await adminClient
