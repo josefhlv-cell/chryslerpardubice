@@ -26,22 +26,27 @@ const formatPrice = (n: number | null | undefined) =>
     : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 // --------- Detail cache + fetch (with 3s timeout) ---------
-type DetailPatch = Partial<Pick<CatalogPart, "image_urls" | "oe_numbers" | "technical_parameters" | "description" | "stock">>;
+type DetailPatch = Partial<Pick<CatalogPart, "image_urls" | "oe_numbers" | "technical_parameters" | "description" | "stock" | "compatible_vehicles" | "price_with_vat" | "price_without_vat" | "availability">>;
 const detailCache = new Map<string, DetailPatch | "unavailable">();
 const inflight = new Map<string, Promise<DetailPatch | "unavailable">>();
 
-function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | "unavailable"> {
+function detailKey(code: string, manufacturer?: string | null) {
+  return `${manufacturer || ""}|${code}`.toUpperCase().replace(/[\s\-._/]/g, "");
+}
+
+function fetchPartDetail(code: string, manufacturer?: string | null, timeoutMs = 3000): Promise<DetailPatch | "unavailable"> {
   if (!code) return Promise.resolve("unavailable");
-  const cached = detailCache.get(code);
+  const key = detailKey(code, manufacturer);
+  const cached = detailCache.get(key);
   if (cached !== undefined) return Promise.resolve(cached);
-  const ongoing = inflight.get(code);
+  const ongoing = inflight.get(key);
   if (ongoing) return ongoing;
 
   const run = (async (): Promise<DetailPatch | "unavailable"> => {
     try {
       const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), timeoutMs));
       const call = supabase.functions.invoke("jm-proxy", {
-        body: { action: "partDetail", payload: { code } },
+        body: { action: "partDetail", payload: { code, manufacturer } },
       });
       const res = await Promise.race([call, timeout]);
       if (res === "timeout") {
@@ -51,7 +56,7 @@ function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | 
       const { data } = res as any;
       const item = data?.data?.item || data?.item;
       if (!item) {
-        detailCache.set(code, "unavailable");
+        detailCache.set(key, "unavailable");
         return "unavailable";
       }
       const patch: DetailPatch = {
@@ -61,16 +66,20 @@ function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | 
           item.technical_parameters && Object.keys(item.technical_parameters).length > 0 ? item.technical_parameters : undefined,
         description: item.description || undefined,
         stock: typeof item.stock === "number" ? item.stock : undefined,
+        compatible_vehicles: Array.isArray(item.compatible_vehicles) && item.compatible_vehicles.length > 0 ? item.compatible_vehicles : undefined,
+        price_with_vat: typeof item.price_with_vat === "number" ? item.price_with_vat : undefined,
+        price_without_vat: typeof item.price_without_vat === "number" ? item.price_without_vat : undefined,
+        availability: item.availability || undefined,
       };
-      detailCache.set(code, patch);
+      detailCache.set(key, patch);
       return patch;
     } catch {
       return "unavailable";
     } finally {
-      inflight.delete(code);
+      inflight.delete(key);
     }
   })();
-  inflight.set(code, run);
+  inflight.set(key, run);
   return run;
 }
 
@@ -136,7 +145,7 @@ const PartDetailModal = ({
 
   useEffect(() => {
     if (!open || !isJm) return;
-    const cached = detailCache.get(part.oem_number);
+    const cached = detailCache.get(detailKey(part.oem_number, part.manufacturer));
     if (cached && cached !== "unavailable") {
       setPatch(cached);
       setState("ready");
@@ -144,7 +153,7 @@ const PartDetailModal = ({
     }
     setState("loading");
     let cancelled = false;
-    fetchPartDetail(part.oem_number).then((res) => {
+    fetchPartDetail(part.oem_number, part.manufacturer).then((res) => {
       if (cancelled) return;
       if (res === "unavailable") {
         setState("unavailable");
@@ -154,7 +163,7 @@ const PartDetailModal = ({
       }
     });
     return () => { cancelled = true; };
-  }, [open, isJm, part.oem_number]);
+  }, [open, isJm, part.oem_number, part.manufacturer]);
 
   const m = { ...part, ...(patch || {}) } as CatalogPart;
   const photos = (m.image_urls && m.image_urls.length > 0 ? m.image_urls : []).filter(Boolean);
@@ -206,6 +215,19 @@ const PartDetailModal = ({
           </div>
         )}
 
+        <div className="flex items-center justify-between rounded-lg bg-secondary/40 border border-border/30 p-3">
+          <div>
+            <div className={cn("text-xl font-bold", isOem ? "text-primary" : "text-foreground")}>{formatPrice(m.price_with_vat)}</div>
+            {m.price_without_vat !== null && m.price_without_vat !== undefined && (
+              <div className="text-[10px] text-muted-foreground">{formatPrice(m.price_without_vat)} bez DPH</div>
+            )}
+          </div>
+          <Button onClick={() => onOrder(m)}>
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            {hasPrice ? "Objednat" : "Poptat"}
+          </Button>
+        </div>
+
         {/* Loading / unavailable states */}
         {state === "loading" && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -220,32 +242,12 @@ const PartDetailModal = ({
           </div>
         )}
 
-        {m.description && (
-          <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">{m.description}</p>
-        )}
-
         {m.technical_parameters && Object.keys(m.technical_parameters).length > 0 && (
           <div>
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
               Technické parametry
             </p>
             <TechParams params={m.technical_parameters} />
-          </div>
-        )}
-
-        {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-              Kompatibilní vozidla
-            </p>
-            <ul className="text-xs text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
-              {m.compatible_vehicles.slice(0, 30).map((v, i) => (
-                <li key={i}>• {v}</li>
-              ))}
-              {m.compatible_vehicles.length > 30 && (
-                <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 30} dalších</li>
-              )}
-            </ul>
           </div>
         )}
 
@@ -264,20 +266,28 @@ const PartDetailModal = ({
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t border-border/30">
+        {m.description && (
           <div>
-            <div className={cn("text-lg font-bold", isOem ? "text-primary" : "text-foreground")}>
-              {formatPrice(m.price_with_vat)}
-            </div>
-            {m.price_without_vat !== null && m.price_without_vat !== undefined && (
-              <div className="text-[10px] text-muted-foreground">{formatPrice(m.price_without_vat)} bez DPH</div>
-            )}
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Popis</p>
+            <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">{m.description}</p>
           </div>
-          <Button onClick={() => onOrder(m)}>
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            {hasPrice ? "Objednat" : "Poptat"}
-          </Button>
-        </div>
+        )}
+
+        {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Kompatibilní vozidla
+            </p>
+            <ul className="text-xs text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
+              {m.compatible_vehicles.slice(0, 30).map((v, i) => (
+                <li key={i}>• {v}</li>
+              ))}
+              {m.compatible_vehicles.length > 30 && (
+                <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 30} dalších</li>
+              )}
+            </ul>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -529,8 +539,9 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
     (async () => {
       for (const code of codes) {
         if (cancelled) break;
-        if (detailCache.has(code)) continue;
-        fetchPartDetail(code).catch(() => {});
+        const part = sorted.find((p) => p.oem_number === code);
+        if (detailCache.has(detailKey(code, part?.manufacturer))) continue;
+        fetchPartDetail(code, part?.manufacturer).catch(() => {});
         await new Promise((r) => setTimeout(r, 120));
       }
     })();

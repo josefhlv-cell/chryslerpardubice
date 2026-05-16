@@ -494,6 +494,7 @@ const UNIVERSAL_MARGIN = 1.20;
 
 interface UnifiedPart {
   supplier: 'jm';
+  jm_internal_id?: number;
   oem_number: string;
   brand: string;
   name: string;
@@ -647,6 +648,7 @@ function extractTechParams(it: any): Record<string, string> {
 function extractOeNumbers(it: any): string[] {
   const out = new Set<string>();
   const sources = [
+    it.oeCodes, it.OeCodes, it.OECodes,
     it.originalNumbers, it.OriginalNumbers,
     it.oeNumbers, it.OeNumbers, it.OENumbers,
     it.references, it.References,
@@ -659,7 +661,8 @@ function extractOeNumbers(it: any): string[] {
         if (typeof row === 'string') out.add(row.trim());
         else if (row && typeof row === 'object') {
           const v = row.number || row.Number || row.code || row.Code || row.oe || row.OE;
-          if (v) out.add(String(v).trim());
+          const manufacturer = String(row.manufacturer || row.Manufacturer || row.brand || row.Brand || '').trim();
+          if (v) out.add(`${manufacturer ? `${manufacturer}: ` : ''}${String(v).trim()}`);
         }
       }
     } else if (typeof src === 'string') {
@@ -667,6 +670,61 @@ function extractOeNumbers(it: any): string[] {
     }
   }
   return [...out].filter(Boolean);
+}
+
+function parseJsonStringMaybe(value: string): any {
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'string') return parseJsonStringMaybe(parsed);
+    return parsed;
+  } catch (_) {
+    return value;
+  }
+}
+
+function cleanHtmlText(value: string): string {
+  return htmlDecode(String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+function parseAttributeHtml(html: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const rows = String(html || '').matchAll(/<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi);
+  for (const row of rows) {
+    const key = cleanHtmlText(row[1]);
+    const val = cleanHtmlText(row[2]);
+    if (key && val) out[key] = val;
+  }
+  return out;
+}
+
+function parseOeHtml(html: string): string[] {
+  const out = new Set<string>();
+  const blocks = String(html || '').matchAll(/<a\b[\s\S]*?class=["'][^"']*flex-item[^"']*["'][\s\S]*?<\/a>/gi);
+  for (const block of blocks) {
+    const raw = block[0];
+    const manufacturer = cleanHtmlText(raw.match(/class=["']flex-manufacturer["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+    const number = cleanHtmlText(raw.match(/class=["']flex-number["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+    if (number) out.add(`${manufacturer ? `${manufacturer}: ` : ''}${number}`);
+  }
+  return [...out];
+}
+
+function parseApplicationsHtml(html: string): string[] {
+  const out = new Set<string>();
+  const tables = String(html || '').matchAll(/<div\b[^>]*class=["'][^"']*table[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*table|$)/gi);
+  for (const table of tables) {
+    const tableHtml = table[1];
+    const header = tableHtml.match(/<div\b[^>]*class=["'][^"']*header[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] || '';
+    const brand = cleanHtmlText(header.match(/class=["'][^"']*highlight[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+    const rows = tableHtml.matchAll(/<a\b[^>]*class=["'][^"']*row[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi);
+    for (const row of rows) {
+      const cols = [...row[1].matchAll(/<span\b[^>]*class=["'][^"']*column[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi)]
+        .map((m) => cleanHtmlText(m[1]))
+        .filter(Boolean);
+      if (cols.length) out.add([brand, ...cols].filter(Boolean).join(' · '));
+    }
+  }
+  return [...out];
 }
 
 function normalizeCatalogItem(it: any): UnifiedPart {
@@ -701,6 +759,7 @@ function normalizeCatalogItem(it: any): UnifiedPart {
 
   return {
     supplier: 'jm',
+    jm_internal_id: Number(it.id ?? it.ID ?? 0) || undefined,
     oem_number: String(prefix ? `${prefix}${code}` : code).trim(),
     brand: String(brand).trim(),
     name: String(name).trim(),
@@ -887,6 +946,77 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
     if (r.items.length > 0) collected.push(...r.items);
   }
   return { rawCount, items: dedupeUnifiedParts(collected) };
+}
+
+async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPart | null> {
+  const raw = await nextisPost('/catalogs/items-checking', {
+    searchTarget: 'CodeMain',
+    trySearchWithoutManufacturer: true,
+    getOECodes: true,
+    getDeposits: false,
+    getServices: false,
+    getCashBack: false,
+    getEANCodes: false,
+    items: [{ code, brand: brand || '', requestedQty: 1, pairID: 1 }],
+  });
+  const first = extractItems(raw)[0];
+  return first ? normalizeCatalogItem(first) : null;
+}
+
+async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): Promise<UnifiedPart> {
+  const code = item.oem_number || fallbackCode;
+  const images = new Set<string>(item.image_urls || []);
+  let productId = Number(item.jm_internal_id || 0) || 0;
+
+  try {
+    const whisper = parseJsonStringMaybe(await jmPublicPostApi('search/get-smart-search-whispers-products', {
+      searchPhrase: code,
+      target: 'Code',
+      showHistory: false,
+    }));
+    const html = String(whisper?.WhispererHTMLContent || '');
+    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) images.add(htmlDecode(m[1]));
+    const href = html.match(/href=["']([^"']*\/hledani\/[^"']+)["']/i)?.[1] || '';
+    const idFromHref = Number(href.match(/\/(\d+)(?:[?#]?)$/)?.[1] || 0);
+    if (idFromHref) productId = idFromHref;
+  } catch (_) { /* optional eshop enrichment */ }
+
+  const firstImage = [...images].find((url) => /PH\d{2}/i.test(url));
+  if (firstImage) {
+    await Promise.all(Array.from({ length: 12 }, async (_, idx) => {
+      const n = String(idx + 1).padStart(2, '0');
+      const candidate = firstImage.replace(/PH\d{2}/i, `PH${n}`);
+      if (images.has(candidate)) return;
+      try {
+        const r = await fetch(candidate, { method: 'HEAD', signal: AbortSignal.timeout(1600) });
+        if (r.ok) images.add(candidate);
+      } catch (_) { /* image not available */ }
+    }));
+  }
+
+  if (!productId) return { ...item, image_urls: [...images], image: [...images][0] || item.image };
+
+  const [attributesHtml, oeHtml, applicationsHtml, descriptionHtml] = await Promise.all([
+    jmPublicPostApi('tecdoc/get-product-detail-attributes', { groupID: productId, tecDocCodePair: code, tecDocBrandID: 0, articleLinkID: productId, manufacturerID: 0, modelID: 0, engineID: 0 }).catch(() => ''),
+    jmPublicPostApi('product/get-product-detail-oe-numbers', { groupID: productId, articleNumber: code, brandId: 0 }).catch(() => ''),
+    jmPublicPostApi('product/get-product-detail-applications', { groupID: productId, articleNumber: code, brandId: 0, vehicleType: 'pc' }).catch(() => ''),
+    jmPublicPostApi('product/get-product-detail-description', { groupID: productId }).catch(() => ''),
+  ]);
+
+  const technicalParameters = parseAttributeHtml(String(attributesHtml || ''));
+  const oeNumbers = parseOeHtml(String(oeHtml || ''));
+  const compatibleVehicles = parseApplicationsHtml(String(applicationsHtml || ''));
+  const description = cleanHtmlText(String(descriptionHtml || ''));
+
+  return {
+    ...item,
+    image: [...images][0] || item.image,
+    image_urls: [...images],
+    technical_parameters: Object.keys(technicalParameters).length ? technicalParameters : item.technical_parameters,
+    oe_numbers: oeNumbers.length ? oeNumbers : item.oe_numbers,
+    compatible_vehicles: compatibleVehicles.length ? compatibleVehicles : item.compatible_vehicles,
+    description: description && description.length > 20 ? description : item.description,
+  };
 }
 
 async function fetchJmViaCrossRefs(adminClient: any, oeCode: string, category = ''): Promise<{ items: UnifiedPart[]; xrefsTried: string[]; rawHits: number }> {
@@ -1436,7 +1566,7 @@ async function enrichPricesIntoDb(adminClient: any, codes: string[]) {
 
 // ---------- HTTP entry ----------
 const PUBLIC_READ_ACTIONS = new Set([
-  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock', 'partsForEngine'
+  'ping', 'searchByCode', 'searchByVehicle', 'vehicleCategories', 'priceAndStock', 'partsForEngine', 'partDetail'
 ]);
 
 Deno.serve(async (req) => {
@@ -2666,8 +2796,9 @@ Deno.serve(async (req) => {
         // Lazy enrichment: full info (images, OE numbers, technical_parameters)
         // for a single J+M item. Used by the catalog detail panel.
         const code = String(payload.code || payload.oem_number || '').trim();
+        const brand = String(payload.brand || payload.manufacturer || '').trim();
         if (!code) { result = { item: null }; break; }
-        const cacheKey = `detail:${normalizeOemCode(code)}`;
+        const cacheKey = `detail:${normalizeOemCode(brand)}:${normalizeOemCode(code)}`;
         try {
           const { data: cached } = await adminClient
             .from('api_cache')
@@ -2684,14 +2815,23 @@ Deno.serve(async (req) => {
           }
         } catch (_) { /* non-blocking */ }
 
-        // Try CodeProduct (item code from supplier) first, then CodeOE (OE number).
-        let direct = await fetchJmForSpecificCode(code, 'CodeProduct').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
+        // Exact product check first: this returns the concrete supplier item instead of a list of alternatives.
+        const exact = await fetchJmExactItem(code, brand).catch(() => null);
+        let direct = { rawCount: exact ? 1 : 0, items: exact ? [exact] : [] as UnifiedPart[] };
+        if (!direct.items.length) {
+          direct = await fetchJmForSpecificCode(code, 'CodeProduct').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
+        }
         if (!direct.items.length) {
           direct = await fetchJmForSpecificCode(code, 'CodeOE').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
         }
-        // Pick best match: exact OEM match wins, otherwise first
+        // Pick best match: exact product code + brand wins, otherwise exact code, otherwise first.
         const norm = normalizeOemCode(code);
-        const best = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm) || direct.items[0] || null;
+        const brandNorm = normalizeOemCode(brand);
+        const base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm && (!brandNorm || normalizeOemCode(it.brand) === brandNorm))
+          || direct.items.find((it) => normalizeOemCode(it.oem_number) === norm)
+          || direct.items[0]
+          || null;
+        const best = base ? await enrichJmItemFromEshop(base, code).catch(() => base) : null;
 
         if (best) {
           try {
@@ -2766,7 +2906,7 @@ Deno.serve(async (req) => {
         const known = [
           'ping', 'diagnose', 'syncCategories', 'searchByCode', 'vehicleCategories',
           'searchByVehicle', 'partsForEngine', 'priceAndStock', 'enrichPrices',
-          'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
+          'partDetail', 'getCategoryTree', 'fetchCategoryTree', 'categoryTree',
           'validateOrder', 'createOrder',
         ];
         return new Response(
