@@ -26,22 +26,27 @@ const formatPrice = (n: number | null | undefined) =>
     : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 // --------- Detail cache + fetch (with 3s timeout) ---------
-type DetailPatch = Partial<Pick<CatalogPart, "image_urls" | "oe_numbers" | "technical_parameters" | "description" | "stock">>;
+type DetailPatch = Partial<Pick<CatalogPart, "image_urls" | "oe_numbers" | "technical_parameters" | "description" | "stock" | "compatible_vehicles" | "price_with_vat" | "price_without_vat" | "availability">>;
 const detailCache = new Map<string, DetailPatch | "unavailable">();
 const inflight = new Map<string, Promise<DetailPatch | "unavailable">>();
 
-function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | "unavailable"> {
+function detailKey(code: string, manufacturer?: string | null) {
+  return `${manufacturer || ""}|${code}`.toUpperCase().replace(/[\s\-._/]/g, "");
+}
+
+function fetchPartDetail(code: string, manufacturer?: string | null, timeoutMs = 3000): Promise<DetailPatch | "unavailable"> {
   if (!code) return Promise.resolve("unavailable");
-  const cached = detailCache.get(code);
+  const key = detailKey(code, manufacturer);
+  const cached = detailCache.get(key);
   if (cached !== undefined) return Promise.resolve(cached);
-  const ongoing = inflight.get(code);
+  const ongoing = inflight.get(key);
   if (ongoing) return ongoing;
 
   const run = (async (): Promise<DetailPatch | "unavailable"> => {
     try {
       const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), timeoutMs));
       const call = supabase.functions.invoke("jm-proxy", {
-        body: { action: "partDetail", payload: { code } },
+        body: { action: "partDetail", payload: { code, manufacturer } },
       });
       const res = await Promise.race([call, timeout]);
       if (res === "timeout") {
@@ -51,7 +56,7 @@ function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | 
       const { data } = res as any;
       const item = data?.data?.item || data?.item;
       if (!item) {
-        detailCache.set(code, "unavailable");
+        detailCache.set(key, "unavailable");
         return "unavailable";
       }
       const patch: DetailPatch = {
@@ -61,16 +66,20 @@ function fetchPartDetail(code: string, timeoutMs = 3000): Promise<DetailPatch | 
           item.technical_parameters && Object.keys(item.technical_parameters).length > 0 ? item.technical_parameters : undefined,
         description: item.description || undefined,
         stock: typeof item.stock === "number" ? item.stock : undefined,
+        compatible_vehicles: Array.isArray(item.compatible_vehicles) && item.compatible_vehicles.length > 0 ? item.compatible_vehicles : undefined,
+        price_with_vat: typeof item.price_with_vat === "number" ? item.price_with_vat : undefined,
+        price_without_vat: typeof item.price_without_vat === "number" ? item.price_without_vat : undefined,
+        availability: item.availability || undefined,
       };
-      detailCache.set(code, patch);
+      detailCache.set(key, patch);
       return patch;
     } catch {
       return "unavailable";
     } finally {
-      inflight.delete(code);
+      inflight.delete(key);
     }
   })();
-  inflight.set(code, run);
+  inflight.set(key, run);
   return run;
 }
 
