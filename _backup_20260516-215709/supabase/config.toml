@@ -1,0 +1,94 @@
+project_id = "nzmeiluvpmchipyssdms"
+
+[functions.catalog-search]
+verify_jwt = false
+
+[functions.catalog-proxy]
+verify_jwt = false
+
+[functions.catalog-probe]
+verify_jwt = false
+
+[functions.catalog-fetch]
+verify_jwt = false
+
+[functions.vin-ocr]
+verify_jwt = false
+
+[functions.ai-mechanic]
+verify_jwt = false
+
+[functions.price-sync]
+verify_jwt = false
+
+[functions.epc-scrape]
+verify_jwt = false
+
+[functions.scrape-7zap]
+verify_jwt = false
+
+[functions.vin-decode-ai]
+verify_jwt = false
+
+[functions.oem-crossref]
+verify_jwt = false
+
+[functions.epc-diagram]
+verify_jwt = false
+
+[functions.epc-generate]
+verify_jwt = false
+
+[functions.scrape-service-procedures]
+verify_jwt = false
+
+[functions.scrape-makro]
+verify_jwt = false
+
+[functions.catalog-bridge]
+verify_jwt = false
+
+[functions.db-backup]
+verify_jwt = false
+
+[functions.jm-proxy]
+verify_jwt = false
+
+[functions.compat-matcher]
+verify_jwt = false
+
+[functions.bulk-price-sync]
+verify_jwt = false
+
+[functions.jm-tree-build]
+verify_jwt = false
+
+[functions.jm-classify-parts]
+verify_jwt = false
+
+[functions.diagnose-part]
+verify_jwt = false
+
+[functions.scrape-7zap-bulk]
+verify_jwt = false
+
+[functions.apply-scrape-preview]
+verify_jwt = false
+
+[functions.auto-pipeline-worker]
+verify_jwt = false
+
+[functions.bulk-scrape-jq]
+verify_jwt = false
+
+[functions.get-part-price]
+verify_jwt = false
+
+[functions.jm-admin-order]
+verify_jwt = false
+
+[functions.catalog-auto-maintenance]
+verify_jwt = false
+
+[functions.nextis-ktype-lookup]
+verify_jwt = false

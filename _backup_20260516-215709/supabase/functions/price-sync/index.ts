@@ -1,0 +1,695 @@
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
+
+const CATALOG_URL = 'https://www.vernostsevyplaci.cz/cnd/';
+const CONCURRENCY = 12;
+const BATCH_SIZE = 100;
+const CACHE_TTL_MINUTES = 20;
+const FRESH_THRESHOLD_HOURS = 24; // Skip parts updated within 24h
+const STALE_THRESHOLD_HOURS = 168; // 7 days = "old"
+const MAX_RETRIES = 3;
+const MIN_DELAY = 200;
+const MAX_DELAY = 600;
+const LOCK_KEY = 'price-sync-lock';
+const LOCK_TTL_SECONDS = 180; // 3 min lock
+
+// User-Agent rotation pool
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.0.0',
+];
+
+function randomUA(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const {
+      partNumbers,
+      mode = 'auto',
+      batchSize = BATCH_SIZE,
+      offset = 0,
+      debugMode = false,
+      exportCsv = false,
+      segment,
+    } = await req.json();
+
+    // Auth check - server-to-server calls (cron, bulk-price-sync) authenticate via service-role bearer.
+    // Browser/admin manual calls authenticate via user JWT and require admin role.
+    const authHeader = req.headers.get('Authorization') || '';
+    const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const isServiceRole = authHeader === `Bearer ${SERVICE_ROLE}`;
+    if (!isServiceRole && mode !== 'auto') {
+      if (!authHeader.startsWith('Bearer ')) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+      const { createClient: createAuthClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const authClient = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
+      const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
+      if (claimsError || !claimsData?.claims?.sub) {
+        return json({ error: 'Unauthorized' }, 401);
+      }
+      const adminCheck = createAuthClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+      const { data: roleData } = await adminCheck.from('user_roles').select('role').eq('user_id', claimsData.claims.sub).eq('role', 'admin').maybeSingle();
+      if (!roleData) {
+        return json({ error: 'Forbidden: admin required' }, 403);
+      }
+    }
+
+    const CATALOG_PASS = Deno.env.get('CATALOG_PASS');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!CATALOG_PASS || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return json({ error: 'Missing secrets' }, 500);
+    }
+
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ── Lock mechanism ──────────────────────────────────────────────
+    const lockKey = segment ? `${LOCK_KEY}-seg${segment}` : LOCK_KEY;
+    const lockAcquired = await acquireLock(supabase, lockKey);
+    if (!lockAcquired) {
+      console.log('⏭️ Another sync is still running, skipping');
+      return json({ success: true, summary: { total: 0, message: 'Skipped - previous run still active' } });
+    }
+
+    const startTime = Date.now();
+    console.log(`[MONITOR] PRICE_SYNC_STARTED mode=${mode} batchSize=${batchSize} offset=${offset}`);
+
+    try {
+      // ── Resolve OEM numbers with priority ─────────────────────────
+        let oemNumbers: string[] = partNumbers || [];
+        if (oemNumbers.length === 0) {
+          oemNumbers = await getPrioritizedParts(supabase, batchSize, offset, mode);
+        }
+
+      if (oemNumbers.length === 0) {
+        return json({ success: true, summary: { total: 0, message: 'No parts to sync' } });
+      }
+
+      const batch = oemNumbers.slice(0, batchSize);
+      console.log(`🚀 Processing batch of ${batch.length} parts (offset ${offset}, concurrency ${CONCURRENCY})`);
+
+      // ── Login ───────────────────────────────────────────────────────
+      const cookieStr = await loginWithRetry(CATALOG_PASS);
+      if (!cookieStr) {
+        return json({ error: 'Catalog login failed after retries' }, 500);
+      }
+
+      // ── Adaptive throttle state ────────────────────────────────────
+      const throttle: ThrottleState = {
+        errorCount: 0,
+        currentDelay: MIN_DELAY,
+        currentConcurrency: CONCURRENCY,
+      };
+
+      // ── Process with adaptive promise pool ─────────────────────────
+      const results = await processWithPool(batch, throttle, (partNumber) =>
+        processPartWithRetry(partNumber, cookieStr, supabase, mode, debugMode, throttle)
+      );
+
+      // ── Stats ──────────────────────────────────────────────────────
+      let updated = 0, errors = 0, skipped = 0, notFound = 0, fallbackUsed = 0;
+      for (const r of results) {
+        if (r.status === 'updated') updated++;
+        else if (r.status === 'locked' || r.status === 'fresh') skipped++;
+        else if (r.status === 'not_found') notFound++;
+        else if (r.status === 'error') errors++;
+        if (r.fallback_used) fallbackUsed++;
+      }
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      const avgMs = batch.length > 0 ? ((Date.now() - startTime) / batch.length).toFixed(0) : '0';
+      const successRate = batch.length > 0 ? Math.round(((updated + skipped) / batch.length) * 100) : 0;
+
+      // ── Monitoring alerts ─────────────────────────────────────────
+      if (successRate < 70 && batch.length >= 10) {
+        console.warn(`[ALERT] PRICE_SYNC_LOW_SUCCESS_RATE: ${successRate}% (${updated + skipped}/${batch.length}). Errors: ${errors}, NotFound: ${notFound}`);
+      }
+      if (errors > 5) {
+        console.warn(`[ALERT] PRICE_SYNC_HIGH_ERROR_RATE: ${errors} errors in batch of ${batch.length}`);
+      }
+      if (fallbackUsed > 10) {
+        console.warn(`[ALERT] PRICE_SYNC_EXCESSIVE_FALLBACK: ${fallbackUsed} fallbacks in batch of ${batch.length}`);
+      }
+      if (fallbackUsed > 0) {
+        console.log(`[MONITOR] FALLBACK_USED: ${fallbackUsed} parts kept previous price due to sync failure`);
+      }
+
+      const summary = {
+        total: oemNumbers.length,
+        batchProcessed: batch.length,
+        updated, errors, notFound, skipped, fallbackUsed,
+        nextOffset: offset + batch.length,
+        elapsedSeconds: parseFloat(elapsed),
+        avgMsPerPart: parseInt(avgMs),
+        successRate: `${successRate}%`,
+      };
+
+      let csv: string | undefined;
+      if (exportCsv) {
+        const { data: allParts } = await supabase
+          .from('parts_new')
+          .select('oem_number, name, price_without_vat, price_with_vat, last_price_update, availability')
+          .order('oem_number');
+        if (allParts) {
+          csv = 'OEM;Název;Cena bez DPH;Cena s DPH;Poslední aktualizace;Dostupnost\n';
+          for (const p of allParts) {
+            csv += `${p.oem_number};${p.name};${p.price_without_vat};${p.price_with_vat};${p.last_price_update || ''};${p.availability || ''}\n`;
+          }
+        }
+      }
+
+      console.log(`[MONITOR] PRICE_SYNC_COMPLETED duration=${elapsed}s updated=${updated} notFound=${notFound} errors=${errors} skipped=${skipped} successRate=${successRate}% avgMs=${avgMs}`);
+      return json({ success: true, results, summary, ...(csv ? { csv } : {}) });
+    } finally {
+      await releaseLock(supabase, lockKey);
+    }
+  } catch (e) {
+    console.error(`[ALERT] PRICE_SYNC_FAILED: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    return json({ error: e instanceof Error ? e.message : 'Unknown error' }, 500);
+  }
+});
+
+// ─── Priority-based part selection ──────────────────────────────────────────
+
+async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
+  // Mopar dealer catalog sources. 7zap added: many OEMs ARE in dealer catalog, worth trying once.
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'ai-epc'];
+
+  if (mode === 'force') {
+    const { data: allParts } = await supabase
+      .from('parts_new')
+      .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
+      .not('oem_number', 'like', 'SAG-%')
+      .not('oem_number', 'like', 'AK-%')
+      .order('oem_number', { ascending: true })
+      .range(offset, offset + limit - 1);
+
+    return (allParts || []).map((part: { oem_number: string }) => part.oem_number).filter(Boolean);
+  }
+
+  const results: string[] = [];
+  const freshCutoff = new Date(Date.now() - FRESH_THRESHOLD_HOURS * 3600000).toISOString();
+
+  if (offset === 0) {
+    const { data: orderParts } = await supabase
+      .from('orders')
+      .select('oem_number')
+      .not('oem_number', 'is', null)
+      .gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (orderParts) {
+      for (const p of orderParts) {
+        if (p.oem_number && !results.includes(p.oem_number)) results.push(p.oem_number);
+      }
+    }
+  }
+
+  const remaining = limit - results.length;
+  if (remaining > 0) {
+    // PRIORITY: parts without prices first, then stale parts
+    const { data: noPriceParts } = await supabase
+      .from('parts_new')
+      .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
+      .not('oem_number', 'like', 'SAG-%')
+      .not('oem_number', 'like', 'AK-%')
+      .lte('price_with_vat', 0)
+      .lt('enrich_attempts', 3)
+      .order('enrich_attempts', { ascending: true })
+      .range(offset, offset + remaining - 1);
+    if (noPriceParts && noPriceParts.length > 0) {
+      for (const p of noPriceParts) {
+        if (!results.includes(p.oem_number)) results.push(p.oem_number);
+      }
+    }
+  }
+
+  // Fallback: stale priced parts (only when no missing-price parts left)
+  if (results.length < limit) {
+    const remaining2 = limit - results.length;
+    const { data: staleParts } = await supabase
+      .from('parts_new')
+      .select('oem_number')
+      .in('catalog_source', ALLOWED_SOURCES)
+      .not('oem_number', 'like', 'SAG-%')
+      .not('oem_number', 'like', 'AK-%')
+      .gt('price_with_vat', 0)
+      .or(`last_price_update.is.null,last_price_update.lt.${freshCutoff}`)
+      .order('last_price_update', { ascending: true, nullsFirst: true })
+      .range(0, remaining2 - 1);
+    if (staleParts) {
+      for (const p of staleParts) {
+        if (!results.includes(p.oem_number)) results.push(p.oem_number);
+      }
+    }
+  }
+
+  return results;
+}
+
+// ─── Lock ───────────────────────────────────────────────────────────────────
+
+async function acquireLock(supabase: any, key: string = LOCK_KEY): Promise<boolean> {
+  const { data: existing } = await supabase
+    .from('api_cache')
+    .select('created_at')
+    .eq('cache_key', key)
+    .eq('cache_type', 'lock')
+    .single();
+
+  if (existing) {
+    const age = (Date.now() - new Date(existing.created_at).getTime()) / 1000;
+    if (age < LOCK_TTL_SECONDS) return false;
+    await supabase.from('api_cache').delete().eq('cache_key', key).eq('cache_type', 'lock');
+  }
+
+  const { error } = await supabase.from('api_cache').insert({
+    cache_key: key,
+    cache_type: 'lock',
+    data: { started: new Date().toISOString() },
+    ttl_seconds: LOCK_TTL_SECONDS,
+  });
+
+  return !error;
+}
+
+async function releaseLock(supabase: any, key: string = LOCK_KEY): Promise<void> {
+  await supabase.from('api_cache').delete().eq('cache_key', key).eq('cache_type', 'lock');
+}
+
+// ─── Adaptive throttle ─────────────────────────────────────────────────────
+
+interface ThrottleState {
+  errorCount: number;
+  currentDelay: number;
+  currentConcurrency: number;
+}
+
+function adaptThrottle(throttle: ThrottleState, success: boolean) {
+  if (!success) {
+    throttle.errorCount++;
+    // After 3 consecutive errors, slow down
+    if (throttle.errorCount >= 3) {
+      throttle.currentDelay = Math.min(throttle.currentDelay * 1.5, 2000);
+      throttle.currentConcurrency = Math.max(Math.floor(throttle.currentConcurrency * 0.6), 2);
+      console.warn(`⚠️ Throttling: delay=${throttle.currentDelay}ms, concurrency=${throttle.currentConcurrency}`);
+    }
+  } else {
+    // Gradually recover
+    if (throttle.errorCount > 0) throttle.errorCount = Math.max(0, throttle.errorCount - 1);
+    if (throttle.currentDelay > MAX_DELAY) {
+      throttle.currentDelay = Math.max(MIN_DELAY, throttle.currentDelay * 0.9);
+    }
+    if (throttle.currentConcurrency < CONCURRENCY) {
+      throttle.currentConcurrency = Math.min(CONCURRENCY, throttle.currentConcurrency + 1);
+    }
+  }
+}
+
+// ─── Random delay ───────────────────────────────────────────────────────────
+
+function randomDelay(throttle: ThrottleState): Promise<void> {
+  const base = throttle.currentDelay;
+  const jitter = base * 0.5;
+  const ms = base + Math.random() * jitter;
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ─── Promise Pool (adaptive) ───────────────────────────────────────────────
+
+async function processWithPool<T>(
+  items: string[],
+  throttle: ThrottleState,
+  fn: (item: string) => Promise<T>
+): Promise<T[]> {
+  const results: T[] = new Array(items.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const i = index++;
+      await randomDelay(throttle);
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  const workerCount = Math.min(throttle.currentConcurrency, items.length);
+  const workers = Array.from({ length: workerCount }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+// ─── Login with retry ───────────────────────────────────────────────────────
+
+async function loginWithRetry(password: string): Promise<string | null> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const cookie = await loginToCatalog(password);
+    if (cookie) return cookie;
+    console.warn(`Login attempt ${attempt} failed, retrying...`);
+    await new Promise(r => setTimeout(r, 1000 * attempt));
+  }
+  return null;
+}
+
+async function loginToCatalog(password: string): Promise<string | null> {
+  const ua = randomUA();
+  const loginResp = await fetch(CATALOG_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': ua,
+    },
+    body: `password=${encodeURIComponent(password)}&submit-password=P%C5%99ihl%C3%A1sit`,
+    redirect: 'manual',
+  });
+
+  const cookies = loginResp.headers.getSetCookie?.() || [];
+  const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
+
+  let catalogHtml = '';
+  if (loginResp.status >= 300 && loginResp.status < 400) {
+    const redirectUrl = loginResp.headers.get('location') || CATALOG_URL;
+    const followResp = await fetch(redirectUrl, {
+      headers: { 'Cookie': cookieStr, 'User-Agent': ua },
+    });
+    catalogHtml = await followResp.text();
+  } else {
+    catalogHtml = await loginResp.text();
+  }
+
+  const hasSearchForm = catalogHtml.includes('name="search"') || catalogHtml.includes('Zadejte') || catalogHtml.includes('find-part');
+  if (!hasSearchForm) {
+    console.error('Login failed - no search form');
+    return null;
+  }
+
+  console.log(`🔑 Login OK (${cookies.length} cookies)`);
+  return cookieStr;
+}
+
+// ─── Process single part with retry ─────────────────────────────────────────
+
+async function processPartWithRetry(
+  partNumber: string,
+  cookieStr: string,
+  supabase: any,
+  mode: string,
+  debugMode: boolean,
+  throttle: ThrottleState
+): Promise<any> {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await processPart(partNumber, cookieStr, supabase, mode, debugMode);
+      adaptThrottle(throttle, result.status !== 'error');
+      return result;
+    } catch (e) {
+      adaptThrottle(throttle, false);
+      if (attempt === MAX_RETRIES) {
+        console.error(`❌ PRICE_SYNC_FAILED: ${partNumber} after ${attempt} attempts — ${String(e)}`);
+        return { oem_number: partNumber, status: 'error', error: String(e), attempts: attempt, fallback_used: false };
+      }
+      await randomDelay(throttle);
+    }
+  }
+}
+
+async function processPart(
+  partNumber: string,
+  cookieStr: string,
+  supabase: any,
+  mode: string,
+  debugMode: boolean
+): Promise<any> {
+  const { data: cached } = await supabase
+    .from('parts_new')
+    .select('id, oem_number, name, price_without_vat, price_with_vat, last_price_update, price_locked, availability')
+    .eq('oem_number', partNumber)
+    .single();
+
+  if (cached?.price_locked) {
+    return { oem_number: partNumber, status: 'locked' };
+  }
+
+  // Cache TTL check
+  if (cached?.last_price_update && mode !== 'force') {
+    const minutesAgo = (Date.now() - new Date(cached.last_price_update).getTime()) / (1000 * 60);
+    if (minutesAgo < CACHE_TTL_MINUTES) {
+      return { oem_number: partNumber, status: 'fresh', price_with_vat: cached.price_with_vat };
+    }
+  }
+
+  // Search variants. Věrnostsevyplaci.cz dealer katalog vyžaduje K-prefix
+  // (např. 4743116AA → K4743116AA). Pokud OEM už K-prefix má, nepřidáváme druhé K.
+  // 6 = engine/Mopar OEM family, SP = service-pack.
+  const cleanPN = partNumber.replace(/[\s-]/g, '').toUpperCase();
+  const padded = cleanPN.length <= 9 ? `0${cleanPN}` : cleanPN;
+  const alreadyK = /^K\d/.test(cleanPN);
+  const variantList: string[] = alreadyK
+    ? [cleanPN, padded, cleanPN.replace(/^K/, ''), `6${cleanPN.replace(/^K/, '')}`, `SP${cleanPN.replace(/^K/, '')}`]
+    : [`K${padded}`, `K${cleanPN}`, `6${cleanPN}`, `SP${cleanPN}`, padded, cleanPN];
+  const searchVariants = [...new Set(variantList)];
+
+  let searchHtml = '';
+  let searchCode = '';
+  let partFound = false;
+  let prices: number[] = [];
+  const ua = randomUA();
+
+  for (const variant of searchVariants) {
+    searchCode = variant;
+    const searchResp = await fetch(CATALOG_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cookie': cookieStr,
+        'User-Agent': ua,
+      },
+      body: `find-part=${encodeURIComponent(variant)}&search-part=Vyhledat`,
+    });
+    searchHtml = await searchResp.text();
+    partFound = verifyPartInResults(searchHtml, partNumber, variant);
+    if (partFound) {
+      prices = extractPricesDOM(searchHtml);
+      if (prices.length > 0) break;
+    }
+    await new Promise(r => setTimeout(r, 150));
+  }
+
+  // Extract catalog name
+  const catalogName = partFound ? extractPartName(searchHtml) : null;
+
+  if (debugMode) {
+    return {
+      oem_number: partNumber, searchCode, debug: true,
+      htmlLength: searchHtml.length, partFound, pricesFound: prices,
+      catalogName,
+      tableContent: (() => {
+        const tableMatch = searchHtml.match(/<table[\s\S]*?<\/table>/gi);
+        return tableMatch ? tableMatch.map(t => t.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()).join(' ||| ').substring(0, 3000) : 'NO TABLE';
+      })(),
+    };
+  }
+
+  if (prices.length > 0) {
+    const { priceWithVat, priceWithoutVat } = pickBestPrices(prices);
+
+    if (cached && cached.price_with_vat !== priceWithVat) {
+      await supabase.from('price_history').insert({
+        part_id: cached.id,
+        old_price_without_vat: cached.price_without_vat || 0,
+        new_price_without_vat: priceWithoutVat,
+        old_price_with_vat: cached.price_with_vat || 0,
+        new_price_with_vat: priceWithVat,
+        source: mode === 'force' ? 'manual' : 'auto',
+      });
+    }
+    if (cached) {
+      const updateData: any = {
+        price_without_vat: priceWithoutVat,
+        price_with_vat: priceWithVat,
+        last_price_update: new Date().toISOString(),
+        availability: 'available',
+      };
+      // Update name from catalog if available and current name looks AI-generated
+      if (catalogName && catalogName.length > 2) {
+        const currentName = cached.name || '';
+        const isAiName = currentName.includes('Náhradní díl') || currentName.includes('(') || /[čšžřďťňáéíóúůý]/.test(currentName);
+        if (isAiName || !currentName) {
+          updateData.name = catalogName;
+        }
+      }
+      await supabase.from('parts_new').update(updateData).eq('id', cached.id);
+    }
+
+    console.log(`✅ PRICE_UPDATED: ${partNumber} → ${priceWithVat} Kč`);
+    return {
+      oem_number: partNumber, status: 'updated', searchCode,
+      price_with_vat: priceWithVat, price_without_vat: priceWithoutVat,
+    };
+  } else {
+    // NEVER overwrite existing price — just bump timestamp to avoid re-checking too soon
+    if (cached) {
+      await supabase.from('parts_new').update({
+        last_price_update: new Date().toISOString(),
+        ...(cached.price_with_vat > 0 ? {} : { availability: 'on_order' }),
+      }).eq('id', cached.id);
+    }
+    console.log(`⚠️ PRICE_SYNC_NOT_FOUND: ${partNumber} — keeping existing price (${cached?.price_with_vat || 0} Kč)`);
+    return { oem_number: partNumber, status: 'not_found', searchCode, fallback_used: !!cached && cached.price_with_vat > 0 };
+  }
+}
+
+// ─── Part verification ──────────────────────────────────────────────────────
+
+function verifyPartInResults(html: string, partNumber: string, searchCode: string): boolean {
+  const partNumClean = partNumber.replace(/\s/g, '');
+  const contentOnly = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<[^>]*>/g, ' ');
+
+  const patterns = [partNumClean, partNumber, searchCode];
+  for (const p of patterns) {
+    if (p.length >= 5 && contentOnly.includes(p)) return true;
+  }
+
+  const tdPattern = new RegExp(`<td[^>]*>[^<]*${partNumClean.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*<\\/td>`, 'i');
+  if (tdPattern.test(html)) return true;
+
+  return false;
+}
+
+// ─── Part name extraction ───────────────────────────────────────────────────
+
+function extractPartName(html: string): string | null {
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (!doc) return null;
+    // Table structure: Kód dílu | Název | Famílie | Kategorie | Segment | Balení | Cena bez DPH | Cena s DPH
+    const rows = doc.querySelectorAll('tr');
+    for (const row of rows) {
+      const tds = (row as any).querySelectorAll('td');
+      if (tds.length >= 7) {
+        const name = ((tds[1] as any).textContent || '').trim();
+        if (name && name.length > 1 && !name.includes('Název')) {
+          return name;
+        }
+      }
+    }
+  } catch (e) {
+    // fallback: regex
+  }
+  // Regex fallback: look for the name column after the part code
+  const m = html.match(/<td[^>]*>[^<]*K?\d{5,}[A-Z]*[^<]*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
+  if (m && m[1].trim().length > 1) return m[1].trim();
+  return null;
+}
+
+// ─── Price extraction ───────────────────────────────────────────────────────
+
+const MAX_PRICE = 5000000;
+
+function extractPricesDOM(html: string): number[] {
+  const prices: number[] = [];
+
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    if (doc) {
+      const tds = doc.querySelectorAll('td');
+      for (const td of tds) {
+        const text = (td as any).textContent || '';
+        const m = text.match(/(\d[\d\s]*[,.]\d{2})/);
+        if (m) {
+          const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+          if (p > 10 && p < MAX_PRICE) prices.push(p);
+        }
+      }
+
+      const priceEls = doc.querySelectorAll('.price, .cena, [class*="price"], [class*="cena"]');
+      for (const el of priceEls) {
+        const text = (el as any).textContent || '';
+        const m = text.match(/(\d[\d\s]*[,.]\d{2})/);
+        if (m) {
+          const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+          if (p > 10 && p < MAX_PRICE) prices.push(p);
+        }
+      }
+    }
+  } catch (e) {
+    console.log('DOMParser fallback to regex:', e);
+  }
+
+  const text = html.replace(/<[^>]*>/g, ' ');
+
+  const kcPattern = /(?<!\d)(\d{1,3}(?:\s\d{3})*[,.]\d{2})\s*Kč/gi;
+  let m;
+  while ((m = kcPattern.exec(text)) !== null) {
+    const p = parseFloat(m[1].replace(/\s/g, '').replace(',', '.'));
+    if (p > 10 && p < MAX_PRICE) prices.push(p);
+  }
+
+  const dphPatterns = [
+    /Cena\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /Cena\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /MOC\s+bez\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /MOC\s+s\s+DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /bez\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+    /s\s*DPH[:\s]*(\d[\d\s]*[,.]\d{2})/gi,
+  ];
+  for (const pat of dphPatterns) {
+    let m2;
+    while ((m2 = pat.exec(text)) !== null) {
+      const p = parseFloat(m2[1].replace(/\s/g, '').replace(',', '.'));
+      if (p > 10 && p < MAX_PRICE) prices.push(p);
+    }
+  }
+
+  const tdPattern = /<td[^>]*>\s*(\d[\d\s]*[,.]\d{2})\s*<\/td>/gi;
+  let m3;
+  while ((m3 = tdPattern.exec(html)) !== null) {
+    const p = parseFloat(m3[1].replace(/\s/g, '').replace(',', '.'));
+    if (p > 10 && p < MAX_PRICE) prices.push(p);
+  }
+
+  return [...new Set(prices)];
+}
+
+function pickBestPrices(prices: number[]): { priceWithVat: number; priceWithoutVat: number } {
+  const sorted = [...prices].sort((a, b) => a - b);
+  if (sorted.length >= 2) {
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const ratio = sorted[j] / sorted[i];
+        if (ratio > 1.18 && ratio < 1.24) {
+          return { priceWithoutVat: sorted[i], priceWithVat: sorted[j] };
+        }
+      }
+    }
+    return { priceWithoutVat: sorted[sorted.length - 2], priceWithVat: sorted[sorted.length - 1] };
+  }
+  return { priceWithVat: sorted[0], priceWithoutVat: Math.round(sorted[0] / 1.21 * 100) / 100 };
+}
+
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}

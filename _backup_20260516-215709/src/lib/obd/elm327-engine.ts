@@ -1,0 +1,242 @@
+// ELM327 Protocol Engine
+// Handles initialization, command queuing, and response parsing
+
+import { bleManager } from '@/lib/obd/ble-manager';
+
+export type CommandPriority = 'high' | 'normal' | 'low';
+
+export type QueuedCommand = {
+  command: string;
+  priority: CommandPriority;
+  resolve: (value: string) => void;
+  reject: (reason: any) => void;
+  timestamp: number;
+  retries: number;
+};
+
+export type ELMState = 'idle' | 'initializing' | 'ready' | 'busy' | 'error';
+
+export type InitStep = {
+  command: string;
+  description: string;
+  status: 'pending' | 'running' | 'success' | 'error';
+  response?: string;
+};
+
+const INIT_SEQUENCE: { command: string; description: string }[] = [
+  { command: 'ATZ', description: 'Reset adapter' },
+  { command: 'ATE0', description: 'Echo off' },
+  { command: 'ATL0', description: 'Linefeeds off' },
+  { command: 'ATS0', description: 'Spaces off' },
+  { command: 'ATH1', description: 'Headers on' },
+  { command: 'ATSP0', description: 'Auto protocol' },
+  { command: 'ATST64', description: 'Timeout 400ms' },
+];
+
+const ERROR_PATTERNS = ['NO DATA', 'UNABLE TO CONNECT', 'BUS INIT', 'CAN ERROR', 'BUFFER FULL', '?', 'ERROR'];
+
+// Simulated OBD responses for web preview
+const SIMULATED_RESPONSES: Record<string, string> = {
+  'ATZ': 'ELM327 v2.3',
+  'ATE0': 'OK',
+  'ATL0': 'OK',
+  'ATS0': 'OK',
+  'ATH1': 'OK',
+  'ATSP0': 'OK',
+  'ATST64': 'OK',
+  'ATRV': '12.6V',
+  '0100': '7E80641002800180000000',
+  '0105': '7E803410548',
+  '010C': '7E804410C0D2C',
+  '010D': '7E80341OD00',
+  '0111': '7E803411119',
+  '0142': '7E80441422F08',
+  '0146': '7E803414632',
+  '0151': '7E80341510A',
+  '03': '7E80243010D',
+};
+
+class ELM327Engine {
+  private state: ELMState = 'idle';
+  private queue: QueuedCommand[] = [];
+  private processing = false;
+  private commandDelay = 80; // ms between commands
+  private initSteps: InitStep[] = [];
+  private stateListeners: ((state: ELMState) => void)[] = [];
+  private initListeners: ((steps: InitStep[]) => void)[] = [];
+  private isNative = false;
+
+  constructor() {
+    this.isNative = typeof (window as any).Capacitor !== 'undefined';
+  }
+
+  getState(): ELMState {
+    return this.state;
+  }
+
+  getInitSteps(): InitStep[] {
+    return [...this.initSteps];
+  }
+
+  setCommandDelay(ms: number) {
+    this.commandDelay = Math.max(50, Math.min(120, ms));
+  }
+
+  getCommandDelay(): number {
+    return this.commandDelay;
+  }
+
+  onStateChange(listener: (state: ELMState) => void): () => void {
+    this.stateListeners.push(listener);
+    return () => { this.stateListeners = this.stateListeners.filter(l => l !== listener); };
+  }
+
+  onInitProgress(listener: (steps: InitStep[]) => void): () => void {
+    this.initListeners.push(listener);
+    return () => { this.initListeners = this.initListeners.filter(l => l !== listener); };
+  }
+
+  private setState(state: ELMState) {
+    this.state = state;
+    this.stateListeners.forEach(l => l(state));
+  }
+
+  private emitInitProgress() {
+    this.initListeners.forEach(l => l([...this.initSteps]));
+  }
+
+  async initialize(): Promise<boolean> {
+    this.setState('initializing');
+    this.initSteps = INIT_SEQUENCE.map(s => ({ ...s, status: 'pending' as const }));
+    this.emitInitProgress();
+
+    for (let i = 0; i < this.initSteps.length; i++) {
+      this.initSteps[i].status = 'running';
+      this.emitInitProgress();
+
+      try {
+        const response = await this.sendRaw(this.initSteps[i].command);
+        this.initSteps[i].status = 'success';
+        this.initSteps[i].response = response;
+      } catch (e) {
+        this.initSteps[i].status = 'error';
+        this.initSteps[i].response = String(e);
+        this.emitInitProgress();
+        this.setState('error');
+        return false;
+      }
+
+      this.emitInitProgress();
+      await this.delay(this.commandDelay);
+    }
+
+    this.setState('ready');
+    return true;
+  }
+
+  private async sendRaw(command: string): Promise<string> {
+    if (!this.isNative) {
+      // Simulate
+      await this.delay(50 + Math.random() * 80);
+      const key = command.toUpperCase().replace(/\s/g, '');
+      return SIMULATED_RESPONSES[key] || 'NO DATA';
+    }
+
+    await bleManager.write(command + '\r');
+    const response = await bleManager.readResponse(2000);
+    return this.parseResponse(response);
+  }
+
+  async sendCommand(command: string, priority: CommandPriority = 'normal'): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const item: QueuedCommand = {
+        command,
+        priority,
+        resolve,
+        reject,
+        timestamp: Date.now(),
+        retries: 0,
+      };
+
+      if (priority === 'high') {
+        this.queue.unshift(item);
+      } else {
+        this.queue.push(item);
+      }
+
+      this.processQueue();
+    });
+  }
+
+  private async processQueue() {
+    if (this.processing || this.queue.length === 0) return;
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const item = this.queue.shift()!;
+      this.setState('busy');
+
+      try {
+        const response = await this.sendRaw(item.command);
+
+        if (this.isError(response)) {
+          if (item.retries < 2) {
+            item.retries++;
+            this.queue.unshift(item);
+          } else {
+            item.reject(new Error(`OBD Error: ${response}`));
+          }
+        } else {
+          item.resolve(response);
+        }
+      } catch (e) {
+        item.reject(e);
+      }
+
+      await this.delay(this.commandDelay);
+    }
+
+    this.processing = false;
+    this.setState('ready');
+  }
+
+  parseResponse(raw: string): string {
+    // Strip prompt characters, whitespace, echoed commands
+    let cleaned = raw
+      .replace(/>/g, '')
+      .replace(/\r/g, '\n')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && !line.startsWith('AT') && !line.startsWith('SEARCHING'))
+      .join('\n');
+
+    return cleaned;
+  }
+
+  parseMultiLine(raw: string): string[] {
+    return raw
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+  }
+
+  isError(response: string): boolean {
+    const upper = response.toUpperCase();
+    return ERROR_PATTERNS.some(p => upper.includes(p));
+  }
+
+  getQueueLength(): number {
+    return this.queue.length;
+  }
+
+  clearQueue() {
+    this.queue.forEach(item => item.reject(new Error('Queue cleared')));
+    this.queue = [];
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(r => setTimeout(r, ms));
+  }
+}
+
+export const elm327 = new ELM327Engine();

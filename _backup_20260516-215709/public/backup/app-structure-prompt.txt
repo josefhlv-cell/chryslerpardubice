@@ -1,0 +1,237 @@
+========================================================================
+CHRYSLER & DODGE PARDUBICE — KOMPLETNÍ PROMPT PRO REKONSTRUKCI
+========================================================================
+
+Toto je mobilní webová aplikace (PWA-ready) pro autoservis a prodej
+náhradních dílů značek Chrysler, Dodge, Jeep, RAM a Fiat.
+
+TECHNOLOGIE: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui
++ Framer Motion + Supabase (auth, DB, edge functions) + React Query
+
+========================================================================
+ARCHITEKTURA
+========================================================================
+
+Vrstva:          Popis:
+─────────────────────────────────────────────────────────
+Frontend         React SPA, mobilní layout (TopBar + BottomNav)
+Kontexty         AuthContext (přihlášení, profil, role, zaměstnanec)
+                 CartContext (košík s položkami, slevami)
+API vrstva       partsAPI.ts (díly, VIN, EPC, kategorie, CSV)
+                 serviceAPI.ts (servisní intervaly, km logika)
+                 buyImportAPI.ts (výkup, dovoz)
+Backend          18 edge functions (AI mechanik, VIN dekódování,
+                 katalogové proxy, EPC generování, notifikace,
+                 cron synchronizace cen, scraping)
+Databáze         40+ tabulek, RLS politiky, enums, views
+
+========================================================================
+MODULY A FUNKCE
+========================================================================
+
+1. PŘIHLÁŠENÍ A ÚČTY
+   - Email registrace (soukromý / firemní účet)
+   - Firemní účty čekají na schválení adminem
+   - Slevy pro firemní zákazníky (nastavitelné %)
+   - Profil s IČO, DIČ, telefon
+   - Reset hesla
+
+2. KATALOG NÁHRADNÍCH DÍLŮ (/shop)
+   - Vyhledávání podle OEM čísla, názvu
+   - Vyhledávání podle vozidla (značka → model → kategorie)
+   - EPC mode (elektronický katalog dílů s nákresy)
+   - VIN dekodér (NHTSA + AI obohacení)
+   - VIN OCR (rozpoznání z fotky)
+   - Filtrování: značka, model, cena, dostupnost, kategorie
+   - Stránkování, řazení, CSV export
+   - Oblíbené díly, historie vyhledávání
+   - Detail dílu: ceny, dostupnost, fotky, kompatibilita
+   - Objednávka nového dílu (přímý nákup)
+   - Poptávka použitého dílu (admin nacení)
+   - Křížové reference OEM čísel
+   - Supersese dílů (nahrazení starých čísel)
+   - Servisní intervaly s doporučenými díly
+   - Multi-source katalog (interní DB + externí API)
+   - Admin margin a uzamčení cen
+
+3. EPC — ELEKTRONICKÝ KATALOG (/epc)
+   - Kompletní workflow: VIN → kategorie → diagram → díl
+   - SVG nákresy s klikacími pozicemi
+   - Propojení pozic s díly v katalogu
+   - Generování diagramů (AI + manuální)
+   - Admin správa EPC kategorií a diagramů
+
+4. NÁKUPNÍ KOŠÍK (/cart, /checkout)
+   - Přidávání/odebírání položek
+   - Automatická sleva pro firemní zákazníky
+   - Odeslání objednávky do DB
+
+5. SERVIS (/service)
+   - Online rezervace servisu
+   - Výběr typu servisu (10 typů)
+   - Preferovaný termín (kalendář)
+   - Poznámka k rezervaci
+   - Admin potvrzení termínu a ceny
+   - Notifikace adminu o nové rezervaci
+
+6. SERVISNÍ ZAKÁZKY (admin + mechanik)
+   - Kompletní lifecycle: přijetí → diagnostika → čekání na
+     schválení → čekání na díly → oprava → testování →
+     připraveno k vyzvednutí → dokončeno
+   - Přiřazení mechanika a zdviže
+   - Úkoly pro mechanika (task management)
+   - Fotodokumentace (před/během/po)
+   - Příjmový protokol (stav paliva, nájezd, poškození, podpis)
+   - Kalkulace: práce + díly + DPH
+   - Fakturace
+   - Timeline stavů s historií
+   - Zákaznické schválení ceny
+   - ETA dokončení
+   - Notifikace zákazníkovi o změně stavu
+
+7. DASHBOARD MECHANIKA (/mechanic-dashboard)
+   - Seznam přiřazených zakázek
+   - Start/stop úkolů s měřením času
+   - Fotodokumentace práce
+   - Pracovní výkazy
+
+8. AI MECHANIK (/ai-mechanic)
+   - Chatbot "Tonda" (edge function ai-mechanic)
+   - Diagnostika závad podle příznaků
+   - Výběr vozidla z garáže uživatele
+   - Kontrolky (check engine, ABS, airbag...)
+   - Fotografie problému (odesílání do AI)
+   - Doporučení dílů z katalogu (napojení na shop)
+   - Nouzové volání na servis
+
+9. NOUZOVÉ PŘÍRUČKY (/emergency)
+   - Vybitá baterie — postup
+   - Přehřátý motor — postup
+   - Defekt pneumatiky — postup
+   - Nízký tlak oleje — postup
+   - Tlačítko pro volání servisu
+
+10. MOJE VOZIDLA — GARÁŽ (/my-vehicles)
+    - CRUD operace na uživatelských vozidlech
+    - VIN dekódování (automatické vyplnění údajů)
+    - VIN OCR (skenování z fotky)
+    - Detail VIN (rozšířené info z AI)
+    - Aktualizace nájezdu
+    - Historie nájezdů
+    - Propojení se servisní knížkou
+    - Ikony vozidel podle značky/modelu
+
+11. SERVISNÍ KNÍŽKA (/service-book)
+    - Historie servisu pro každé vozidlo
+    - Filtrování podle vozidla
+    - Detail záznamu (typ, datum, nájezd, díly, cena, popis)
+    - Export do PDF
+
+12. SERVISNÍ PLÁNY (/service-plan)
+    - Automatické plány podle vozidla
+    - Vlastní (custom) plány
+    - Intervaly km + měsíce
+    - Výpočet "next service due" (km_start logika)
+    - Doporučené díly (OEM)
+    - Propojení s katalogem
+
+13. NABÍDKA VOZŮ (/vehicles, /vehicle-offer)
+    - Seznam vozů k prodeji
+    - Detail vozu (fotky, parametry, popis)
+    - Poptávkový formulář
+    - Výkup vozu (formulář s hodnocením stavu)
+    - Dovoz vozu na zakázku (specifikace požadavků)
+    - Admin správa nabídky
+
+14. NOTIFIKACE (/notifications)
+    - In-app notifikace
+    - Počet nepřečtených (badge)
+    - Admin odesílání zpráv uživatelům
+
+15. ADMIN PANEL (/admin)
+    - 18+ tabů s kompletní správou
+    - Schvalování firemních účtů + nastavení slev
+    - Správa objednávek (stavy, poznámky)
+    - Správa servisních rezervací
+    - Správa servisních zakázek (kompletní workflow)
+    - Import katalogu (CSV + AI)
+    - Nastavení katalogových zdrojů
+    - Správa cen (marže, uzamčení, bulk sync)
+    - Synchronizace cen (CRON)
+    - EPC diagramy (generování, import)
+    - Feature flags (zapínání/vypínání modulů)
+    - Mechanici, zaměstnanci
+    - Servisní statistiky a kalendář
+    - Servisní postupy (scraping + editace)
+    - Hlášení poruch s AI analýzou
+    - Výkup/dovoz vozů
+
+16. PREZENTACE (/presentation)
+    - Interní modul pro prezentaci aplikace
+    - 8 tematických obrázků + 10 UI mockupů
+    - Export do PDF
+    - Záloha kódu
+
+========================================================================
+DATABÁZOVÉ ENUMS
+========================================================================
+
+app_role: admin | customer
+booking_status: pending | confirmed | in_progress | completed | cancelled
+order_status_v2: nova | zpracovava_se | vyrizena | zrusena
+order_type: new | used
+request_status: pending | quoted | accepted | rejected | fulfilled
+service_order_status: received | diagnostics | waiting_approval |
+  waiting_parts | in_repair | testing | ready_pickup | completed
+
+========================================================================
+EDGE FUNCTIONS (18)
+========================================================================
+
+ai-mechanic        — AI chatbot diagnostika
+catalog-fetch       — Stahování z externích katalogů
+catalog-probe       — Test dostupnosti katalogů
+catalog-proxy       — Proxy pro katalogové API
+catalog-search      — Vyhledávání v externích katalozích
+cron-control        — Správa CRON úloh
+epc-diagram         — Generování EPC diagramů
+epc-generate        — Generování EPC pro model
+epc-generate-batch  — Dávkové generování EPC
+epc-scrape          — Scraping EPC dat
+notify-admin        — Notifikace adminům
+oem-crossref        — Křížové reference OEM
+price-sync          — Synchronizace cen
+scrape-7zap         — Scraping 7zap.com
+scrape-service-procedures — Scraping servisních postupů
+service-status-notify — Notifikace o změně stavu zakázky
+vin-decode-ai       — AI dekódování VIN
+vin-ocr             — OCR rozpoznání VIN z fotky
+
+========================================================================
+DESIGN SYSTÉM
+========================================================================
+
+- Tmavý gradient theme (gradient-dark)
+- Primary barva: zlatá/amber
+- Glass-card efekty (backdrop-blur)
+- Font display: Oswald / system
+- Mobilní layout s bottom navigation
+- Framer Motion animace na všech přechodech
+- shadcn/ui komponenty (50+)
+- Responsivní design (mobile-first, 390px základ)
+
+========================================================================
+BEZPEČNOST
+========================================================================
+
+- RLS politiky na všech tabulkách
+- Role v separátní tabulce user_roles
+- has_role() security definer funkce
+- Firemní účty vyžadují schválení
+- can_place_order kontrola před objednávkou
+- Admin panel chráněný rolí
+- Edge functions s auth kontrolou
+
+========================================================================
+KONEC PROMPTU
+========================================================================

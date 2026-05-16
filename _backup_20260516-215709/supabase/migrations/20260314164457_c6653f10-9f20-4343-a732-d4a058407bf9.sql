@@ -1,0 +1,1 @@
+DELETE FROM epc_categories WHERE brand = 'Chrysler' AND category IN ('Motor (Engine)', 'Převodovka (Transmission)', 'Brzdový systém (Brakes)', 'Odpružení (Suspension)', 'Karoserie (Body)', 'Elektroinstalace (Electrical)', 'Klimatizace (A/C)', 'Výfuk (Exhaust)', 'Chladící systém (Cooling)', 'Údržba (Maintenance)');
