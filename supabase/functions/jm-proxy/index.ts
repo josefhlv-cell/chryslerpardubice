@@ -2488,6 +2488,48 @@ Deno.serve(async (req) => {
               }
               const sectionsList = Object.values(grouped);
               const collectedAll = sectionsList.flatMap((s) => s.items);
+              // INTERNAL ONLY: log suspicious gen_art_name (TecDoc category) mappings
+              // returned by J+M. We never expose these warnings to the customer,
+              // we only log them so we can audit which J+M categories are wrong.
+              try {
+                const NAME_HINTS: Array<{ re: RegExp; expect: RegExp; label: string }> = [
+                  { re: /brzd\w*\s+desti/i,  expect: /desti|brake\s*pad/i,        label: 'brake-pads' },
+                  { re: /brzd\w*\s+kotou/i,  expect: /kotou|brake\s*disc/i,       label: 'brake-discs' },
+                  { re: /(olejov\w*\s+)?filtr\s+oleje|olejov\w*\s+filtr/i, expect: /filtr|filter/i, label: 'oil-filter' },
+                  { re: /vzduchov\w*\s+filtr/i,   expect: /filtr|filter/i,        label: 'air-filter' },
+                  { re: /palivov\w*\s+filtr/i,    expect: /filtr|filter/i,        label: 'fuel-filter' },
+                  { re: /kabinov\w*\s+filtr|pylov\w*\s+filtr/i, expect: /filtr|filter/i, label: 'cabin-filter' },
+                  { re: /tlumi/i,                 expect: /tlumi|shock|damper/i,  label: 'shock-absorber' },
+                  { re: /(klínov\w*|drážkov\w*|ozuben\w*)\s+řemen/i, expect: /řemen|belt/i, label: 'belt' },
+                  { re: /chladič/i,               expect: /chladič|radiator|cool/i, label: 'radiator' },
+                  { re: /žárovk/i,                expect: /žárov|bulb|světl/i,    label: 'bulb' },
+                ];
+                const suspicious: Array<{ oem: string; brand: string; name: string; gen_art_name: string; expected: string }> = [];
+                const seenLog = new Set<string>();
+                for (const it of collectedAll) {
+                  const name = String(it.name || '');
+                  // @ts-ignore
+                  const gname = String((it as any).tecdoc_section?.label || it.category || '');
+                  for (const h of NAME_HINTS) {
+                    if (h.re.test(name) && gname && !h.expect.test(gname)) {
+                      const k = `${h.label}::${gname}`;
+                      if (seenLog.has(k)) break;
+                      seenLog.add(k);
+                      suspicious.push({ oem: String(it.oem_number || ''), brand: String(it.brand || ''), name, gen_art_name: gname, expected: h.label });
+                      break;
+                    }
+                  }
+                }
+                if (suspicious.length) {
+                  await adminClient.from('catalog_event_log').insert({
+                    source: 'jm-proxy',
+                    event: 'gen_art_name_suspicious',
+                    level: 'warn',
+                    message: `J+M gen_art_name mismatch: ${suspicious.length} hits (engineID ${resolvedEngineID})`,
+                    details: { engineID: resolvedEngineID, samples: suspicious.slice(0, 30), total: suspicious.length },
+                  });
+                }
+              } catch (_) { /* non-blocking internal log */ }
               if (collectedAll.length > 0) {
                 const enriched = await enrichItemsWithRelatedOem(adminClient, collectedAll);
                 const out = {
