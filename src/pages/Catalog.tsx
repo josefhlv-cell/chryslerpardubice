@@ -363,7 +363,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           loading
             ? <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                <p className="text-xs text-muted-foreground">Načítám díly z J+M (TecDoc) …</p>
+                <p className="text-xs text-muted-foreground">Načítání…</p>
               </div>
             : groups.length === 0
               ? <div className="text-center py-16 text-sm text-muted-foreground">
