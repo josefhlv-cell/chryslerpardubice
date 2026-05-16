@@ -221,11 +221,18 @@ export async function fetchAllPartsForEngine(opts: {
         .limit(5000);
       const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
       if (partIds.length > 0) {
-        const { data: rows } = await supabase
-          .from("parts_new_public")
-          .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description")
-          .in("id", partIds);
-        vehicleOemRows = (rows || []).filter((r: any) => {
+        // Batch the .in() query — PostgREST URL limit fails silently around ~200 UUIDs.
+        const BATCH = 150;
+        const allRows: any[] = [];
+        for (let i = 0; i < partIds.length; i += BATCH) {
+          const slice = partIds.slice(i, i + BATCH);
+          const { data: rows } = await supabase
+            .from("parts_new_public")
+            .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description")
+            .in("id", slice);
+          if (rows) allRows.push(...rows);
+        }
+        vehicleOemRows = allRows.filter((r: any) => {
           const src = String(r.catalog_source || "").toLowerCase();
           return ["mopar", "mopar_oem", "7zap", "csv", "epc-link"].includes(src);
         });
