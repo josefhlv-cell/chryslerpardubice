@@ -2662,7 +2662,54 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case 'getCategoryTree':
+      case 'partDetail': {
+        // Lazy enrichment: full info (images, OE numbers, technical_parameters)
+        // for a single J+M item. Used by the catalog detail panel.
+        const code = String(payload.code || payload.oem_number || '').trim();
+        if (!code) { result = { item: null }; break; }
+        const cacheKey = `detail:${normalizeOemCode(code)}`;
+        try {
+          const { data: cached } = await adminClient
+            .from('api_cache')
+            .select('data, created_at, ttl_seconds')
+            .eq('cache_type', 'jm_part_detail')
+            .eq('cache_key', cacheKey)
+            .maybeSingle();
+          if (cached) {
+            const ageMs = Date.now() - new Date(cached.created_at as string).getTime();
+            if (ageMs < (cached.ttl_seconds ?? 7 * 24 * 3600) * 1000) {
+              result = { item: cached.data, fromCache: true };
+              break;
+            }
+          }
+        } catch (_) { /* non-blocking */ }
+
+        // Try CodeProduct (item code from supplier) first, then CodeOE (OE number).
+        let direct = await fetchJmForSpecificCode(code, 'CodeProduct').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
+        if (!direct.items.length) {
+          direct = await fetchJmForSpecificCode(code, 'CodeOE').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
+        }
+        // Pick best match: exact OEM match wins, otherwise first
+        const norm = normalizeOemCode(code);
+        const best = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm) || direct.items[0] || null;
+
+        if (best) {
+          try {
+            await adminClient.from('api_cache').upsert({
+              cache_type: 'jm_part_detail',
+              cache_key: cacheKey,
+              data: best,
+              ttl_seconds: 7 * 24 * 3600,
+              created_at: new Date().toISOString(),
+            }, { onConflict: 'cache_type,cache_key' });
+          } catch (_) { /* non-blocking */ }
+        }
+
+        result = { item: best, rawCount: direct.rawCount };
+        break;
+      }
+
+
       case 'fetchCategoryTree':
       case 'categoryTree': {
         const { data, error } = await adminClient
