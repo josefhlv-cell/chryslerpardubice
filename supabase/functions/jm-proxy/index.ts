@@ -2413,6 +2413,7 @@ Deno.serve(async (req) => {
           for (const r of sectionResults) {
             totalRaw += r.rawCount;
             if (r.items.length > 0) sectionsHit++;
+            const liveSectionLabel = liveSectionLabelFromItems(r.items, r.sec.label);
             for (const it of r.items) {
               if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
               const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
@@ -2420,9 +2421,9 @@ Deno.serve(async (req) => {
               seen.add(key);
               collected.push({
                 ...it,
-                category: r.sec.label,
+                category: liveSectionLabel,
                 // @ts-ignore — extra field consumed by frontend
-                tecdoc_section: { id: r.sec.id, label: r.sec.label },
+                tecdoc_section: { id: r.sec.id, label: liveSectionLabel },
               });
             }
           }
