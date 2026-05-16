@@ -1201,6 +1201,19 @@ function classifyTecdoc(item: { name: string; description?: string }): TecdocSec
   return { id: 0, label: 'Ostatní', keywords: [] };
 }
 
+function liveSectionLabelFromItems(items: UnifiedPart[], fallback: string): string {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const it of items) {
+    const label = String(it.name || '').trim();
+    if (!label) continue;
+    const key = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const prev = counts.get(key);
+    counts.set(key, { label, count: (prev?.count || 0) + 1 });
+  }
+  const top = [...counts.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'cs'))[0];
+  return top?.label || fallback || 'Ostatní';
+}
+
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
   return nodes
     .map((node) => {
@@ -2400,6 +2413,7 @@ Deno.serve(async (req) => {
           for (const r of sectionResults) {
             totalRaw += r.rawCount;
             if (r.items.length > 0) sectionsHit++;
+            const liveSectionLabel = liveSectionLabelFromItems(r.items, r.sec.label);
             for (const it of r.items) {
               if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
               const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
@@ -2407,9 +2421,9 @@ Deno.serve(async (req) => {
               seen.add(key);
               collected.push({
                 ...it,
-                category: r.sec.label,
+                category: liveSectionLabel,
                 // @ts-ignore — extra field consumed by frontend
-                tecdoc_section: { id: r.sec.id, label: r.sec.label },
+                tecdoc_section: { id: r.sec.id, label: liveSectionLabel },
               });
             }
           }
