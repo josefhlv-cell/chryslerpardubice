@@ -539,8 +539,9 @@ const CatalogListing = ({ items, loading, onOrder, emptyHint }: Props) => {
     (async () => {
       for (const code of codes) {
         if (cancelled) break;
-        if (detailCache.has(code)) continue;
-        fetchPartDetail(code).catch(() => {});
+        const part = sorted.find((p) => p.oem_number === code);
+        if (detailCache.has(detailKey(code, part?.manufacturer))) continue;
+        fetchPartDetail(code, part?.manufacturer).catch(() => {});
         await new Promise((r) => setTimeout(r, 120));
       }
     })();
