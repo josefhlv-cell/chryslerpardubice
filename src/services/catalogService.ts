@@ -28,7 +28,6 @@ type RawJmItem = {
   price_with_vat: number;
   price_without_vat: number;
   stock: number;
-  stock: number;
   availability: string;
   image: string;
   image_urls?: string[];
@@ -41,6 +40,7 @@ type RawJmItem = {
 
 function jmToCatalogPart(it: RawJmItem): CatalogPart {
   const price = Number(it.price_with_vat) || 0;
+  const stock = Number(it.stock) || 0;
   return {
     id: `jm-${it.oem_number}`,
     oem_number: it.oem_number,
@@ -49,9 +49,9 @@ function jmToCatalogPart(it: RawJmItem): CatalogPart {
     catalog_source: "jm",
     price_without_vat: it.price_without_vat || null,
     price_with_vat: price || null,
-    availability: price > 0 ? it.availability || "in_stock" : "on_order",
+    availability: stock > 0 ? "in_stock" : price > 0 ? it.availability || "on_order" : "on_order",
     image_urls: it.image_urls && it.image_urls.length > 0 ? it.image_urls : (it.image ? [it.image] : null),
-    category: it.category || null,
+    category: it.category || it.tecdoc_section?.label || null,
     description: it.description || null,
     is_oem: false,
     badge_label: "NÁHRADA",
@@ -62,6 +62,8 @@ function jmToCatalogPart(it: RawJmItem): CatalogPart {
     compatible_vehicles: null,
     related_oem_number: it.related_oem_number || null,
     oe_numbers: it.oe_numbers && it.oe_numbers.length > 0 ? it.oe_numbers : null,
+    stock,
+    tecdoc_section: it.tecdoc_section?.label || null,
   };
 }
 
