@@ -647,6 +647,7 @@ function extractTechParams(it: any): Record<string, string> {
 function extractOeNumbers(it: any): string[] {
   const out = new Set<string>();
   const sources = [
+    it.oeCodes, it.OeCodes, it.OECodes,
     it.originalNumbers, it.OriginalNumbers,
     it.oeNumbers, it.OeNumbers, it.OENumbers,
     it.references, it.References,
@@ -659,7 +660,8 @@ function extractOeNumbers(it: any): string[] {
         if (typeof row === 'string') out.add(row.trim());
         else if (row && typeof row === 'object') {
           const v = row.number || row.Number || row.code || row.Code || row.oe || row.OE;
-          if (v) out.add(String(v).trim());
+          const manufacturer = String(row.manufacturer || row.Manufacturer || row.brand || row.Brand || '').trim();
+          if (v) out.add(`${manufacturer ? `${manufacturer}: ` : ''}${String(v).trim()}`);
         }
       }
     } else if (typeof src === 'string') {
@@ -667,6 +669,61 @@ function extractOeNumbers(it: any): string[] {
     }
   }
   return [...out].filter(Boolean);
+}
+
+function parseJsonStringMaybe(value: string): any {
+  try {
+    const parsed = JSON.parse(value);
+    if (typeof parsed === 'string') return parseJsonStringMaybe(parsed);
+    return parsed;
+  } catch (_) {
+    return value;
+  }
+}
+
+function cleanHtmlText(value: string): string {
+  return htmlDecode(String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+function parseAttributeHtml(html: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const rows = String(html || '').matchAll(/<tr[^>]*>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<\/tr>/gi);
+  for (const row of rows) {
+    const key = cleanHtmlText(row[1]);
+    const val = cleanHtmlText(row[2]);
+    if (key && val) out[key] = val;
+  }
+  return out;
+}
+
+function parseOeHtml(html: string): string[] {
+  const out = new Set<string>();
+  const blocks = String(html || '').matchAll(/<a\b[\s\S]*?class=["'][^"']*flex-item[^"']*["'][\s\S]*?<\/a>/gi);
+  for (const block of blocks) {
+    const raw = block[0];
+    const manufacturer = cleanHtmlText(raw.match(/class=["']flex-manufacturer["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+    const number = cleanHtmlText(raw.match(/class=["']flex-number["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+    if (number) out.add(`${manufacturer ? `${manufacturer}: ` : ''}${number}`);
+  }
+  return [...out];
+}
+
+function parseApplicationsHtml(html: string): string[] {
+  const out = new Set<string>();
+  const tables = String(html || '').matchAll(/<div\b[^>]*class=["'][^"']*table[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*table|$)/gi);
+  for (const table of tables) {
+    const tableHtml = table[1];
+    const header = tableHtml.match(/<div\b[^>]*class=["'][^"']*header[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] || '';
+    const brand = cleanHtmlText(header.match(/class=["'][^"']*highlight[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1] || '');
+    const rows = tableHtml.matchAll(/<a\b[^>]*class=["'][^"']*row[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi);
+    for (const row of rows) {
+      const cols = [...row[1].matchAll(/<span\b[^>]*class=["'][^"']*column[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi)]
+        .map((m) => cleanHtmlText(m[1]))
+        .filter(Boolean);
+      if (cols.length) out.add([brand, ...cols].filter(Boolean).join(' · '));
+    }
+  }
+  return [...out];
 }
 
 function normalizeCatalogItem(it: any): UnifiedPart {
