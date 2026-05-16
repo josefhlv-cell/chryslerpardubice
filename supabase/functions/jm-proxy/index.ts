@@ -494,6 +494,7 @@ const UNIVERSAL_MARGIN = 1.20;
 
 interface UnifiedPart {
   supplier: 'jm';
+  jm_internal_id?: number;
   oem_number: string;
   brand: string;
   name: string;
@@ -758,6 +759,7 @@ function normalizeCatalogItem(it: any): UnifiedPart {
 
   return {
     supplier: 'jm',
+    jm_internal_id: Number(it.id ?? it.ID ?? 0) || undefined,
     oem_number: String(prefix ? `${prefix}${code}` : code).trim(),
     brand: String(brand).trim(),
     name: String(name).trim(),
@@ -944,6 +946,77 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
     if (r.items.length > 0) collected.push(...r.items);
   }
   return { rawCount, items: dedupeUnifiedParts(collected) };
+}
+
+async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPart | null> {
+  const raw = await nextisPost('/catalogs/items-checking', {
+    searchTarget: 'CodeMain',
+    trySearchWithoutManufacturer: true,
+    getOECodes: true,
+    getDeposits: false,
+    getServices: false,
+    getCashBack: false,
+    getEANCodes: false,
+    items: [{ code, brand: brand || '', requestedQty: 1, pairID: 1 }],
+  });
+  const first = extractItems(raw)[0];
+  return first ? normalizeCatalogItem(first) : null;
+}
+
+async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): Promise<UnifiedPart> {
+  const code = item.oem_number || fallbackCode;
+  const images = new Set<string>(item.image_urls || []);
+  let productId = Number(item.jm_internal_id || 0) || 0;
+
+  try {
+    const whisper = parseJsonStringMaybe(await jmPublicPostApi('search/get-smart-search-whispers-products', {
+      searchPhrase: code,
+      target: 'Code',
+      showHistory: false,
+    }));
+    const html = String(whisper?.WhispererHTMLContent || '');
+    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) images.add(htmlDecode(m[1]));
+    const href = html.match(/href=["']([^"']*\/hledani\/[^"']+)["']/i)?.[1] || '';
+    const idFromHref = Number(href.match(/\/(\d+)(?:[?#]?)$/)?.[1] || 0);
+    if (idFromHref) productId = idFromHref;
+  } catch (_) { /* optional eshop enrichment */ }
+
+  const firstImage = [...images].find((url) => /PH\d{2}/i.test(url));
+  if (firstImage) {
+    await Promise.all(Array.from({ length: 12 }, async (_, idx) => {
+      const n = String(idx + 1).padStart(2, '0');
+      const candidate = firstImage.replace(/PH\d{2}/i, `PH${n}`);
+      if (images.has(candidate)) return;
+      try {
+        const r = await fetch(candidate, { method: 'HEAD', signal: AbortSignal.timeout(1600) });
+        if (r.ok) images.add(candidate);
+      } catch (_) { /* image not available */ }
+    }));
+  }
+
+  if (!productId) return { ...item, image_urls: [...images], image: [...images][0] || item.image };
+
+  const [attributesHtml, oeHtml, applicationsHtml, descriptionHtml] = await Promise.all([
+    jmPublicPostApi('tecdoc/get-product-detail-attributes', { groupID: productId, tecDocCodePair: code, tecDocBrandID: 0, articleLinkID: productId, manufacturerID: 0, modelID: 0, engineID: 0 }).catch(() => ''),
+    jmPublicPostApi('product/get-product-detail-oe-numbers', { groupID: productId, articleNumber: code, brandId: 0 }).catch(() => ''),
+    jmPublicPostApi('product/get-product-detail-applications', { groupID: productId, articleNumber: code, brandId: 0, vehicleType: 'pc' }).catch(() => ''),
+    jmPublicPostApi('product/get-product-detail-description', { groupID: productId }).catch(() => ''),
+  ]);
+
+  const technicalParameters = parseAttributeHtml(String(attributesHtml || ''));
+  const oeNumbers = parseOeHtml(String(oeHtml || ''));
+  const compatibleVehicles = parseApplicationsHtml(String(applicationsHtml || ''));
+  const description = cleanHtmlText(String(descriptionHtml || ''));
+
+  return {
+    ...item,
+    image: [...images][0] || item.image,
+    image_urls: [...images],
+    technical_parameters: Object.keys(technicalParameters).length ? technicalParameters : item.technical_parameters,
+    oe_numbers: oeNumbers.length ? oeNumbers : item.oe_numbers,
+    compatible_vehicles: compatibleVehicles.length ? compatibleVehicles : item.compatible_vehicles,
+    description: description && description.length > 20 ? description : item.description,
+  };
 }
 
 async function fetchJmViaCrossRefs(adminClient: any, oeCode: string, category = ''): Promise<{ items: UnifiedPart[]; xrefsTried: string[]; rawHits: number }> {
