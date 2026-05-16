@@ -1201,6 +1201,19 @@ function classifyTecdoc(item: { name: string; description?: string }): TecdocSec
   return { id: 0, label: 'Ostatní', keywords: [] };
 }
 
+function liveSectionLabelFromItems(items: UnifiedPart[], fallback: string): string {
+  const counts = new Map<string, { label: string; count: number }>();
+  for (const it of items) {
+    const label = String(it.name || '').trim();
+    if (!label) continue;
+    const key = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const prev = counts.get(key);
+    counts.set(key, { label, count: (prev?.count || 0) + 1 });
+  }
+  const top = [...counts.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'cs'))[0];
+  return top?.label || fallback || 'Ostatní';
+}
+
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
   return nodes
     .map((node) => {
