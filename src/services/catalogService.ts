@@ -287,34 +287,80 @@ export async function fetchAllPartsForEngine(opts: {
       addedOemByParent.set(pid, set);
     }
 
-    const oemByParent = new Map<string, CatalogPart[]>();
+    // Group OEM rows per parent + try to slot each one into an existing tecdoc child
+    // section by matching keywords from the part name to the child label.
+    const oemByParentChild = new Map<string, Map<string, CatalogPart[]>>(); // parentId -> (childId|"__fallback") -> parts
     for (const row of vehicleOemRows) {
       const parent = parentForSection(row.category || "Ostatní");
       const key = normalizeOem(row.oem_number);
       const existing = addedOemByParent.get(parent.id);
       if (key && existing?.has(key)) continue;
-      if (!oemByParent.has(parent.id)) oemByParent.set(parent.id, []);
-      oemByParent.get(parent.id)!.push(oemRowToCatalogPart(row));
+
+      const oemPart = oemRowToCatalogPart(row);
+      const nameNorm = norm(oemPart.name);
+      let targetChildId = "__fallback";
+
+      const parentGroup = parentMap.get(parent.id);
+      if (parentGroup?.children?.length) {
+        // Match against the most specific (longest) token of each child label that
+        // doesn't share a prefix with the parent label (skip generic words like "brzdove").
+        const parentRoot = norm(parentGroup.label).slice(0, 4);
+        const candidates = parentGroup.children
+          .map((c) => {
+            const tokens = norm(c.label)
+              .split(/\s+/)
+              .filter((t) => t.length >= 5 && !t.startsWith(parentRoot));
+            // Try each specific token; pick the longest that appears in the OEM name
+            let bestLen = 0;
+            for (const t of tokens) {
+              if (nameNorm.includes(t) && t.length > bestLen) bestLen = t.length;
+            }
+            return bestLen > 0 ? { childId: c.id, score: bestLen } : null;
+          })
+          .filter(Boolean) as { childId: string; score: number }[];
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => b.score - a.score);
+          targetChildId = candidates[0].childId;
+        }
+      }
+
+      if (!oemByParentChild.has(parent.id)) oemByParentChild.set(parent.id, new Map());
+      const childMap = oemByParentChild.get(parent.id)!;
+      if (!childMap.has(targetChildId)) childMap.set(targetChildId, []);
+      childMap.get(targetChildId)!.push(oemPart);
       if (existing && key) existing.add(key);
     }
 
-    for (const [pid, oemList] of oemByParent) {
-      if (oemList.length === 0) continue;
+    for (const [pid, childMap] of oemByParentChild) {
       const parentInfo = CATEGORY_RULES.find((r) => r.id === pid) || { id: pid, label: "Ostatní" };
       if (!parentMap.has(pid)) {
         parentMap.set(pid, { id: pid, label: parentInfo.label, count: 0, parts: [], children: [] });
       }
       const pg = parentMap.get(pid)!;
-      const childId = `${pid}:oem-vehicle`;
-      const child: CategoryGroup = {
-        id: childId,
-        label: "Originální díly (Mopar)",
-        count: oemList.length,
-        parts: oemList,
-      };
-      pg.children!.unshift(child);
-      pg.parts = [...oemList, ...pg.parts];
-      pg.count += oemList.length;
+
+      for (const [childId, oemList] of childMap) {
+        if (oemList.length === 0) continue;
+        if (childId === "__fallback") {
+          const fallbackId = `${pid}:oem-vehicle`;
+          pg.children!.unshift({
+            id: fallbackId,
+            label: "Originální díly (Mopar)",
+            count: oemList.length,
+            parts: oemList,
+          });
+        } else {
+          // Inject into existing child section
+          const existingChild = pg.children!.find((c) => c.id === childId);
+          if (existingChild) {
+            existingChild.parts = [...oemList, ...existingChild.parts];
+            existingChild.count = existingChild.parts.length;
+          } else {
+            pg.children!.unshift({ id: childId, label: parentInfo.label, count: oemList.length, parts: oemList });
+          }
+        }
+        pg.parts = [...oemList, ...pg.parts];
+        pg.count += oemList.length;
+      }
     }
   }
 
