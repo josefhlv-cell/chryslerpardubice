@@ -28,6 +28,7 @@ type RawJmItem = {
   price_with_vat: number;
   price_without_vat: number;
   stock: number;
+  stock: number;
   availability: string;
   image: string;
   image_urls?: string[];
