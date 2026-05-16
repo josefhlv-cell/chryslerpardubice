@@ -2834,13 +2834,21 @@ Deno.serve(async (req) => {
         if (!direct.items.length) {
           direct = await fetchJmForSpecificCode(code, 'CodeOE').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
         }
-        // Pick best match: exact product code + brand wins, otherwise exact code, otherwise first.
+        // Pick best match: exact product code + brand wins. If a brand was
+        // supplied and nothing matches that brand we return null instead of a
+        // wrong-brand item (VALEO brake pad must NOT resolve to HART radiator).
         const norm = normalizeOemCode(code);
         const brandNorm = normalizeOemCode(brand);
-        const base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm && (!brandNorm || normalizeOemCode(it.brand) === brandNorm))
-          || direct.items.find((it) => normalizeOemCode(it.oem_number) === norm)
-          || direct.items[0]
-          || null;
+        let base: UnifiedPart | null = null;
+        if (brandNorm) {
+          base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm && normalizeOemCode(it.brand) === brandNorm)
+              || direct.items.find((it) => normalizeOemCode(it.brand) === brandNorm)
+              || null;
+        } else {
+          base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm)
+              || direct.items[0]
+              || null;
+        }
         const best = base ? await enrichJmItemFromEshop(base, code).catch(() => base) : null;
 
         if (best) {
