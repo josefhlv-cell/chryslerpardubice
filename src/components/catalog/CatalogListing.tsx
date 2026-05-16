@@ -145,7 +145,7 @@ const PartDetailModal = ({
 
   useEffect(() => {
     if (!open || !isJm) return;
-    const cached = detailCache.get(part.oem_number);
+    const cached = detailCache.get(detailKey(part.oem_number, part.manufacturer));
     if (cached && cached !== "unavailable") {
       setPatch(cached);
       setState("ready");
@@ -153,7 +153,7 @@ const PartDetailModal = ({
     }
     setState("loading");
     let cancelled = false;
-    fetchPartDetail(part.oem_number).then((res) => {
+    fetchPartDetail(part.oem_number, part.manufacturer).then((res) => {
       if (cancelled) return;
       if (res === "unavailable") {
         setState("unavailable");
@@ -163,7 +163,7 @@ const PartDetailModal = ({
       }
     });
     return () => { cancelled = true; };
-  }, [open, isJm, part.oem_number]);
+  }, [open, isJm, part.oem_number, part.manufacturer]);
 
   const m = { ...part, ...(patch || {}) } as CatalogPart;
   const photos = (m.image_urls && m.image_urls.length > 0 ? m.image_urls : []).filter(Boolean);
@@ -215,6 +215,19 @@ const PartDetailModal = ({
           </div>
         )}
 
+        <div className="flex items-center justify-between rounded-lg bg-secondary/40 border border-border/30 p-3">
+          <div>
+            <div className={cn("text-xl font-bold", isOem ? "text-primary" : "text-foreground")}>{formatPrice(m.price_with_vat)}</div>
+            {m.price_without_vat !== null && m.price_without_vat !== undefined && (
+              <div className="text-[10px] text-muted-foreground">{formatPrice(m.price_without_vat)} bez DPH</div>
+            )}
+          </div>
+          <Button onClick={() => onOrder(m)}>
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            {hasPrice ? "Objednat" : "Poptat"}
+          </Button>
+        </div>
+
         {/* Loading / unavailable states */}
         {state === "loading" && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -229,32 +242,12 @@ const PartDetailModal = ({
           </div>
         )}
 
-        {m.description && (
-          <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">{m.description}</p>
-        )}
-
         {m.technical_parameters && Object.keys(m.technical_parameters).length > 0 && (
           <div>
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
               Technické parametry
             </p>
             <TechParams params={m.technical_parameters} />
-          </div>
-        )}
-
-        {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-              Kompatibilní vozidla
-            </p>
-            <ul className="text-xs text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
-              {m.compatible_vehicles.slice(0, 30).map((v, i) => (
-                <li key={i}>• {v}</li>
-              ))}
-              {m.compatible_vehicles.length > 30 && (
-                <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 30} dalších</li>
-              )}
-            </ul>
           </div>
         )}
 
@@ -273,20 +266,28 @@ const PartDetailModal = ({
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t border-border/30">
+        {m.description && (
           <div>
-            <div className={cn("text-lg font-bold", isOem ? "text-primary" : "text-foreground")}>
-              {formatPrice(m.price_with_vat)}
-            </div>
-            {m.price_without_vat !== null && m.price_without_vat !== undefined && (
-              <div className="text-[10px] text-muted-foreground">{formatPrice(m.price_without_vat)} bez DPH</div>
-            )}
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Popis</p>
+            <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-line">{m.description}</p>
           </div>
-          <Button onClick={() => onOrder(m)}>
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            {hasPrice ? "Objednat" : "Poptat"}
-          </Button>
-        </div>
+        )}
+
+        {m.compatible_vehicles && Array.isArray(m.compatible_vehicles) && m.compatible_vehicles.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+              Kompatibilní vozidla
+            </p>
+            <ul className="text-xs text-foreground/90 space-y-0.5 max-h-40 overflow-y-auto pr-1">
+              {m.compatible_vehicles.slice(0, 30).map((v, i) => (
+                <li key={i}>• {v}</li>
+              ))}
+              {m.compatible_vehicles.length > 30 && (
+                <li className="text-muted-foreground/70">+{m.compatible_vehicles.length - 30} dalších</li>
+              )}
+            </ul>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
