@@ -949,9 +949,13 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
 }
 
 async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPart | null> {
+  const hasBrand = !!(brand && brand.trim());
   const raw = await nextisPost('/catalogs/items-checking', {
     searchTarget: 'CodeMain',
-    trySearchWithoutManufacturer: true,
+    // If a brand is provided we MUST honor it — otherwise items-checking will
+    // happily return some other manufacturer's item with the same code
+    // (e.g. VALEO 601817 brake pad vs HART 601817 radiator).
+    trySearchWithoutManufacturer: !hasBrand,
     getOECodes: true,
     getDeposits: false,
     getServices: false,
@@ -959,14 +963,59 @@ async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPa
     getEANCodes: false,
     items: [{ code, brand: brand || '', requestedQty: 1, pairID: 1 }],
   });
-  const first = extractItems(raw)[0];
-  return first ? normalizeCatalogItem(first) : null;
+  const items = extractItems(raw).map(normalizeCatalogItem);
+  if (!items.length) return null;
+  if (hasBrand) {
+    const bn = normalizeOemCode(brand!);
+    const exact = items.find((it) => normalizeOemCode(it.brand) === bn);
+    return exact || null; // strict: never return wrong-brand item
+  }
+  return items[0];
+}
+
+function isRealImageUrl(url: string): boolean {
+  if (!url) return false;
+  if (/FlexPictureNotFound/i.test(url)) return false;
+  if (/placeholder|no.?image|noimage/i.test(url)) return false;
+  return /^https?:\/\//i.test(url);
+}
+
+async function scrapeEshopProductPageImages(href: string): Promise<string[]> {
+  try {
+    const url = href.startsWith('http') ? href : `https://eshop.jmautodily.cz${href.startsWith('/') ? '' : '/'}${href}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; ChryslerCD/1.0)',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const out = new Set<string>();
+    // gallery <img> and lazy attrs
+    const patterns = [
+      /data-flex-async-image-src=["']([^"']+)["']/gi,
+      /data-zoom-image=["']([^"']+)["']/gi,
+      /data-large=["']([^"']+)["']/gi,
+      /<img[^>]+src=["']([^"']*partsdata\.nextis\.cz[^"']+)["']/gi,
+      /<a[^>]+href=["']([^"']*partsdata\.nextis\.cz[^"']+\.(?:jpg|jpeg|png|webp))["']/gi,
+    ];
+    for (const re of patterns) {
+      for (const m of html.matchAll(re)) {
+        const u = htmlDecode(m[1]);
+        if (isRealImageUrl(u)) out.add(u);
+      }
+    }
+    return [...out];
+  } catch (_) { return []; }
 }
 
 async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): Promise<UnifiedPart> {
   const code = item.oem_number || fallbackCode;
-  const images = new Set<string>(item.image_urls || []);
+  const images = new Set<string>((item.image_urls || []).filter(isRealImageUrl));
   let productId = Number(item.jm_internal_id || 0) || 0;
+  let detailHref = '';
 
   try {
     const whisper = parseJsonStringMaybe(await jmPublicPostApi('search/get-smart-search-whispers-products', {
@@ -975,8 +1024,12 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
       showHistory: false,
     }));
     const html = String(whisper?.WhispererHTMLContent || '');
-    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) images.add(htmlDecode(m[1]));
+    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) {
+      const u = htmlDecode(m[1]);
+      if (isRealImageUrl(u)) images.add(u);
+    }
     const href = html.match(/href=["']([^"']*\/hledani\/[^"']+)["']/i)?.[1] || '';
+    if (href) detailHref = htmlDecode(href);
     const idFromHref = Number(href.match(/\/(\d+)(?:[?#]?)$/)?.[1] || 0);
     if (idFromHref) productId = idFromHref;
   } catch (_) { /* optional eshop enrichment */ }
@@ -994,7 +1047,16 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
     }));
   }
 
-  if (!productId) return { ...item, image_urls: [...images], image: [...images][0] || item.image };
+  // HTML fallback: if API gave no real photos, scrape the public product page.
+  if (images.size === 0 && detailHref) {
+    const scraped = await scrapeEshopProductPageImages(detailHref);
+    for (const u of scraped) images.add(u);
+  }
+
+  if (!productId) {
+    const arr = [...images];
+    return { ...item, image_urls: arr, image: arr[0] || item.image };
+  }
 
   const [attributesHtml, oeHtml, applicationsHtml, descriptionHtml] = await Promise.all([
     jmPublicPostApi('tecdoc/get-product-detail-attributes', { groupID: productId, tecDocCodePair: code, tecDocBrandID: 0, articleLinkID: productId, manufacturerID: 0, modelID: 0, engineID: 0 }).catch(() => ''),
@@ -1008,10 +1070,11 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
   const compatibleVehicles = parseApplicationsHtml(String(applicationsHtml || ''));
   const description = cleanHtmlText(String(descriptionHtml || ''));
 
+  const arr = [...images];
   return {
     ...item,
-    image: [...images][0] || item.image,
-    image_urls: [...images],
+    image: arr[0] || item.image,
+    image_urls: arr,
     technical_parameters: Object.keys(technicalParameters).length ? technicalParameters : item.technical_parameters,
     oe_numbers: oeNumbers.length ? oeNumbers : item.oe_numbers,
     compatible_vehicles: compatibleVehicles.length ? compatibleVehicles : item.compatible_vehicles,
@@ -2425,6 +2488,48 @@ Deno.serve(async (req) => {
               }
               const sectionsList = Object.values(grouped);
               const collectedAll = sectionsList.flatMap((s) => s.items);
+              // INTERNAL ONLY: log suspicious gen_art_name (TecDoc category) mappings
+              // returned by J+M. We never expose these warnings to the customer,
+              // we only log them so we can audit which J+M categories are wrong.
+              try {
+                const NAME_HINTS: Array<{ re: RegExp; expect: RegExp; label: string }> = [
+                  { re: /brzd\w*\s+desti/i,  expect: /desti|brake\s*pad/i,        label: 'brake-pads' },
+                  { re: /brzd\w*\s+kotou/i,  expect: /kotou|brake\s*disc/i,       label: 'brake-discs' },
+                  { re: /(olejov\w*\s+)?filtr\s+oleje|olejov\w*\s+filtr/i, expect: /filtr|filter/i, label: 'oil-filter' },
+                  { re: /vzduchov\w*\s+filtr/i,   expect: /filtr|filter/i,        label: 'air-filter' },
+                  { re: /palivov\w*\s+filtr/i,    expect: /filtr|filter/i,        label: 'fuel-filter' },
+                  { re: /kabinov\w*\s+filtr|pylov\w*\s+filtr/i, expect: /filtr|filter/i, label: 'cabin-filter' },
+                  { re: /tlumi/i,                 expect: /tlumi|shock|damper/i,  label: 'shock-absorber' },
+                  { re: /(klínov\w*|drážkov\w*|ozuben\w*)\s+řemen/i, expect: /řemen|belt/i, label: 'belt' },
+                  { re: /chladič/i,               expect: /chladič|radiator|cool/i, label: 'radiator' },
+                  { re: /žárovk/i,                expect: /žárov|bulb|světl/i,    label: 'bulb' },
+                ];
+                const suspicious: Array<{ oem: string; brand: string; name: string; gen_art_name: string; expected: string }> = [];
+                const seenLog = new Set<string>();
+                for (const it of collectedAll) {
+                  const name = String(it.name || '');
+                  // @ts-ignore
+                  const gname = String((it as any).tecdoc_section?.label || it.category || '');
+                  for (const h of NAME_HINTS) {
+                    if (h.re.test(name) && gname && !h.expect.test(gname)) {
+                      const k = `${h.label}::${gname}`;
+                      if (seenLog.has(k)) break;
+                      seenLog.add(k);
+                      suspicious.push({ oem: String(it.oem_number || ''), brand: String(it.brand || ''), name, gen_art_name: gname, expected: h.label });
+                      break;
+                    }
+                  }
+                }
+                if (suspicious.length) {
+                  await adminClient.from('catalog_event_log').insert({
+                    source: 'jm-proxy',
+                    event: 'gen_art_name_suspicious',
+                    level: 'warn',
+                    message: `J+M gen_art_name mismatch: ${suspicious.length} hits (engineID ${resolvedEngineID})`,
+                    details: { engineID: resolvedEngineID, samples: suspicious.slice(0, 30), total: suspicious.length },
+                  });
+                }
+              } catch (_) { /* non-blocking internal log */ }
               if (collectedAll.length > 0) {
                 const enriched = await enrichItemsWithRelatedOem(adminClient, collectedAll);
                 const out = {
@@ -2824,13 +2929,21 @@ Deno.serve(async (req) => {
         if (!direct.items.length) {
           direct = await fetchJmForSpecificCode(code, 'CodeOE').catch(() => ({ rawCount: 0, items: [] as UnifiedPart[] }));
         }
-        // Pick best match: exact product code + brand wins, otherwise exact code, otherwise first.
+        // Pick best match: exact product code + brand wins. If a brand was
+        // supplied and nothing matches that brand we return null instead of a
+        // wrong-brand item (VALEO brake pad must NOT resolve to HART radiator).
         const norm = normalizeOemCode(code);
         const brandNorm = normalizeOemCode(brand);
-        const base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm && (!brandNorm || normalizeOemCode(it.brand) === brandNorm))
-          || direct.items.find((it) => normalizeOemCode(it.oem_number) === norm)
-          || direct.items[0]
-          || null;
+        let base: UnifiedPart | null = null;
+        if (brandNorm) {
+          base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm && normalizeOemCode(it.brand) === brandNorm)
+              || direct.items.find((it) => normalizeOemCode(it.brand) === brandNorm)
+              || null;
+        } else {
+          base = direct.items.find((it) => normalizeOemCode(it.oem_number) === norm)
+              || direct.items[0]
+              || null;
+        }
         const best = base ? await enrichJmItemFromEshop(base, code).catch(() => base) : null;
 
         if (best) {
