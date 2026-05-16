@@ -263,6 +263,48 @@ export async function fetchAllPartsForEngine(opts: {
     parentGroup.count += parts.length;
   }
 
+  // 3b. Inject vehicle-compatible OEM rows that weren't already added via J+M crossref.
+  // Bucket by parent category derived from the OEM row's `category` text.
+  if (vehicleOemRows.length > 0) {
+    // Track OEM numbers already added (per parent) to avoid duplicates with J+M-linked OEM
+    const addedOemByParent = new Map<string, Set<string>>();
+    for (const [pid, pg] of parentMap) {
+      const set = new Set<string>();
+      for (const p of pg.parts) if (p.is_oem && p.oem_number) set.add(normalizeOem(p.oem_number));
+      addedOemByParent.set(pid, set);
+    }
+
+    const oemByParent = new Map<string, CatalogPart[]>();
+    for (const row of vehicleOemRows) {
+      const parent = parentForSection(row.category || "Ostatní");
+      const key = normalizeOem(row.oem_number);
+      const existing = addedOemByParent.get(parent.id);
+      if (key && existing?.has(key)) continue;
+      if (!oemByParent.has(parent.id)) oemByParent.set(parent.id, []);
+      oemByParent.get(parent.id)!.push(oemRowToCatalogPart(row));
+      if (existing && key) existing.add(key);
+    }
+
+    for (const [pid, oemList] of oemByParent) {
+      if (oemList.length === 0) continue;
+      const parentInfo = CATEGORY_RULES.find((r) => r.id === pid) || { id: pid, label: "Ostatní" };
+      if (!parentMap.has(pid)) {
+        parentMap.set(pid, { id: pid, label: parentInfo.label, count: 0, parts: [], children: [] });
+      }
+      const pg = parentMap.get(pid)!;
+      const childId = `${pid}:oem-vehicle`;
+      const child: CategoryGroup = {
+        id: childId,
+        label: "Originální díly (Mopar)",
+        count: oemList.length,
+        parts: oemList,
+      };
+      pg.children!.unshift(child);
+      pg.parts = [...oemList, ...pg.parts];
+      pg.count += oemList.length;
+    }
+  }
+
   const groups = [...parentMap.values()];
   for (const group of groups) {
     group.children = (group.children || []).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "cs"));
