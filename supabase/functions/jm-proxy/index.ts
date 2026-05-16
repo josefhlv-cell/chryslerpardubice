@@ -949,9 +949,13 @@ async function fetchJmForSpecificCode(code: string, searchTarget: 'CodeOE' | 'Co
 }
 
 async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPart | null> {
+  const hasBrand = !!(brand && brand.trim());
   const raw = await nextisPost('/catalogs/items-checking', {
     searchTarget: 'CodeMain',
-    trySearchWithoutManufacturer: true,
+    // If a brand is provided we MUST honor it — otherwise items-checking will
+    // happily return some other manufacturer's item with the same code
+    // (e.g. VALEO 601817 brake pad vs HART 601817 radiator).
+    trySearchWithoutManufacturer: !hasBrand,
     getOECodes: true,
     getDeposits: false,
     getServices: false,
@@ -959,8 +963,14 @@ async function fetchJmExactItem(code: string, brand?: string): Promise<UnifiedPa
     getEANCodes: false,
     items: [{ code, brand: brand || '', requestedQty: 1, pairID: 1 }],
   });
-  const first = extractItems(raw)[0];
-  return first ? normalizeCatalogItem(first) : null;
+  const items = extractItems(raw).map(normalizeCatalogItem);
+  if (!items.length) return null;
+  if (hasBrand) {
+    const bn = normalizeOemCode(brand!);
+    const exact = items.find((it) => normalizeOemCode(it.brand) === bn);
+    return exact || null; // strict: never return wrong-brand item
+  }
+  return items[0];
 }
 
 async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): Promise<UnifiedPart> {
