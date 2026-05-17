@@ -137,9 +137,11 @@ Deno.serve(async (req) => {
   const delayMs = Number(url.searchParams.get('delay') || 800);
   const offset = Number(url.searchParams.get('offset') || 0);
 
+  const allowedBrands = ['chrysler', 'dodge', 'ram', 'lancia'];
   const { data: rows, error } = await supabase
     .from('nextis_vehicles')
     .select('id, brand, model, engine, year_from, year_to, power_kw, fuel, external_id')
+    .in('brand', ['Chrysler', 'Dodge', 'RAM', 'Lancia'])
     .order('brand').order('model').order('engine')
     .range(offset, offset + limit - 1);
   if (error) {
