@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
 
       // Count target — všechny zdroje s autentickými Mopar OEM čísly.
       // 7zap, epc-ai, ai-epc, makro obsahují originální OEM čísla → vernostsevyplaci.cz je umí ocenit.
-      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro'];
+      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro', 'catcar'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
@@ -150,7 +150,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
-      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro'])
+      .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro', 'catcar'])
       .neq('is_active', false)
       .limit(BATCH_SIZE);
     if (run.mode === 'missing') {

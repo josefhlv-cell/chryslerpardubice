@@ -189,7 +189,7 @@ Deno.serve(async (req) => {
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
   // Mopar dealer catalog sources. 7zap added: many OEMs ARE in dealer catalog, worth trying once.
-  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'ai-epc'];
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'ai-epc', 'epc-ai', 'makro', 'catcar'];
 
   if (mode === 'force') {
     const { data: allParts } = await supabase
