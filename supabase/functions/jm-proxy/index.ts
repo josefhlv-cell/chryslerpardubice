@@ -842,7 +842,7 @@ async function enrichItemsWithRelatedOem(
       .from('parts_new')
       .select('oem_number')
       .in('oem_number', [...new Set(allOeNumbers)])
-      .in('catalog_source', ['mopar', 'mopar_oem', '7zap', 'csv', 'epc-link'])
+      .in('catalog_source', ['mopar', 'mopar_oem', 'jm_oem', '7zap', 'csv', 'epc-link'])
       .limit(500);
 
     if (!oemRows?.length) return items;
