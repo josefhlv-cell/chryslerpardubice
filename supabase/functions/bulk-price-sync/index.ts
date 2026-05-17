@@ -145,19 +145,26 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let errorTotal = run.error_count || 0;
   let lastError: string | null = run.last_error;
 
+  // Negative-cache window: pokud byl OEM zkoušen v posledních 7 dnech a nic se nenašlo,
+  // přeskoč ho. Katalog vernostsevyplaci.cz je relativně stabilní → opakovat každý běh = plýtvání.
+  const NEGATIVE_CACHE_DAYS = 7;
+  const negCacheCutoff = new Date(Date.now() - NEGATIVE_CACHE_DAYS * 24 * 3600 * 1000).toISOString();
+
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
     // Pull next batch — všechny zdroje s OEM Mopar čísly.
+    // KRITICKÉ: ORDER BY last_price_update ASC NULLS FIRST — jinak se vybírá pořád stejných 200 dílů
+    // a běh nikdy nepostoupí (processed stoupá, ale na stejných OEM).
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
       .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro', 'catcar', 'jm_oem'])
       .neq('is_active', false)
+      .order('last_price_update', { ascending: true, nullsFirst: true })
       .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
       q = q.or('price_with_vat.is.null,price_with_vat.eq.0');
-    } else {
-      // mode 'all' — process oldest updated first
-      q = q.order('last_price_update', { ascending: true, nullsFirst: true });
+      // Negative cache — netestuj znova OEMs marně zkoušené v posledních 7 dnech
+      q = q.or(`last_price_update.is.null,last_price_update.lt.${negCacheCutoff}`);
     }
     const { data: batch, error: batchErr } = await q;
     if (batchErr) {
@@ -183,6 +190,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
     }
 
     // Invoke the existing price-sync function for this batch (it does the actual scraping + DB update)
+    let batchRateLimited = false;
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/price-sync`, {
         method: 'POST',
@@ -192,17 +200,32 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         },
         body: JSON.stringify({
           batchSize: batch.length,
-          mode: 'force', // bypass cache TTL — bulk sync explicitly wants fresh prices
+          // 'auto' respects 20min cache TTL inside price-sync. We already skip 7d-negative-cached OEMs
+          // in the SELECT above, so 'force' would just burn budget on the same dead OEMs.
+          mode: 'auto',
           partNumbers: batch.map((b: any) => b.oem_number),
         }),
       });
-      const result = await res.json().catch(() => ({}));
-      const sum = result.summary || {};
-      processedTotal += batch.length;
-      updatedTotal += sum.updated ?? result.updated ?? result.successCount ?? 0;
-      errorTotal += sum.errors ?? result.errors ?? 0;
+      if (!res.ok) {
+        // Most likely platform rate limit (429/503) → back off, don't count whole batch as 200 errors
+        const txt = await res.text().catch(() => '');
+        lastError = `HTTP ${res.status}: ${txt.slice(0, 200)}`;
+        if (res.status === 429 || res.status === 503 || /rate limit/i.test(txt)) {
+          batchRateLimited = true;
+          errorTotal += 1; // count as 1 transient error, not 200
+        } else {
+          errorTotal += batch.length;
+          processedTotal += batch.length;
+        }
+      } else {
+        const result = await res.json().catch(() => ({}));
+        const sum = result.summary || {};
+        processedTotal += batch.length;
+        updatedTotal += sum.updated ?? result.updated ?? result.successCount ?? 0;
+        errorTotal += sum.errors ?? result.errors ?? 0;
+      }
     } catch (e) {
-      errorTotal += batch.length;
+      errorTotal += 1;
       lastError = e instanceof Error ? e.message : String(e);
     }
 
@@ -216,6 +239,11 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         last_error: lastError,
       })
       .eq('id', runId);
+
+    // Adaptive back-off if rate-limited so the run doesn't burn the whole 50s window
+    if (batchRateLimited) {
+      await new Promise((r) => setTimeout(r, 8000));
+    }
   }
 
   // Time budget exhausted — relaunch self
