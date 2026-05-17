@@ -1,0 +1,1 @@
+DELETE FROM public.api_cache WHERE cache_type IN ('jm_parts_for_engine','jm_scan_progress');
