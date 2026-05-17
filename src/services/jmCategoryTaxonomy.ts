@@ -113,7 +113,7 @@ export const JM_CATEGORY_TREE: JmCategoryNode[] = [
     n("wheels-tpms", "TPMS / ventilky", 30, ["tpms", "snimac tlaku v pneu", "ventil pneu"]),
     n("wheels-fasteners", "Šrouby / matice kol", 40, ["sroub kola", "matice kola"]),
   ]),
-  n("engine", "Motor", 120, ["motor", "hlava valce", "tesneni", "vack", "klik", "pist", "ventil", "olejova vana", "ulozeni motoru", "hnaci hridel"], [
+  n("engine", "Motor", 120, ["motor", "hlava valce", "tesneni", "vack", "klik", "pist", "ventil", "olejova vana", "ulozeni motoru"], [
     n("engine-gaskets", "Těsnění", 10, ["tesneni", "sada tesneni", "tesnici krouzek", "tesneni hlavy valce", "tesneni kryt hlavy", "tesneni vika", "tesneni sani"]),
     n("engine-head", "Hlava válců / ventilový rozvod", 20, ["hlava valce", "vackovy hridel", "ventil", "hydrostel", "vahadlo"]),
     n("engine-crank", "Klikový mechanismus", 30, ["klikovy hridel", "ojnice", "pist", "lozisko klik"]),
@@ -168,7 +168,7 @@ export const JM_CATEGORY_TREE: JmCategoryNode[] = [
   ]),
   n("steering", "Řízení", 220, ["rizeni", "ridici mechanismus", "tahlo rizeni", "manzeta rizeni", "volant", "servo"], [
     n("steering-rack", "Řídicí mechanismus", 10, ["ridici mechanismus", "hrebenove rizeni", "prevodka rizeni"]),
-    n("steering-mounts", "Uložení řízení", 20, ["ulozeni ridici mechanismus", "ulozeni rizeni"]),
+    n("steering-mounts", "Uložení řízení", 20, ["ulozeni ridici mechanismus", "ulozeni, ridici mechanismus", "ulozeni rizeni"]),
     n("steering-rods", "Táhla / čepy řízení", 30, ["tahlo rizeni", "cep rizeni", "tyc rizeni"]),
     n("steering-boots", "Manžety řízení", 40, ["manzeta rizeni"]),
     n("steering-servo", "Servořízení", 50, ["servo", "servocerpadlo"]),
@@ -263,14 +263,15 @@ function walkBest(node: JmCategoryNode, normLabel: string, path: JmCategoryPathN
 
   for (const kw of node.match || []) {
     const score = scoreKeyword(normLabel, kw);
-    if (score > 0 && (!best || score > best.score)) {
-      best = { score, path: currentPath };
+    const weightedScore = score + currentPath.length * 50;
+    if (weightedScore > 0 && (!best || weightedScore > best.score || (weightedScore === best.score && currentPath.length > best.path.length))) {
+      best = { score: weightedScore, path: currentPath };
     }
   }
 
   for (const child of node.children || []) {
     const childBest = walkBest(child, normLabel, currentPath);
-    if (childBest && (!best || childBest.score > best.score)) best = childBest;
+    if (childBest && (!best || childBest.score > best.score || (childBest.score === best.score && childBest.path.length > best.path.length))) best = childBest;
   }
 
   return best;
@@ -283,7 +284,7 @@ export function mapSectionToPath(sectionLabel: string): JmCategoryPathNode[] {
   let best: Candidate | null = null;
   for (const root of JM_CATEGORY_TREE) {
     const candidate = walkBest(root, normLabel, []);
-    if (candidate && (!best || candidate.score > best.score)) best = candidate;
+    if (candidate && (!best || candidate.score > best.score || (candidate.score === best.score && candidate.path.length > best.path.length))) best = candidate;
   }
 
   return best?.path || FALLBACK_PATH;
