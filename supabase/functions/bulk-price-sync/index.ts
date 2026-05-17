@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
 
       // Count target — všechny zdroje s autentickými Mopar OEM čísly.
       // 7zap, epc-ai, ai-epc, makro obsahují originální OEM čísla → vernostsevyplaci.cz je umí ocenit.
-      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro', 'catcar'];
+      const allowedSources = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro', 'catcar', 'jm_oem'];
       let targetCount = 0;
       if (mode === 'missing') {
         const { count } = await admin
