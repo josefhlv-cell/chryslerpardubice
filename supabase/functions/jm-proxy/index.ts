@@ -1764,10 +1764,17 @@ Deno.serve(async (req) => {
       }
 
       case 'resolveKType': {
-        const { brand, model, engine, year, vin, nextisVehicleId } = (payload || {}) as Record<string, any>;
+        const { brand, model, engine, year, vin, nextisVehicleId, forceFresh } = (payload || {}) as Record<string, any>;
         try {
-          const r = await resolveKType(adminClient, { brand, model, engine, year, vin, nextisVehicleId });
-          result = { ok: true, ...r };
+          if (forceFresh && brand && model && engine) {
+            const jm = await resolveKTypeFromJmPublicSelector(adminClient, { brand, model, engine, year });
+            result = jm?.k_type
+              ? { ok: true, k_type: jm.k_type, source: jm.source }
+              : { ok: true, k_type: 0, source: 'none' };
+          } else {
+            const r = await resolveKType(adminClient, { brand, model, engine, year, vin, nextisVehicleId });
+            result = { ok: true, ...r };
+          }
         } catch (e) {
           result = { ok: false, error: (e as Error).message };
         }
