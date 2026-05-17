@@ -190,6 +190,7 @@ async function processRun(admin: any, runId: string): Promise<Response> {
     }
 
     // Invoke the existing price-sync function for this batch (it does the actual scraping + DB update)
+    let batchRateLimited = false;
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/price-sync`, {
         method: 'POST',
@@ -199,17 +200,32 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         },
         body: JSON.stringify({
           batchSize: batch.length,
-          mode: 'force', // bypass cache TTL — bulk sync explicitly wants fresh prices
+          // 'auto' respects 20min cache TTL inside price-sync. We already skip 7d-negative-cached OEMs
+          // in the SELECT above, so 'force' would just burn budget on the same dead OEMs.
+          mode: 'auto',
           partNumbers: batch.map((b: any) => b.oem_number),
         }),
       });
-      const result = await res.json().catch(() => ({}));
-      const sum = result.summary || {};
-      processedTotal += batch.length;
-      updatedTotal += sum.updated ?? result.updated ?? result.successCount ?? 0;
-      errorTotal += sum.errors ?? result.errors ?? 0;
+      if (!res.ok) {
+        // Most likely platform rate limit (429/503) → back off, don't count whole batch as 200 errors
+        const txt = await res.text().catch(() => '');
+        lastError = `HTTP ${res.status}: ${txt.slice(0, 200)}`;
+        if (res.status === 429 || res.status === 503 || /rate limit/i.test(txt)) {
+          batchRateLimited = true;
+          errorTotal += 1; // count as 1 transient error, not 200
+        } else {
+          errorTotal += batch.length;
+          processedTotal += batch.length;
+        }
+      } else {
+        const result = await res.json().catch(() => ({}));
+        const sum = result.summary || {};
+        processedTotal += batch.length;
+        updatedTotal += sum.updated ?? result.updated ?? result.successCount ?? 0;
+        errorTotal += sum.errors ?? result.errors ?? 0;
+      }
     } catch (e) {
-      errorTotal += batch.length;
+      errorTotal += 1;
       lastError = e instanceof Error ? e.message : String(e);
     }
 
@@ -223,6 +239,11 @@ async function processRun(admin: any, runId: string): Promise<Response> {
         last_error: lastError,
       })
       .eq('id', runId);
+
+    // Adaptive back-off if rate-limited so the run doesn't burn the whole 50s window
+    if (batchRateLimited) {
+      await new Promise((r) => setTimeout(r, 8000));
+    }
   }
 
   // Time budget exhausted — relaunch self
