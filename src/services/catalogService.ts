@@ -151,8 +151,8 @@ export async function fetchAllPartsForEngine(opts: {
   const oemByNumber = new Map<string, any>();
   for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
 
-  // 3. Build groups 1:1 from J+M sections. ORIGINÁL first per J+M item (matched by OE), then NÁHRADA.
-  const groups: CategoryGroup[] = [];
+  // 3. Build flat section groups 1:1 from J+M. ORIGINÁL first per J+M item, then NÁHRADA.
+  const sectionGroups: CategoryGroup[] = [];
   for (const [, bucket] of sectionMap) {
     const seenOem = new Set<string>();
     const oemParts: CatalogPart[] = [];
@@ -160,7 +160,6 @@ export async function fetchAllPartsForEngine(opts: {
     const seenJm = new Set<string>();
 
     for (const it of bucket.jmItems) {
-      // try related_oem_number first, then any oe_numbers
       const candidates: string[] = [];
       if (it.related_oem_number) candidates.push(it.related_oem_number);
       for (const oe of it.oe_numbers || []) candidates.push(oe);
@@ -182,11 +181,49 @@ export async function fetchAllPartsForEngine(opts: {
 
     const parts = [...oemParts, ...jmParts];
     if (parts.length === 0) continue;
-    groups.push({ id: bucket.id, label: bucket.label, count: parts.length, parts });
+    sectionGroups.push({ id: bucket.id, label: bucket.label, count: parts.length, parts });
   }
 
-  // Sort: most parts first; alphabetical on tie
-  groups.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "cs"));
+  // 4. Build canonical 2-level hierarchy: Parent → J+M sections
+  const parentBuckets = new Map<string, { parent: typeof CANONICAL_PARENTS[number] | { id: string; label: string; sort: number }; children: CategoryGroup[]; parts: CatalogPart[] }>();
+  for (const sec of sectionGroups) {
+    const parent = mapSectionToParent(sec.label);
+    const key = parent.id;
+    if (!parentBuckets.has(key)) {
+      parentBuckets.set(key, { parent, children: [], parts: [] });
+    }
+    const bucket = parentBuckets.get(key)!;
+    bucket.children.push({ ...sec, id: `${parent.id}:${sec.id}` });
+    bucket.parts.push(...sec.parts);
+  }
+
+  const groups: CategoryGroup[] = [];
+  for (const [, b] of parentBuckets) {
+    // sort children alphabetically (cs)
+    b.children.sort((a, c) => a.label.localeCompare(c.label, "cs"));
+    // deduplicate parent-level parts by id (so search/expansion stays consistent)
+    const seen = new Set<string>();
+    const dedup: CatalogPart[] = [];
+    for (const p of b.parts) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      dedup.push(p);
+    }
+    groups.push({
+      id: b.parent.id,
+      label: b.parent.label,
+      count: dedup.length,
+      parts: dedup,
+      children: b.children,
+    });
+  }
+
+  // Sort parents by canonical sort order; "other" always last
+  groups.sort((a, c) => {
+    const sa = CANONICAL_PARENTS.find((p) => p.id === a.id)?.sort ?? 9999;
+    const sc = CANONICAL_PARENTS.find((p) => p.id === c.id)?.sort ?? 9999;
+    return sa - sc || a.label.localeCompare(c.label, "cs");
+  });
 
   const totalParts = groups.reduce((s, g) => s + g.count, 0);
   return {
@@ -194,6 +231,6 @@ export async function fetchAllPartsForEngine(opts: {
     totalParts,
     oemSeedsUsed,
     warning: payload.warning,
-    debug: { ...debug, mirror: "jm-1:1", sections: groups.length },
+    debug: { ...debug, hierarchy: "canonical-2level", parents: groups.length, sections: sectionGroups.length },
   };
 }
