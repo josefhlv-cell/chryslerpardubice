@@ -459,13 +459,38 @@ async function processPart(
   // Search variants. Věrnostsevyplaci.cz dealer katalog vyžaduje K-prefix
   // (např. 4743116AA → K4743116AA). Pokud OEM už K-prefix má, nepřidáváme druhé K.
   // 6 = engine/Mopar OEM family, SP = service-pack.
+  //
+  // POZOR: jm_oem zdroj má často:
+  //   - leading padding "0000077366718" → reálné OEM je 77366718
+  //   - prefix "00K..." → reálné OEM je K... (00 je interní kód)
+  // Bez stripování těchto prefixů vernostsevyplaci nic nenajde.
   const cleanPN = partNumber.replace(/[\s-]/g, '').toUpperCase();
-  const padded = cleanPN.length <= 9 ? `0${cleanPN}` : cleanPN;
-  const alreadyK = /^K\d/.test(cleanPN);
+  // strip leading zeros (ale ne když by zbylo prázdné), pak normalizace 00K → K
+  const stripLeadingZeros = (s: string) => s.replace(/^0+(?=.)/, '');
+  const noZeros = stripLeadingZeros(cleanPN);
+  const no00K = cleanPN.replace(/^00K/, 'K');
+  const noZerosNo00K = stripLeadingZeros(no00K);
+  // "core" = bez K prefixu, bez nul — výchozí kanonická forma pro generování variant
+  const core = noZerosNo00K.replace(/^K/, '');
+  const padded = core.length <= 9 ? `0${core}` : core;
+  const alreadyK = /^K\d/.test(cleanPN) || /^K\d/.test(no00K);
   const variantList: string[] = alreadyK
-    ? [cleanPN, padded, cleanPN.replace(/^K/, ''), `6${cleanPN.replace(/^K/, '')}`, `SP${cleanPN.replace(/^K/, '')}`]
-    : [`K${padded}`, `K${cleanPN}`, `6${cleanPN}`, `SP${cleanPN}`, padded, cleanPN];
-  const searchVariants = [...new Set(variantList)];
+    ? [
+        no00K, noZerosNo00K, cleanPN, noZeros,
+        `K${core}`, `K${padded}`,
+        core, `6${core}`, `SP${core}`,
+      ]
+    : [
+        // nejdřív zkusit K + holé jádro (nejčastější hit pro Mopar v dealer katalogu)
+        `K${core}`, `K${padded}`,
+        // fallback: K + původní (pro krátké OEM)
+        `K${cleanPN}`,
+        // pak holé/padding bez K
+        core, padded, cleanPN, noZeros,
+        // legacy family prefixy
+        `6${core}`, `SP${core}`,
+      ];
+  const searchVariants = [...new Set(variantList.filter(Boolean))];
 
   let searchHtml = '';
   let searchCode = '';

@@ -22,8 +22,37 @@ const stripBrandPrefix = (s: string) => {
   const idx = s.lastIndexOf(":");
   return idx >= 0 ? s.slice(idx + 1) : s;
 };
-const normalizeOem = (s: string) =>
-  stripBrandPrefix(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+const stripLeadingZeros = (s: string) => s.replace(/^0+(?=.)/, "");
+// Kanonická forma OEM klíče pro Map lookup — sjednocuje varianty
+// "0000077366718", "00K68243338AA", "K68243338AA", "5142560AB" tak, aby
+// se trefily na stejný klíč. Pravidla: strip brand prefix → uppercase →
+// remove separators → strip leading zeros → odstraň "00K" prefix (= K).
+const canonicalOem = (raw: string): string => {
+  let s = stripBrandPrefix(raw || "").toUpperCase().replace(/[\s\-._/]/g, "");
+  s = s.replace(/^00K/, "K");
+  s = stripLeadingZeros(s);
+  return s;
+};
+const normalizeOem = canonicalOem;
+// Vrátí všechny varianty OEM, které pošleme do .in() dotazu na parts_new.
+// Cílem je přežít: padding nulami, K-prefix, 00K-prefix, čistou formu.
+const oemMatchVariants = (raw: string): string[] => {
+  const stripped = stripBrandPrefix(String(raw || "")).trim();
+  if (!stripped) return [];
+  const upper = stripped.toUpperCase().replace(/[\s\-._/]/g, "");
+  const noZeros = stripLeadingZeros(upper);
+  const no00K = upper.replace(/^00K/, "K");
+  const set = new Set<string>([stripped, upper, noZeros, no00K, stripLeadingZeros(no00K)]);
+  // Také zkusit K-variantu a bezKvariantu pro Mopar katalog
+  const core = noZeros.replace(/^K/, "");
+  if (core) {
+    set.add(core);
+    set.add(`K${core}`);
+    set.add(`00K${core}`);
+    set.add(`0000${core}`);
+  }
+  return [...set].filter(Boolean);
+};
 
 type RawJmItem = {
   oem_number: string;
@@ -72,26 +101,60 @@ function jmToCatalogPart(it: RawJmItem): CatalogPart {
   };
 }
 
-function oemRowToCatalogPart(row: any): CatalogPart {
+// Z J+M dílu odvodí specifikátor (přední/zadní/levá/pravá/horní/dolní),
+// kterým obohatí generický OEM název ("Brzdové destičky" → "... přední").
+function deriveOemNameQualifier(jm?: RawJmItem | null): string {
+  if (!jm) return "";
+  const haystack = [
+    jm.tecdoc_section?.label,
+    jm.name,
+    jm.description,
+    ...Object.values(jm.technical_parameters || {}),
+  ].filter(Boolean).join(" ").toLowerCase();
+  const tags: string[] = [];
+  const push = (t: string) => { if (!tags.includes(t)) tags.push(t); };
+  if (/p[řr]edn[ií]|front|vorne/.test(haystack)) push("přední");
+  else if (/zadn[ií]|rear|hinten/.test(haystack)) push("zadní");
+  if (/\blev[áéý]\b|\bleft\b|\blinks\b/.test(haystack)) push("levá");
+  else if (/\bprav[áéý]\b|\bright\b|\brechts\b/.test(haystack)) push("pravá");
+  if (/horn[ií]|upper/.test(haystack)) push("horní");
+  else if (/doln[ií]|lower/.test(haystack)) push("dolní");
+  return tags.join(" ");
+}
+
+function oemRowToCatalogPart(row: any, sourceJm?: RawJmItem | null): CatalogPart {
   const price = Number(row.price_with_vat) || 0;
+  const baseName = String(row.name || row.oem_number || "");
+  const qualifier = deriveOemNameQualifier(sourceJm);
+  const enrichedName = qualifier && !baseName.toLowerCase().includes(qualifier.split(" ")[0])
+    ? `${baseName} ${qualifier}`.trim()
+    : baseName;
+  const description = row.description || sourceJm?.description || null;
+  const image_urls = Array.isArray(row.image_urls) && row.image_urls.length > 0
+    ? row.image_urls
+    : (sourceJm?.image_urls && sourceJm.image_urls.length > 0
+        ? sourceJm.image_urls
+        : (sourceJm?.image ? [sourceJm.image] : null));
   return {
     id: String(row.id),
     oem_number: String(row.oem_number || ""),
-    name: String(row.name || row.oem_number || ""),
-    manufacturer: "Mopar",
+    name: enrichedName,
+    manufacturer: null, // ORIGINÁL badge mluví sám za sebe — nezobrazujeme "Mopar"
     catalog_source: String(row.catalog_source || "mopar"),
     price_without_vat: Number(row.price_without_vat) || null,
     price_with_vat: price || null,
     availability: price > 0 ? row.availability || "in_stock" : "on_order",
-    image_urls: Array.isArray(row.image_urls) ? row.image_urls : null,
-    category: row.category || null,
-    description: row.description || null,
+    image_urls,
+    category: row.category || sourceJm?.tecdoc_section?.label || sourceJm?.category || null,
+    description,
     is_oem: true,
     badge_label: "ORIGINÁL",
     rank: 1,
     final_price: price || null,
     markup_percent: 0,
-    technical_parameters: null,
+    technical_parameters: sourceJm?.technical_parameters && Object.keys(sourceJm.technical_parameters).length > 0
+      ? sourceJm.technical_parameters
+      : null,
     compatible_vehicles: null,
     related_oem_number: null,
     oe_numbers: null,
@@ -135,13 +198,7 @@ export async function fetchAllPartsForEngine(opts: {
   const oemNumbersToFetch = new Set<string>();
   const addOem = (raw: string | null | undefined) => {
     if (!raw) return;
-    const stripped = stripBrandPrefix(String(raw)).trim();
-    if (!stripped) return;
-    oemNumbersToFetch.add(stripped);
-    const norm = stripped.toUpperCase().replace(/[\s\-._/]/g, "");
-    if (norm && norm !== stripped) oemNumbersToFetch.add(norm);
-    if (norm && !norm.startsWith("K")) oemNumbersToFetch.add(`K${norm}`);
-    if (norm.startsWith("K")) oemNumbersToFetch.add(norm.slice(1));
+    for (const v of oemMatchVariants(raw)) oemNumbersToFetch.add(v);
   };
   for (const it of rawItems) {
     addOem(it.related_oem_number);
@@ -150,9 +207,6 @@ export async function fetchAllPartsForEngine(opts: {
 
   let oemRows: any[] = [];
   if (oemNumbersToFetch.size > 0) {
-    // Smaller batch keeps URL well under PostgREST/Cloudflare limits (~4 KB).
-    // Previously BATCH=200 produced 5 KB+ URLs and Cloudflare returned 403,
-    // which silently dropped ALL OEM rows → ORIGINÁL never appeared on top.
     const list = [...oemNumbersToFetch].slice(0, 2000);
     const BATCH = 40;
     const slices: string[][] = [];
@@ -175,8 +229,13 @@ export async function fetchAllPartsForEngine(opts: {
       return ["mopar", "mopar_oem", "jm_oem", "7zap", "csv", "epc-link"].includes(src);
     });
   }
+  // Index DB OEM rows kanonickou formou — to umožní lookup z libovolné
+  // varianty (s K/bez K, s leading 0 atd.).
   const oemByNumber = new Map<string, any>();
-  for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
+  for (const row of oemRows) {
+    const key = canonicalOem(row.oem_number);
+    if (key && !oemByNumber.has(key)) oemByNumber.set(key, row);
+  }
 
   // 3. Build flat section groups 1:1 from J+M. ORIGINÁL first per J+M item, then NÁHRADA.
   const sectionGroups: CategoryGroup[] = [];
@@ -195,7 +254,7 @@ export async function fetchAllPartsForEngine(opts: {
         if (!k || seenOem.has(k)) continue;
         const row = oemByNumber.get(k);
         if (row) {
-          oemParts.push(oemRowToCatalogPart(row));
+          oemParts.push(oemRowToCatalogPart(row, it));
           seenOem.add(k);
           break;
         }
