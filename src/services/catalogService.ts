@@ -150,16 +150,26 @@ export async function fetchAllPartsForEngine(opts: {
 
   let oemRows: any[] = [];
   if (oemNumbersToFetch.size > 0) {
+    // Smaller batch keeps URL well under PostgREST/Cloudflare limits (~4 KB).
+    // Previously BATCH=200 produced 5 KB+ URLs and Cloudflare returned 403,
+    // which silently dropped ALL OEM rows → ORIGINÁL never appeared on top.
     const list = [...oemNumbersToFetch].slice(0, 2000);
-    const BATCH = 200;
-    for (let i = 0; i < list.length; i += BATCH) {
-      const slice = list.slice(i, i + BATCH);
-      const { data: rows } = await supabase
-        .from("parts_new_public")
-        .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description")
-        .in("oem_number", slice);
-      if (rows) oemRows.push(...rows);
-    }
+    const BATCH = 40;
+    const slices: string[][] = [];
+    for (let i = 0; i < list.length; i += BATCH) slices.push(list.slice(i, i + BATCH));
+    const results = await Promise.all(
+      slices.map((slice) =>
+        supabase
+          .from("parts_new_public")
+          .select("id, oem_number, name, manufacturer, catalog_source, price_with_vat, price_without_vat, availability, image_urls, category, description")
+          .in("oem_number", slice)
+          .then(({ data, error }) => {
+            if (error) console.warn("[catalogService] oem batch failed:", error.message);
+            return data || [];
+          })
+      )
+    );
+    for (const rows of results) oemRows.push(...rows);
     oemRows = oemRows.filter((r: any) => {
       const src = String(r.catalog_source || "").toLowerCase();
       return ["mopar", "mopar_oem", "jm_oem", "7zap", "csv", "epc-link"].includes(src);
