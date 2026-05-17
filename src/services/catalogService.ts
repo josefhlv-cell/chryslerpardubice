@@ -254,7 +254,7 @@ export async function fetchAllPartsForEngine(opts: {
         if (!k || seenOem.has(k)) continue;
         const row = oemByNumber.get(k);
         if (row) {
-          oemParts.push(oemRowToCatalogPart(row));
+          oemParts.push(oemRowToCatalogPart(row, it));
           seenOem.add(k);
           break;
         }
