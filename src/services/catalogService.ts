@@ -18,8 +18,12 @@ export type CategoryGroup = {
   children?: CategoryGroup[];
 };
 
+const stripBrandPrefix = (s: string) => {
+  const idx = s.lastIndexOf(":");
+  return idx >= 0 ? s.slice(idx + 1) : s;
+};
 const normalizeOem = (s: string) =>
-  (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+  stripBrandPrefix(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
 type RawJmItem = {
   oem_number: string;
@@ -74,7 +78,7 @@ function oemRowToCatalogPart(row: any): CatalogPart {
     id: String(row.id),
     oem_number: String(row.oem_number || ""),
     name: String(row.name || row.oem_number || ""),
-    manufacturer: row.manufacturer || "Mopar",
+    manufacturer: "Mopar",
     catalog_source: String(row.catalog_source || "mopar"),
     price_without_vat: Number(row.price_without_vat) || null,
     price_with_vat: price || null,
@@ -125,11 +129,23 @@ export async function fetchAllPartsForEngine(opts: {
     sectionMap.get(id)!.jmItems.push(it);
   }
 
-  // 2. Collect all OE numbers we need to look up in parts_new_public
+  // 2. Collect all OE numbers we need to look up in parts_new_public.
+  // J+M může vracet OE čísla ve formátu "CHRYSLER: 5142560AB" — ořezáváme brand prefix
+  // a zkoušíme i variantu s "K" prefixem (Mopar/Lancia katalog).
   const oemNumbersToFetch = new Set<string>();
+  const addOem = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const stripped = stripBrandPrefix(String(raw)).trim();
+    if (!stripped) return;
+    oemNumbersToFetch.add(stripped);
+    const norm = stripped.toUpperCase().replace(/[\s\-._/]/g, "");
+    if (norm && norm !== stripped) oemNumbersToFetch.add(norm);
+    if (norm && !norm.startsWith("K")) oemNumbersToFetch.add(`K${norm}`);
+    if (norm.startsWith("K")) oemNumbersToFetch.add(norm.slice(1));
+  };
   for (const it of rawItems) {
-    if (it.related_oem_number) oemNumbersToFetch.add(it.related_oem_number);
-    for (const oe of it.oe_numbers || []) oemNumbersToFetch.add(oe);
+    addOem(it.related_oem_number);
+    for (const oe of it.oe_numbers || []) addOem(oe);
   }
 
   let oemRows: any[] = [];
@@ -146,7 +162,7 @@ export async function fetchAllPartsForEngine(opts: {
     }
     oemRows = oemRows.filter((r: any) => {
       const src = String(r.catalog_source || "").toLowerCase();
-      return ["mopar", "mopar_oem", "7zap", "csv", "epc-link"].includes(src);
+      return ["mopar", "mopar_oem", "jm_oem", "7zap", "csv", "epc-link"].includes(src);
     });
   }
   const oemByNumber = new Map<string, any>();
