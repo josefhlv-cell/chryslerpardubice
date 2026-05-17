@@ -3,7 +3,7 @@
  * Brand → Model → Engine → Category (TecDoc section) → Parts.
  * One round-trip to jm-proxy `partsForEngine`, then OEM-first locally.
  */
-import { forwardRef, useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, ChevronLeft, ChevronDown, Loader2, Car, Wrench, Cog, Package,
@@ -242,15 +242,18 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const filteredGroups = useMemo(() => {
     const query = categoryQuery.trim().toLowerCase();
     if (!query) return groups;
-    return groups
-      .map((g) => {
-        const childMatches = (g.children || []).filter((c) => c.label.toLowerCase().includes(query));
-        if (g.label.toLowerCase().includes(query)) return g;
-        if (childMatches.length === 0) return null;
-        const count = childMatches.reduce((s, c) => s + c.count, 0);
-        return { ...g, count, parts: childMatches.flatMap((c) => c.parts), children: childMatches };
-      })
-      .filter(Boolean) as CategoryGroup[];
+
+    const filterNode = (node: CategoryGroup): CategoryGroup | null => {
+      const childMatches = (node.children || [])
+        .map(filterNode)
+        .filter(Boolean) as CategoryGroup[];
+      if (node.label.toLowerCase().includes(query)) return node;
+      if (childMatches.length === 0) return null;
+      const parts = childMatches.flatMap((c) => c.parts);
+      return { ...node, count: parts.length, parts, children: childMatches };
+    };
+
+    return groups.map(filterNode).filter(Boolean) as CategoryGroup[];
   }, [groups, categoryQuery]);
 
   const partsItems = selectedGroup
@@ -388,7 +391,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                       <div className="p-6 text-center text-xs text-amber-300/80">⚠️ Žádná kategorie nesouhlasí s filtrem.</div>
                     )}
                     {filteredGroups.map((g) => {
-                      const renderNode = (node: CategoryGroup, depth = 0): React.ReactNode => {
+                      const renderNode = (node: CategoryGroup, depth = 0): ReactNode => {
                         const Icon = depth === 0 ? (CATEGORY_ICON[node.label] || Package) : null;
                         const children = node.children || [];
                         const isExpanded = expandedGroups.has(node.id) || categoryQuery.trim().length > 0;
