@@ -110,6 +110,42 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_review_queue: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json
+          reason: string | null
+          ref_id: string | null
+          ref_table: string | null
+          resolved_at: string | null
+          status: string
+          topic: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          reason?: string | null
+          ref_id?: string | null
+          ref_table?: string | null
+          resolved_at?: string | null
+          status?: string
+          topic: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          reason?: string | null
+          ref_id?: string | null
+          ref_table?: string | null
+          resolved_at?: string | null
+          status?: string
+          topic?: string
+        }
+        Relationships: []
+      }
       admin_sessions: {
         Row: {
           created_at: string
