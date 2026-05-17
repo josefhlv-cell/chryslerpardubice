@@ -146,7 +146,7 @@ export async function fetchAllPartsForEngine(opts: {
     }
     oemRows = oemRows.filter((r: any) => {
       const src = String(r.catalog_source || "").toLowerCase();
-      return ["mopar", "mopar_oem", "7zap", "csv", "epc-link"].includes(src);
+      return ["mopar", "mopar_oem", "jm_oem", "7zap", "csv", "epc-link"].includes(src);
     });
   }
   const oemByNumber = new Map<string, any>();
