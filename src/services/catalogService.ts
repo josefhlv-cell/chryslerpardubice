@@ -117,8 +117,9 @@ export async function fetchAllPartsForEngine(opts: {
   // 1. Group J+M items by tecdoc_section (1:1 mirror)
   const sectionMap = new Map<string, { id: string; label: string; jmItems: RawJmItem[] }>();
   for (const it of rawItems) {
-    const sec = it.tecdoc_section || { id: 0, label: it.category || "Ostatní" };
-    const label = String(sec.label || it.category || "Nezařazená J+M sekce").trim();
+    const sec = it.tecdoc_section || { id: 0, label: it.category || "Nezařazená J+M sekce" };
+    const rawLabel = String(sec.label || it.category || "Nezařazená J+M sekce").trim();
+    const label = /^ostatní$/i.test(rawLabel) ? "Nezařazená J+M sekce" : rawLabel;
     const id = normalizeSectionLabel(label);
     if (!sectionMap.has(id)) sectionMap.set(id, { id, label, jmItems: [] });
     sectionMap.get(id)!.jmItems.push(it);
