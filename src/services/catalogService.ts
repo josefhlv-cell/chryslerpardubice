@@ -22,8 +22,37 @@ const stripBrandPrefix = (s: string) => {
   const idx = s.lastIndexOf(":");
   return idx >= 0 ? s.slice(idx + 1) : s;
 };
-const normalizeOem = (s: string) =>
-  stripBrandPrefix(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+const stripLeadingZeros = (s: string) => s.replace(/^0+(?=.)/, "");
+// Kanonická forma OEM klíče pro Map lookup — sjednocuje varianty
+// "0000077366718", "00K68243338AA", "K68243338AA", "5142560AB" tak, aby
+// se trefily na stejný klíč. Pravidla: strip brand prefix → uppercase →
+// remove separators → strip leading zeros → odstraň "00K" prefix (= K).
+const canonicalOem = (raw: string): string => {
+  let s = stripBrandPrefix(raw || "").toUpperCase().replace(/[\s\-._/]/g, "");
+  s = s.replace(/^00K/, "K");
+  s = stripLeadingZeros(s);
+  return s;
+};
+const normalizeOem = canonicalOem;
+// Vrátí všechny varianty OEM, které pošleme do .in() dotazu na parts_new.
+// Cílem je přežít: padding nulami, K-prefix, 00K-prefix, čistou formu.
+const oemMatchVariants = (raw: string): string[] => {
+  const stripped = stripBrandPrefix(String(raw || "")).trim();
+  if (!stripped) return [];
+  const upper = stripped.toUpperCase().replace(/[\s\-._/]/g, "");
+  const noZeros = stripLeadingZeros(upper);
+  const no00K = upper.replace(/^00K/, "K");
+  const set = new Set<string>([stripped, upper, noZeros, no00K, stripLeadingZeros(no00K)]);
+  // Také zkusit K-variantu a bezKvariantu pro Mopar katalog
+  const core = noZeros.replace(/^K/, "");
+  if (core) {
+    set.add(core);
+    set.add(`K${core}`);
+    set.add(`00K${core}`);
+    set.add(`0000${core}`);
+  }
+  return [...set].filter(Boolean);
+};
 
 type RawJmItem = {
   oem_number: string;
