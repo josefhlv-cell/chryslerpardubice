@@ -1,391 +1,300 @@
 /**
- * J+M Section → Canonical Category Taxonomy
+ * J+M product taxonomy
  *
- * Mirrors the J+M eshop main category tree. Goal: ZERO items in "Ostatní".
- * Matching is keyword-based on the section label (lowercased, diacritics-insensitive).
- *
- * Order matters: more specific parents come first. The first matching parent wins.
+ * The Nextis/J+M endpoint returns generic article names (`gen_art_name`) as a flat
+ * list. The J+M eshop presents those articles inside a fixed TecDoc-style tree.
+ * This file rebuilds that tree deterministically: Main category → J+M subcategory
+ * → returned J+M section. The fallback is deliberately NOT named "Ostatní", so the
+ * catalog never creates the broken catch-all bucket the customer complained about.
  */
 
 export type CanonicalParent = {
   id: string;
   label: string;
   sort: number;
-  /** substrings (lowercased, no diacritics) — match against J+M section label */
   match: string[];
 };
 
-const stripDia = (s: string) =>
-  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-
-/**
- * Canonical parents — mirrors the J+M eshop main categories (31+).
- * Order = matching priority. Place more specific parents BEFORE generic ones.
- */
-export const CANONICAL_PARENTS: CanonicalParent[] = [
-  // ─── BRZDY ────────────────────────────────────────────────────────────
-  {
-    id: "brakes",
-    label: "Brzdové zařízení",
-    sort: 10,
-    match: [
-      "brzd", "brake", "brems", "destick", "destič", "kotouc", "kotouč",
-      "trmen", "třmen", "bubnov", "celist brzd", "čelist brzd",
-      "abs", "asr", "esp", "parkovac brzd", "rucni brzd", "ruční brzd",
-      "bowden", "valecek brzd", "váleček brzd", "valec brzd", "válec brzd",
-      "hadick brzd", "hadice brzd", "kapalin brzd", "regulator brzd",
-      "regulace jizdni", "regulace jízdní", "spinac brzdov", "spínač brzdov",
-      "posilovac brzd", "posilovač brzd", "snimac otacek kola", "snímač otáček kola",
-    ],
-  },
-
-  // ─── MOTOR + příslušenství motoru ─────────────────────────────────────
-  {
-    id: "belt-drive",
-    label: "Řemenový pohon",
-    sort: 15,
-    match: [
-      "remen", "řemen", "remenice", "řemenice", "napinak", "napínák",
-      "napinaci kladk", "napínací kladk", "vodici kladk", "vodící kladk",
-      "ozubeny remen", "ozubený řemen", "klin remen", "klínový řemen",
-      "drazkov remen", "drážkový řemen", "poly-v",
-    ],
-  },
-  {
-    id: "ignition",
-    label: "Zapalování / žhavicí zařízení",
-    sort: 18,
-    match: [
-      "zapal", "zapalov", "svick", "svíčk", "žhav", "zhav",
-      "cívk zapal", "civk zapal", "rozdelov", "rozdělov",
-    ],
-  },
-  {
-    id: "engine",
-    label: "Motor",
-    sort: 20,
-    match: [
-      "motor", "hlava motoru", "blok motoru", "vack", "vačk", "ventil",
-      "rozvod", "klikov", "ojnic", "pistn", "píst", "tesneni motor",
-      "těsnění motor", "olejov", "olejovy", "olejová", "olejove",
-      "olejovy filtr", "olejová pumpa", "vyvazov", "vyvažov",
-      "vacuum pump", "vakuove cerpad", "vakuové čerpad",
-      "vyfuk ventil", "výfuk ventil", "saci ventil", "sací ventil",
-      "víko hlavy", "viko hlavy", "vanovac", "vaňovac",
-    ],
-  },
-
-  // ─── PALIVO ───────────────────────────────────────────────────────────
-  {
-    id: "fuel-pump",
-    label: "Palivové čerpadlo",
-    sort: 28,
-    match: ["palivove cerpad", "palivové čerpad", "palivove pump", "palivová pump", "cerpadlo paliv", "čerpadlo paliv"],
-  },
-  {
-    id: "fuel-prep",
-    label: "Příprava paliva",
-    sort: 29,
-    match: [
-      "priprava paliv", "příprava paliv", "vstrik", "vstřik", "injektor",
-      "tryska vstrik", "tryska vstřik", "rampa vstrik", "rampa vstřik",
-      "regulator tlak paliv", "regulátor tlaku paliv", "snimac tlaku paliv",
-      "snímač tlaku paliv", "common rail", "karbur",
-    ],
-  },
-  {
-    id: "fuel",
-    label: "Palivový systém",
-    sort: 30,
-    match: [
-      "paliv", "fuel", "nadrz paliv", "nádrž paliv", "plovak", "plovák",
-      "lpg", "cng", "hadice paliv", "vedeni paliv", "vedení paliv",
-      "viko nadrze", "víko nádrže", "klapka paliv",
-    ],
-  },
-
-  // ─── VÝFUK ────────────────────────────────────────────────────────────
-  {
-    id: "exhaust",
-    label: "Výfuk",
-    sort: 40,
-    match: [
-      "vyfuk", "výfuk", "exhaust", "katalyz", "lambda", "dpf", "egr",
-      "tlumic vyfuku", "tlumič výfuku", "sber vyfuku", "sběr výfuku",
-      "kolen vyfuk", "koleno výfuk", "filtr pevn castic", "filtr pevn částic",
-    ],
-  },
-
-  // ─── CHLAZENÍ + HVAC ─────────────────────────────────────────────────
-  {
-    id: "cooling",
-    label: "Chlazení",
-    sort: 50,
-    match: [
-      "chlad", "chladic motoru", "chladič motoru", "ventilator chlaz",
-      "ventilátor chlaz", "nadrzka chlad", "nádržka chlad", "interkul",
-      "intercoolér", "intercooler", "termostat", "vodni cerpad", "vodní čerpad",
-      "vodni pump", "vodní pump", "chladic oleje", "chladič oleje",
-      "snimac teploty chlad", "snímač teploty chlad",
-    ],
-  },
-  {
-    id: "ac",
-    label: "Klimatizace",
-    sort: 60,
-    match: [
-      "klimat", "klima", "kompresor klima", "susic klima", "sušič klima",
-      "expanzni ventil", "expanzní ventil", "vyparnik", "výparník",
-      "kondenzator klima", "kondenzátor klima", "filtr kabin", "kabin filt",
-      "pylov", "a/c",
-    ],
-  },
-  {
-    id: "heating",
-    label: "Topení / ventilace",
-    sort: 62,
-    match: [
-      "topen", "topení", "ventilac", "ventilátor topen", "ventilator topen",
-      "radiator topen", "radiátor topen", "fukar", "fukár",
-    ],
-  },
-
-  // ─── PŘEVODOVÉ ÚSTROJÍ ───────────────────────────────────────────────
-  {
-    id: "transmission",
-    label: "Převodovka",
-    sort: 70,
-    match: [
-      "prevodov", "převodov", "gearbox", "stupen", "stupeň", "synchron",
-      "olej prevodov", "olej převodov", "razeni", "řazení", "voli razeni", "volič řazení",
-      "automatick prevod", "automatická převod",
-    ],
-  },
-  {
-    id: "clutch",
-    label: "Spojka / příslušenství",
-    sort: 75,
-    match: [
-      "spojk", "lamel spojk", "presn lozisk", "přítlačný kotouč", "pritlacny kotouc",
-      "vypinac spojky", "vypínací spojky", "hlavni valec spojk", "hlavní válec spojk",
-      "pomocny valec spojk", "pomocný válec spojk",
-    ],
-  },
-  {
-    id: "drivetrain-wheels",
-    label: "Pohon kol",
-    sort: 80,
-    match: ["pohon kol", "poloos", "kloub poloos", "homokinet", "manzeta pohon", "manžeta pohon"],
-  },
-  {
-    id: "drivetrain-axle",
-    label: "Pohon nápravy",
-    sort: 82,
-    match: ["pohon napravy", "pohon nápravy", "kardan", "diferencial", "diferenciál", "rozvodovk"],
-  },
-
-  // ─── ZAVĚŠENÍ / NÁPRAVA / KOLA ───────────────────────────────────────
-  {
-    id: "suspension",
-    label: "Odpružení / tlumení",
-    sort: 90,
-    match: [
-      "tlumic", "tlumič", "pruzin", "pružin", "odpruz", "odpruž",
-      "vinut pruzin", "vinuté pružin", "doraz tlumic", "doraz tlumič",
-      "manzeta tlumic", "manžeta tlumič", "horni uchyceni tlumic",
-      "horní uchycení tlumič", "stabiliz",
-    ],
-  },
-  {
-    id: "axle",
-    label: "Zavěšení nápravy / Vedení kol",
-    sort: 95,
-    match: [
-      "naprav", "náprav", "zaveseni", "zavěšení", "rameno", "silenblok",
-      "silentblok", "loziska kol", "ložiska kol", "lozisko kol", "ložisko kol",
-      "naboj", "náboj", "cep kola", "čep kola", "hlavov cep", "hlavový čep",
-      "kulov cep", "kulový čep", "tycka stabiliz", "tyčka stabiliz",
-    ],
-  },
-  {
-    id: "wheels",
-    label: "Kola / pneu",
-    sort: 110,
-    match: ["kola", "pneu", "disk", "ventil pneu", "puklic", "poklic", "tpms", "snimac tlaku v pneu", "snímač tlaku v pneu"],
-  },
-
-  // ─── ŘÍZENÍ ───────────────────────────────────────────────────────────
-  {
-    id: "steering",
-    label: "Řízení",
-    sort: 100,
-    match: [
-      "rizeni", "řízení", "volant", "tyc rizeni", "tyč řízení",
-      "servo rizen", "servočerpadl", "servocerpadl", "hrebenov rizen",
-      "hřebenov řízen", "manzeta rizeni", "manžeta řízení",
-    ],
-  },
-
-  // ─── FILTRY ───────────────────────────────────────────────────────────
-  {
-    id: "filters",
-    label: "Filtry",
-    sort: 120,
-    match: ["filtr", "filter", "vzduchov filt", "vzduchový filt"],
-  },
-
-  // ─── ELEKTRO ──────────────────────────────────────────────────────────
-  {
-    id: "electrical",
-    label: "Elektroinstalace",
-    sort: 130,
-    match: [
-      "elektroin", "elektrick", "alterna", "starter", "spoust", "spoušt",
-      "bateri", "akumulator", "akumulátor", "konektor", "rele", "relé",
-      "pojistk", "kabel", "svazek", "ridici jednotka", "řídicí jednotka",
-      "klakson", "houkac", "houkač",
-    ],
-  },
-  {
-    id: "sensors",
-    label: "Snímače a čidla",
-    sort: 135,
-    match: ["snimac", "snímač", "cidlo", "čidlo", "sensor", "lambda sond"],
-  },
-
-  // ─── OSVĚTLENÍ ────────────────────────────────────────────────────────
-  {
-    id: "lighting",
-    label: "Osvětlení",
-    sort: 140,
-    match: [
-      "svetl", "světl", "osvet", "osvět", "zarov", "žárov", "lamp",
-      "smerov", "směrov", "blink", "reflektor", "mlhov", "brzdov svet",
-      "brzdové svět", "zadni svet", "zadní svět", "denni svicen", "denní svícen",
-      "xenon", "led modul",
-    ],
-  },
-
-  // ─── BEZPEČNOST ──────────────────────────────────────────────────────
-  {
-    id: "safety",
-    label: "Bezpečnostní systém",
-    sort: 150,
-    match: [
-      "airbag", "bezpec", "bezpeč", "pas", "pás", "srs", "asisten",
-      "predepin", "předepín", "navijec pasu", "naviječ pásu",
-    ],
-  },
-
-  // ─── STĚRAČE / ČIŠTĚNÍ SKEL ──────────────────────────────────────────
-  {
-    id: "wipers",
-    label: "Stěrače",
-    sort: 160,
-    match: ["sterac", "stěrač", "lista stera", "lišta stěra", "rameno stera", "rameno stěra", "motor stera", "motor stěra"],
-  },
-  {
-    id: "wash",
-    label: "Čištění skel",
-    sort: 162,
-    match: [
-      "ostrik", "ostřik", "cist skel", "čišt skel", "tryska ostrik",
-      "tryska ostřik", "cerpadlo ostrik", "čerpadlo ostřik", "nadrzka ostrik",
-      "nádržka ostřik", "hadice ostrik", "hadice ostřik",
-    ],
-  },
-
-  // ─── KAROSERIE / DVEŘE / OKNA ────────────────────────────────────────
-  {
-    id: "body",
-    label: "Karosérie",
-    sort: 170,
-    match: [
-      "karos", "karoser", "kapot", "blatnik", "blatník", "naraznik", "nárazník",
-      "mrizk", "mřížk", "lem blatnik", "lem blatník", "zrcatk", "zrcátk",
-      "spoiler", "prah", "obklad karos", "obklad bocnice", "obklad bočnice",
-      "maska chladi", "maska chladič",
-    ],
-  },
-  {
-    id: "lock",
-    label: "Zamykací zařízení",
-    sort: 172,
-    match: ["zamyk", "zamek", "zámek", "centralni zamyk", "centrální zamyk", "klik dveri", "klika dveří", "vlozka zamku", "vložka zámku"],
-  },
-  {
-    id: "doors",
-    label: "Dveře a okna",
-    sort: 175,
-    match: ["dvere", "dveře", "vzpera", "vzpěra", "okno", "sklo", "stahovani okna", "stahování okna", "stahovacka", "stahovačka"],
-  },
-
-  // ─── INTERIÉR / KOMFORT ──────────────────────────────────────────────
-  {
-    id: "interior",
-    label: "Vnitřní vybavení",
-    sort: 180,
-    match: ["vnitrni vyb", "vnitřní vyb", "interier", "interiér", "sedadl", "palubn", "obklad dveri", "obklad dveří", "stinitko", "stínítko"],
-  },
-  {
-    id: "comfort",
-    label: "Komfortní systémy",
-    sort: 185,
-    match: ["komfort", "tempomat", "parkovac sensor", "parkovací senzor", "park asisten", "vyhrev sedadel", "vyhřev sedadel"],
-  },
-  {
-    id: "info",
-    label: "Informační / komunikační systém",
-    sort: 190,
-    match: ["informacni", "informační", "komunikac", "komunikač", "radio", "navigac", "antena", "anténa", "reproduktor"],
-  },
-
-  // ─── PŘÍSLUŠENSTVÍ / SERVIS ──────────────────────────────────────────
-  {
-    id: "towing",
-    label: "Příslušenství",
-    sort: 200,
-    match: ["tazn", "tažn", "prislu", "příslu", "nosic", "nosič", "kufr stresn", "kufr střešn"],
-  },
-  {
-    id: "service",
-    label: "Díly pro servis / kontrolu / údržbu",
-    sort: 220,
-    match: ["udrz", "údrž", "servis", "kontrol", "naradi", "nářadí", "specialni naradi", "speciální nářadí", "diagnost"],
-  },
-  {
-    id: "fluids",
-    label: "Náplně a kapaliny",
-    sort: 230,
-    match: ["olej", "kapalin", "naplne", "náplně", "mazac", "mazací", "fluid", "nemrznouc", "nemrznouc směs", "destilovan vod", "destilovaná vod"],
-  },
-];
-
-const PARENTS_PREP = CANONICAL_PARENTS.map((p) => ({
-  ...p,
-  _match: p.match.map(stripDia),
-}));
-
-const OTHERS: CanonicalParent = {
-  id: "other",
-  label: "Ostatní",
-  sort: 9999,
-  match: [],
+export type JmCategoryNode = CanonicalParent & {
+  children?: JmCategoryNode[];
 };
 
+export type JmCategoryPathNode = {
+  id: string;
+  label: string;
+  sort: number;
+};
+
+const stripDia = (s: string) =>
+  String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+const n = (id: string, label: string, sort: number, match: string[] = [], children?: JmCategoryNode[]): JmCategoryNode => ({
+  id,
+  label,
+  sort,
+  match,
+  children,
+});
+
 /**
- * Map a single J+M section label (gen_art_name) to a canonical parent.
- * Returns "other" if nothing matches.
+ * Main categories are kept in the same user-facing order as the J+M eshop tree.
+ * Children are broad J+M/TecDoc subgroups; the real API section is inserted below
+ * the best matching subgroup so the UI gets true subcategories instead of a flat list.
  */
-export function mapSectionToParent(sectionLabel: string): CanonicalParent {
-  const norm = stripDia(String(sectionLabel || ""));
-  if (!norm) return OTHERS;
-  for (const p of PARENTS_PREP) {
-    for (const kw of p._match) {
-      if (norm.includes(kw)) {
-        return CANONICAL_PARENTS.find((x) => x.id === p.id)!;
-      }
+export const JM_CATEGORY_TREE: JmCategoryNode[] = [
+  n("safety", "Bezpečnostní systém", 10, ["bezpec", "airbag", "srs", "pas", "predepin", "navijec pasu"], [
+    n("safety-airbags", "Airbagy", 10, ["airbag", "srs"]),
+    n("safety-belts", "Bezpečnostní pásy", 20, ["bezpecnostni pas", "bezpec pas", "pas", "predepin", "navijec pasu"]),
+  ]),
+  n("brakes", "Brzdové zařízení", 20, ["brzd", "brake", "abs", "esp", "asr"], [
+    n("brakes-disc", "Kotoučové brzdy", 10, ["brzdove destick", "brzdovy kotouc", "brzdove kotouce", "brzdovy trmen", "trmen", "kotouc", "destick", "caliper", "rotor"]),
+    n("brakes-drum", "Bubnové brzdy", 20, ["buben", "bubnov", "celist", "pakna", "brake shoe"]),
+    n("brakes-hydraulic", "Hydraulika brzd", 30, ["brzdova hadic", "brzdova trub", "brzdovy valec", "hlavni brzdovy", "posilovac brzd", "regulator brzd"]),
+    n("brakes-parking", "Parkovací brzda", 40, ["parkovac brzd", "rucni brzd", "lanovod", "bowden"]),
+    n("brakes-abs", "ABS / regulace jízdní dynamiky", 50, ["abs", "esp", "asr", "regulace jizdni", "snimac otacek kola"]),
+  ]),
+  n("screen-cleaning", "Čištění skel", 30, ["ostrik", "cisteni skel", "sterac", "stiraci"], [
+    n("screen-wipers", "Stěrače", 10, ["sterac", "stiraci lista", "lista sterace", "rameno sterace", "sterac gumicka"]),
+    n("screen-washer", "Ostřikovače", 20, ["ostrik", "tryska ostrik", "cerpadlo ostrik", "nadrzka ostrik", "hadice ostrik"]),
+  ]),
+  n("service-maintenance", "Díly pro servis / kontrolu / údržbu", 40, ["servis", "kontrol", "udrz", "naradi", "sada", "oprav", "spojovac"], [
+    n("service-kits", "Servisní sady", 10, ["servisni sada", "sada prislusenstvi", "montazni sada", "opravna sada"]),
+    n("service-tools", "Nářadí", 20, ["naradi", "diagnost"]),
+    n("service-universal", "Univerzální / montážní díly", 90, ["univerzal", "spojovac", "sroub", "matice", "prichytka", "svorka"]),
+  ]),
+  n("electrical", "Elektroinstalace", 50, ["elektr", "alternator", "starter", "bateri", "akumulator", "rele", "pojist", "kabel", "svazek"], [
+    n("electrical-alternator", "Alternátory", 10, ["alternator", "regulator alternator", "remenice alternator"]),
+    n("electrical-starter", "Startéry", 20, ["starter", "spoustec"]),
+    n("electrical-battery", "Baterie", 30, ["baterie", "akumulator"]),
+    n("electrical-switches", "Relé / pojistky / spínače", 40, ["rele", "pojist", "spinac", "prepinac"]),
+    n("electrical-wiring", "Kabeláž / konektory", 50, ["kabel", "svazek", "konektor", "zasuvka"]),
+    n("electrical-control", "Řídicí jednotky", 60, ["ridici jednot", "modul", "ecu"]),
+  ]),
+  n("filters", "Filtry", 60, ["filtr", "filter"], [
+    n("filters-oil", "Olejové filtry", 10, ["olejovy filtr", "filtr oleje", "oil filter"]),
+    n("filters-air", "Vzduchové filtry", 20, ["vzduchovy filtr", "air filter"]),
+    n("filters-cabin", "Kabinové / pylové filtry", 30, ["kabinovy filtr", "pylovy filtr", "filtr kabin", "filtr vnitrniho prostoru"]),
+    n("filters-fuel", "Palivové filtry", 40, ["palivovy filtr", "fuel filter"]),
+    n("filters-gearbox", "Filtry převodovky", 50, ["filtr prevodov", "hydraulicky filtr"]),
+  ]),
+  n("cooling", "Chlazení", 70, ["chlad", "termostat", "vodni cerpad", "intercool", "ventilator chlad"], [
+    n("cooling-radiator", "Chladiče vody", 10, ["chladic motoru", "vodni chladic", "radiator"]),
+    n("cooling-oil", "Chladiče oleje", 20, ["chladic oleje", "olejovy chladic"]),
+    n("cooling-thermostat", "Termostaty", 30, ["termostat"]),
+    n("cooling-pump", "Vodní čerpadla", 40, ["vodni cerpad", "vodni pump"]),
+    n("cooling-fan", "Ventilátory chlazení", 50, ["ventilator chlad", "sahara"]),
+    n("cooling-hoses", "Hadice / nádržky chlazení", 60, ["hadice chlad", "nadrzka chlad", "expanzni nadob"]),
+    n("cooling-intercooler", "Mezichladiče", 70, ["intercool", "interkul"]),
+  ]),
+  n("body", "Karosérie", 80, ["karos", "kapot", "blatnik", "naraznik", "mrizk", "maska", "zrcatk", "dvere", "okno", "sklo"], [
+    n("body-bumpers", "Nárazníky / výztuhy", 10, ["naraznik", "vyztuha narazniku"]),
+    n("body-front", "Přední část / maska", 20, ["mrizka chladice", "maska chladice", "predni stena"]),
+    n("body-panels", "Kapoty / blatníky / prahy", 30, ["kapot", "blatnik", "lem blatniku", "prah"]),
+    n("body-mirrors", "Zrcátka", 40, ["zrcatk"]),
+    n("body-doors", "Dveře / víka", 50, ["dvere", "zaves dveri", "vzpera zad dveri", "viko kufru", "kapota plynov"]),
+    n("body-glass", "Skla / stahování oken", 60, ["sklo", "okno", "stahovani okna", "stahovacka"]),
+  ]),
+  n("ac", "Klimatizace", 90, ["klimat", "klima", "a/c", "kompresor", "kondenzator", "vyparnik", "expanzni ventil"], [
+    n("ac-compressor", "Kompresory klimatizace", 10, ["kompresor klimat", "kompresor klima"]),
+    n("ac-condenser", "Kondenzátory", 20, ["kondenzator"]),
+    n("ac-dryer", "Vysoušeče / sušiče", 30, ["vysousec", "susic"]),
+    n("ac-expansion", "Expanzní ventily", 40, ["expanzni ventil"]),
+    n("ac-evaporator", "Výparníky", 50, ["vyparnik"]),
+    n("ac-hoses", "Hadice klimatizace", 60, ["hadice klimat", "vedeni klimat"]),
+  ]),
+  n("comfort", "Komfortní systémy", 100, ["komfort", "tempomat", "parkovac", "vyhrev", "elektricke ovladani"], [
+    n("comfort-parking", "Parkovací asistenty", 10, ["parkovac", "pdc"]),
+    n("comfort-cruise", "Tempomat", 20, ["tempomat"]),
+    n("comfort-heated", "Vyhřívání", 30, ["vyhrev", "vyhrivani"]),
+  ]),
+  n("wheels", "Kola / pneumatiky", 110, ["kolo", "kola", "pneu", "disk", "tpms", "sroub kola"], [
+    n("wheels-tyres", "Pneumatiky", 10, ["pneu", "pneumat"]),
+    n("wheels-rims", "Disky kol", 20, ["disk kola", "rafek"]),
+    n("wheels-tpms", "TPMS / ventilky", 30, ["tpms", "snimac tlaku v pneu", "ventil pneu"]),
+    n("wheels-fasteners", "Šrouby / matice kol", 40, ["sroub kola", "matice kola"]),
+  ]),
+  n("engine", "Motor", 120, ["motor", "hlava valce", "tesneni", "vack", "klik", "pist", "ventil", "olejova vana", "ulozeni motoru", "hnaci hridel"], [
+    n("engine-gaskets", "Těsnění", 10, ["tesneni", "sada tesneni", "tesnici krouzek", "tesneni hlavy valce", "tesneni kryt hlavy", "tesneni vika", "tesneni sani"]),
+    n("engine-head", "Hlava válců / ventilový rozvod", 20, ["hlava valce", "vackovy hridel", "ventil", "hydrostel", "vahadlo"]),
+    n("engine-crank", "Klikový mechanismus", 30, ["klikovy hridel", "ojnice", "pist", "lozisko klik"]),
+    n("engine-lubrication", "Mazání motoru", 40, ["olejova vana", "olejove cerpadlo", "merka oleje", "vypustny sroub oleje"]),
+    n("engine-mounts", "Uložení motoru", 50, ["ulozeni motoru", "zaveseni motoru", "silentblok motoru", "drzak motoru"]),
+    n("engine-intake", "Sání motoru", 60, ["sani", "skrtici klapka", "saci potrubi"]),
+    n("engine-timing", "Rozvody", 70, ["rozvod", "rozvodovy retez", "rozvodovy remen"]),
+  ]),
+  n("suspension-damping", "Odpružení / tlumení", 130, ["tlumic", "pruzin", "odpruz", "doraz tlumic", "ulozeni tlumic"], [
+    n("damping-shocks", "Tlumiče", 10, ["tlumic", "tlumice"]),
+    n("damping-springs", "Pružiny", 20, ["pruzin"]),
+    n("damping-mounts", "Uložení / dorazy tlumičů", 30, ["ulozeni tlumic", "doraz tlumic", "manzeta tlumic"]),
+  ]),
+  n("fuel-pump", "Palivové čerpadlo", 140, ["palivove cerpad", "cerpadlo paliv", "palivova pump"], [
+    n("fuel-pump-electric", "Elektrická palivová čerpadla", 10, ["palivove cerpad", "cerpadlo paliv", "palivova pump"]),
+    n("fuel-pump-module", "Moduly palivového čerpadla", 20, ["modul palivoveho cerpadla"]),
+  ]),
+  n("fuel-system", "Palivový systém", 150, ["paliv", "nadrz", "plovak", "lpg", "cng"], [
+    n("fuel-tank", "Nádrž / víčko / klapka", 10, ["palivova nadrz", "viko nadrze", "klapka palivove nadrze", "hrdlo nadrze"]),
+    n("fuel-lines", "Palivové vedení", 20, ["palivove vedeni", "palivova hadice", "potrubi paliva"]),
+    n("fuel-pressure", "Regulace tlaku paliva", 30, ["regulator tlaku paliva", "tlak paliva"]),
+  ]),
+  n("fuel-preparation", "Příprava paliva", 160, ["vstrik", "injektor", "tryska", "karbur", "common rail", "palivova rampa"], [
+    n("fuel-injectors", "Vstřikovače / trysky", 10, ["vstrik", "vstrikovac", "injektor", "tryska"]),
+    n("fuel-rail", "Vstřikovací rampa", 20, ["palivova rampa", "vstrikovaci rampa", "common rail"]),
+    n("fuel-carburettor", "Karburátor", 30, ["karbur"]),
+  ]),
+  n("wheel-drive", "Pohon kol", 170, ["poloos", "hnaci hridel", "homokinet", "kloub poloosy", "manzeta pohon"], [
+    n("wheel-drive-shafts", "Hnací hřídele / poloosy", 10, ["hnaci hridel", "poloos"]),
+    n("wheel-drive-joints", "Klouby / manžety poloos", 20, ["kloub poloosy", "homokinet", "manzeta pohon"]),
+  ]),
+  n("axle-drive", "Pohon nápravy", 180, ["kardan", "diferencial", "rozvodovka", "pohon napravy"], [
+    n("axle-drive-diff", "Diferenciál", 10, ["diferencial"]),
+    n("axle-drive-cardans", "Kardany", 20, ["kardan"]),
+    n("axle-drive-transfer", "Rozvodovka", 30, ["rozvodovka"]),
+  ]),
+  n("transmission", "Převodovka", 190, ["prevodov", "razeni", "volic", "automat", "synchron", "atf", "gearbox"], [
+    n("transmission-automatic", "Automatická převodovka", 10, ["automaticka prevodovka", "automat", "atf"]),
+    n("transmission-manual", "Manuální převodovka", 20, ["manualni prevodovka", "synchron", "spojka radici"]),
+    n("transmission-shift", "Řazení / volič", 30, ["razeni", "volic", "tahlo razeni"]),
+    n("transmission-oil", "Olej převodovky", 40, ["olej prevodovky", "prevodovy olej"]),
+  ]),
+  n("accessories", "Příslušenství", 200, ["prislu", "tazn", "nosic", "autokoberec", "tazne lano"], [
+    n("accessories-towing", "Tažné zařízení", 10, ["tazn", "tazne lano"]),
+    n("accessories-carrier", "Nosiče / střešní systémy", 20, ["nosic", "stresni"]),
+    n("accessories-interior", "Doplňky interiéru", 30, ["autokoberec", "koberec"]),
+  ]),
+  n("belt-drive", "Řemenový pohon", 210, ["remen", "remenice", "napinak", "kladk", "poly-v"], [
+    n("belt-v", "Drážkové / klínové řemeny", 10, ["drazkovy remen", "klinovy remen", "remen", "poly-v"]),
+    n("belt-tensioners", "Napínáky a kladky", 20, ["napinak remene", "napinaci kladka", "vodici kladka", "kladka"]),
+    n("belt-pulleys", "Řemenice", 30, ["remenice"]),
+  ]),
+  n("steering", "Řízení", 220, ["rizeni", "ridici mechanismus", "tahlo rizeni", "manzeta rizeni", "volant", "servo"], [
+    n("steering-rack", "Řídicí mechanismus", 10, ["ridici mechanismus", "hrebenove rizeni", "prevodka rizeni"]),
+    n("steering-mounts", "Uložení řízení", 20, ["ulozeni ridici mechanismus", "ulozeni rizeni"]),
+    n("steering-rods", "Táhla / čepy řízení", 30, ["tahlo rizeni", "cep rizeni", "tyc rizeni"]),
+    n("steering-boots", "Manžety řízení", 40, ["manzeta rizeni"]),
+    n("steering-servo", "Servořízení", 50, ["servo", "servocerpadlo"]),
+    n("steering-wheel", "Volant", 60, ["volant"]),
+  ]),
+  n("clutch", "Spojka", 230, ["spojk", "setrvacnik", "vypinaci lozisko", "pritlacny talir"], [
+    n("clutch-kits", "Spojkové sady", 10, ["spojkova sada", "sada spojky"]),
+    n("clutch-disc", "Spojkový kotouč / přítlačný talíř", 20, ["spojkovy kotouc", "pritlacny talir", "pritlacny kotouc"]),
+    n("clutch-bearing", "Vypínací ložiska", 30, ["vypinaci lozisko", "vysouseci lozisko"]),
+    n("clutch-cylinders", "Spojkové válce", 40, ["spojkovy valec", "hlavni spojkovy valec", "pomocny spojkovy valec"]),
+    n("clutch-flywheel", "Setrvačníky", 50, ["setrvacnik"]),
+  ]),
+  n("sensors", "Snímače", 240, ["snimac", "cidlo", "sensor", "sonda"], [
+    n("sensors-engine", "Snímače motoru", 10, ["snimac vackoveho", "snimac klikoveho", "snimac tlaku oleje", "snimac teploty", "cidlo teploty"]),
+    n("sensors-exhaust", "Lambda sondy", 20, ["lambda", "sonda"]),
+    n("sensors-speed", "Snímače otáček / rychlosti", 30, ["snimac otacek", "snimac rychlosti"]),
+    n("sensors-parking", "Parkovací snímače", 40, ["parkovaci snimac", "pdc"]),
+  ]),
+  n("heating", "Topení / ventilace", 250, ["topen", "ventilac", "fukar", "ventilator topeni", "radiator topeni"], [
+    n("heating-heat-exchanger", "Radiátory topení", 10, ["radiator topeni", "vymenik topeni"]),
+    n("heating-blower", "Ventilátory / odpory topení", 20, ["ventilator topeni", "fukar", "odpor topeni"]),
+    n("heating-controls", "Ovládání topení", 30, ["ovladani topeni", "klapka topeni"]),
+  ]),
+  n("interior", "Vnitřní vybavení", 260, ["interier", "vnitrni", "sedadl", "palub", "madlo", "stinitko"], [
+    n("interior-dashboard", "Palubní deska / ovladače", 10, ["palub", "ovladac", "spinac palub"]),
+    n("interior-seats", "Sedadla", 20, ["sedadl"]),
+    n("interior-trim", "Obložení interiéru", 30, ["oblozeni", "madlo", "stinitko", "vnitrni vybaveni"]),
+  ]),
+  n("exhaust", "Výfuk", 270, ["vyfuk", "katalyz", "lambda", "dpf", "egr"], [
+    n("exhaust-pipes", "Výfukové potrubí", 10, ["vyfukove potrubi", "trubka vyfuku", "koleno vyfuku"]),
+    n("exhaust-silencer", "Tlumiče výfuku", 20, ["tlumic vyfuku"]),
+    n("exhaust-catalyst", "Katalyzátory / DPF", 30, ["katalyz", "dpf", "filtr pevnych castic"]),
+    n("exhaust-gaskets", "Těsnění výfuku", 40, ["tesneni vyfuku", "tesneni vyfuk"]),
+    n("exhaust-egr", "EGR", 50, ["egr"]),
+  ]),
+  n("locks", "Zamykací zařízení", 280, ["zamek", "zamyk", "centralni zamyk", "vlozka zamku", "klika dveri"], [
+    n("locks-door", "Zámky dveří", 10, ["zamek dveri", "klika dveri"]),
+    n("locks-central", "Centrální zamykání", 20, ["centralni zamyk"]),
+    n("locks-cylinders", "Vložky zámků / klíče", 30, ["vlozka zamku", "klic"]),
+  ]),
+  n("ignition", "Zapalování / žhavicí zařízení", 290, ["zapal", "svick", "zhav", "civk", "rozdelovac"], [
+    n("ignition-spark", "Zapalovací svíčky", 10, ["zapalovaci svicka", "svicka zapal"]),
+    n("ignition-coils", "Zapalovací cívky", 20, ["zapalovaci civka", "civka zapal"]),
+    n("ignition-glow", "Žhavicí svíčky", 30, ["zhavici svicka", "zhav"]),
+    n("ignition-distributor", "Rozdělovač / kabely", 40, ["rozdelovac", "zapalovaci kabel"]),
+  ]),
+  n("axle-suspension", "Zavěšení nápravy / Vedení kol", 300, ["naprav", "zaveseni", "rameno", "silenblok", "silentblok", "pouzdro", "ulozeni", "naboj", "lozisko kola", "cep kola", "stabiliz"], [
+    n("axle-arms", "Ramena / vedení kol", 10, ["rameno", "vodici rameno", "podelne rameno", "pricne rameno"]),
+    n("axle-bushes", "Pouzdra / silentbloky", 20, ["pouzdro", "silenblok", "silentblok", "ulozeni", "ulozeni napravy"]),
+    n("axle-joints", "Čepy nápravy", 30, ["kulovy cep", "hlavovy cep", "cep napravy", "cep kola"]),
+    n("axle-bearings", "Náboje / ložiska kol", 40, ["naboj kola", "lozisko kola", "loziska kol"]),
+    n("axle-stabilizer", "Stabilizátor", 50, ["stabiliz", "tycka stabiliz", "ulozeni stabiliz"]),
+  ]),
+  n("lighting", "Osvětlení", 310, ["svetl", "osvet", "zarov", "blink", "smerov", "mlhov", "reflektor", "xenon", "led"], [
+    n("lighting-headlights", "Světlomety", 10, ["hlavni svetlomet", "svetlomet", "reflektor"]),
+    n("lighting-rear", "Zadní světla", 20, ["zadni svetlo", "brzdove svetlo"]),
+    n("lighting-indicators", "Směrovky", 30, ["blikac", "smerov"]),
+    n("lighting-bulbs", "Žárovky", 40, ["zarovka", "vybojka"]),
+    n("lighting-fog", "Mlhovky", 50, ["mlhov"]),
+  ]),
+];
+
+export const CANONICAL_PARENTS: CanonicalParent[] = JM_CATEGORY_TREE.map(({ id, label, sort, match }) => ({
+  id,
+  label,
+  sort,
+  match,
+}));
+
+const FALLBACK_PATH: JmCategoryPathNode[] = [
+  { id: "service-maintenance", label: "Díly pro servis / kontrolu / údržbu", sort: 40 },
+  { id: "service-universal", label: "Univerzální / montážní díly", sort: 90 },
+];
+
+type Candidate = {
+  score: number;
+  path: JmCategoryPathNode[];
+};
+
+const scoreKeyword = (normLabel: string, keyword: string): number => {
+  const kw = stripDia(keyword);
+  if (!kw) return 0;
+  if (normLabel === kw) return 2000 + kw.length;
+  if (normLabel.startsWith(kw)) return 1200 + kw.length;
+  if (normLabel.includes(kw)) return 800 + kw.length;
+  return 0;
+};
+
+function walkBest(node: JmCategoryNode, normLabel: string, path: JmCategoryPathNode[]): Candidate | null {
+  const currentPath = [...path, { id: node.id, label: node.label, sort: node.sort }];
+  let best: Candidate | null = null;
+
+  for (const kw of node.match || []) {
+    const score = scoreKeyword(normLabel, kw);
+    if (score > 0 && (!best || score > best.score)) {
+      best = { score, path: currentPath };
     }
   }
-  return OTHERS;
+
+  for (const child of node.children || []) {
+    const childBest = walkBest(child, normLabel, currentPath);
+    if (childBest && (!best || childBest.score > best.score)) best = childBest;
+  }
+
+  return best;
+}
+
+export function mapSectionToPath(sectionLabel: string): JmCategoryPathNode[] {
+  const normLabel = stripDia(sectionLabel);
+  if (!normLabel) return FALLBACK_PATH;
+
+  let best: Candidate | null = null;
+  for (const root of JM_CATEGORY_TREE) {
+    const candidate = walkBest(root, normLabel, []);
+    if (candidate && (!best || candidate.score > best.score)) best = candidate;
+  }
+
+  return best?.path || FALLBACK_PATH;
+}
+
+/** Backward-compatible helper for old callers that only need the main parent. */
+export function mapSectionToParent(sectionLabel: string): CanonicalParent {
+  const root = mapSectionToPath(sectionLabel)[0];
+  return CANONICAL_PARENTS.find((p) => p.id === root.id) || CANONICAL_PARENTS.find((p) => p.id === "service-maintenance")!;
+}
+
+export function normalizeSectionLabel(sectionLabel: string): string {
+  return stripDia(sectionLabel).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "section";
 }
