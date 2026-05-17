@@ -101,26 +101,60 @@ function jmToCatalogPart(it: RawJmItem): CatalogPart {
   };
 }
 
-function oemRowToCatalogPart(row: any): CatalogPart {
+// Z J+M dílu odvodí specifikátor (přední/zadní/levá/pravá/horní/dolní),
+// kterým obohatí generický OEM název ("Brzdové destičky" → "... přední").
+function deriveOemNameQualifier(jm?: RawJmItem | null): string {
+  if (!jm) return "";
+  const haystack = [
+    jm.tecdoc_section?.label,
+    jm.name,
+    jm.description,
+    ...Object.values(jm.technical_parameters || {}),
+  ].filter(Boolean).join(" ").toLowerCase();
+  const tags: string[] = [];
+  const push = (t: string) => { if (!tags.includes(t)) tags.push(t); };
+  if (/p[řr]edn[ií]|front|vorne/.test(haystack)) push("přední");
+  else if (/zadn[ií]|rear|hinten/.test(haystack)) push("zadní");
+  if (/\blev[áéý]\b|\bleft\b|\blinks\b/.test(haystack)) push("levá");
+  else if (/\bprav[áéý]\b|\bright\b|\brechts\b/.test(haystack)) push("pravá");
+  if (/horn[ií]|upper/.test(haystack)) push("horní");
+  else if (/doln[ií]|lower/.test(haystack)) push("dolní");
+  return tags.join(" ");
+}
+
+function oemRowToCatalogPart(row: any, sourceJm?: RawJmItem | null): CatalogPart {
   const price = Number(row.price_with_vat) || 0;
+  const baseName = String(row.name || row.oem_number || "");
+  const qualifier = deriveOemNameQualifier(sourceJm);
+  const enrichedName = qualifier && !baseName.toLowerCase().includes(qualifier.split(" ")[0])
+    ? `${baseName} ${qualifier}`.trim()
+    : baseName;
+  const description = row.description || sourceJm?.description || null;
+  const image_urls = Array.isArray(row.image_urls) && row.image_urls.length > 0
+    ? row.image_urls
+    : (sourceJm?.image_urls && sourceJm.image_urls.length > 0
+        ? sourceJm.image_urls
+        : (sourceJm?.image ? [sourceJm.image] : null));
   return {
     id: String(row.id),
     oem_number: String(row.oem_number || ""),
-    name: String(row.name || row.oem_number || ""),
-    manufacturer: "Mopar",
+    name: enrichedName,
+    manufacturer: null, // ORIGINÁL badge mluví sám za sebe — nezobrazujeme "Mopar"
     catalog_source: String(row.catalog_source || "mopar"),
     price_without_vat: Number(row.price_without_vat) || null,
     price_with_vat: price || null,
     availability: price > 0 ? row.availability || "in_stock" : "on_order",
-    image_urls: Array.isArray(row.image_urls) ? row.image_urls : null,
-    category: row.category || null,
-    description: row.description || null,
+    image_urls,
+    category: row.category || sourceJm?.tecdoc_section?.label || sourceJm?.category || null,
+    description,
     is_oem: true,
     badge_label: "ORIGINÁL",
     rank: 1,
     final_price: price || null,
     markup_percent: 0,
-    technical_parameters: null,
+    technical_parameters: sourceJm?.technical_parameters && Object.keys(sourceJm.technical_parameters).length > 0
+      ? sourceJm.technical_parameters
+      : null,
     compatible_vehicles: null,
     related_oem_number: null,
     oe_numbers: null,
