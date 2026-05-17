@@ -1394,17 +1394,63 @@ function classifyTecdoc(item: { name: string; description?: string }): TecdocSec
   return { id: 0, label: 'Ostatní', keywords: [] };
 }
 
-function liveSectionLabelFromItems(items: UnifiedPart[], fallback: string): string {
-  const counts = new Map<string, { label: string; count: number }>();
-  for (const it of items) {
-    const label = String(it.name || '').trim();
-    if (!label) continue;
-    const key = label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const prev = counts.get(key);
-    counts.set(key, { label, count: (prev?.count || 0) + 1 });
+/**
+ * Derive a trustworthy section label for a batch of items returned for one
+ * genArtID. Order of preference:
+ *   1) Most-frequent NON-EMPTY `gen_art_name` returned by Nextis (the API
+ *      ships the genuine TecDoc generic-article label per item).
+ *   2) Hand-curated CANONICAL_SECTION_LABEL_BY_ID override (for ids where
+ *      Nextis returns "bez názvu" or nothing).
+ *   3) Most-frequent product `name` (last resort — noisy).
+ *   4) Caller-provided fallback ("Ostatní" if all else fails).
+ *
+ * The previously-used hardcoded TECDOC_SECTIONS.label is intentionally NOT
+ * trusted: audit of 79 cached engines showed our guessed labels were wrong
+ * for ~70% of genArtIDs (e.g. id 305 was "Zrcátka" but actually contains
+ * V-belts, id 78 was "Náboj kola" but contains brake calipers).
+ */
+const CANONICAL_SECTION_LABEL_BY_ID: Record<number, string> = {
+  472: 'Brzdový třmen',
+  541: 'Napínák řemene',
+  590: 'Pouzdro',
+  1092: 'Žárovka', // brake-light bulb subtype
+  204: 'Poloosa',
+  104: 'Žárovka osvětlení zavazadlového prostoru',
+};
+
+function dominant<T>(values: T[]): T | undefined {
+  if (!values.length) return undefined;
+  const counts = new Map<string, { v: T; c: number }>();
+  for (const v of values) {
+    const k = String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    if (!k) continue;
+    const prev = counts.get(k);
+    counts.set(k, { v, c: (prev?.c || 0) + 1 });
   }
-  const top = [...counts.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'cs'))[0];
-  return top?.label || fallback || 'Ostatní';
+  const top = [...counts.values()].sort((a, b) => b.c - a.c)[0];
+  return top?.v;
+}
+
+function liveSectionLabelFromItems(
+  items: UnifiedPart[],
+  fallback: string,
+  sectionId?: number,
+): string {
+  // 1) Trust Nextis per-item gen_art_name when present
+  // @ts-ignore extra field
+  const genArtNames = items.map((it) => String((it as any).gen_art_name || '').trim())
+    .filter((s) => s && s !== 'bez názvu' && s !== 'bez nazvu');
+  const topGen = dominant(genArtNames);
+  if (topGen) return topGen;
+  // 2) Hand-curated override for known-bad ids
+  if (sectionId && CANONICAL_SECTION_LABEL_BY_ID[sectionId]) {
+    return CANONICAL_SECTION_LABEL_BY_ID[sectionId];
+  }
+  // 3) Dominant item name
+  const topName = dominant(items.map((it) => String(it.name || '').trim()).filter(Boolean));
+  if (topName) return topName;
+  // 4) Fallback (caller's TECDOC_SECTIONS.label is unreliable; use only if nothing else)
+  return fallback || 'Ostatní';
 }
 
 function countCategoryTree(nodes: CategoryNode[], rows: any[]): CategoryNode[] {
@@ -2648,7 +2694,7 @@ Deno.serve(async (req) => {
           for (const r of sectionResults) {
             totalRaw += r.rawCount;
             if (r.items.length > 0) sectionsHit++;
-            const liveSectionLabel = liveSectionLabelFromItems(r.items, r.sec.label);
+            const liveSectionLabel = liveSectionLabelFromItems(r.items, r.sec.label, r.sec.id);
             for (const it of r.items) {
               if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
               const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
