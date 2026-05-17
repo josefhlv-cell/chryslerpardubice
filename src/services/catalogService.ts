@@ -74,7 +74,7 @@ function oemRowToCatalogPart(row: any): CatalogPart {
     id: String(row.id),
     oem_number: String(row.oem_number || ""),
     name: String(row.name || row.oem_number || ""),
-    manufacturer: row.manufacturer || "Mopar",
+    manufacturer: "Mopar",
     catalog_source: String(row.catalog_source || "mopar"),
     price_without_vat: Number(row.price_without_vat) || null,
     price_with_vat: price || null,
