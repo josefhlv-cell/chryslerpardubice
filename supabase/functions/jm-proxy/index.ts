@@ -2694,7 +2694,7 @@ Deno.serve(async (req) => {
           for (const r of sectionResults) {
             totalRaw += r.rawCount;
             if (r.items.length > 0) sectionsHit++;
-            const liveSectionLabel = liveSectionLabelFromItems(r.items, r.sec.label);
+            const liveSectionLabel = liveSectionLabelFromItems(r.items, r.sec.label, r.sec.id);
             for (const it of r.items) {
               if (!it.oem_number || !isAllowedBrand(it.brand)) continue;
               const key = `${r.sec.id}::${normalizeOemCode(it.brand)}::${normalizeOemCode(it.oem_number)}`;
