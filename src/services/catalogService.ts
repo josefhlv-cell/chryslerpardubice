@@ -8,6 +8,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
+import { mapSectionToParent, CANONICAL_PARENTS } from "./jmCategoryTaxonomy";
 
 export type CategoryGroup = {
   id: string;
