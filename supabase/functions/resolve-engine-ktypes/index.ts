@@ -28,7 +28,7 @@ async function callFn(name: string, body: unknown) {
 }
 
 async function resolveOne(row: any): Promise<{ k_type: number; source: string } | { error: string }> {
-  // Primary: jm-proxy resolveKType (eshop TecDoc wizard — per-engine accurate).
+  // Primary: jm-proxy resolveKType with forceFresh → uses J+M TecDoc wizard scrape.
   for (let attempt = 0; attempt < 3; attempt++) {
     const r = await callFn('jm-proxy', {
       action: 'resolveKType',
@@ -37,16 +37,18 @@ async function resolveOne(row: any): Promise<{ k_type: number; source: string } 
         model: row.model,
         engine: row.engine,
         year: row.year_from || undefined,
+        forceFresh: true,
       },
     });
-    if (r.status === 429 || (typeof r.body === 'object' && r.body?.error?.includes?.('Rate limit'))) {
+    // jm-proxy wraps responses as { success, data }
+    const data = r.body?.data ?? r.body;
+    if (r.status === 429 || (typeof data === 'object' && String(data?.error || '').includes('Rate limit'))) {
       await sleep(15_000);
       continue;
     }
-    if (r.status === 200 && r.body?.ok && Number(r.body.k_type) > 0) {
-      return { k_type: Number(r.body.k_type), source: r.body.source || 'jm_eshop' };
+    if (r.status === 200 && data?.ok && Number(data.k_type) > 0) {
+      return { k_type: Number(data.k_type), source: data.source || 'jm_eshop' };
     }
-    console.log('[resolveOne] jm-proxy returned', row.brand, row.model, row.engine, '->', JSON.stringify(r));
     break;
   }
   // Fallback: nextis-ktype-lookup (authenticated API search)
