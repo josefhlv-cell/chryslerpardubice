@@ -145,19 +145,26 @@ async function processRun(admin: any, runId: string): Promise<Response> {
   let errorTotal = run.error_count || 0;
   let lastError: string | null = run.last_error;
 
+  // Negative-cache window: pokud byl OEM zkoušen v posledních 7 dnech a nic se nenašlo,
+  // přeskoč ho. Katalog vernostsevyplaci.cz je relativně stabilní → opakovat každý běh = plýtvání.
+  const NEGATIVE_CACHE_DAYS = 7;
+  const negCacheCutoff = new Date(Date.now() - NEGATIVE_CACHE_DAYS * 24 * 3600 * 1000).toISOString();
+
   while (Date.now() - startedAt < MAX_RUNTIME_MS) {
     // Pull next batch — všechny zdroje s OEM Mopar čísly.
+    // KRITICKÉ: ORDER BY last_price_update ASC NULLS FIRST — jinak se vybírá pořád stejných 200 dílů
+    // a běh nikdy nepostoupí (processed stoupá, ale na stejných OEM).
     let q = admin
       .from('parts_new')
       .select('id, oem_number, catalog_source')
       .in('catalog_source', ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'epc-ai', 'ai-epc', 'makro', 'catcar', 'jm_oem'])
       .neq('is_active', false)
+      .order('last_price_update', { ascending: true, nullsFirst: true })
       .limit(BATCH_SIZE);
     if (run.mode === 'missing') {
       q = q.or('price_with_vat.is.null,price_with_vat.eq.0');
-    } else {
-      // mode 'all' — process oldest updated first
-      q = q.order('last_price_update', { ascending: true, nullsFirst: true });
+      // Negative cache — netestuj znova OEMs marně zkoušené v posledních 7 dnech
+      q = q.or(`last_price_update.is.null,last_price_update.lt.${negCacheCutoff}`);
     }
     const { data: batch, error: batchErr } = await q;
     if (batchErr) {
