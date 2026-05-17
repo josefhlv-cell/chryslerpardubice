@@ -46,6 +46,7 @@ async function resolveOne(row: any): Promise<{ k_type: number; source: string } 
     if (r.status === 200 && r.body?.ok && Number(r.body.k_type) > 0) {
       return { k_type: Number(r.body.k_type), source: r.body.source || 'jm_eshop' };
     }
+    console.log('[resolveOne] jm-proxy returned', row.brand, row.model, row.engine, '->', JSON.stringify(r));
     break;
   }
   // Fallback: nextis-ktype-lookup (authenticated API search)
