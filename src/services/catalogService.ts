@@ -198,13 +198,7 @@ export async function fetchAllPartsForEngine(opts: {
   const oemNumbersToFetch = new Set<string>();
   const addOem = (raw: string | null | undefined) => {
     if (!raw) return;
-    const stripped = stripBrandPrefix(String(raw)).trim();
-    if (!stripped) return;
-    oemNumbersToFetch.add(stripped);
-    const norm = stripped.toUpperCase().replace(/[\s\-._/]/g, "");
-    if (norm && norm !== stripped) oemNumbersToFetch.add(norm);
-    if (norm && !norm.startsWith("K")) oemNumbersToFetch.add(`K${norm}`);
-    if (norm.startsWith("K")) oemNumbersToFetch.add(norm.slice(1));
+    for (const v of oemMatchVariants(raw)) oemNumbersToFetch.add(v);
   };
   for (const it of rawItems) {
     addOem(it.related_oem_number);
@@ -213,9 +207,6 @@ export async function fetchAllPartsForEngine(opts: {
 
   let oemRows: any[] = [];
   if (oemNumbersToFetch.size > 0) {
-    // Smaller batch keeps URL well under PostgREST/Cloudflare limits (~4 KB).
-    // Previously BATCH=200 produced 5 KB+ URLs and Cloudflare returned 403,
-    // which silently dropped ALL OEM rows → ORIGINÁL never appeared on top.
     const list = [...oemNumbersToFetch].slice(0, 2000);
     const BATCH = 40;
     const slices: string[][] = [];
@@ -238,8 +229,13 @@ export async function fetchAllPartsForEngine(opts: {
       return ["mopar", "mopar_oem", "jm_oem", "7zap", "csv", "epc-link"].includes(src);
     });
   }
+  // Index DB OEM rows kanonickou formou — to umožní lookup z libovolné
+  // varianty (s K/bez K, s leading 0 atd.).
   const oemByNumber = new Map<string, any>();
-  for (const row of oemRows) oemByNumber.set(normalizeOem(row.oem_number), row);
+  for (const row of oemRows) {
+    const key = canonicalOem(row.oem_number);
+    if (key && !oemByNumber.has(key)) oemByNumber.set(key, row);
+  }
 
   // 3. Build flat section groups 1:1 from J+M. ORIGINÁL first per J+M item, then NÁHRADA.
   const sectionGroups: CategoryGroup[] = [];
