@@ -129,11 +129,23 @@ export async function fetchAllPartsForEngine(opts: {
     sectionMap.get(id)!.jmItems.push(it);
   }
 
-  // 2. Collect all OE numbers we need to look up in parts_new_public
+  // 2. Collect all OE numbers we need to look up in parts_new_public.
+  // J+M může vracet OE čísla ve formátu "CHRYSLER: 5142560AB" — ořezáváme brand prefix
+  // a zkoušíme i variantu s "K" prefixem (Mopar/Lancia katalog).
   const oemNumbersToFetch = new Set<string>();
+  const addOem = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const stripped = stripBrandPrefix(String(raw)).trim();
+    if (!stripped) return;
+    oemNumbersToFetch.add(stripped);
+    const norm = stripped.toUpperCase().replace(/[\s\-._/]/g, "");
+    if (norm && norm !== stripped) oemNumbersToFetch.add(norm);
+    if (norm && !norm.startsWith("K")) oemNumbersToFetch.add(`K${norm}`);
+    if (norm.startsWith("K")) oemNumbersToFetch.add(norm.slice(1));
+  };
   for (const it of rawItems) {
-    if (it.related_oem_number) oemNumbersToFetch.add(it.related_oem_number);
-    for (const oe of it.oe_numbers || []) oemNumbersToFetch.add(oe);
+    addOem(it.related_oem_number);
+    for (const oe of it.oe_numbers || []) addOem(oe);
   }
 
   let oemRows: any[] = [];
