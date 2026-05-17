@@ -3,7 +3,7 @@
  * Brand → Model → Engine → Category (TecDoc section) → Parts.
  * One round-trip to jm-proxy `partsForEngine`, then OEM-first locally.
  */
-import { forwardRef, useEffect, useMemo, useState } from "react";
+import { forwardRef, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRight, ChevronLeft, ChevronDown, Loader2, Car, Wrench, Cog, Package,
@@ -159,7 +159,15 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       .then((res) => {
         if (cancelled) return;
         setGroups(res.groups);
-        setExpandedGroups(new Set(res.groups.slice(0, 8).map((g) => g.id)));
+        const autoExpanded = new Set<string>();
+        const collectExpanded = (items: CategoryGroup[], depth = 0) => {
+          for (const item of items) {
+            if (depth === 0 || (depth === 1 && item.children?.length)) autoExpanded.add(item.id);
+            if (depth < 1 && item.children?.length) collectExpanded(item.children, depth + 1);
+          }
+        };
+        collectExpanded(res.groups);
+        setExpandedGroups(autoExpanded);
         setDebugInfo(res.debug || null);
         if (res.warning) setWarning(res.warning);
         if (res.groups.length === 0) setWarning(res.warning || "Pro toto vozidlo se nepodařilo načíst žádné díly.");
@@ -234,15 +242,18 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const filteredGroups = useMemo(() => {
     const query = categoryQuery.trim().toLowerCase();
     if (!query) return groups;
-    return groups
-      .map((g) => {
-        const childMatches = (g.children || []).filter((c) => c.label.toLowerCase().includes(query));
-        if (g.label.toLowerCase().includes(query)) return g;
-        if (childMatches.length === 0) return null;
-        const count = childMatches.reduce((s, c) => s + c.count, 0);
-        return { ...g, count, parts: childMatches.flatMap((c) => c.parts), children: childMatches };
-      })
-      .filter(Boolean) as CategoryGroup[];
+
+    const filterNode = (node: CategoryGroup): CategoryGroup | null => {
+      const childMatches = (node.children || [])
+        .map(filterNode)
+        .filter(Boolean) as CategoryGroup[];
+      if (node.label.toLowerCase().includes(query)) return node;
+      if (childMatches.length === 0) return null;
+      const parts = childMatches.flatMap((c) => c.parts);
+      return { ...node, count: parts.length, parts, children: childMatches };
+    };
+
+    return groups.map(filterNode).filter(Boolean) as CategoryGroup[];
   }, [groups, categoryQuery]);
 
   const partsItems = selectedGroup
@@ -380,43 +391,44 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                       <div className="p-6 text-center text-xs text-amber-300/80">⚠️ Žádná kategorie nesouhlasí s filtrem.</div>
                     )}
                     {filteredGroups.map((g) => {
-                      const Icon = CATEGORY_ICON[g.label] || Package;
-                      const children = g.children || [];
-                      const isExpanded = expandedGroups.has(g.id) || categoryQuery.trim().length > 0;
-                      return (
-                        <div key={g.id}>
-                          <button onClick={() => children.length ? setExpandedGroups((prev) => {
-                              const next = new Set(prev);
-                              next.has(g.id) ? next.delete(g.id) : next.add(g.id);
-                              return next;
-                            }) : setSelectedGroup(g)}
-                            className="group w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors text-left">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <Icon className="w-4 h-4 text-primary/70 shrink-0" />
-                              <span className="text-sm font-semibold truncate">{g.label}</span>
-                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">{g.count}</Badge>
-                            </div>
-                            {children.length ? (
-                              isExpanded ? <ChevronDown className="w-4 h-4 text-primary shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary shrink-0" />
-                            ) : <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />}
-                          </button>
-                          {isExpanded && children.length > 0 && (
-                            <div className="bg-background/35 border-t border-border/20">
-                              {children.map((child) => (
-                                <button key={child.id} onClick={() => setSelectedGroup(child)}
-                                  className="group w-full flex items-center justify-between gap-3 pl-10 pr-4 py-2.5 hover:bg-secondary/50 transition-colors text-left">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
-                                    <span className="text-xs md:text-sm font-medium truncate">{child.label}</span>
-                                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 shrink-0">{child.count}</Badge>
-                                  </div>
-                                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0" />
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
+                      const renderNode = (node: CategoryGroup, depth = 0): ReactNode => {
+                        const Icon = depth === 0 ? (CATEGORY_ICON[node.label] || Package) : null;
+                        const children = node.children || [];
+                        const isExpanded = expandedGroups.has(node.id) || categoryQuery.trim().length > 0;
+                        const isRoot = depth === 0;
+                        const isLeaf = children.length === 0;
+                        const leftPadding = isRoot ? 16 : Math.min(28 + depth * 18, 72);
+                        return (
+                          <div key={node.id}>
+                            <button
+                              onClick={() => children.length ? setExpandedGroups((prev) => {
+                                const next = new Set(prev);
+                                next.has(node.id) ? next.delete(node.id) : next.add(node.id);
+                                return next;
+                              }) : setSelectedGroup(node)}
+                              className={`group w-full flex items-center justify-between gap-3 pr-4 ${isRoot ? "py-3" : "py-2.5"} hover:bg-secondary/50 transition-colors text-left`}
+                              style={{ paddingLeft: leftPadding }}
+                            >
+                              <div className={`flex items-center ${isRoot ? "gap-3" : "gap-2"} min-w-0`}>
+                                {Icon ? <Icon className="w-4 h-4 text-primary/70 shrink-0" /> : <span className={`${depth === 1 ? "w-1.5 h-1.5" : "w-1 h-1"} rounded-full bg-primary/60 shrink-0`} />}
+                                <span className={`${isRoot ? "text-sm font-semibold" : depth === 1 ? "text-xs md:text-sm font-semibold" : "text-xs md:text-sm font-medium"} truncate`}>
+                                  {node.label}
+                                </span>
+                                <Badge variant={isRoot ? "secondary" : "outline"} className="text-[10px] h-4 px-1.5 shrink-0">{node.count}</Badge>
+                              </div>
+                              {children.length ? (
+                                isExpanded ? <ChevronDown className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-primary shrink-0`} /> : <ChevronRight className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-muted-foreground/40 group-hover:text-primary shrink-0`} />
+                              ) : <ChevronRight className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0`} />}
+                            </button>
+                            {isExpanded && !isLeaf && (
+                              <div className="bg-background/35 border-t border-border/20">
+                                {children.map((child) => renderNode(child, depth + 1))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      };
+                      return renderNode(g);
                     })}
                   </div>
                 </div>
