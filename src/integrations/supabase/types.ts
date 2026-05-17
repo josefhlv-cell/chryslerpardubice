@@ -855,6 +855,99 @@ export type Database = {
           },
         ]
       }
+      catcar_oem: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          model_id: string | null
+          model_name: string | null
+          name: string | null
+          oem_number: string
+          position: string | null
+          schema_name: string | null
+          schema_url: string | null
+          subcategory: string | null
+          vehicle_tag: string
+          year: number | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          model_id?: string | null
+          model_name?: string | null
+          name?: string | null
+          oem_number: string
+          position?: string | null
+          schema_name?: string | null
+          schema_url?: string | null
+          subcategory?: string | null
+          vehicle_tag: string
+          year?: number | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          model_id?: string | null
+          model_name?: string | null
+          name?: string | null
+          oem_number?: string
+          position?: string | null
+          schema_name?: string | null
+          schema_url?: string | null
+          subcategory?: string | null
+          vehicle_tag?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
+      catcar_scrape_progress: {
+        Row: {
+          categories_done: number
+          created_at: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          model_name: string | null
+          oems_count: number
+          schemas_done: number
+          started_at: string | null
+          status: string
+          vehicle_tag: string
+          year: number | null
+        }
+        Insert: {
+          categories_done?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          model_name?: string | null
+          oems_count?: number
+          schemas_done?: number
+          started_at?: string | null
+          status?: string
+          vehicle_tag: string
+          year?: number | null
+        }
+        Update: {
+          categories_done?: number
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          model_name?: string | null
+          oems_count?: number
+          schemas_done?: number
+          started_at?: string | null
+          status?: string
+          vehicle_tag?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
       catcar_test: {
         Row: {
           category: string | null
