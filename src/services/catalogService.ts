@@ -8,7 +8,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
-import { mapSectionToParent, CANONICAL_PARENTS } from "./jmCategoryTaxonomy";
+import { CANONICAL_PARENTS, mapSectionToPath, normalizeSectionLabel } from "./jmCategoryTaxonomy";
 
 export type CategoryGroup = {
   id: string;
@@ -184,46 +184,76 @@ export async function fetchAllPartsForEngine(opts: {
     sectionGroups.push({ id: bucket.id, label: bucket.label, count: parts.length, parts });
   }
 
-  // 4. Build canonical 2-level hierarchy: Parent → J+M sections
-  const parentBuckets = new Map<string, { parent: typeof CANONICAL_PARENTS[number] | { id: string; label: string; sort: number }; children: CategoryGroup[]; parts: CatalogPart[] }>();
-  for (const sec of sectionGroups) {
-    const parent = mapSectionToParent(sec.label);
-    const key = parent.id;
-    if (!parentBuckets.has(key)) {
-      parentBuckets.set(key, { parent, children: [], parts: [] });
-    }
-    const bucket = parentBuckets.get(key)!;
-    bucket.children.push({ ...sec, id: `${parent.id}:${sec.id}` });
-    bucket.parts.push(...sec.parts);
-  }
+  // 4. Build J+M-like hierarchy: Main category → J+M subcategory → live J+M section.
+  // This keeps the real J+M sections intact, but places them under the same product tree
+  // users see in J+M instead of dumping unmatched names into "Ostatní".
+  type MutableGroup = CategoryGroup & { sort: number; childMap: Map<string, MutableGroup> };
+  const rootMap = new Map<string, MutableGroup>();
 
-  const groups: CategoryGroup[] = [];
-  for (const [, b] of parentBuckets) {
-    // sort children alphabetically (cs)
-    b.children.sort((a, c) => a.label.localeCompare(c.label, "cs"));
-    // deduplicate parent-level parts by id (so search/expansion stays consistent)
+  const dedupeParts = (parts: CatalogPart[]) => {
     const seen = new Set<string>();
     const dedup: CatalogPart[] = [];
-    for (const p of b.parts) {
+    for (const p of parts) {
       if (seen.has(p.id)) continue;
       seen.add(p.id);
       dedup.push(p);
     }
-    groups.push({
-      id: b.parent.id,
-      label: b.parent.label,
-      count: dedup.length,
-      parts: dedup,
-      children: b.children,
-    });
+    return dedup;
+  };
+
+  const ensureNode = (map: Map<string, MutableGroup>, id: string, label: string, sort: number): MutableGroup => {
+    const existing = map.get(id);
+    if (existing) return existing;
+    const node: MutableGroup = { id, label, sort, count: 0, parts: [], children: [], childMap: new Map() };
+    map.set(id, node);
+    return node;
+  };
+
+  for (const sec of sectionGroups) {
+    const path = mapSectionToPath(sec.label);
+    const rootInfo = path[0];
+    const root = ensureNode(rootMap, rootInfo.id, rootInfo.label, rootInfo.sort);
+    root.parts.push(...sec.parts);
+
+    let parent = root;
+    for (const nodeInfo of path.slice(1)) {
+      const child = ensureNode(parent.childMap, nodeInfo.id, nodeInfo.label, nodeInfo.sort);
+      parent.parts.push(...sec.parts);
+      child.parts.push(...sec.parts);
+      parent = child;
+    }
+
+    const sectionSlug = normalizeSectionLabel(sec.label || sec.id);
+    const sectionId = `${parent.id}:section:${sectionSlug}:${sec.id}`;
+    const sectionNode = ensureNode(parent.childMap, sectionId, sec.label, 10_000 + sec.label.localeCompare(sec.label, "cs"));
+    sectionNode.parts.push(...sec.parts);
   }
 
-  // Sort parents by canonical sort order; "other" always last
-  groups.sort((a, c) => {
-    const sa = CANONICAL_PARENTS.find((p) => p.id === a.id)?.sort ?? 9999;
-    const sc = CANONICAL_PARENTS.find((p) => p.id === c.id)?.sort ?? 9999;
-    return sa - sc || a.label.localeCompare(c.label, "cs");
-  });
+  const finalize = (node: MutableGroup): CategoryGroup => {
+    const parts = dedupeParts(node.parts);
+    const children = [...node.childMap.values()]
+      .map(finalize)
+      .sort((a, c) => {
+        const ma = node.childMap.get(a.id)?.sort ?? 9999;
+        const mc = node.childMap.get(c.id)?.sort ?? 9999;
+        return ma - mc || a.label.localeCompare(c.label, "cs");
+      });
+    return {
+      id: node.id,
+      label: node.label,
+      count: parts.length,
+      parts,
+      children: children.length > 0 ? children : undefined,
+    };
+  };
+
+  const groups: CategoryGroup[] = [...rootMap.values()]
+    .map(finalize)
+    .sort((a, c) => {
+      const sa = CANONICAL_PARENTS.find((p) => p.id === a.id)?.sort ?? 9999;
+      const sc = CANONICAL_PARENTS.find((p) => p.id === c.id)?.sort ?? 9999;
+      return sa - sc || a.label.localeCompare(c.label, "cs");
+    });
 
   const totalParts = groups.reduce((s, g) => s + g.count, 0);
   return {
@@ -231,6 +261,6 @@ export async function fetchAllPartsForEngine(opts: {
     totalParts,
     oemSeedsUsed,
     warning: payload.warning,
-    debug: { ...debug, hierarchy: "canonical-2level", parents: groups.length, sections: sectionGroups.length },
+    debug: { ...debug, hierarchy: "jm-3level", parents: groups.length, sections: sectionGroups.length },
   };
 }
