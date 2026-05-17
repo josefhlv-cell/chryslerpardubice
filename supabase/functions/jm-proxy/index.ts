@@ -831,51 +831,71 @@ async function enrichItemsWithRelatedOem(
   adminClient: any,
   items: UnifiedPart[],
 ): Promise<UnifiedPart[]> {
-  const allOeNumbers: string[] = [];
+  const allOeNumbers = new Set<string>();
   for (const item of items) {
     if (item.oe_numbers?.length) {
       for (const oe of item.oe_numbers) {
         const norm = normalizeOemCode(oe);
         if (!norm) continue;
-        allOeNumbers.push(norm);
+        allOeNumbers.add(norm);
         const stripped = norm.replace(/^K/, '');
-        if (stripped !== norm) allOeNumbers.push(stripped);
+        if (stripped !== norm) allOeNumbers.add(stripped);
+        // J+M často udává čísla bez vedoucí nuly; Mopar/OEM má někdy "0" prefix.
+        if (/^\d/.test(stripped)) allOeNumbers.add(`0${stripped}`);
+        if (!stripped.startsWith('K')) allOeNumbers.add(`K${stripped}`);
       }
     }
   }
-  if (allOeNumbers.length === 0) return items;
+  if (allOeNumbers.size === 0) return items;
 
   try {
-    const { data: oemRows } = await adminClient
-      .from('parts_new')
-      .select('oem_number')
-      .in('oem_number', [...new Set(allOeNumbers)])
-      .in('catalog_source', ['mopar', 'mopar_oem', 'jm_oem', '7zap', 'csv', 'epc-link'])
-      .limit(500);
-
-    if (!oemRows?.length) return items;
-
+    const list = [...allOeNumbers];
     const oeToMopar = new Map<string, string>();
-    for (const row of oemRows) {
-      const norm = normalizeOemCode(row.oem_number);
-      if (!norm) continue;
-      oeToMopar.set(norm, row.oem_number);
-      oeToMopar.set(`K${norm}`, row.oem_number);
-      oeToMopar.set(norm.replace(/^K/, ''), row.oem_number);
+    const BATCH = 200;
+    let totalRows = 0;
+    for (let i = 0; i < list.length; i += BATCH) {
+      const slice = list.slice(i, i + BATCH);
+      const { data: oemRows, error } = await adminClient
+        .from('parts_new')
+        .select('oem_number')
+        .in('oem_number', slice)
+        .in('catalog_source', ['mopar', 'mopar_oem', 'jm_oem', '7zap', 'csv', 'epc-link']);
+      if (error) {
+        console.warn('[enrichItemsWithRelatedOem] batch error:', error.message);
+        continue;
+      }
+      for (const row of oemRows || []) {
+        totalRows++;
+        const norm = normalizeOemCode(row.oem_number);
+        if (!norm) continue;
+        oeToMopar.set(norm, row.oem_number);
+        oeToMopar.set(`K${norm}`, row.oem_number);
+        oeToMopar.set(norm.replace(/^K/, ''), row.oem_number);
+        oeToMopar.set(norm.replace(/^0+/, ''), row.oem_number);
+      }
     }
+    console.log(`[enrichItemsWithRelatedOem] candidates=${allOeNumbers.size} matched=${totalRows} mapSize=${oeToMopar.size}`);
+    if (oeToMopar.size === 0) return items;
 
-    return items.map((item) => {
+    let linked = 0;
+    const out = items.map((item) => {
       if (item.related_oem_number) return item;
       for (const oe of item.oe_numbers || []) {
         const norm = normalizeOemCode(oe);
         const moparOem =
-          oeToMopar.get(norm) || oeToMopar.get(norm.replace(/^K/, '')) || oeToMopar.get(`K${norm}`);
+          oeToMopar.get(norm) ||
+          oeToMopar.get(norm.replace(/^K/, '')) ||
+          oeToMopar.get(`K${norm}`) ||
+          oeToMopar.get(norm.replace(/^0+/, ''));
         if (moparOem) {
+          linked++;
           return { ...item, related_oem_number: moparOem };
         }
       }
       return item;
     });
+    console.log(`[enrichItemsWithRelatedOem] linked ${linked}/${items.length} items to OEM`);
+    return out;
   } catch (e) {
     console.warn('[enrichItemsWithRelatedOem] failed:', (e as Error).message);
     return items;
