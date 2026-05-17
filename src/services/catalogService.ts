@@ -18,8 +18,12 @@ export type CategoryGroup = {
   children?: CategoryGroup[];
 };
 
+const stripBrandPrefix = (s: string) => {
+  const idx = s.lastIndexOf(":");
+  return idx >= 0 ? s.slice(idx + 1) : s;
+};
 const normalizeOem = (s: string) =>
-  (s || "").toUpperCase().replace(/[\s\-._/]/g, "");
+  stripBrandPrefix(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
 type RawJmItem = {
   oem_number: string;
