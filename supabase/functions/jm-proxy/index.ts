@@ -794,8 +794,16 @@ function normalizeItems(raw: any): UnifiedPart[] {
     .filter((p) => p.oem_number && isUsBrand(p.brand));
 }
 
+function stripBrandPrefix(value: string): string {
+  // J+M často vrací OE čísla ve formátu "CHRYSLER: 5142560AB" nebo "CHRYSLER (BBDC): 5142566AA".
+  // Bereme jen část za poslední dvojtečkou.
+  const idx = value.lastIndexOf(':');
+  return idx >= 0 ? value.slice(idx + 1) : value;
+}
+
 function normalizeOemCode(value: string | null | undefined): string {
-  return String(value || '').toUpperCase().replace(/[\s\-._/]/g, '').trim();
+  const raw = stripBrandPrefix(String(value || ''));
+  return raw.toUpperCase().replace(/[\s\-._/]/g, '').trim();
 }
 
 function baseEightDigits(value: string | null | undefined): string {
