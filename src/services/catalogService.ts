@@ -118,8 +118,8 @@ export async function fetchAllPartsForEngine(opts: {
   const sectionMap = new Map<string, { id: string; label: string; jmItems: RawJmItem[] }>();
   for (const it of rawItems) {
     const sec = it.tecdoc_section || { id: 0, label: it.category || "Ostatní" };
-    const id = String(sec.id || sec.label || "0");
-    const label = String(sec.label || it.category || "Ostatní").trim();
+    const label = String(sec.label || it.category || "Nezařazená J+M sekce").trim();
+    const id = normalizeSectionLabel(label);
     if (!sectionMap.has(id)) sectionMap.set(id, { id, label, jmItems: [] });
     sectionMap.get(id)!.jmItems.push(it);
   }
@@ -224,8 +224,8 @@ export async function fetchAllPartsForEngine(opts: {
     }
 
     const sectionSlug = normalizeSectionLabel(sec.label || sec.id);
-    const sectionId = `${parent.id}:section:${sectionSlug}:${sec.id}`;
-    const sectionNode = ensureNode(parent.childMap, sectionId, sec.label, 10_000 + sec.label.localeCompare(sec.label, "cs"));
+    const sectionId = `${parent.id}:section:${sectionSlug}`;
+    const sectionNode = ensureNode(parent.childMap, sectionId, sec.label, 10_000);
     sectionNode.parts.push(...sec.parts);
   }
 

@@ -223,9 +223,9 @@ export const JM_CATEGORY_TREE: JmCategoryNode[] = [
     n("axle-stabilizer", "Stabilizátor", 50, ["stabiliz", "tycka stabiliz", "ulozeni stabiliz"]),
   ]),
   n("lighting", "Osvětlení", 310, ["svetl", "osvet", "zarov", "blink", "smerov", "mlhov", "reflektor", "xenon", "led"], [
-    n("lighting-headlights", "Světlomety", 10, ["hlavni svetlomet", "svetlomet", "reflektor"]),
+    n("lighting-headlights", "Světlomety", 10, ["zarovka, hlavni svetlomet", "hlavni svetlomet", "svetlomet", "reflektor"]),
     n("lighting-rear", "Zadní světla", 20, ["zadni svetlo", "brzdove svetlo"]),
-    n("lighting-indicators", "Směrovky", 30, ["blikac", "smerov"]),
+    n("lighting-indicators", "Směrovky", 30, ["zarovka, blikac", "blikac", "smerov"]),
     n("lighting-bulbs", "Žárovky", 40, ["zarovka", "vybojka"]),
     n("lighting-fog", "Mlhovky", 50, ["mlhov"]),
   ]),
