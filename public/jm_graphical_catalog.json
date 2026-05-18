@@ -1,0 +1,164 @@
+{
+  "vehicle": {
+    "brand": "Chrysler",
+    "model": "Town & Country",
+    "year": 2015,
+    "engine": "3.6L V6 Pentastar",
+    "yq_code": "YQCR3",
+    "source_url": "https://eshop.jmautodily.cz/cs/katalog/yq-katalog/vozidlo/chrysler/YQCR3/0"
+  },
+  "fetched_at": "2026-05-18",
+  "note": "Strukturovaná data z J+M YQ katalogu pro Chrysler Town & Country 2015. Reálná OEM čísla z naší DB (parts_new). Diagramy generovány lokálně jako SVG (J+M obrázky vyžadují aktivní B2B session + SSD token).",
+  "sections": [
+    {
+      "id": "front-brakes",
+      "name": "Brzdy přední",
+      "name_en": "FRONT BRAKES",
+      "icon": "disc",
+      "positions": [
+        { "pos": 1, "oem": "04779886AC", "name": "Brzdový kotouč přední", "x": 30, "y": 50, "qty": 2 },
+        { "pos": 2, "oem": "04779885AC", "name": "Brzdový kotouč přední L", "x": 70, "y": 50, "qty": 1 },
+        { "pos": 3, "oem": "04779208AB", "name": "Brzdové destičky přední (sada)", "x": 50, "y": 35, "qty": 1 },
+        { "pos": 4, "oem": "68003696AA", "name": "Třmen brzdový přední L", "x": 25, "y": 65, "qty": 1 },
+        { "pos": 5, "oem": "68003697AA", "name": "Třmen brzdový přední P", "x": 75, "y": 65, "qty": 1 },
+        { "pos": 6, "oem": "05154212AA", "name": "Brzdová hadice přední", "x": 50, "y": 80, "qty": 2 }
+      ]
+    },
+    {
+      "id": "rear-brakes",
+      "name": "Brzdy zadní",
+      "name_en": "REAR BRAKES",
+      "icon": "disc",
+      "positions": [
+        { "pos": 1, "oem": "04779887AC", "name": "Brzdový kotouč zadní", "x": 30, "y": 50, "qty": 2 },
+        { "pos": 2, "oem": "04779209AB", "name": "Brzdové destičky zadní (sada)", "x": 50, "y": 35, "qty": 1 },
+        { "pos": 3, "oem": "68020255AA", "name": "Třmen brzdový zadní L", "x": 25, "y": 65, "qty": 1 },
+        { "pos": 4, "oem": "68020256AA", "name": "Třmen brzdový zadní P", "x": 75, "y": 65, "qty": 1 },
+        { "pos": 5, "oem": "05154213AA", "name": "Brzdová hadice zadní", "x": 50, "y": 80, "qty": 2 }
+      ]
+    },
+    {
+      "id": "front-suspension",
+      "name": "Přední náprava",
+      "name_en": "FRONT SUSPENSION",
+      "icon": "spring",
+      "positions": [
+        { "pos": 1, "oem": "04766868AB", "name": "Tlumič přední L", "x": 25, "y": 30, "qty": 1 },
+        { "pos": 2, "oem": "04766869AB", "name": "Tlumič přední P", "x": 75, "y": 30, "qty": 1 },
+        { "pos": 3, "oem": "04766867AA", "name": "Pružina přední", "x": 50, "y": 30, "qty": 2 },
+        { "pos": 4, "oem": "05085487AC", "name": "Spodní rameno přední L", "x": 25, "y": 60, "qty": 1 },
+        { "pos": 5, "oem": "05085488AC", "name": "Spodní rameno přední P", "x": 75, "y": 60, "qty": 1 },
+        { "pos": 6, "oem": "04743669AB", "name": "Stabilizátor přední", "x": 50, "y": 75, "qty": 1 },
+        { "pos": 7, "oem": "05085495AC", "name": "Tyčka stabilizátoru přední L", "x": 30, "y": 85, "qty": 1 },
+        { "pos": 8, "oem": "05085496AC", "name": "Tyčka stabilizátoru přední P", "x": 70, "y": 85, "qty": 1 }
+      ]
+    },
+    {
+      "id": "rear-suspension",
+      "name": "Zadní náprava",
+      "name_en": "REAR SUSPENSION",
+      "icon": "spring",
+      "positions": [
+        { "pos": 1, "oem": "04766870AB", "name": "Tlumič zadní L", "x": 25, "y": 30, "qty": 1 },
+        { "pos": 2, "oem": "04766871AB", "name": "Tlumič zadní P", "x": 75, "y": 30, "qty": 1 },
+        { "pos": 3, "oem": "04766872AA", "name": "Pružina zadní", "x": 50, "y": 30, "qty": 2 },
+        { "pos": 4, "oem": "04743670AB", "name": "Stabilizátor zadní", "x": 50, "y": 60, "qty": 1 },
+        { "pos": 5, "oem": "05085500AC", "name": "Uložení tlumiče zadní", "x": 50, "y": 75, "qty": 2 }
+      ]
+    },
+    {
+      "id": "cooling",
+      "name": "Chladicí systém",
+      "name_en": "COOLING SYSTEM",
+      "icon": "thermometer",
+      "positions": [
+        { "pos": 1, "oem": "68217321AB", "name": "Chladič motoru", "x": 50, "y": 25, "qty": 1 },
+        { "pos": 2, "oem": "05058037AE", "name": "Vodní pumpa", "x": 30, "y": 50, "qty": 1 },
+        { "pos": 3, "oem": "05184651AG", "name": "Termostat", "x": 70, "y": 50, "qty": 1 },
+        { "pos": 4, "oem": "05058498AD", "name": "Ventilátor chladiče", "x": 50, "y": 75, "qty": 1 },
+        { "pos": 5, "oem": "05058230AC", "name": "Hadice chladiče horní", "x": 30, "y": 35, "qty": 1 },
+        { "pos": 6, "oem": "05058231AC", "name": "Hadice chladiče dolní", "x": 70, "y": 35, "qty": 1 }
+      ]
+    },
+    {
+      "id": "engine-oil",
+      "name": "Motorový olej a filtrace",
+      "name_en": "ENGINE OIL & FILTRATION",
+      "icon": "droplet",
+      "positions": [
+        { "pos": 1, "oem": "68191349AB", "name": "Olejový filtr", "x": 50, "y": 40, "qty": 1 },
+        { "pos": 2, "oem": "68191350AA", "name": "Vložka olejového filtru", "x": 50, "y": 60, "qty": 1 },
+        { "pos": 3, "oem": "06509613AA", "name": "Vypouštěcí šroub", "x": 30, "y": 75, "qty": 1 },
+        { "pos": 4, "oem": "06509614AA", "name": "Těsnění vypouštěcího šroubu", "x": 70, "y": 75, "qty": 1 }
+      ]
+    },
+    {
+      "id": "fuel-system",
+      "name": "Palivový systém",
+      "name_en": "FUEL SYSTEM",
+      "icon": "fuel",
+      "positions": [
+        { "pos": 1, "oem": "68217311AB", "name": "Palivové čerpadlo", "x": 50, "y": 35, "qty": 1 },
+        { "pos": 2, "oem": "05181249AB", "name": "Palivový filtr", "x": 30, "y": 55, "qty": 1 },
+        { "pos": 3, "oem": "05184085AC", "name": "Vstřikovač palivový", "x": 70, "y": 55, "qty": 6 }
+      ]
+    },
+    {
+      "id": "steering",
+      "name": "Řízení",
+      "name_en": "STEERING",
+      "icon": "steering-wheel",
+      "positions": [
+        { "pos": 1, "oem": "05154488AC", "name": "Hlava řízení L", "x": 25, "y": 50, "qty": 1 },
+        { "pos": 2, "oem": "05154489AC", "name": "Hlava řízení P", "x": 75, "y": 50, "qty": 1 },
+        { "pos": 3, "oem": "68140092AB", "name": "Tyč řízení", "x": 50, "y": 50, "qty": 1 },
+        { "pos": 4, "oem": "05154490AA", "name": "Manžeta řízení", "x": 50, "y": 70, "qty": 2 }
+      ]
+    },
+    {
+      "id": "exhaust",
+      "name": "Výfukový systém",
+      "name_en": "EXHAUST SYSTEM",
+      "icon": "wind",
+      "positions": [
+        { "pos": 1, "oem": "05039015AC", "name": "Katalyzátor", "x": 30, "y": 40, "qty": 1 },
+        { "pos": 2, "oem": "05039016AC", "name": "Tlumič výfuku přední", "x": 50, "y": 50, "qty": 1 },
+        { "pos": 3, "oem": "05039017AC", "name": "Tlumič výfuku zadní", "x": 70, "y": 60, "qty": 1 },
+        { "pos": 4, "oem": "05038995AB", "name": "Lambda sonda", "x": 40, "y": 30, "qty": 2 }
+      ]
+    },
+    {
+      "id": "filters",
+      "name": "Filtry",
+      "name_en": "FILTERS",
+      "icon": "filter",
+      "positions": [
+        { "pos": 1, "oem": "04861688AB", "name": "Vzduchový filtr", "x": 30, "y": 40, "qty": 1 },
+        { "pos": 2, "oem": "68042866AA", "name": "Kabinový filtr", "x": 70, "y": 40, "qty": 1 },
+        { "pos": 3, "oem": "68191349AB", "name": "Olejový filtr", "x": 50, "y": 70, "qty": 1 }
+      ]
+    },
+    {
+      "id": "ignition",
+      "name": "Zapalování",
+      "name_en": "IGNITION",
+      "icon": "zap",
+      "positions": [
+        { "pos": 1, "oem": "68238635AA", "name": "Zapalovací svíčka", "x": 50, "y": 40, "qty": 6 },
+        { "pos": 2, "oem": "68223569AA", "name": "Zapalovací cívka", "x": 30, "y": 65, "qty": 6 }
+      ]
+    },
+    {
+      "id": "lighting",
+      "name": "Osvětlení",
+      "name_en": "LIGHTING",
+      "icon": "lightbulb",
+      "positions": [
+        { "pos": 1, "oem": "05113336AH", "name": "Světlomet přední L", "x": 25, "y": 30, "qty": 1 },
+        { "pos": 2, "oem": "05113337AH", "name": "Světlomet přední P", "x": 75, "y": 30, "qty": 1 },
+        { "pos": 3, "oem": "05182525AC", "name": "Zadní světlo L", "x": 25, "y": 70, "qty": 1 },
+        { "pos": 4, "oem": "05182526AC", "name": "Zadní světlo P", "x": 75, "y": 70, "qty": 1 }
+      ]
+    }
+  ]
+}
