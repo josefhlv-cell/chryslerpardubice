@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       let q = supabase
         .from("parts_new")
         .select("id, oem_number, catalog_source, category, compatible_vehicles")
-        .in("catalog_source", ["mopar", "mopar_oem", "csv", "epc-ai", "7zap", "epc-link"])
+        .in("catalog_source", ["mopar", "mopar_oem", "csv", "epc-ai", "7zap", "epc-link", "ai-epc", "jm_oem"])
         .limit(limit);
 
       if (category) q = q.ilike("category", `%${category}%`);
