@@ -22,11 +22,13 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: true });
 
     // Pending service bookings
-    const { data: pendingBookings } = await supabase
+    const { data: pendingBookings, error: bookErr, count: bookCount } = await supabase
       .from("service_bookings")
-      .select("id, created_at, status")
+      .select("id, created_at, status", { count: "exact" })
       .eq("status", "pending")
       .order("created_at", { ascending: true });
+    if (bookErr) console.error("bookings query error:", bookErr);
+    console.log("bookings: data=", pendingBookings?.length, "count=", bookCount);
 
     const ordersCount = pendingOrders?.length ?? 0;
     const bookingsCount = pendingBookings?.length ?? 0;
