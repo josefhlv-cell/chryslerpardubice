@@ -158,17 +158,30 @@ async function getCookie(force = false): Promise<CachedCookie> {
 
 async function fetchLoggedIn(path: string, retry = true): Promise<{ status: number; html: string }> {
   const c = await getCookie();
-  const r = await fetch(BASE + path, {
-    headers: {
-      "Cookie": c.cookie,
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Referer": BASE + LOGIN_PATH,
-    },
-  });
+  // Retry transient network errors (Connection reset by peer, etc.) from upstream
+  let r: Response | null = null;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      r = await fetch(BASE + path, {
+        headers: {
+          "Cookie": c.cookie,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": BASE + LOGIN_PATH,
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "cs,en;q=0.9",
+        },
+      });
+      break;
+    } catch (e) {
+      lastErr = e;
+      await new Promise((res) => setTimeout(res, 500 * attempt));
+    }
+  }
+  if (!r) throw new Error(`upstream fetch failed after retries: ${String((lastErr as Error)?.message ?? lastErr)}`);
   const html = await r.text();
-  // Heuristic: if logged out we'd see the login form again
   if (retry && /name="ctl00\$ctl00\$BodyContentPlaceHolder\$LoginForm\$Username"/.test(html)) {
-    await getCookie(true); // refresh
+    await getCookie(true);
     return fetchLoggedIn(path, false);
   }
   return { status: r.status, html };
