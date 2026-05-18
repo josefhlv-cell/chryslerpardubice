@@ -349,6 +349,13 @@ const Admin = () => {
       case "catalog-repair": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPhotoEnrichment /><AdminDataFixer /><AdminCatalogQualityExport /><AdminCatalogCommandCenter /></div></Suspense>;
       case "catalog-prices": return <Suspense fallback={<Loader />}><div className="space-y-4"><AdminPriceSyncStats /><AdminBulkPriceSyncRuns /><AdminBulkPriceSync /><AdminMoparEnum /><AdminPriceManagement /></div></Suspense>;
       case "catalog-epc": return <Suspense fallback={<Loader />}><AdminEPCDiagrams /></Suspense>;
+      case "catalog-graphical": return (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">Grafický katalog (J+M YQ)</h2>
+          <p className="text-sm text-muted-foreground">Interaktivní rozkliknutelná schémata. Zatím pouze Chrysler Town &amp; Country 2015. Schémata se stahují z J+M B2B přes tlačítko v detailu sekce a cachují do soukromého úložiště.</p>
+          <Button onClick={() => navigate("/graficky-katalog")}>Otevřít grafický katalog</Button>
+        </div>
+      );
       case "catalog-settings": return <Suspense fallback={<Loader />}><AdminCatalogSettings /></Suspense>;
 
       // ----- SERVICE -----
