@@ -258,6 +258,7 @@ function SectionThumbnail({ section }: { section: Section }) {
 
 function SectionDetail({
   section, activePos, setActivePos, onPrev, onNext, hasPrev, hasNext, navigate,
+  schemaUrl, onDownloadSchema, fetchingSchema,
 }: {
   section: Section;
   activePos: number | null;
@@ -267,6 +268,9 @@ function SectionDetail({
   hasPrev: boolean;
   hasNext: boolean;
   navigate: (path: string) => void;
+  schemaUrl: string | null;
+  onDownloadSchema: () => void;
+  fetchingSchema: boolean;
 }) {
   return (
     <>
@@ -283,13 +287,31 @@ function SectionDetail({
         </Button>
       </div>
 
+      {/* Toolbar: download real J+M schema */}
+      <div className="flex justify-end mb-2">
+        <Button size="sm" variant="secondary" onClick={onDownloadSchema} disabled={fetchingSchema}>
+          {fetchingSchema ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}
+          {schemaUrl ? "Aktualizovat schéma" : "Stáhnout reálné schéma z J+M"}
+        </Button>
+      </div>
+
       {/* Schema */}
       <Card className="p-4 mb-4 bg-card">
         <div className="aspect-[4/3] md:aspect-[16/9] rounded-lg bg-gradient-to-br from-muted/40 to-muted/10 border border-border relative overflow-hidden">
-          <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
-            {/* schematic outline */}
-            <rect x="10" y="10" width="80" height="80" rx="3" fill="none" stroke="hsl(var(--border))" strokeWidth="0.3" strokeDasharray="1 1" />
-            <line x1="50" y1="10" x2="50" y2="90" stroke="hsl(var(--border))" strokeWidth="0.2" strokeDasharray="1 2" />
+          {schemaUrl && (
+            <img
+              src={schemaUrl}
+              alt={`Schéma ${section.name}`}
+              className="absolute inset-0 w-full h-full object-contain"
+            />
+          )}
+          <svg viewBox="0 0 100 100" className="w-full h-full relative" preserveAspectRatio="none">
+            {!schemaUrl && (
+              <>
+                <rect x="10" y="10" width="80" height="80" rx="3" fill="none" stroke="hsl(var(--border))" strokeWidth="0.3" strokeDasharray="1 1" />
+                <line x1="50" y1="10" x2="50" y2="90" stroke="hsl(var(--border))" strokeWidth="0.2" strokeDasharray="1 2" />
+              </>
+            )}
             {/* positions */}
             {section.positions.map((p) => {
               const isActive = activePos === p.pos;
