@@ -136,12 +136,16 @@ Deno.serve(async (req) => {
   const limit = Number(url.searchParams.get('limit') || 200);
   const delayMs = Number(url.searchParams.get('delay') || 800);
   const offset = Number(url.searchParams.get('offset') || 0);
+  const modelFilter = url.searchParams.get('model') || '';
+  const brandFilter = url.searchParams.get('brand') || '';
 
   const allowedBrands = ['chrysler', 'dodge', 'ram', 'lancia'];
-  const { data: rows, error } = await supabase
+  let qb = supabase
     .from('nextis_vehicles')
     .select('id, brand, model, engine, year_from, year_to, power_kw, fuel, external_id')
-    .in('brand', ['Chrysler', 'Dodge', 'RAM', 'Lancia'])
+    .in('brand', brandFilter ? [brandFilter] : ['Chrysler', 'Dodge', 'RAM', 'Lancia']);
+  if (modelFilter) qb = qb.ilike('model', `%${modelFilter}%`);
+  const { data: rows, error } = await qb
     .order('brand').order('model').order('engine')
     .range(offset, offset + limit - 1);
   if (error) {
