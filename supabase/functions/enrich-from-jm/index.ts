@@ -168,18 +168,43 @@ Deno.serve(async (req) => {
   const errors: string[] = [];
   const attemptedIds: string[] = [];
 
+  // Build OEM variants for fallback lookups (same hierarchy as price-sync):
+  //   1) original
+  //   2) stripLeadingZeros
+  //   3) K + stripLeadingZeros (Mopar prefix)
+  //   4) original.replace(/^00K/, 'K')
+  //   5) original.replace(/^K/, '')  (in case J+M index without K)
+  function oemVariants(raw: string): string[] {
+    const v = new Set<string>();
+    const o = String(raw).trim().toUpperCase();
+    v.add(o);
+    const stripped = o.replace(/^0+/, "");
+    if (stripped) v.add(stripped);
+    if (stripped && !stripped.startsWith("K")) v.add("K" + stripped);
+    v.add(o.replace(/^00K/, "K"));
+    if (o.startsWith("K")) v.add(o.replace(/^K/, ""));
+    return Array.from(v).filter(Boolean);
+  }
+
   for (const p of parts || []) {
     scanned++;
     attemptedIds.push(p.id as string);
     if (!p.oem_number) continue;
 
-    const res = await callJmProxy("searchByCode", { code: p.oem_number });
-    const items = res?.items || [];
+    // Try every variant until we get items back.
+    let items: JmItem[] = [];
+    let usedVariant = p.oem_number;
+    for (const variant of oemVariants(p.oem_number)) {
+      const r = await callJmProxy("searchByCode", { code: variant });
+      if (r?.items?.length) { items = r.items; usedVariant = variant; break; }
+    }
     if (!items.length) { noMatch++; continue; }
 
     const target = normalizeOem(p.oem_number);
+    const targetVariant = normalizeOem(usedVariant);
     const match = items.find((it) => {
-      if (normalizeOem(it.oem_number || "") === target) return true;
+      const norm = normalizeOem(it.oem_number || "");
+      if (norm === target || norm === targetVariant) return true;
       if (normalizeOem(it.related_oem_number || "") === target) return true;
       if (Array.isArray(it.oe_numbers) && it.oe_numbers.some((c) => normalizeOem(c) === target)) return true;
       return false;

@@ -188,8 +188,9 @@ Deno.serve(async (req) => {
 // ─── Priority-based part selection ──────────────────────────────────────────
 
 async function getPrioritizedParts(supabase: any, limit: number, offset: number, mode: string): Promise<string[]> {
-  // Mopar dealer catalog sources. 7zap added: many OEMs ARE in dealer catalog, worth trying once.
-  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'ai-epc', 'epc-ai', 'makro', 'catcar'];
+  // Mopar dealer catalog sources. 7zap + jm_oem added: many OEMs ARE in dealer catalog, worth trying once.
+  // jm_oem are OEM numbers harvested from J+M API responses — they need pricing via vernostsevyplaci.cz like the rest.
+  const ALLOWED_SOURCES = ['mopar', 'mopar_oem', 'csv', 'epc-link', '7zap', 'ai-epc', 'epc-ai', 'makro', 'catcar', 'jm_oem'];
 
   if (mode === 'force') {
     const { data: allParts } = await supabase
