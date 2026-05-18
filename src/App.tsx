@@ -48,6 +48,8 @@ const MechanicDashboard = lazy(() => import("./pages/MechanicDashboard"));
 const OBDDiagnostics = lazy(() => import("./pages/OBDDiagnostics"));
 const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
+const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
+import ProfileGate from "@/components/ProfileGate";
 
 const BOT_RE = /Lighthouse|PageSpeed|PTST|Googlebot|Chrome-Lighthouse/i;
 const isBot = typeof navigator !== "undefined" && BOT_RE.test(navigator.userAgent);
@@ -77,6 +79,7 @@ const App = () => (
               )}
               <OnboardingGuide />
               <AdminDailyReport />
+              <ProfileGate />
               <TopBar />
               <div className="flex w-full">
                 <DesktopSidebar />
@@ -110,6 +113,7 @@ const App = () => (
                     <Route path="/obd" element={<OBDDiagnostics />} />
                     <Route path="/presentation" element={<AppPresentation />} />
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/complete-profile" element={<CompleteProfile />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/admin" element={<Admin />} />
