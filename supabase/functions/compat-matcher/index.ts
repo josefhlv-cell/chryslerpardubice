@@ -50,6 +50,15 @@ Deno.serve(async (req) => {
     const limit = Math.min(body.limit || 25, 100);
 
     if (action === "match-part") {
+      const { data: part } = await supabase
+        .from("parts_new")
+        .select("id, oem_number, catalog_source")
+        .eq("id", body.part_id)
+        .maybeSingle();
+      if (part?.catalog_source === "jm_oem") {
+        const result = await matchJmOemPart(supabase, part.id, part.oem_number);
+        return json(result);
+      }
       const result = await matchSinglePart(supabase, body.part_id);
       return json(result);
     }
