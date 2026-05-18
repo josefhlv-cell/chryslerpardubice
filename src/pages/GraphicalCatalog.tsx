@@ -67,11 +67,67 @@ export default function GraphicalCatalog() {
     if (!data || activeIdx <= 0) return;
     setActiveId(data.sections[activeIdx - 1].id);
     setActivePos(null);
+    setSchemaUrl(null);
   };
   const goNext = () => {
     if (!data || activeIdx < 0 || activeIdx >= data.sections.length - 1) return;
     setActiveId(data.sections[activeIdx + 1].id);
     setActivePos(null);
+    setSchemaUrl(null);
+  };
+
+  // Load cached schema for active section whenever it changes
+  useEffect(() => {
+    setSchemaUrl(null);
+    if (!activeSection || !data) return;
+    (async () => {
+      const { data: row } = await supabase
+        .from("jm_schema_cache")
+        .select("storage_path")
+        .eq("yq_code", data.vehicle.yq_code)
+        .eq("section_id", activeSection.id)
+        .maybeSingle();
+      if (row?.storage_path) {
+        const { data: signed } = await supabase.storage
+          .from("jm-schemas")
+          .createSignedUrl(row.storage_path, 3600);
+        if (signed?.signedUrl) setSchemaUrl(signed.signedUrl);
+      }
+    })();
+  }, [activeSection?.id, data?.vehicle.yq_code]);
+
+  const downloadSchema = async () => {
+    if (!activeSection || !data) return;
+    setFetchingSchema(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("scrape-jq-eshop", {
+        body: null,
+        method: "POST",
+        // function reads query params, not body
+      } as never);
+      // The function reads from URL params; use fetch directly for query params
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-jq-eshop?action=yq-schema&yq_code=${encodeURIComponent(data.vehicle.yq_code)}&section_id=${encodeURIComponent(activeSection.id)}`;
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session?.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+      const json = await r.json();
+      if (json.ok && json.signed_url) {
+        setSchemaUrl(json.signed_url);
+        toast.success(json.cached ? "Schéma načteno z cache" : "Schéma staženo z J+M a uloženo");
+      } else {
+        toast.error(json.error || "Nepodařilo se stáhnout schéma");
+      }
+      void res; void error;
+    } catch (e) {
+      toast.error(String((e as Error).message));
+    } finally {
+      setFetchingSchema(false);
+    }
   };
 
   if (!data) {
