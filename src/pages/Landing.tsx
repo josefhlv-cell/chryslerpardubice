@@ -107,12 +107,6 @@ const Landing = () => {
             <Button variant="outline" size="lg" className="w-full h-13 text-base font-display font-semibold rounded-2xl border-border/60" onClick={() => navigate("/auth?mode=register")}>
               Registrace
             </Button>
-            <button
-              onClick={() => navigate("/catalog")}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors mt-1 text-center"
-            >
-              Pokračovat jako host →
-            </button>
           </motion.div>
         </motion.div>
       </div>
