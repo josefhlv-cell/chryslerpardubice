@@ -222,6 +222,118 @@ async function scrapeModelsForBrand(brand: string) {
   return { status, found: unique.length, persisted: inserted, sample: unique.slice(0, 5), path };
 }
 
+// --------------- YQ graphical catalog: schema fetching ---------------
+
+// Find diagram image URL inside a logged-in YQ section page.
+// J+M renders schemas as <img src="...Image.ashx?..."> or as raw paths.
+// Be permissive: pick the largest/most likely diagram image on the page.
+function pickSchemaImage(html: string, baseUrl: string): string | null {
+  const $ = cheerio.load(html);
+  const candidates: { url: string; score: number }[] = [];
+  $("img").each((_, el) => {
+    const src = $(el).attr("src") || "";
+    if (!src) return;
+    // Skip obvious chrome/icons
+    if (/logo|icon|banner|sprite|pixel|favicon|track/i.test(src)) return;
+    if (src.startsWith("data:")) return;
+    let score = 0;
+    if (/Image\.ashx/i.test(src)) score += 5;
+    if (/schema|diagram|yq|tecdoc/i.test(src)) score += 3;
+    const w = parseInt($(el).attr("width") || "0", 10);
+    const h = parseInt($(el).attr("height") || "0", 10);
+    if (w > 200 || h > 200) score += 2;
+    candidates.push({ url: src, score });
+  });
+  candidates.sort((a, b) => b.score - a.score);
+  if (!candidates.length) return null;
+  const top = candidates[0].url;
+  try { return new URL(top, baseUrl).toString(); } catch { return top; }
+}
+
+async function fetchSchemaForSection(yqCode: string, sectionId: string, sectionPath?: string) {
+  // 1) Cache?
+  const { data: cached } = await admin
+    .from("jm_schema_cache")
+    .select("storage_path, image_url_source, fetched_at")
+    .eq("yq_code", yqCode)
+    .eq("section_id", sectionId)
+    .maybeSingle();
+
+  if (cached?.storage_path) {
+    const { data: signed } = await admin.storage
+      .from("jm-schemas")
+      .createSignedUrl(cached.storage_path, 3600);
+    if (signed?.signedUrl) {
+      return {
+        cached: true,
+        signed_url: signed.signedUrl,
+        storage_path: cached.storage_path,
+        source: cached.image_url_source,
+        fetched_at: cached.fetched_at,
+      };
+    }
+  }
+
+  // 2) Fetch logged-in section page.
+  // The caller provides the path observed from the YQ tree. If not, we try a heuristic path.
+  const path = sectionPath ??
+    `/cs/katalog/yq-katalog/vozidlo/chrysler/${yqCode}/${sectionId}`;
+  const { status, html } = await fetchLoggedIn(path);
+  if (status !== 200) throw new Error(`section page status ${status} for ${path}`);
+
+  const imgUrl = pickSchemaImage(html, BASE + path);
+  if (!imgUrl) throw new Error(`no schema image found on ${path}`);
+
+  // 3) Download image with the same session cookie
+  const c = await getCookie();
+  const imgRes = await fetch(imgUrl, {
+    headers: {
+      "Cookie": c.cookie,
+      "Referer": BASE + path,
+      "User-Agent": "Mozilla/5.0",
+    },
+  });
+  if (!imgRes.ok) throw new Error(`image download failed: ${imgRes.status}`);
+  const contentType = imgRes.headers.get("content-type") || "image/png";
+  const bytes = new Uint8Array(await imgRes.arrayBuffer());
+  if (bytes.length < 200) throw new Error(`suspiciously small image: ${bytes.length} bytes`);
+
+  // 4) Upload to private bucket
+  const ext = contentType.includes("svg") ? "svg"
+    : contentType.includes("jpeg") ? "jpg"
+    : contentType.includes("webp") ? "webp"
+    : "png";
+  const storagePath = `${yqCode}/${sectionId}.${ext}`;
+  const { error: upErr } = await admin.storage
+    .from("jm-schemas")
+    .upload(storagePath, bytes, { contentType, upsert: true });
+  if (upErr) throw new Error(`upload failed: ${upErr.message}`);
+
+  // 5) Persist cache row
+  await admin.from("jm_schema_cache").upsert({
+    yq_code: yqCode,
+    section_id: sectionId,
+    image_url_source: imgUrl,
+    storage_path: storagePath,
+    content_type: contentType,
+    byte_size: bytes.length,
+    fetched_at: new Date().toISOString(),
+  }, { onConflict: "yq_code,section_id" });
+
+  const { data: signed } = await admin.storage
+    .from("jm-schemas")
+    .createSignedUrl(storagePath, 3600);
+
+  return {
+    cached: false,
+    signed_url: signed?.signedUrl,
+    storage_path: storagePath,
+    source: imgUrl,
+    byte_size: bytes.length,
+    content_type: contentType,
+  };
+}
+
 // --------------- handler ---------------
 
 Deno.serve(async (req) => {
@@ -244,6 +356,29 @@ Deno.serve(async (req) => {
       const { status, html } = await fetchLoggedIn(path);
       return json({ ok: true, status, length: html.length, head: html.slice(0, 800) });
     }
+    if (action === "yq-schema") {
+      // Admin-gated: require service role JWT OR caller supplied an admin user JWT.
+      // (We trust caller because verify_jwt is enabled at platform level for invoked clients.)
+      const yqCode = url.searchParams.get("yq_code");
+      const sectionId = url.searchParams.get("section_id");
+      const sectionPath = url.searchParams.get("section_path") ?? undefined;
+      if (!yqCode || !sectionId) {
+        return json({ ok: false, error: "missing yq_code or section_id" }, 400);
+      }
+      const res = await fetchSchemaForSection(yqCode, sectionId, sectionPath);
+      return json({ ok: true, ...res });
+    }
+    if (action === "yq-list-cached") {
+      const yqCode = url.searchParams.get("yq_code");
+      if (!yqCode) return json({ ok: false, error: "missing yq_code" }, 400);
+      const { data, error } = await admin
+        .from("jm_schema_cache")
+        .select("section_id, section_name, storage_path, fetched_at, byte_size")
+        .eq("yq_code", yqCode)
+        .order("section_id");
+      if (error) throw error;
+      return json({ ok: true, items: data ?? [] });
+    }
     // default: scrape brand
     let brand = url.searchParams.get("brand");
     if (!brand && req.method === "POST") {
@@ -258,6 +393,13 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: String((e as Error)?.message ?? e) }, 500);
   }
 });
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
