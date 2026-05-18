@@ -106,7 +106,10 @@ const Notifications = () => {
               transition={{ delay: i * 0.02 }}
             >
               <button
-                onClick={() => !n.is_read && markRead(n.id)}
+                onClick={() => {
+                  if (!n.is_read) markRead(n.id);
+                  if (n.link) navigate(n.link);
+                }}
                 className={`w-full text-left glass-card p-4 flex items-start gap-3.5 transition-all ${
                   !n.is_read ? "border-primary/30 bg-primary/[0.03]" : "opacity-60"
                 }`}
