@@ -41,6 +41,7 @@ const ServicePlan = lazy(() => import("./pages/ServicePlan"));
 const ServiceBook = lazy(() => import("./pages/ServiceBook"));
 const MyServiceOrders = lazy(() => import("./pages/MyServiceOrders"));
 const AppPresentation = lazy(() => import("./pages/AppPresentation"));
+const GraphicalCatalog = lazy(() => import("./pages/GraphicalCatalog"));
 const VehicleOffer = lazy(() => import("./pages/VehicleOffer"));
 const EPC = lazy(() => import("./pages/EPC"));
 const MechanicDashboard = lazy(() => import("./pages/MechanicDashboard"));
@@ -88,6 +89,7 @@ const App = () => (
                     <Route path="/dily" element={<Catalog />} />
                     <Route path="/catalog" element={<Catalog />} />
                     <Route path="/epc" element={<EPC />} />
+                    <Route path="/graficky-katalog" element={<GraphicalCatalog />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/checkout" element={<Checkout />} />
                     <Route path="/service" element={<Service />} />
