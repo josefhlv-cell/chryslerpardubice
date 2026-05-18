@@ -187,11 +187,22 @@ Deno.serve(async (req) => {
 
     const patch: Record<string, unknown> = {};
 
-    // Image — always take from J+M if we don't have one
+    // Image — always take from J+M if we don't have one. searchByCode does NOT
+    // return images (Nextis API limitation), so fall back to partDetail which
+    // scrapes eshop.jmautodily.cz for the gallery.
     const hasImg = Array.isArray(p.image_urls) && p.image_urls.length > 0;
     if (!hasImg) {
-      const imgs = pickImages(match);
-      if (imgs) patch.image_urls = imgs;
+      let imgs = pickImages(match);
+      if (!imgs || imgs.length === 0) {
+        const det = await fetch(`${SUPABASE_URL}/functions/v1/jm-proxy`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${SERVICE_ROLE}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "partDetail", payload: { code: match.oem_number || p.oem_number, brand: match.brand } }),
+        }).then((r) => r.ok ? r.json() : null).catch(() => null);
+        const detItem = det?.data?.item as JmItem | undefined;
+        if (detItem) imgs = pickImages(detItem);
+      }
+      if (imgs && imgs.length) patch.image_urls = imgs;
     }
 
     // Name — always rebuild (strip brand, add position). Only write if it changes.
