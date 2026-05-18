@@ -134,6 +134,8 @@ export default function GraphicalCatalog() {
       if (json?.ok && json.signed_url) {
         setSchemaUrl(json.signed_url);
         toast.success(json.cached ? "Schéma načteno z cache" : "Schéma staženo z J+M a uloženo");
+      } else if (json?.error_code === "UPSTREAM_BLOCKED") {
+        toast.info("J+M portál momentálně nedostupný – zobrazena lokální mapa pozic.");
       } else {
         toast.error(lastErr || json?.error || "Nepodařilo se stáhnout schéma");
       }
