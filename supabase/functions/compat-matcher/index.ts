@@ -50,8 +50,51 @@ Deno.serve(async (req) => {
     const limit = Math.min(body.limit || 25, 100);
 
     if (action === "match-part") {
+      const { data: part } = await supabase
+        .from("parts_new")
+        .select("id, oem_number, catalog_source")
+        .eq("id", body.part_id)
+        .maybeSingle();
+      if (part?.catalog_source === "jm_oem") {
+        const result = await matchJmOemPart(supabase, part.id, part.oem_number);
+        return json(result);
+      }
       const result = await matchSinglePart(supabase, body.part_id);
       return json(result);
+    }
+
+    if (action === "match-jm-oem") {
+      // Dedicated branch: jm_oem parts only — derives compat via jm-proxy.searchByCode
+      const onlyMissing: boolean = body.onlyMissing !== false;
+      let q = supabase
+        .from("parts_new")
+        .select("id, oem_number")
+        .eq("catalog_source", "jm_oem")
+        .limit(limit);
+      const { data: parts, error } = await q;
+      if (error) throw error;
+      let scope = parts || [];
+      if (onlyMissing && scope.length) {
+        const ids = scope.map((p: any) => p.id);
+        const { data: already } = await supabase
+          .from("catalog_vehicle_compatibility")
+          .select("part_id")
+          .in("part_id", ids);
+        const have = new Set((already || []).map((r: any) => r.part_id));
+        scope = scope.filter((p: any) => !have.has(p.id));
+      }
+      const bgScope = scope.slice(0, limit);
+      const work = (async () => {
+        for (const p of bgScope) {
+          try { await matchJmOemPart(supabase, p.id, p.oem_number); } catch (_) { /* swallow */ }
+        }
+      })();
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any).waitUntil) {
+        // @ts-ignore
+        (EdgeRuntime as any).waitUntil(work);
+      }
+      return json({ ok: true, background: true, queued: bgScope.length, candidates: parts?.length || 0 });
     }
 
     if (action === "match-all") {
@@ -248,4 +291,95 @@ async function matchSinglePart(supabase: any, partId: string) {
   }
 
   return result;
+}
+
+// ============= jm_oem branch =============
+// For OEM parts: call jm-proxy.searchByCode to discover which J+M parts
+// reference this OEM, parse vehicle brand prefixes from their oe_numbers,
+// then upsert compat rows against every nextis_vehicles row of that brand.
+// This makes OEMs visible in the catalog tree at brand level (model/engine
+// filters in catalogV2API.listPartsForVehicle still apply via ilike).
+const ALLOWED_BRAND_PREFIXES: Record<string, string> = {
+  CHRYSLER: "Chrysler",
+  DODGE: "Dodge",
+  RAM: "RAM",
+  LANCIA: "Lancia",
+};
+
+async function matchJmOemPart(supabase: any, partId: string, oem: string) {
+  if (!oem) return { ok: false, reason: "no oem" };
+  // Call jm-proxy.searchByCode
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/jm-proxy`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action: "searchByCode", payload: { code: oem } }),
+  }).catch(() => null);
+  if (!resp || !resp.ok) return { ok: false, reason: "jm-proxy failed" };
+  const json = await resp.json().catch(() => null);
+  const items: any[] = json?.data?.items || [];
+  if (items.length === 0) return { ok: false, reason: "no jm items" };
+
+  // Collect brand prefixes from oe_numbers and from compatible_vehicles
+  const brands = new Set<string>();
+  for (const it of items) {
+    for (const oeRaw of it.oe_numbers || []) {
+      const m = String(oeRaw).match(/^([A-Z]+)\s*:/);
+      if (m && ALLOWED_BRAND_PREFIXES[m[1]]) brands.add(ALLOWED_BRAND_PREFIXES[m[1]]);
+    }
+    for (const cv of it.compatible_vehicles || []) {
+      const s = String(cv).toLowerCase();
+      for (const [pfx, canon] of Object.entries(ALLOWED_BRAND_PREFIXES)) {
+        if (s.includes(pfx.toLowerCase()) || s.includes(canon.toLowerCase())) brands.add(canon);
+      }
+    }
+  }
+  if (brands.size === 0) return { ok: false, reason: "no us brand" };
+
+  // For each brand, fetch nextis_vehicles and insert compat rows.
+  // We can't use upsert with the partial unique index (PostgREST limitation),
+  // so we filter out existing pairs first then bulk-insert.
+  let inserted = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  for (const b of brands) {
+    const { data: vehicles } = await supabase
+      .from("nextis_vehicles")
+      .select("id, brand, model, engine, year_from, year_to")
+      .eq("brand", b)
+      .limit(500);
+    if (!vehicles?.length) continue;
+    const vehIds = vehicles.map((v: any) => v.id);
+    const { data: existing } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .select("nextis_vehicle_id")
+      .eq("part_id", partId)
+      .in("nextis_vehicle_id", vehIds);
+    const have = new Set((existing || []).map((r: any) => r.nextis_vehicle_id));
+    const toInsert = vehicles
+      .filter((v: any) => !have.has(v.id))
+      .map((v: any) => ({
+        part_id: partId,
+        nextis_vehicle_id: v.id,
+        brand: v.brand,
+        model: v.model,
+        engine: v.engine,
+        year_from: v.year_from,
+        year_to: v.year_to,
+        is_oem: true,
+        match_method: "jm_searchByCode",
+        match_confidence: 80,
+        source: "manual",
+      }));
+    skipped += vehicles.length - toInsert.length;
+    if (toInsert.length === 0) continue;
+    const { error, count } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .insert(toInsert, { count: "exact" });
+    if (error) errors.push(error.message);
+    else inserted += count || toInsert.length;
+  }
+  return { ok: true, brands: [...brands], inserted, skipped, errors };
 }
