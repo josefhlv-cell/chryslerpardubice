@@ -410,7 +410,15 @@ Deno.serve(async (req) => {
     const res = await scrapeModelsForBrand(brand);
     return json({ ok: true, brand, ...res });
   } catch (e) {
-    return json({ ok: false, error: String((e as Error)?.message ?? e) }, 500);
+    const err = e as Error & { code?: string };
+    if (err?.code === "UPSTREAM_BLOCKED") {
+      return json({
+        ok: false,
+        error_code: "UPSTREAM_BLOCKED",
+        error: "J+M B2B portál blokuje přístup ze serveru (Connection reset). Schéma momentálně nelze stáhnout — používá se lokální mapa.",
+      }, 502);
+    }
+    return json({ ok: false, error: String(err?.message ?? e) }, 500);
   }
 });
 
