@@ -338,35 +338,48 @@ async function matchJmOemPart(supabase: any, partId: string, oem: string) {
   }
   if (brands.size === 0) return { ok: false, reason: "no us brand" };
 
-  // For each brand, fetch nextis_vehicles and upsert compat rows
+  // For each brand, fetch nextis_vehicles and insert compat rows.
+  // We can't use upsert with the partial unique index (PostgREST limitation),
+  // so we filter out existing pairs first then bulk-insert.
   let inserted = 0;
+  let skipped = 0;
+  const errors: string[] = [];
   for (const b of brands) {
     const { data: vehicles } = await supabase
       .from("nextis_vehicles")
       .select("id, brand, model, engine, year_from, year_to")
       .eq("brand", b)
       .limit(500);
-    for (const v of vehicles || []) {
-      const { error } = await supabase
-        .from("catalog_vehicle_compatibility")
-        .upsert(
-          {
-            part_id: partId,
-            nextis_vehicle_id: v.id,
-            brand: v.brand,
-            model: v.model,
-            engine: v.engine,
-            year_from: v.year_from,
-            year_to: v.year_to,
-            is_oem: true,
-            match_method: "jm_searchByCode",
-            match_confidence: 80,
-            source: "manual",
-          },
-          { onConflict: "part_id,nextis_vehicle_id" }
-        );
-      if (!error) inserted++;
-    }
+    if (!vehicles?.length) continue;
+    const vehIds = vehicles.map((v: any) => v.id);
+    const { data: existing } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .select("nextis_vehicle_id")
+      .eq("part_id", partId)
+      .in("nextis_vehicle_id", vehIds);
+    const have = new Set((existing || []).map((r: any) => r.nextis_vehicle_id));
+    const toInsert = vehicles
+      .filter((v: any) => !have.has(v.id))
+      .map((v: any) => ({
+        part_id: partId,
+        nextis_vehicle_id: v.id,
+        brand: v.brand,
+        model: v.model,
+        engine: v.engine,
+        year_from: v.year_from,
+        year_to: v.year_to,
+        is_oem: true,
+        match_method: "jm_searchByCode",
+        match_confidence: 80,
+        source: "manual",
+      }));
+    skipped += vehicles.length - toInsert.length;
+    if (toInsert.length === 0) continue;
+    const { error, count } = await supabase
+      .from("catalog_vehicle_compatibility")
+      .insert(toInsert, { count: "exact" });
+    if (error) errors.push(error.message);
+    else inserted += count || toInsert.length;
   }
-  return { ok: true, brands: [...brands], inserted };
+  return { ok: true, brands: [...brands], inserted, skipped, errors };
 }
