@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
     // Pending service bookings
     const { data: pendingBookings } = await supabase
       .from("service_bookings")
-      .select("id, customer_name, service_date, created_at, status")
+      .select("id, created_at, status")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
 
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
         const age = Math.floor(
           (Date.now() - new Date(oldestBooking.created_at).getTime()) / 86400000,
         );
-        lines.push(`   Nejstarší: ${age} dní (${oldestBooking.customer_name ?? "—"})`);
+        lines.push(`   Nejstarší: ${age} dní`);
       }
     }
     const message = lines.join("\n");
