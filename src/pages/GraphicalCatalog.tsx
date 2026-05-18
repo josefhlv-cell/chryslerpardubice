@@ -100,29 +100,43 @@ export default function GraphicalCatalog() {
     if (!activeSection || !data) return;
     setFetchingSchema(true);
     try {
-      const { data: res, error } = await supabase.functions.invoke("scrape-jq-eshop", {
-        body: null,
-        method: "POST",
-        // function reads query params, not body
-      } as never);
-      // The function reads from URL params; use fetch directly for query params
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-jq-eshop?action=yq-schema&yq_code=${encodeURIComponent(data.vehicle.yq_code)}&section_id=${encodeURIComponent(activeSection.id)}`;
-      const { data: { session } } = await supabase.auth.getSession();
-      const r = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session?.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
+      const qs = new URLSearchParams({
+        action: "yq-schema",
+        yq_code: data.vehicle.yq_code,
+        section_id: activeSection.id,
+        brand: (data.vehicle.brand || "chrysler").toLowerCase(),
       });
-      const json = await r.json();
-      if (json.ok && json.signed_url) {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-jq-eshop?${qs.toString()}`;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // Retry on transient connection resets from upstream B2B portal
+      let json: any = null;
+      let lastErr = "";
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const r = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session?.access_token}`,
+              apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+          });
+          json = await r.json();
+          if (json?.ok) break;
+          lastErr = json?.error || `HTTP ${r.status}`;
+          if (!/Connection reset|peer|ECONNRESET|client error/i.test(lastErr)) break;
+        } catch (e) {
+          lastErr = String((e as Error).message);
+        }
+        await new Promise((res) => setTimeout(res, 800 * attempt));
+      }
+
+      if (json?.ok && json.signed_url) {
         setSchemaUrl(json.signed_url);
         toast.success(json.cached ? "Schéma načteno z cache" : "Schéma staženo z J+M a uloženo");
       } else {
-        toast.error(json.error || "Nepodařilo se stáhnout schéma");
+        toast.error(lastErr || json?.error || "Nepodařilo se stáhnout schéma");
       }
-      void res; void error;
     } catch (e) {
       toast.error(String((e as Error).message));
     } finally {
