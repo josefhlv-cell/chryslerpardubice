@@ -23,6 +23,8 @@ export type Notification = {
   message: string;
   is_read: boolean;
   created_at: string;
+  link?: string | null;
+  event_type?: string | null;
 };
 
 export const fetchNotifications = async (userId: string) => {
