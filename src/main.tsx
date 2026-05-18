@@ -21,4 +21,7 @@ if (isPreviewHost || isInIframe) {
   });
 }
 
+// Initialize native (iOS/Android) integrations — no-op on web
+import("./lib/native").then((m) => m.initNative()).catch(() => {});
+
 createRoot(document.getElementById("root")!).render(<App />);

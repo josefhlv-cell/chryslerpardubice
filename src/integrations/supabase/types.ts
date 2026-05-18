@@ -1118,6 +1118,42 @@ export type Database = {
         }
         Relationships: []
       }
+      device_tokens: {
+        Row: {
+          created_at: string
+          device_id: string | null
+          id: string
+          last_seen_at: string
+          model: string | null
+          os_version: string | null
+          platform: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id?: string | null
+          id?: string
+          last_seen_at?: string
+          model?: string | null
+          os_version?: string | null
+          platform: string
+          token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string | null
+          id?: string
+          last_seen_at?: string
+          model?: string | null
+          os_version?: string | null
+          platform?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dtc_codes: {
         Row: {
           affected_models: string[] | null
