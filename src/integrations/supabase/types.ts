@@ -2318,24 +2318,33 @@ export type Database = {
       notifications: {
         Row: {
           created_at: string
+          dedupe_key: string | null
+          event_type: string | null
           id: string
           is_read: boolean
+          link: string | null
           message: string
           title: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          dedupe_key?: string | null
+          event_type?: string | null
           id?: string
           is_read?: boolean
+          link?: string | null
           message: string
           title: string
           user_id: string
         }
         Update: {
           created_at?: string
+          dedupe_key?: string | null
+          event_type?: string | null
           id?: string
           is_read?: boolean
+          link?: string | null
           message?: string
           title?: string
           user_id?: string
@@ -4355,6 +4364,16 @@ export type Database = {
       }
       manage_price_sync_cron: { Args: { p_action: string }; Returns: boolean }
       normalize_oem: { Args: { _oem: string }; Returns: string }
+      notify_admins_event: {
+        Args: {
+          _dedupe_key: string
+          _event_type: string
+          _link: string
+          _message: string
+          _title: string
+        }
+        Returns: undefined
+      }
       oem_priority_rank: { Args: { _source: string }; Returns: number }
       release_stuck_price_sync_runs: { Args: never; Returns: number }
     }
