@@ -234,6 +234,7 @@ const Admin = () => {
         { key: "catalog-import", label: "Import OEM/CSV" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
         ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "OEM EPC nákresy" }] : []),
+        { key: "catalog-graphical", label: "Grafický katalog (J+M)", icon: Layers, onClick: () => navigate("/graficky-katalog") },
       ],
     },
     {
