@@ -233,6 +233,9 @@ export default function GraphicalCatalog() {
             hasPrev={activeIdx > 0}
             hasNext={activeIdx < data.sections.length - 1}
             navigate={navigate}
+            schemaUrl={schemaUrl}
+            onDownloadSchema={downloadSchema}
+            fetchingSchema={fetchingSchema}
           />
         )}
       </div>
