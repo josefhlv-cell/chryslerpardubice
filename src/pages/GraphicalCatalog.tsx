@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ArrowLeft, Car, Layers, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, Car, Layers, Search, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type Position = { pos: number; oem: string; name: string; x: number; y: number; qty: number };
 type Section = { id: string; name: string; name_en: string; icon: string; positions: Position[] };
@@ -17,10 +20,17 @@ type Catalog = {
 
 export default function GraphicalCatalog() {
   const navigate = useNavigate();
+  const { user, isAdmin, isLoading } = useAuth();
   const [data, setData] = useState<Catalog | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activePos, setActivePos] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  const [schemaUrl, setSchemaUrl] = useState<string | null>(null);
+  const [fetchingSchema, setFetchingSchema] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && (!user || !isAdmin)) navigate("/auth");
+  }, [isLoading, user, isAdmin, navigate]);
 
   useEffect(() => {
     fetch("/jm_graphical_catalog.json")
@@ -57,11 +67,67 @@ export default function GraphicalCatalog() {
     if (!data || activeIdx <= 0) return;
     setActiveId(data.sections[activeIdx - 1].id);
     setActivePos(null);
+    setSchemaUrl(null);
   };
   const goNext = () => {
     if (!data || activeIdx < 0 || activeIdx >= data.sections.length - 1) return;
     setActiveId(data.sections[activeIdx + 1].id);
     setActivePos(null);
+    setSchemaUrl(null);
+  };
+
+  // Load cached schema for active section whenever it changes
+  useEffect(() => {
+    setSchemaUrl(null);
+    if (!activeSection || !data) return;
+    (async () => {
+      const { data: row } = await supabase
+        .from("jm_schema_cache")
+        .select("storage_path")
+        .eq("yq_code", data.vehicle.yq_code)
+        .eq("section_id", activeSection.id)
+        .maybeSingle();
+      if (row?.storage_path) {
+        const { data: signed } = await supabase.storage
+          .from("jm-schemas")
+          .createSignedUrl(row.storage_path, 3600);
+        if (signed?.signedUrl) setSchemaUrl(signed.signedUrl);
+      }
+    })();
+  }, [activeSection?.id, data?.vehicle.yq_code]);
+
+  const downloadSchema = async () => {
+    if (!activeSection || !data) return;
+    setFetchingSchema(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke("scrape-jq-eshop", {
+        body: null,
+        method: "POST",
+        // function reads query params, not body
+      } as never);
+      // The function reads from URL params; use fetch directly for query params
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-jq-eshop?action=yq-schema&yq_code=${encodeURIComponent(data.vehicle.yq_code)}&section_id=${encodeURIComponent(activeSection.id)}`;
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session?.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
+      const json = await r.json();
+      if (json.ok && json.signed_url) {
+        setSchemaUrl(json.signed_url);
+        toast.success(json.cached ? "Schéma načteno z cache" : "Schéma staženo z J+M a uloženo");
+      } else {
+        toast.error(json.error || "Nepodařilo se stáhnout schéma");
+      }
+      void res; void error;
+    } catch (e) {
+      toast.error(String((e as Error).message));
+    } finally {
+      setFetchingSchema(false);
+    }
   };
 
   if (!data) {
@@ -167,6 +233,9 @@ export default function GraphicalCatalog() {
             hasPrev={activeIdx > 0}
             hasNext={activeIdx < data.sections.length - 1}
             navigate={navigate}
+            schemaUrl={schemaUrl}
+            onDownloadSchema={downloadSchema}
+            fetchingSchema={fetchingSchema}
           />
         )}
       </div>
@@ -189,6 +258,7 @@ function SectionThumbnail({ section }: { section: Section }) {
 
 function SectionDetail({
   section, activePos, setActivePos, onPrev, onNext, hasPrev, hasNext, navigate,
+  schemaUrl, onDownloadSchema, fetchingSchema,
 }: {
   section: Section;
   activePos: number | null;
@@ -198,6 +268,9 @@ function SectionDetail({
   hasPrev: boolean;
   hasNext: boolean;
   navigate: (path: string) => void;
+  schemaUrl: string | null;
+  onDownloadSchema: () => void;
+  fetchingSchema: boolean;
 }) {
   return (
     <>
@@ -214,13 +287,31 @@ function SectionDetail({
         </Button>
       </div>
 
+      {/* Toolbar: download real J+M schema */}
+      <div className="flex justify-end mb-2">
+        <Button size="sm" variant="secondary" onClick={onDownloadSchema} disabled={fetchingSchema}>
+          {fetchingSchema ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Download className="w-4 h-4 mr-1" />}
+          {schemaUrl ? "Aktualizovat schéma" : "Stáhnout reálné schéma z J+M"}
+        </Button>
+      </div>
+
       {/* Schema */}
       <Card className="p-4 mb-4 bg-card">
         <div className="aspect-[4/3] md:aspect-[16/9] rounded-lg bg-gradient-to-br from-muted/40 to-muted/10 border border-border relative overflow-hidden">
-          <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
-            {/* schematic outline */}
-            <rect x="10" y="10" width="80" height="80" rx="3" fill="none" stroke="hsl(var(--border))" strokeWidth="0.3" strokeDasharray="1 1" />
-            <line x1="50" y1="10" x2="50" y2="90" stroke="hsl(var(--border))" strokeWidth="0.2" strokeDasharray="1 2" />
+          {schemaUrl && (
+            <img
+              src={schemaUrl}
+              alt={`Schéma ${section.name}`}
+              className="absolute inset-0 w-full h-full object-contain"
+            />
+          )}
+          <svg viewBox="0 0 100 100" className="w-full h-full relative" preserveAspectRatio="none">
+            {!schemaUrl && (
+              <>
+                <rect x="10" y="10" width="80" height="80" rx="3" fill="none" stroke="hsl(var(--border))" strokeWidth="0.3" strokeDasharray="1 1" />
+                <line x1="50" y1="10" x2="50" y2="90" stroke="hsl(var(--border))" strokeWidth="0.2" strokeDasharray="1 2" />
+              </>
+            )}
             {/* positions */}
             {section.positions.map((p) => {
               const isActive = activePos === p.pos;
