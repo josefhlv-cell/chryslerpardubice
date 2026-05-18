@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, ArrowLeft, Car, Layers, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, ArrowLeft, Car, Layers, Search, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type Position = { pos: number; oem: string; name: string; x: number; y: number; qty: number };
 type Section = { id: string; name: string; name_en: string; icon: string; positions: Position[] };
@@ -17,10 +20,17 @@ type Catalog = {
 
 export default function GraphicalCatalog() {
   const navigate = useNavigate();
+  const { user, isAdmin, isLoading } = useAuth();
   const [data, setData] = useState<Catalog | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activePos, setActivePos] = useState<number | null>(null);
   const [query, setQuery] = useState("");
+  const [schemaUrl, setSchemaUrl] = useState<string | null>(null);
+  const [fetchingSchema, setFetchingSchema] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && (!user || !isAdmin)) navigate("/auth");
+  }, [isLoading, user, isAdmin, navigate]);
 
   useEffect(() => {
     fetch("/jm_graphical_catalog.json")
