@@ -1,6 +1,14 @@
-// Enrich parts_new with images, descriptions, and OE numbers from J+M.
-// CRITICAL: Never touches prices. Only fills image_urls / description /
-// compatible_vehicles when missing.
+// Enrich OEM parts_new rows (jm_oem / mopar) with images, clean names and
+// technical descriptions from the paired J+M item.
+//
+// RULES (per owner 2026-05-18):
+//   - NEVER touches price.
+//   - Always sets manufacturer = NULL on OEM rows (ORIGINÁL badge handles it).
+//   - Cleans brand words (TRW, BOSCH, A.B.S., ...) from any name we keep.
+//   - Never mentions "J+M" / "Nextis" / supplier anywhere.
+//   - Appends position qualifiers (přední/zadní/levá/pravá/horní/dolní).
+//   - Description = formatted technical_parameters (rozměry, parametry) — never
+//     a raw aftermarket label.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -15,66 +23,148 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 interface JmItem {
   oem_number?: string;
   image?: string;
+  image_urls?: string[];
   category?: string;
   name?: string;
+  description?: string;
+  technical_parameters?: Record<string, string>;
+  tecdoc_section?: { id?: number | string; label?: string };
   oe_numbers?: string[] | null;
+  related_oem_number?: string;
   compatible_vehicles?: string[];
 }
 
-async function callJmProxy(
-  action: string,
-  payload: unknown,
-): Promise<{ items: JmItem[] } | null> {
+// Brand words and supplier mentions we strip from any name we keep.
+const BRAND_BLOCKLIST = [
+  "j\\+m", "jm autodily", "jm", "nextis",
+  "mopar", "trw", "bosch", "a\\.b\\.s\\.", "abs", "starline", "ferodo",
+  "brembo", "ate", "textar", "valeo", "sachs", "luk", "ngk", "denso",
+  "mann", "mahle", "hengst", "knecht", "wix", "purflux", "blue\\s*print",
+  "febi", "ruville", "bilstein", "monroe", "kyb", "lemf[öo]rder",
+  "lemforder", "meyle", "swag", "triscan", "skf", "ina", "gates",
+  "contitech", "dayco", "hella", "magneti\\s*marelli", "marelli",
+  "lucas", "beru", "champion", "delphi", "filtron", "moog", "febest",
+  "as[- ]?pl", "aspl", "raybestos", "cardone", "walker", "as pl",
+  "standard motor products",
+];
+
+function stripBrand(input: string | null | undefined): string {
+  if (!input) return "";
+  let out = String(input);
+  const re = new RegExp(`\\b(?:${BRAND_BLOCKLIST.join("|")})\\b`, "gi");
+  out = out.replace(re, " ");
+  // Drop trailing brand-style tokens like "(TRW)" leftovers
+  out = out.replace(/\(\s*\)/g, " ");
+  out = out.replace(/[–—-]\s*$/g, "");
+  out = out.replace(/\s{2,}/g, " ").trim();
+  // Title-case first char
+  if (out.length > 0) out = out[0].toUpperCase() + out.slice(1);
+  return out;
+}
+
+function extractPositions(...texts: (string | null | undefined)[]): string[] {
+  const t = texts.filter(Boolean).join(" ").toLowerCase();
+  const pos: string[] = [];
+  if (/\b(p[řr]edn[ií]|front|vorne|vorderachse|vorder|na p[řr]edn[ií])\b/.test(t)) pos.push("přední");
+  else if (/\b(zadn[ií]|rear|hinten|hinterachse|hinter|na zadn[ií])\b/.test(t)) pos.push("zadní");
+  if (/\b(lev[áýé]|left|links|li\.)\b/.test(t)) pos.push("levá");
+  else if (/\b(prav[áýé]|right|rechts|re\.)\b/.test(t)) pos.push("pravá");
+  if (/\b(horn[ií]|upper|oben|above)\b/.test(t)) pos.push("horní");
+  else if (/\b(doln[ií]|lower|unten|below)\b/.test(t)) pos.push("dolní");
+  if (/\b(vnit[řr]n[ií]|inner|innen)\b/.test(t)) pos.push("vnitřní");
+  else if (/\b(vn[ěe]j[šs][ií]|outer|aussen|außen)\b/.test(t)) pos.push("vnější");
+  return pos;
+}
+
+function buildName(baseName: string | null | undefined, match: JmItem): string {
+  // Prefer the gen-art / tecdoc label (clean, no brand) → fallback to existing name → match.name
+  const candidates = [
+    match.tecdoc_section?.label,
+    match.category,
+    baseName,
+    match.name,
+  ];
+  let label = "";
+  for (const c of candidates) {
+    const cleaned = stripBrand(c);
+    if (cleaned && cleaned.length >= 3) { label = cleaned; break; }
+  }
+  if (!label) label = stripBrand(baseName) || "Originální díl";
+
+  const positions = extractPositions(match.name, match.description,
+    JSON.stringify(match.technical_parameters || {}), baseName);
+  // Don't duplicate position already present
+  const lower = label.toLowerCase();
+  const extra = positions.filter((p) => !lower.includes(p));
+  return extra.length ? `${label} ${extra.join(" ")}`.replace(/\s{2,}/g, " ").trim() : label;
+}
+
+function buildDescription(match: JmItem): string | null {
+  const params = match.technical_parameters || {};
+  const lines: string[] = [];
+  for (const [k, v] of Object.entries(params)) {
+    if (!v || String(v).trim() === "") continue;
+    const key = stripBrand(k);
+    const val = stripBrand(String(v));
+    if (!key || !val) continue;
+    lines.push(`${key}: ${val}`);
+  }
+  if (lines.length === 0) return null;
+  return lines.join(" • ");
+}
+
+function pickImages(match: JmItem): string[] | null {
+  const arr: string[] = [];
+  if (Array.isArray(match.image_urls)) for (const u of match.image_urls) if (u) arr.push(u);
+  if (match.image && !arr.includes(match.image)) arr.unshift(match.image);
+  return arr.length ? arr.slice(0, 6) : null;
+}
+
+async function callJmProxy(action: string, payload: unknown): Promise<{ items: JmItem[] } | null> {
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/jm-proxy`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${SERVICE_ROLE}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${SERVICE_ROLE}`, "Content-Type": "application/json" },
       body: JSON.stringify({ action, payload }),
     });
     if (!r.ok) return null;
     const j = await r.json();
     if (!j?.success) return null;
     return j.data as { items: JmItem[] };
-  } catch (_e) {
-    return null;
-  }
+  } catch (_e) { return null; }
 }
+
+const normalizeOem = (s: string) =>
+  String(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE);
   const url = new URL(req.url);
-  // Smaller batches → respect Nextis quota across multiple runs.
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
-  const onlyMissingImage = url.searchParams.get("scope") !== "all";
+  const scope = url.searchParams.get("scope") || "missing";
+  // Only enrich OEM-side rows; we never overwrite J+M aftermarket rows here.
+  const sourceFilter = ["jm_oem", "mopar", "mopar_oem", "csv", "epc-link"];
 
-  // Fetch parts that need enrichment (missing image OR description).
-  // Order by last_enrich_attempt_at (NULLS first) so each run advances the queue.
   let q = sb
     .from("parts_new")
-    .select("id, oem_number, image_urls, description, compatible_vehicles, name")
+    .select("id, oem_number, image_urls, description, name, manufacturer, catalog_source")
+    .in("catalog_source", sourceFilter)
     .order("last_enrich_attempt_at", { ascending: true, nullsFirst: true })
     .limit(limit);
-
-  if (onlyMissingImage) {
-    q = q.or("image_urls.is.null,description.is.null");
+  if (scope !== "all") {
+    q = q.or("image_urls.is.null,description.is.null,manufacturer.not.is.null");
   }
 
   const { data: parts, error } = await q;
   if (error) {
     return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  let updated = 0;
-  let scanned = 0;
-  let noMatch = 0;
+  let updated = 0, scanned = 0, noMatch = 0;
   const errors: string[] = [];
   const attemptedIds: string[] = [];
 
@@ -82,44 +172,51 @@ Deno.serve(async (req) => {
     scanned++;
     attemptedIds.push(p.id as string);
     if (!p.oem_number) continue;
-    const res = await callJmProxy("searchByCode", { code: p.oem_number });
-    if (!res?.items?.length) { noMatch++; continue; }
 
-    // Find item whose oem_number or oe_numbers matches our part's OEM
-    const norm = (s: string) => String(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
-    const target = norm(p.oem_number);
-    const match = res.items.find((it) => {
-      if (norm(it.oem_number || "") === target) return true;
-      if (Array.isArray(it.oe_numbers) && it.oe_numbers.some((c) => norm(c) === target)) return true;
+    const res = await callJmProxy("searchByCode", { code: p.oem_number });
+    const items = res?.items || [];
+    if (!items.length) { noMatch++; continue; }
+
+    const target = normalizeOem(p.oem_number);
+    const match = items.find((it) => {
+      if (normalizeOem(it.oem_number || "") === target) return true;
+      if (normalizeOem(it.related_oem_number || "") === target) return true;
+      if (Array.isArray(it.oe_numbers) && it.oe_numbers.some((c) => normalizeOem(c) === target)) return true;
       return false;
-    }) || res.items[0];
+    }) || items[0];
 
     const patch: Record<string, unknown> = {};
+
+    // Image — always take from J+M if we don't have one
     const hasImg = Array.isArray(p.image_urls) && p.image_urls.length > 0;
-    if (!hasImg && match.image) {
-      patch.image_urls = [match.image];
-    }
-    if (!p.description && match.name && match.name !== p.name) {
-      patch.description = match.name;
-    }
-    if (!p.compatible_vehicles && Array.isArray(match.compatible_vehicles) && match.compatible_vehicles.length) {
-      patch.compatible_vehicles = match.compatible_vehicles.join("; ");
+    if (!hasImg) {
+      const imgs = pickImages(match);
+      if (imgs) patch.image_urls = imgs;
     }
 
+    // Name — always rebuild (strip brand, add position). Only write if it changes.
+    const cleanName = buildName(p.name, match);
+    if (cleanName && cleanName !== p.name) patch.name = cleanName;
+
+    // Description — replace if empty or contains a brand word
+    const hasBrandInDesc = p.description && /(\b(?:trw|bosch|a\.b\.s\.|abs|starline|ferodo|brembo|ate|textar|valeo|j\+m|nextis|mopar)\b)/i.test(p.description);
+    if (!p.description || hasBrandInDesc) {
+      const desc = buildDescription(match);
+      if (desc) patch.description = desc;
+    }
+
+    // Manufacturer — OEM rows must never carry an aftermarket brand
+    if (p.manufacturer !== null) patch.manufacturer = null;
+
     if (Object.keys(patch).length > 0) {
-      const { error: uerr } = await sb
-        .from("parts_new")
-        .update(patch)
-        .eq("id", p.id);
+      const { error: uerr } = await sb.from("parts_new").update(patch).eq("id", p.id);
       if (uerr) errors.push(`${p.oem_number}: ${uerr.message}`);
       else updated++;
     }
   }
 
-  // Stamp every attempted part so the queue advances even when J+M has no match.
   if (attemptedIds.length) {
-    await sb
-      .from("parts_new")
+    await sb.from("parts_new")
       .update({ last_enrich_attempt_at: new Date().toISOString() })
       .in("id", attemptedIds);
   }
@@ -128,7 +225,7 @@ Deno.serve(async (req) => {
     source: "enrich-from-jm",
     event: "batch_done",
     level: "info",
-    message: `Enriched ${updated}/${scanned} (noMatch=${noMatch})`,
+    message: `OEM enriched ${updated}/${scanned} (noMatch=${noMatch})`,
     details: { updated, scanned, noMatch, errors: errors.slice(0, 10) },
   });
 
