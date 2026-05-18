@@ -1543,6 +1543,48 @@ export type Database = {
           },
         ]
       }
+      jm_schema_cache: {
+        Row: {
+          byte_size: number | null
+          content_type: string | null
+          expires_at: string | null
+          fetched_at: string
+          id: string
+          image_url_source: string | null
+          positions: Json | null
+          section_id: string
+          section_name: string | null
+          storage_path: string
+          yq_code: string
+        }
+        Insert: {
+          byte_size?: number | null
+          content_type?: string | null
+          expires_at?: string | null
+          fetched_at?: string
+          id?: string
+          image_url_source?: string | null
+          positions?: Json | null
+          section_id: string
+          section_name?: string | null
+          storage_path: string
+          yq_code: string
+        }
+        Update: {
+          byte_size?: number | null
+          content_type?: string | null
+          expires_at?: string | null
+          fetched_at?: string
+          id?: string
+          image_url_source?: string | null
+          positions?: Json | null
+          section_id?: string
+          section_name?: string | null
+          storage_path?: string
+          yq_code?: string
+        }
+        Relationships: []
+      }
       jm_tree_sync_runs: {
         Row: {
           categories_created: number
