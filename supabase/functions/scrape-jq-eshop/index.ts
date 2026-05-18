@@ -178,7 +178,14 @@ async function fetchLoggedIn(path: string, retry = true): Promise<{ status: numb
       await new Promise((res) => setTimeout(res, 500 * attempt));
     }
   }
-  if (!r) throw new Error(`upstream fetch failed after retries: ${String((lastErr as Error)?.message ?? lastErr)}`);
+  if (!r) {
+    const msg = String((lastErr as Error)?.message ?? lastErr);
+    // TCP reset / connection refused = upstream blokuje egress IP Supabase Edge runtime
+    const blocked = /reset by peer|ECONNRESET|Connection refused|client error \(Connect\)/i.test(msg);
+    const err = new Error(blocked ? "UPSTREAM_BLOCKED" : `upstream fetch failed: ${msg}`);
+    (err as Error & { code?: string }).code = blocked ? "UPSTREAM_BLOCKED" : "UPSTREAM_ERROR";
+    throw err;
+  }
   const html = await r.text();
   if (retry && /name="ctl00\$ctl00\$BodyContentPlaceHolder\$LoginForm\$Username"/.test(html)) {
     await getCookie(true);
