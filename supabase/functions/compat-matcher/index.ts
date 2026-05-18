@@ -283,3 +283,81 @@ async function matchSinglePart(supabase: any, partId: string) {
 
   return result;
 }
+
+// ============= jm_oem branch =============
+// For OEM parts: call jm-proxy.searchByCode to discover which J+M parts
+// reference this OEM, parse vehicle brand prefixes from their oe_numbers,
+// then upsert compat rows against every nextis_vehicles row of that brand.
+// This makes OEMs visible in the catalog tree at brand level (model/engine
+// filters in catalogV2API.listPartsForVehicle still apply via ilike).
+const ALLOWED_BRAND_PREFIXES: Record<string, string> = {
+  CHRYSLER: "Chrysler",
+  DODGE: "Dodge",
+  RAM: "RAM",
+  LANCIA: "Lancia",
+};
+
+async function matchJmOemPart(supabase: any, partId: string, oem: string) {
+  if (!oem) return { ok: false, reason: "no oem" };
+  // Call jm-proxy.searchByCode
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/jm-proxy`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SERVICE_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action: "searchByCode", payload: { code: oem } }),
+  }).catch(() => null);
+  if (!resp || !resp.ok) return { ok: false, reason: "jm-proxy failed" };
+  const json = await resp.json().catch(() => null);
+  const items: any[] = json?.data?.items || [];
+  if (items.length === 0) return { ok: false, reason: "no jm items" };
+
+  // Collect brand prefixes from oe_numbers and from compatible_vehicles
+  const brands = new Set<string>();
+  for (const it of items) {
+    for (const oeRaw of it.oe_numbers || []) {
+      const m = String(oeRaw).match(/^([A-Z]+)\s*:/);
+      if (m && ALLOWED_BRAND_PREFIXES[m[1]]) brands.add(ALLOWED_BRAND_PREFIXES[m[1]]);
+    }
+    for (const cv of it.compatible_vehicles || []) {
+      const s = String(cv).toLowerCase();
+      for (const [pfx, canon] of Object.entries(ALLOWED_BRAND_PREFIXES)) {
+        if (s.includes(pfx.toLowerCase()) || s.includes(canon.toLowerCase())) brands.add(canon);
+      }
+    }
+  }
+  if (brands.size === 0) return { ok: false, reason: "no us brand" };
+
+  // For each brand, fetch nextis_vehicles and upsert compat rows
+  let inserted = 0;
+  for (const b of brands) {
+    const { data: vehicles } = await supabase
+      .from("nextis_vehicles")
+      .select("id, brand, model, engine, year_from, year_to")
+      .eq("brand", b)
+      .limit(500);
+    for (const v of vehicles || []) {
+      const { error } = await supabase
+        .from("catalog_vehicle_compatibility")
+        .upsert(
+          {
+            part_id: partId,
+            nextis_vehicle_id: v.id,
+            brand: v.brand,
+            model: v.model,
+            engine: v.engine,
+            year_from: v.year_from,
+            year_to: v.year_to,
+            is_oem: true,
+            match_method: "jm_searchByCode",
+            match_confidence: 80,
+            source: "manual",
+          },
+          { onConflict: "part_id,nextis_vehicle_id" }
+        );
+      if (!error) inserted++;
+    }
+  }
+  return { ok: true, brands: [...brands], inserted };
+}
