@@ -54,6 +54,40 @@ Deno.serve(async (req) => {
       return json(result);
     }
 
+    if (action === "match-jm-oem") {
+      // Dedicated branch: jm_oem parts only — derives compat via jm-proxy.searchByCode
+      const onlyMissing: boolean = body.onlyMissing !== false;
+      let q = supabase
+        .from("parts_new")
+        .select("id, oem_number")
+        .eq("catalog_source", "jm_oem")
+        .limit(limit);
+      const { data: parts, error } = await q;
+      if (error) throw error;
+      let scope = parts || [];
+      if (onlyMissing && scope.length) {
+        const ids = scope.map((p: any) => p.id);
+        const { data: already } = await supabase
+          .from("catalog_vehicle_compatibility")
+          .select("part_id")
+          .in("part_id", ids);
+        const have = new Set((already || []).map((r: any) => r.part_id));
+        scope = scope.filter((p: any) => !have.has(p.id));
+      }
+      const bgScope = scope.slice(0, limit);
+      const work = (async () => {
+        for (const p of bgScope) {
+          try { await matchJmOemPart(supabase, p.id, p.oem_number); } catch (_) { /* swallow */ }
+        }
+      })();
+      // @ts-ignore
+      if (typeof EdgeRuntime !== "undefined" && (EdgeRuntime as any).waitUntil) {
+        // @ts-ignore
+        (EdgeRuntime as any).waitUntil(work);
+      }
+      return json({ ok: true, background: true, queued: bgScope.length, candidates: parts?.length || 0 });
+    }
+
     if (action === "match-all") {
       // Optional scope filters
       const brand: string | undefined = body.brand;
