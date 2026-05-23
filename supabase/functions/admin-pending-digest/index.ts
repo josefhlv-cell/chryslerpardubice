@@ -76,21 +76,27 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Deduplicate: skip if same-title notification was sent in last 20h
-    const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
-    const { data: recent } = await supabase
+    // Deduplicate via DB unique constraint on (user_id, dedupe_key).
+    // Key = same bucket per calendar day + counts, so a fresh digest is sent
+    // when the backlog actually changes.
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const dedupe_key = `digest:${todayKey}:o${ordersCount}:b${bookingsCount}`;
+
+    const toInsert = adminIds.map((user_id) => ({
+      user_id,
+      title,
+      message,
+      dedupe_key,
+      event_type: "admin_digest",
+      link: "/admin",
+    }));
+
+    const { error: insErr } = await supabase
       .from("notifications")
-      .select("user_id")
-      .eq("title", title)
-      .gte("created_at", since);
-    const alreadyNotified = new Set((recent ?? []).map((r: any) => r.user_id));
-
-    const toInsert = adminIds
-      .filter((id) => !alreadyNotified.has(id))
-      .map((user_id) => ({ user_id, title, message }));
-
-    if (toInsert.length > 0) {
-      await supabase.from("notifications").insert(toInsert);
+      .insert(toInsert);
+    // 23505 = unique violation → already sent, that's fine
+    if (insErr && insErr.code !== "23505") {
+      console.error("insert error:", insErr);
     }
 
     return new Response(
