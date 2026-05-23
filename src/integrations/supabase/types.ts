@@ -458,6 +458,69 @@ export type Database = {
           },
         ]
       }
+      catalog_categories_bak_pretreev2: {
+        Row: {
+          created_at: string | null
+          external_id: string | null
+          id: string | null
+          is_global: boolean | null
+          name_cs: string | null
+          name_en: string | null
+          node_type: string | null
+          parent_id: string | null
+          power_kw: number | null
+          slug: string | null
+          sort_order: number | null
+          source: Database["public"]["Enums"]["catalog_source_type"] | null
+          updated_at: string | null
+          vehicle_brand: string | null
+          vehicle_engine: string | null
+          vehicle_model: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          is_global?: boolean | null
+          name_cs?: string | null
+          name_en?: string | null
+          node_type?: string | null
+          parent_id?: string | null
+          power_kw?: number | null
+          slug?: string | null
+          sort_order?: number | null
+          source?: Database["public"]["Enums"]["catalog_source_type"] | null
+          updated_at?: string | null
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          is_global?: boolean | null
+          name_cs?: string | null
+          name_en?: string | null
+          node_type?: string | null
+          parent_id?: string | null
+          power_kw?: number | null
+          slug?: string | null
+          sort_order?: number | null
+          source?: Database["public"]["Enums"]["catalog_source_type"] | null
+          updated_at?: string | null
+          vehicle_brand?: string | null
+          vehicle_engine?: string | null
+          vehicle_model?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
       catalog_diagnostic_fixes: {
         Row: {
           affected_count: number
@@ -772,6 +835,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      catalog_part_categories_bak_pretreev2: {
+        Row: {
+          category_id: string | null
+          created_at: string | null
+          id: string | null
+          is_primary: boolean | null
+          part_id: string | null
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_primary?: boolean | null
+          part_id?: string | null
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_primary?: boolean | null
+          part_id?: string | null
+        }
+        Relationships: []
       }
       catalog_snapshots: {
         Row: {
@@ -1517,6 +1604,48 @@ export type Database = {
         }
         Relationships: []
       }
+      jm_category_tree_v2: {
+        Row: {
+          brand: string
+          created_at: string
+          engine: string
+          gen_art_id: number
+          gen_art_name: string
+          id: string
+          k_type: number
+          last_synced_at: string | null
+          model: string
+          part_count: number
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          created_at?: string
+          engine: string
+          gen_art_id: number
+          gen_art_name: string
+          id?: string
+          k_type: number
+          last_synced_at?: string | null
+          model: string
+          part_count?: number
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          created_at?: string
+          engine?: string
+          gen_art_id?: number
+          gen_art_name?: string
+          id?: string
+          k_type?: number
+          last_synced_at?: string | null
+          model?: string
+          part_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       jm_orders: {
         Row: {
           attempts: number
@@ -1575,6 +1704,59 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jm_part_v2: {
+        Row: {
+          availability: string | null
+          fetched_at: string
+          id: string
+          image_url: string | null
+          manufacturer: string | null
+          name: string | null
+          node_id: string
+          oem_number: string
+          price_with_vat: number | null
+          price_without_vat: number | null
+          raw: Json | null
+          stock: number | null
+        }
+        Insert: {
+          availability?: string | null
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          node_id: string
+          oem_number: string
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          raw?: Json | null
+          stock?: number | null
+        }
+        Update: {
+          availability?: string | null
+          fetched_at?: string
+          id?: string
+          image_url?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          node_id?: string
+          oem_number?: string
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          raw?: Json | null
+          stock?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jm_part_v2_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: false
+            referencedRelation: "jm_category_tree_v2"
             referencedColumns: ["id"]
           },
         ]
