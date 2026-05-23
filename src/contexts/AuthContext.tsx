@@ -64,12 +64,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .eq("user_id", userId)
-      .single();
-    setProfile(data);
+      .maybeSingle();
+    if (error) console.error("fetchProfile error:", error);
+    setProfile(data ?? null);
   };
 
   const checkAdmin = async (userId: string) => {

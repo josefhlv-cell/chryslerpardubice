@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Allowed paths even when profile incomplete
-const ALLOWED = ["/complete-profile", "/auth", "/reset-password", "/terms", "/"];
+const ALLOWED = ["/complete-profile", "/auth", "/reset-password", "/terms"];
 
 const ProfileGate = () => {
   const { user, profile, isLoading } = useAuth();
