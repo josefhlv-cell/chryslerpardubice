@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.jm-tree-v2-build]
 verify_jwt = false
+
+[functions.kitoem-price-sync]
+verify_jwt = false
