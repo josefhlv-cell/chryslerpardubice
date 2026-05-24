@@ -29,6 +29,7 @@ type JmItem = {
   oem_number: string;
   name?: string;
   brand?: string;
+  category?: string;
   price_with_vat?: number;
   price_without_vat?: number;
   stock?: number;
@@ -36,6 +37,7 @@ type JmItem = {
   image?: string;
   gen_art_id?: number;
   gen_art_name?: string;
+  tecdoc_section?: { id?: number; label?: string };
 };
 
 async function invokeJmProxy(payload: unknown) {
