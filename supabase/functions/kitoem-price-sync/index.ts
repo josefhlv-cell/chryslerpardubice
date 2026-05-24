@@ -13,9 +13,9 @@ const corsHeaders = {
 };
 
 const CATALOG_URL = "https://www.vernostsevyplaci.cz/cnd/";
-const CONCURRENCY = 10;
+const CONCURRENCY = 15;
 const MAX_RETRIES = 3;
-const MIN_DELAY = 200;
+const MIN_DELAY = 150;
 const MAX_PRICE = 5_000_000;
 
 const UAS = [
