@@ -2169,6 +2169,72 @@ export type Database = {
         }
         Relationships: []
       }
+      kitoem_parts: {
+        Row: {
+          brand: string | null
+          category: string | null
+          created_at: string
+          description: string | null
+          engine: string | null
+          id: string
+          image_urls: string[] | null
+          jm_manufacturer: string | null
+          jm_part_code: string | null
+          k_type: number | null
+          model: string | null
+          name: string | null
+          oe_brand: string | null
+          oem_number: string
+          position: string | null
+          technical_params: Json | null
+          updated_at: string
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          engine?: string | null
+          id?: string
+          image_urls?: string[] | null
+          jm_manufacturer?: string | null
+          jm_part_code?: string | null
+          k_type?: number | null
+          model?: string | null
+          name?: string | null
+          oe_brand?: string | null
+          oem_number: string
+          position?: string | null
+          technical_params?: Json | null
+          updated_at?: string
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          engine?: string | null
+          id?: string
+          image_urls?: string[] | null
+          jm_manufacturer?: string | null
+          jm_part_code?: string | null
+          k_type?: number | null
+          model?: string | null
+          name?: string | null
+          oe_brand?: string | null
+          oem_number?: string
+          position?: string | null
+          technical_params?: Json | null
+          updated_at?: string
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
       mechanic_offline_queue: {
         Row: {
           action: string
@@ -4593,6 +4659,14 @@ export type Database = {
         Returns: undefined
       }
       oem_priority_rank: { Args: { _source: string }; Returns: number }
+      populate_kitoem_from_jm: {
+        Args: never
+        Returns: {
+          categories_covered: number
+          jm_scanned: number
+          oem_inserted: number
+        }[]
+      }
       release_stuck_price_sync_runs: { Args: never; Returns: number }
     }
     Enums: {
