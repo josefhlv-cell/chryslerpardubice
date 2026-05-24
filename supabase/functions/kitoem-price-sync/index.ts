@@ -248,8 +248,7 @@ Deno.serve(async (req) => {
           price_found: true,
           price_checked_at: nowIso,
           price_variant_used: r.variant,
-          price_attempts: (undefined as any), // placeholder, see RPC below
-        } as any)
+        })
         .eq("oem_number", oem);
     } else {
       notFound++;
