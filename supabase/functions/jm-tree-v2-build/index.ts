@@ -110,12 +110,17 @@ Deno.serve(async (req) => {
 
       const items: JmItem[] = proxyRes.data?.data?.items || [];
 
-      // Group items by gen_art_id (fallback to name when id missing)
+      // Group items by TecDoc gen_art (id+name). Prefer top-level
+      // gen_art_* (strategy A0), fall back to tecdoc_section.* or category
+      // (strategy A / multi-genart loop). Items without any category are skipped.
       const groups = new Map<string, { id: number; name: string; items: JmItem[] }>();
       for (const it of items) {
-        const gid = Number(it.gen_art_id || 0) || 0;
-        const gname = String(it.gen_art_name || "").trim();
-        if (!gname) continue; // skip items without a TecDoc category
+        const gid = Number(it.gen_art_id || it.tecdoc_section?.id || 0) || 0;
+        const gname =
+          (String(it.gen_art_name || "").trim()) ||
+          (String(it.tecdoc_section?.label || "").trim()) ||
+          (String(it.category || "").trim());
+        if (!gname) continue;
         const key = `${gid}::${gname.toLowerCase()}`;
         if (!groups.has(key)) groups.set(key, { id: gid, name: gname, items: [] });
         groups.get(key)!.items.push(it);
