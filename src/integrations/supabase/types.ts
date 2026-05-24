@@ -2253,6 +2253,90 @@ export type Database = {
         }
         Relationships: []
       }
+      kitoem_parts_backup: {
+        Row: {
+          brand: string | null
+          category: string | null
+          created_at: string | null
+          description: string | null
+          engine: string | null
+          id: string | null
+          image_urls: string[] | null
+          jm_manufacturer: string | null
+          jm_part_code: string | null
+          k_type: number | null
+          model: string | null
+          name: string | null
+          oe_brand: string | null
+          oem_number: string | null
+          position: string | null
+          price_attempts: number | null
+          price_checked_at: string | null
+          price_found: boolean | null
+          price_variant_used: string | null
+          price_with_vat: number | null
+          price_without_vat: number | null
+          technical_params: Json | null
+          updated_at: string | null
+          year_from: number | null
+          year_to: number | null
+        }
+        Insert: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          engine?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          jm_manufacturer?: string | null
+          jm_part_code?: string | null
+          k_type?: number | null
+          model?: string | null
+          name?: string | null
+          oe_brand?: string | null
+          oem_number?: string | null
+          position?: string | null
+          price_attempts?: number | null
+          price_checked_at?: string | null
+          price_found?: boolean | null
+          price_variant_used?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          technical_params?: Json | null
+          updated_at?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Update: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          engine?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          jm_manufacturer?: string | null
+          jm_part_code?: string | null
+          k_type?: number | null
+          model?: string | null
+          name?: string | null
+          oe_brand?: string | null
+          oem_number?: string | null
+          position?: string | null
+          price_attempts?: number | null
+          price_checked_at?: string | null
+          price_found?: boolean | null
+          price_variant_used?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          technical_params?: Json | null
+          updated_at?: string | null
+          year_from?: number | null
+          year_to?: number | null
+        }
+        Relationships: []
+      }
       mechanic_offline_queue: {
         Row: {
           action: string
@@ -3037,6 +3121,96 @@ export type Database = {
           price_without_vat?: number
           segment?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      parts_new_backup: {
+        Row: {
+          admin_margin_percent: number | null
+          admin_price: number | null
+          availability: string | null
+          catalog_source: string | null
+          category: string | null
+          compatible_vehicles: string | null
+          currency: string | null
+          description: string | null
+          enrich_attempts: number | null
+          family: string | null
+          id: string | null
+          image_urls: string[] | null
+          internal_code: string | null
+          is_active: boolean | null
+          last_enrich_attempt_at: string | null
+          last_enrich_status: string | null
+          last_name_check_at: string | null
+          last_price_update: string | null
+          manufacturer: string | null
+          name: string | null
+          oem_number: string | null
+          packaging: string | null
+          price_locked: boolean | null
+          price_with_vat: number | null
+          price_without_vat: number | null
+          segment: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_margin_percent?: number | null
+          admin_price?: number | null
+          availability?: string | null
+          catalog_source?: string | null
+          category?: string | null
+          compatible_vehicles?: string | null
+          currency?: string | null
+          description?: string | null
+          enrich_attempts?: number | null
+          family?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          internal_code?: string | null
+          is_active?: boolean | null
+          last_enrich_attempt_at?: string | null
+          last_enrich_status?: string | null
+          last_name_check_at?: string | null
+          last_price_update?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          oem_number?: string | null
+          packaging?: string | null
+          price_locked?: boolean | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          segment?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_margin_percent?: number | null
+          admin_price?: number | null
+          availability?: string | null
+          catalog_source?: string | null
+          category?: string | null
+          compatible_vehicles?: string | null
+          currency?: string | null
+          description?: string | null
+          enrich_attempts?: number | null
+          family?: string | null
+          id?: string | null
+          image_urls?: string[] | null
+          internal_code?: string | null
+          is_active?: boolean | null
+          last_enrich_attempt_at?: string | null
+          last_enrich_status?: string | null
+          last_name_check_at?: string | null
+          last_price_update?: string | null
+          manufacturer?: string | null
+          name?: string | null
+          oem_number?: string | null
+          packaging?: string | null
+          price_locked?: boolean | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
+          segment?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
