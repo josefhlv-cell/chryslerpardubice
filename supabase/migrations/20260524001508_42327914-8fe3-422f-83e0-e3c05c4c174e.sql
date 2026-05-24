@@ -1,0 +1,1 @@
+UPDATE public.feature_flags SET enabled = true WHERE feature_key = 'use_jm_tree_v2';

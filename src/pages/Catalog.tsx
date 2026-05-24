@@ -21,6 +21,7 @@ import {
   type CatalogPart, type NextisVehicle,
 } from "@/api/catalogV2API";
 import { fetchAllPartsForEngine, type CategoryGroup } from "@/services/catalogService";
+import { fetchAllPartsForEngineV2 } from "@/services/catalogServiceV2";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
@@ -155,8 +156,32 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     setWarning(null);
 
     let cancelled = false;
-    fetchAllPartsForEngine({ brand, model, engine, nextisVehicleId: vehicleId })
-      .then((res) => {
+    (async () => {
+      try {
+        // Feature flag: use_jm_tree_v2 → načítat z jm_category_tree_v2 + jm_part_v2.
+        // Pokud flag ON a v2 vrátí data → použij. Jinak fallback na starý strom.
+        let res: Awaited<ReturnType<typeof fetchAllPartsForEngine>> | null = null;
+        try {
+          const { data: flag } = await supabase
+            .from("feature_flags")
+            .select("enabled")
+            .eq("feature_key", "use_jm_tree_v2")
+            .maybeSingle();
+          if (flag?.enabled) {
+            const v2 = await fetchAllPartsForEngineV2({ brand, model, engine });
+            if (v2 && v2.groups.length > 0) {
+              res = { ...v2, oemSeedsUsed: 0 };
+              console.info("[Catalog] v2 tree:", v2.debug);
+            } else {
+              console.info("[Catalog] v2 prázdný → fallback na starý strom");
+            }
+          }
+        } catch (e) {
+          console.warn("[Catalog] v2 flag/load chyba, fallback:", e);
+        }
+        if (!res) {
+          res = await fetchAllPartsForEngine({ brand, model, engine, nextisVehicleId: vehicleId });
+        }
         if (cancelled) return;
         setGroups(res.groups);
         const autoExpanded = new Set<string>();
@@ -171,13 +196,12 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
         setDebugInfo(res.debug || null);
         if (res.warning) setWarning(res.warning);
         if (res.groups.length === 0) setWarning(res.warning || "Pro toto vozidlo se nepodařilo načíst žádné díly.");
-      })
-      .catch((e) => {
+      } catch (e: any) {
         if (!cancelled) { toast.error("Chyba načítání: " + e.message); setGroups([]); }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) { setLoading(false); setPartsLoading(false); }
-      });
+      }
+    })();
     return () => { cancelled = true; };
   }, [brand, model, engine, vehicles]);
 
