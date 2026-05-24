@@ -21,6 +21,7 @@ import {
   type CatalogPart, type NextisVehicle,
 } from "@/api/catalogV2API";
 import { fetchAllPartsForEngine, type CategoryGroup } from "@/services/catalogService";
+import { fetchAllPartsForEngineV2 } from "@/services/catalogServiceV2";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
