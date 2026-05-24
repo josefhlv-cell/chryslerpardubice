@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
 
   let body: { batchSize?: number; mode?: "auto" | "force"; oems?: string[] } = {};
   try { body = await req.json(); } catch { /* GET ok */ }
-  const batchSize = Math.min(Math.max(body.batchSize ?? 200, 1), 500);
+  const batchSize = Math.min(Math.max(body.batchSize ?? 40, 1), 200);
   const mode = body.mode ?? "auto";
 
   // Select OEMs to process
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
       .from("kitoem_parts")
       .select("oem_number")
       .order("oem_number", { ascending: true })
-      .limit(batchSize * 6); // overshoot, dedupe in JS
+      .limit(batchSize * 6);
     if (mode === "auto") q = q.is("price_checked_at", null);
     const { data, error } = await q;
     if (error) return json({ error: error.message }, 500);
@@ -215,7 +215,6 @@ Deno.serve(async (req) => {
   }
 
   if (oems.length === 0) {
-    // Count remaining
     const { count } = await supabase
       .from("kitoem_parts")
       .select("oem_number", { count: "exact", head: true })
@@ -227,51 +226,49 @@ Deno.serve(async (req) => {
   if (!cookie) return json({ error: "catalog login failed" }, 502);
 
   const t0 = Date.now();
-  const results = await runPool(oems, (oem) => lookupPrice(oem, cookie));
-
   let found = 0, notFound = 0, errors = 0;
-  const nowIso = new Date().toISOString();
 
-  // Batch updates: group by status (Supabase doesn't support bulk UPDATE w/ varying values easily,
-  // so we update one OEM at a time — still fast vs scraping cost).
-  for (let i = 0; i < oems.length; i++) {
-    const oem = oems[i];
-    const r = results[i] as any;
-    if (r?.error) { errors++; continue; }
-    if (r.found) {
-      found++;
-      await supabase
-        .from("kitoem_parts")
-        .update({
-          price_with_vat: r.withVat,
-          price_without_vat: r.withoutVat,
-          price_found: true,
-          price_checked_at: nowIso,
-          price_variant_used: r.variant,
-        })
-        .eq("oem_number", oem);
-    } else {
-      notFound++;
-      await supabase
-        .from("kitoem_parts")
-        .update({
-          price_with_vat: 0,
-          price_without_vat: 0,
-          price_found: false,
-          price_checked_at: nowIso,
-          price_variant_used: null,
-        })
-        .eq("oem_number", oem);
+  // Incremental write inside pool — survives CPU-time cutoff
+  let idx = 0;
+  const worker = async () => {
+    while (idx < oems.length) {
+      const i = idx++;
+      const oem = oems[i];
+      await new Promise((r) => setTimeout(r, MIN_DELAY + Math.random() * 150));
+      try {
+        const r = await lookupPrice(oem, cookie);
+        const nowIso = new Date().toISOString();
+        if (r.found) {
+          found++;
+          await supabase.from("kitoem_parts").update({
+            price_with_vat: r.withVat,
+            price_without_vat: r.withoutVat,
+            price_found: true,
+            price_checked_at: nowIso,
+            price_variant_used: r.variant,
+          }).eq("oem_number", oem);
+        } else {
+          notFound++;
+          await supabase.from("kitoem_parts").update({
+            price_with_vat: 0,
+            price_without_vat: 0,
+            price_found: false,
+            price_checked_at: nowIso,
+            price_variant_used: null,
+          }).eq("oem_number", oem);
+        }
+      } catch {
+        errors++;
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, oems.length) }, worker));
 
-  // Get remaining count
   const { count: remaining } = await supabase
     .from("kitoem_parts")
     .select("oem_number", { count: "exact", head: true })
     .is("price_checked_at", null);
 
-  // Distinct remaining (approx — true distinct done by next call's selector)
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   return json({
     success: true,
@@ -283,3 +280,4 @@ Deno.serve(async (req) => {
     rowsRemainingUnchecked: remaining ?? 0,
   });
 });
+
