@@ -2186,6 +2186,12 @@ export type Database = {
           oe_brand: string | null
           oem_number: string
           position: string | null
+          price_attempts: number
+          price_checked_at: string | null
+          price_found: boolean | null
+          price_variant_used: string | null
+          price_with_vat: number | null
+          price_without_vat: number | null
           technical_params: Json | null
           updated_at: string
           year_from: number | null
@@ -2207,6 +2213,12 @@ export type Database = {
           oe_brand?: string | null
           oem_number: string
           position?: string | null
+          price_attempts?: number
+          price_checked_at?: string | null
+          price_found?: boolean | null
+          price_variant_used?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
           technical_params?: Json | null
           updated_at?: string
           year_from?: number | null
@@ -2228,6 +2240,12 @@ export type Database = {
           oe_brand?: string | null
           oem_number?: string
           position?: string | null
+          price_attempts?: number
+          price_checked_at?: string | null
+          price_found?: boolean | null
+          price_variant_used?: string | null
+          price_with_vat?: number | null
+          price_without_vat?: number | null
           technical_params?: Json | null
           updated_at?: string
           year_from?: number | null
