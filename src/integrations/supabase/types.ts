@@ -4659,14 +4659,6 @@ export type Database = {
         Returns: undefined
       }
       oem_priority_rank: { Args: { _source: string }; Returns: number }
-      populate_kitoem_from_jm: {
-        Args: never
-        Returns: {
-          categories_covered: number
-          jm_scanned: number
-          oem_inserted: number
-        }[]
-      }
       release_stuck_price_sync_runs: { Args: never; Returns: number }
     }
     Enums: {
