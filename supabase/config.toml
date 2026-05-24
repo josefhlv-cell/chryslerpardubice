@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.nextis-ktype-lookup]
 verify_jwt = false
+
+[functions.jm-tree-v2-build]
+verify_jwt = false
