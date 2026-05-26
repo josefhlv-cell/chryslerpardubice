@@ -34,7 +34,26 @@ function detailKey(code: string, manufacturer?: string | null) {
   return `${manufacturer || ""}|${code}`.toUpperCase().replace(/[\s\-._/]/g, "");
 }
 
-function fetchPartDetail(code: string, manufacturer?: string | null, timeoutMs = 3000): Promise<DetailPatch | "unavailable"> {
+async function kitoemFallback(code: string): Promise<DetailPatch | null> {
+  try {
+    const { data } = await (supabase as any)
+      .from("kitoem_parts")
+      .select("name, description, image_urls, technical_params, price_with_vat, price_without_vat")
+      .eq("oem_number", code)
+      .limit(1)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      image_urls: Array.isArray(data.image_urls) && data.image_urls.length ? data.image_urls : undefined,
+      technical_parameters: data.technical_params && typeof data.technical_params === "object" ? data.technical_params : undefined,
+      description: data.description || undefined,
+      price_with_vat: typeof data.price_with_vat === "number" ? data.price_with_vat : undefined,
+      price_without_vat: typeof data.price_without_vat === "number" ? data.price_without_vat : undefined,
+    };
+  } catch { return null; }
+}
+
+function fetchPartDetail(code: string, manufacturer?: string | null, timeoutMs = 10000): Promise<DetailPatch | "unavailable"> {
   if (!code) return Promise.resolve("unavailable");
   const key = detailKey(code, manufacturer);
   const cached = detailCache.get(key);
@@ -50,12 +69,15 @@ function fetchPartDetail(code: string, manufacturer?: string | null, timeoutMs =
       });
       const res = await Promise.race([call, timeout]);
       if (res === "timeout") {
-        // Do not cache timeouts — give user a chance to retry on next open.
+        const fb = await kitoemFallback(code);
+        if (fb) { detailCache.set(key, fb); return fb; }
         return "unavailable";
       }
       const { data } = res as any;
       const item = data?.data?.item || data?.item;
       if (!item) {
+        const fb = await kitoemFallback(code);
+        if (fb) { detailCache.set(key, fb); return fb; }
         detailCache.set(key, "unavailable");
         return "unavailable";
       }
@@ -71,9 +93,19 @@ function fetchPartDetail(code: string, manufacturer?: string | null, timeoutMs =
         price_without_vat: typeof item.price_without_vat === "number" ? item.price_without_vat : undefined,
         availability: item.availability || undefined,
       };
+      if (!patch.image_urls || !patch.description || !patch.technical_parameters) {
+        const fb = await kitoemFallback(code);
+        if (fb) {
+          if (!patch.image_urls && fb.image_urls) patch.image_urls = fb.image_urls;
+          if (!patch.description && fb.description) patch.description = fb.description;
+          if (!patch.technical_parameters && fb.technical_parameters) patch.technical_parameters = fb.technical_parameters;
+        }
+      }
       detailCache.set(key, patch);
       return patch;
     } catch {
+      const fb = await kitoemFallback(code);
+      if (fb) { detailCache.set(key, fb); return fb; }
       return "unavailable";
     } finally {
       inflight.delete(key);
@@ -238,7 +270,7 @@ const PartDetailModal = ({
         {state === "unavailable" && (
           <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded p-2">
             <AlertTriangle className="w-4 h-4" />
-            Detail dočasně nedostupný. Zkuste to prosím za chvíli.
+            Zobrazujeme základní data. Detailní informace dohledáme do několika minut.
           </div>
         )}
 
