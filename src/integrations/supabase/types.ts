@@ -1646,6 +1646,51 @@ export type Database = {
         }
         Relationships: []
       }
+      jm_graphical_catalog: {
+        Row: {
+          brand: string
+          engine: string | null
+          id: string
+          image_base64: string | null
+          image_url: string | null
+          k_type: string | null
+          model: string
+          part_positions: Json | null
+          scraped_at: string
+          section_id: string
+          section_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          engine?: string | null
+          id?: string
+          image_base64?: string | null
+          image_url?: string | null
+          k_type?: string | null
+          model: string
+          part_positions?: Json | null
+          scraped_at?: string
+          section_id: string
+          section_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          engine?: string | null
+          id?: string
+          image_base64?: string | null
+          image_url?: string | null
+          k_type?: string | null
+          model?: string
+          part_positions?: Json | null
+          scraped_at?: string
+          section_id?: string
+          section_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       jm_orders: {
         Row: {
           attempts: number
