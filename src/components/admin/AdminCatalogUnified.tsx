@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import AdminCatalogHub from "./AdminCatalogHub";
+import AdminCatalogToolRegistry from "./AdminCatalogToolRegistry";
 import AICatalogImport from "./AICatalogImport";
 import CatalogImport from "./CatalogImport";
 import EPCImport from "./EPCImport";
@@ -70,7 +71,8 @@ const AdminCatalogUnified = () => {
           ))}
         </TabsList>
 
-        <TabsContent value="overview" className="mt-3">
+        <TabsContent value="overview" className="mt-3 space-y-4">
+          <AdminCatalogToolRegistry />
           <AdminCatalogHub />
         </TabsContent>
 
