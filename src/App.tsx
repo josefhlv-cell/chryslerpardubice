@@ -119,6 +119,8 @@ const App = () => (
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/admin/compatibility" element={<AdminCompatibility />} />
+                    <Route path="/admin/users" element={<AdminUser360 />} />
+                    <Route path="/admin/users/:userId" element={<AdminUser360 />} />
                     <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
                     <Route path="/index" element={<Navigate to="/" replace />} />
                     <Route path="*" element={<NotFound />} />
