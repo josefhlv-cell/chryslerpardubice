@@ -124,6 +124,33 @@ Poznámka zákazníka: ${record.customer_note || "—"}
     }));
     await supabase.from("notifications").insert(notifRows);
 
+    // === E-mailové upozornění na chrysler@obchod.cz ===
+    // Pokud je nastaven RESEND_API_KEY, pošleme e-mail. Jinak jen zalogujeme.
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    const RECIPIENT = "chrysler@obchod.cz";
+    if (RESEND_API_KEY) {
+      try {
+        const r = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: "Chrysler Pardubice <onboarding@resend.dev>",
+            to: [RECIPIENT, ...adminEmails],
+            subject,
+            text: body,
+          }),
+        });
+        if (!r.ok) console.error("Resend send failed:", await r.text());
+      } catch (e) {
+        console.error("Resend exception:", e);
+      }
+    } else {
+      console.log(`[notify-admin] RESEND_API_KEY není nastaven — e-mail na ${RECIPIENT} přeskočen.`);
+    }
+
     console.log(`Notification sent to ${adminIds.length} admin(s): ${subject}`);
 
     return new Response(
