@@ -28,10 +28,33 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const JM_LOGIN = Deno.env.get("JM_LOGIN")!;
 const JM_PASS = Deno.env.get("JM_PASS")!;
+const JM_ESHOP_COOKIE = Deno.env.get("JM_ESHOP_COOKIE") || "";
+const FIRECRAWL_KEY = Deno.env.get("FIRECRAWL_API_KEY") || "";
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
 });
+
+// Firecrawl fallback — used when Supabase Edge egress is blocked by J+M (TCP reset).
+async function firecrawlFetch(targetUrl: string, cookie: string): Promise<{ status: number; html: string } | null> {
+  if (!FIRECRAWL_KEY) return null;
+  try {
+    const r = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${FIRECRAWL_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: targetUrl,
+        formats: ["html"],
+        headers: cookie ? { Cookie: cookie } : undefined,
+        waitFor: 1000,
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j?.success) return null;
+    return { status: j?.data?.metadata?.statusCode ?? 200, html: j?.data?.html ?? "" };
+  } catch { return null; }
+}
 
 // --------------- cookie / login ---------------
 
@@ -146,14 +169,24 @@ async function getCookie(force = false): Promise<CachedCookie> {
       if (age < (data.ttl_seconds ?? COOKIE_TTL_S) && p.cookie) return p;
     }
   }
-  const fresh = await loginFresh();
-  await admin.from("api_cache").upsert({
-    cache_key: COOKIE_CACHE_KEY,
-    payload: fresh,
-    ttl_seconds: COOKIE_TTL_S,
-    created_at: new Date().toISOString(),
-  }, { onConflict: "cache_key" });
-  return fresh;
+  // Try a direct login first; if upstream is blocked, fall back to the
+  // pre-configured JM_ESHOP_COOKIE secret so the scraper can still work
+  // via Firecrawl.
+  try {
+    const fresh = await loginFresh();
+    await admin.from("api_cache").upsert({
+      cache_key: COOKIE_CACHE_KEY,
+      payload: fresh,
+      ttl_seconds: COOKIE_TTL_S,
+      created_at: new Date().toISOString(),
+    }, { onConflict: "cache_key" });
+    return fresh;
+  } catch (e) {
+    if (JM_ESHOP_COOKIE) {
+      return { cookie: JM_ESHOP_COOKIE, customer_id: "preset", fetched_at: Date.now() };
+    }
+    throw e;
+  }
 }
 
 async function fetchLoggedIn(path: string, retry = true): Promise<{ status: number; html: string }> {
@@ -180,8 +213,12 @@ async function fetchLoggedIn(path: string, retry = true): Promise<{ status: numb
   }
   if (!r) {
     const msg = String((lastErr as Error)?.message ?? lastErr);
-    // TCP reset / connection refused = upstream blokuje egress IP Supabase Edge runtime
     const blocked = /reset by peer|ECONNRESET|Connection refused|client error \(Connect\)/i.test(msg);
+    if (blocked) {
+      // Egress blocked — fallback to Firecrawl with our session cookie.
+      const fc = await firecrawlFetch(BASE + path, c.cookie);
+      if (fc) return fc;
+    }
     const err = new Error(blocked ? "UPSTREAM_BLOCKED" : `upstream fetch failed: ${msg}`);
     (err as Error & { code?: string }).code = blocked ? "UPSTREAM_BLOCKED" : "UPSTREAM_ERROR";
     throw err;
