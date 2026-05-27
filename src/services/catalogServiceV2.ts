@@ -9,6 +9,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
 import type { CategoryGroup } from "./catalogService";
+import { mapSectionToPath } from "./jmCategoryTaxonomy";
+
+const stripDia = (s: string) =>
+  String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 type TreeRow = {
   id: string;
