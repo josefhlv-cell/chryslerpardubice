@@ -48,6 +48,7 @@ const MechanicDashboard = lazy(() => import("./pages/MechanicDashboard"));
 const OBDDiagnostics = lazy(() => import("./pages/OBDDiagnostics"));
 const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
+const AdminUser360 = lazy(() => import("./pages/AdminUser360"));
 const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
 import ProfileGate from "@/components/ProfileGate";
 
@@ -118,6 +119,8 @@ const App = () => (
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/admin/compatibility" element={<AdminCompatibility />} />
+                    <Route path="/admin/users" element={<AdminUser360 />} />
+                    <Route path="/admin/users/:userId" element={<AdminUser360 />} />
                     <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
                     <Route path="/index" element={<Navigate to="/" replace />} />
                     <Route path="*" element={<NotFound />} />
