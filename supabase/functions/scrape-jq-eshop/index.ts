@@ -28,10 +28,33 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const JM_LOGIN = Deno.env.get("JM_LOGIN")!;
 const JM_PASS = Deno.env.get("JM_PASS")!;
+const JM_ESHOP_COOKIE = Deno.env.get("JM_ESHOP_COOKIE") || "";
+const FIRECRAWL_KEY = Deno.env.get("FIRECRAWL_API_KEY") || "";
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE, {
   auth: { persistSession: false },
 });
+
+// Firecrawl fallback — used when Supabase Edge egress is blocked by J+M (TCP reset).
+async function firecrawlFetch(targetUrl: string, cookie: string): Promise<{ status: number; html: string } | null> {
+  if (!FIRECRAWL_KEY) return null;
+  try {
+    const r = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${FIRECRAWL_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: targetUrl,
+        formats: ["html"],
+        headers: cookie ? { Cookie: cookie } : undefined,
+        waitFor: 1000,
+      }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j?.success) return null;
+    return { status: j?.data?.metadata?.statusCode ?? 200, html: j?.data?.html ?? "" };
+  } catch { return null; }
+}
 
 // --------------- cookie / login ---------------
 
