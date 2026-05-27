@@ -48,6 +48,7 @@ const MechanicDashboard = lazy(() => import("./pages/MechanicDashboard"));
 const OBDDiagnostics = lazy(() => import("./pages/OBDDiagnostics"));
 const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
+const AdminUser360 = lazy(() => import("./pages/AdminUser360"));
 const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
 import ProfileGate from "@/components/ProfileGate";
 
