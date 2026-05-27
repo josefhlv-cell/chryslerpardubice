@@ -9,6 +9,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogPart } from "@/api/catalogV2API";
 import type { CategoryGroup } from "./catalogService";
+import { mapSectionToPath } from "./jmCategoryTaxonomy";
+
+const stripDia = (s: string) =>
+  String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 type TreeRow = {
   id: string;
@@ -168,29 +172,115 @@ export async function fetchAllPartsForEngineV2(opts: {
   }
 
   let kitoemInjected = 0;
-  const groups: CategoryGroup[] = rows.map((r) => {
+
+  // 1) Sloučení duplicit: stejný český gen_art_name (různé TecDoc IDs) → jedna kategorie.
+  const leafByName = new Map<string, { label: string; parts: CatalogPart[]; oemSet: Set<string> }>();
+  for (const r of rows) {
     const jmItems = (byNode.get(r.id) || []).map(jmRowToCatalog);
-    const matchingKitoem = kitoemByCat.get(norm(r.gen_art_name)) || [];
-    // Deduplicate: pokud KITOEM OEM už je mezi J+M položkami, J+M položku
-    // skryjeme — KITOEM (ORIGINÁL) má přednost.
-    const kitoemOems = new Set(matchingKitoem.map((k) => k.oem_number.toUpperCase()));
-    const filteredJm = jmItems.filter((j) => !kitoemOems.has(j.oem_number.toUpperCase()));
-    const originals = matchingKitoem.map(kitoemRowToCatalog);
+    const key = stripDia(r.gen_art_name);
+    const bucket = leafByName.get(key) || { label: r.gen_art_name, parts: [], oemSet: new Set<string>() };
+    for (const p of jmItems) {
+      const oemKey = p.oem_number.toUpperCase();
+      if (!bucket.oemSet.has(oemKey)) {
+        bucket.oemSet.add(oemKey);
+        bucket.parts.push(p);
+      }
+    }
+    leafByName.set(key, bucket);
+  }
+
+  // 2) Injekce KITOEM ORIGINÁL na začátek odpovídající kategorie.
+  for (const [key, bucket] of leafByName) {
+    const matching = kitoemByCat.get(key) || [];
+    if (matching.length === 0) continue;
+    const kitoemOems = new Set(matching.map((k) => k.oem_number.toUpperCase()));
+    bucket.parts = bucket.parts.filter((j) => !kitoemOems.has(j.oem_number.toUpperCase()));
+    const originals = matching.map(kitoemRowToCatalog);
     kitoemInjected += originals.length;
-    const items = [...originals, ...filteredJm];
-    return {
-      id: `jmv2:${r.gen_art_id}`,
-      label: r.gen_art_name,
-      count: items.length,
-      parts: items,
+    bucket.parts = [...originals, ...bucket.parts];
+  }
+
+  // 3) Sestavení hierarchie root → sub → leaf přes mapSectionToPath.
+  type LeafGroup = CategoryGroup;
+  const subBuckets = new Map<string, { rootId: string; rootLabel: string; rootSort: number; subId: string; subLabel: string; subSort: number; leaves: LeafGroup[] }>();
+
+  for (const [key, bucket] of leafByName) {
+    if (bucket.parts.length === 0) continue;
+    const path = mapSectionToPath(bucket.label);
+    const root = path[0];
+    const sub = path[1] || path[0];
+    const subKey = `${root.id}::${sub.id}`;
+    const slot = subBuckets.get(subKey) || {
+      rootId: root.id, rootLabel: root.label, rootSort: root.sort,
+      subId: sub.id, subLabel: sub.label, subSort: sub.sort,
+      leaves: [],
     };
-  }).filter((g) => g.count > 0)
-    .sort((a, b) => a.label.localeCompare(b.label, "cs"));
+    slot.leaves.push({
+      id: `jmv2:leaf:${key}`,
+      label: bucket.label,
+      count: bucket.parts.length,
+      parts: bucket.parts,
+    });
+    subBuckets.set(subKey, slot);
+  }
+
+  // 4) Seskup sub-kategorie pod root.
+  const rootMap = new Map<string, { id: string; label: string; sort: number; subs: Map<string, { id: string; label: string; sort: number; leaves: LeafGroup[] }> }>();
+  for (const slot of subBuckets.values()) {
+    const r = rootMap.get(slot.rootId) || { id: slot.rootId, label: slot.rootLabel, sort: slot.rootSort, subs: new Map() };
+    const s = r.subs.get(slot.subId) || { id: slot.subId, label: slot.subLabel, sort: slot.subSort, leaves: [] };
+    s.leaves.push(...slot.leaves);
+    r.subs.set(slot.subId, s);
+    rootMap.set(slot.rootId, r);
+  }
+
+  const groups: CategoryGroup[] = [...rootMap.values()]
+    .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label, "cs"))
+    .map((root) => {
+      const subs = [...root.subs.values()]
+        .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label, "cs"))
+        .map((sub) => {
+          const leaves = sub.leaves.sort((a, b) => a.label.localeCompare(b.label, "cs"));
+          const subCount = leaves.reduce((s, l) => s + l.count, 0);
+          // Pokud sub má jen jeden leaf se stejným názvem → zjednodušit (leaf = sub).
+          if (leaves.length === 1 && stripDia(leaves[0].label) === stripDia(sub.label)) {
+            return leaves[0];
+          }
+          return {
+            id: `jmv2:sub:${root.id}:${sub.id}`,
+            label: sub.label,
+            count: subCount,
+            parts: [],
+            children: leaves,
+          } as CategoryGroup;
+        });
+      const rootCount = subs.reduce((s, c) => s + c.count, 0);
+      // Pokud root má jen jednu sub se stejným názvem → zjednodušit.
+      if (subs.length === 1 && stripDia(subs[0].label) === stripDia(root.label)) {
+        return { ...subs[0], id: `jmv2:root:${root.id}`, label: root.label };
+      }
+      return {
+        id: `jmv2:root:${root.id}`,
+        label: root.label,
+        count: rootCount,
+        parts: [],
+        children: subs,
+      } as CategoryGroup;
+    })
+    .filter((g) => g.count > 0);
 
   const totalParts = groups.reduce((s, g) => s + g.count, 0);
   return {
     groups,
     totalParts,
-    debug: { source: "jm_tree_v2+kitoem", nodes: rows.length, k_type: rows[0]?.k_type ?? null, kitoemInjected },
+    debug: {
+      source: "jm_tree_v2+kitoem+hierarchy",
+      nodes: rows.length,
+      mergedLeaves: leafByName.size,
+      rootCategories: groups.length,
+      k_type: rows[0]?.k_type ?? null,
+      kitoemInjected,
+    },
   };
 }
+
