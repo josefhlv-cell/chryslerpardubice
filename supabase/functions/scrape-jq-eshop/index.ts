@@ -203,8 +203,12 @@ async function fetchLoggedIn(path: string, retry = true): Promise<{ status: numb
   }
   if (!r) {
     const msg = String((lastErr as Error)?.message ?? lastErr);
-    // TCP reset / connection refused = upstream blokuje egress IP Supabase Edge runtime
     const blocked = /reset by peer|ECONNRESET|Connection refused|client error \(Connect\)/i.test(msg);
+    if (blocked) {
+      // Egress blocked — fallback to Firecrawl with our session cookie.
+      const fc = await firecrawlFetch(BASE + path, c.cookie);
+      if (fc) return fc;
+    }
     const err = new Error(blocked ? "UPSTREAM_BLOCKED" : `upstream fetch failed: ${msg}`);
     (err as Error & { code?: string }).code = blocked ? "UPSTREAM_BLOCKED" : "UPSTREAM_ERROR";
     throw err;
