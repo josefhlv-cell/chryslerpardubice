@@ -66,15 +66,11 @@ Deno.serve(async (req) => {
   const errors: string[] = [];
   for (let offset = 0; offset < parts.length; offset += batchSize) {
     const slice = parts.slice(offset, offset + batchSize);
-    const variantToIds = new Map<string, string[]>();
     const allVariants = new Set<string>();
 
     for (const p of slice) {
       for (const v of variants(p.oem_number)) {
         allVariants.add(v);
-        const ids = variantToIds.get(v) || [];
-        ids.push(p.id);
-        variantToIds.set(v, ids);
       }
     }
 
@@ -86,12 +82,12 @@ Deno.serve(async (req) => {
       const { data, error: e } = await sb
         .from("part_crossref")
         .select("oem_number, part_number")
-        .or(`oem_number.in.(${inList}),normalized_oem.in.(${inList})`);
+        .in("oem_number", chunk);
       if (e) { errors.push(`part_crossref fetch: ${e.message}`); continue; }
       for (const r of data || []) {
         const pn = String(r.part_number || "").trim();
         if (!pn) continue;
-        for (const key of [norm(r.oem_number || ""), norm((r as any).normalized_oem || "")]) {
+        for (const key of [norm(r.oem_number || "")]) {
           if (!key) continue;
           const arr = crossMap.get(key) || [];
           arr.push(pn);
@@ -182,19 +178,21 @@ Deno.serve(async (req) => {
     if (patch.description) withDesc++;
     if (patch.technical_params) withTech++;
   }
+  }
 
   await sb.from("catalog_event_log").insert({
     source: "kitoem-enrich-from-crossref",
     event: "batch_done",
     level: "info",
     message: `crossref enrich ${updated}/${scanned} (xref=${withCrossref} img=${withImage} desc=${withDesc} tech=${withTech})`,
-    details: { scanned, withCrossref, updated, withImage, withDesc, withTech, errors: errors.slice(0, 10) },
+    details: { scanned, withCrossref, updated, withImage, withDesc, withTech, noMatch, errors: errors.slice(0, 10) },
   });
 
   return new Response(
     JSON.stringify({
       success: true, scanned, candidates: scanned, withCrossref,
-      updated, withImage, withDesc, withTech, errors: errors.slice(0, 10),
+      updated, img: withImage, desc: withDesc, tech: withTech, noMatch,
+      withImage, withDesc, withTech, errors: errors.slice(0, 10),
     }),
     { headers: { ...corsHeaders, "Content-Type": "application/json" } },
   );
