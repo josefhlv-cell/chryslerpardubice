@@ -2,8 +2,8 @@
 // No AI, no external HTTP. Pure DB lookup that copies image_urls / description
 // (and uses parts_new.category as fallback "technical_params").
 //
-// POST /kitoem-enrich-from-crossref?limit=2000
-// Returns { scanned, candidates, withCrossref, updated, withImage, withDesc, withTech, errors }
+// POST /kitoem-enrich-from-crossref?limit=100&batchSize=20
+// Returns { scanned, candidates, updated, img, desc, tech, noMatch, errors }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
   const url = new URL(req.url);
-  const limit = Math.min(parseInt(url.searchParams.get("limit") || "2000"), 5000);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "100"), 500);
+  const batchSize = Math.min(Math.max(parseInt(url.searchParams.get("batchSize") || "20"), 1), 50);
 
   // 1) Pull batch of kitoem rows missing any of image/desc/tech
   const { data: parts, error } = await sb
@@ -59,82 +60,90 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  // 2) Load ALL crossref rows once into a Map<normOem, partNumbers[]>
-  const crossMap = new Map<string, string[]>();
-  {
-    let from = 0;
-    const page = 1000;
-    while (true) {
+  // 2) Process in real small batches. Do NOT load the entire part_crossref table;
+  // it can contain tens of thousands of rows and previously saturated the DB pool.
+  let updated = 0, withCrossref = 0, withImage = 0, withDesc = 0, withTech = 0, noMatch = 0;
+  const errors: string[] = [];
+  for (let offset = 0; offset < parts.length; offset += batchSize) {
+    const slice = parts.slice(offset, offset + batchSize);
+    const variantToIds = new Map<string, string[]>();
+    const allVariants = new Set<string>();
+
+    for (const p of slice) {
+      for (const v of variants(p.oem_number)) {
+        allVariants.add(v);
+        const ids = variantToIds.get(v) || [];
+        ids.push(p.id);
+        variantToIds.set(v, ids);
+      }
+    }
+
+    const crossMap = new Map<string, string[]>();
+    const vList = [...allVariants];
+    for (let i = 0; i < vList.length; i += 100) {
+      const chunk = vList.slice(i, i + 100);
+      const inList = chunk.map((c) => `"${c.replace(/"/g, "")}"`).join(",");
       const { data, error: e } = await sb
         .from("part_crossref")
         .select("oem_number, part_number")
-        .range(from, from + page - 1);
-      if (e || !data || data.length === 0) break;
-      for (const r of data) {
-        const k = norm(r.oem_number || "");
+        .or(`oem_number.in.(${inList}),normalized_oem.in.(${inList})`);
+      if (e) { errors.push(`part_crossref fetch: ${e.message}`); continue; }
+      for (const r of data || []) {
         const pn = String(r.part_number || "").trim();
-        if (!k || !pn) continue;
-        const arr = crossMap.get(k) || [];
-        arr.push(pn);
-        crossMap.set(k, arr);
+        if (!pn) continue;
+        for (const key of [norm(r.oem_number || ""), norm((r as any).normalized_oem || "")]) {
+          if (!key) continue;
+          const arr = crossMap.get(key) || [];
+          arr.push(pn);
+          crossMap.set(key, arr);
+        }
       }
-      if (data.length < page) break;
-      from += page;
     }
-  }
 
-  // 3) For each kitoem row, look up crossref by any variant, then fetch parts_new by those part_numbers
-  let updated = 0, withCrossref = 0, withImage = 0, withDesc = 0, withTech = 0;
-  const errors: string[] = [];
-
-  // Batch unique part_numbers we need to fetch from parts_new
-  const allNeeded = new Set<string>();
-  const perRowPNs: Record<string, string[]> = {};
-  for (const p of parts) {
-    const pns: string[] = [];
-    for (const v of variants(p.oem_number)) {
-      const arr = crossMap.get(v);
-      if (arr) pns.push(...arr);
+    const allNeeded = new Set<string>();
+    const perRowPNs: Record<string, string[]> = {};
+    for (const p of slice) {
+      const pns: string[] = [];
+      for (const v of variants(p.oem_number)) {
+        const arr = crossMap.get(v);
+        if (arr) pns.push(...arr);
+      }
+      const uniq = [...new Set(pns.map((x) => x.trim()).filter(Boolean))];
+      if (uniq.length) {
+        perRowPNs[p.id] = uniq;
+        withCrossref++;
+        for (const x of uniq) allNeeded.add(norm(x));
+      } else {
+        noMatch++;
+      }
     }
-    const uniq = [...new Set(pns.map((x) => x.trim()).filter(Boolean))];
-    if (uniq.length) {
-      perRowPNs[p.id] = uniq;
-      withCrossref++;
-      for (const x of uniq) allNeeded.add(norm(x));
-    }
-  }
 
-  // 4) Fetch parts_new rows where normalize_oem(oem_number) in allNeeded — chunked
-  const pnInfo = new Map<string, { image_urls: string[] | null; description: string | null; category: string | null; name: string | null }>();
-  const needed = [...allNeeded];
-  for (let i = 0; i < needed.length; i += 200) {
-    const chunk = needed.slice(i, i + 200);
-    // Build OR filter on raw oem_number variants (normalized client-side after fetch)
-    // Use IN-style: oem_number.in.(...). Supabase requires comma-separated quoted list.
-    const inList = chunk.map((c) => `"${c}"`).join(",");
-    // Try direct match on oem_number first
-    const { data, error: e } = await sb
-      .from("parts_new")
-      .select("oem_number, image_urls, description, category, name")
-      .or(`oem_number.in.(${inList}),internal_code.in.(${inList})`);
-    if (e) { errors.push(`parts_new fetch: ${e.message}`); continue; }
-    for (const r of data || []) {
-      const k = norm(r.oem_number || "");
-      const ik = norm((r as any).internal_code || "");
-      const has = (s: string) => s && !pnInfo.has(s);
-      const info = {
-        image_urls: Array.isArray(r.image_urls) && r.image_urls.length ? r.image_urls : null,
-        description: r.description || null,
-        category: r.category || null,
-        name: r.name || null,
-      };
-      if (has(k)) pnInfo.set(k, info);
-      if (has(ik)) pnInfo.set(ik, info);
+    const pnInfo = new Map<string, { image_urls: string[] | null; description: string | null; category: string | null; name: string | null }>();
+    const needed = [...allNeeded];
+    for (let i = 0; i < needed.length; i += 100) {
+      const chunk = needed.slice(i, i + 100);
+      const inList = chunk.map((c) => `"${c.replace(/"/g, "")}"`).join(",");
+      const { data, error: e } = await sb
+        .from("parts_new")
+        .select("oem_number, internal_code, image_urls, description, category, name")
+        .or(`oem_number.in.(${inList}),internal_code.in.(${inList})`);
+      if (e) { errors.push(`parts_new fetch: ${e.message}`); continue; }
+      for (const r of data || []) {
+        const k = norm(r.oem_number || "");
+        const ik = norm((r as any).internal_code || "");
+        const has = (s: string) => s && !pnInfo.has(s);
+        const info = {
+          image_urls: Array.isArray(r.image_urls) && r.image_urls.length ? r.image_urls : null,
+          description: r.description || null,
+          category: r.category || null,
+          name: r.name || null,
+        };
+        if (has(k)) pnInfo.set(k, info);
+        if (has(ik)) pnInfo.set(ik, info);
+      }
     }
-  }
 
-  // 5) Apply updates row by row
-  for (const p of parts) {
+  for (const p of slice) {
     const pns = perRowPNs[p.id];
     if (!pns) continue;
     const hasImg = Array.isArray(p.image_urls) && p.image_urls.length > 0;
