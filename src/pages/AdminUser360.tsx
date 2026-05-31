@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -28,6 +29,7 @@ import { toast } from "sonner";
 import {
   Search, User, Car, ShoppingCart, Wrench, Calendar, AlertTriangle,
   Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil, History, UserPlus,
+  ChevronLeft, ChevronRight, CheckCircle2, Clock, MailPlus,
 } from "lucide-react";
 
 type Profile = {
@@ -60,31 +62,56 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
   const [filter, setFilter] = useState<"all" | "private" | "business" | "pending">("all");
   const [sortBy, setSortBy] = useState<"recent" | "spend" | "orders" | "name">("recent");
 
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Bulk selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNotifyOpen, setBulkNotifyOpen] = useState(false);
+  const [bulkTitle, setBulkTitle] = useState("");
+  const [bulkMsg, setBulkMsg] = useState("");
+
   const loadAll = async () => {
     setListLoading(true);
     try {
-      const { data: profs } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      const list = (profs as Profile[]) || [];
+      // Stránkovaný fetch (Supabase má limit 1000/dotaz) — vezmeme až 5000 nejnovějších.
+      const PAGE = 1000;
+      const MAX_PAGES = 5;
+      let list: Profile[] = [];
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(i * PAGE, i * PAGE + PAGE - 1);
+        if (error) break;
+        const chunk = (data as Profile[]) || [];
+        list = list.concat(chunk);
+        if (chunk.length < PAGE) break;
+      }
       setAll(list);
 
       const ids = list.map((p) => p.user_id);
       if (ids.length) {
-        const { data: ords } = await supabase
-          .from("orders")
-          .select("user_id, price_with_vat, quantity, created_at")
-          .in("user_id", ids);
+        // Také batchovat IN, kdyby seznam byl velký
         const map: Record<string, { orders: number; spend: number; lastOrder?: string }> = {};
-        (ords || []).forEach((o: any) => {
-          const k = o.user_id;
-          if (!map[k]) map[k] = { orders: 0, spend: 0 };
-          map[k].orders += 1;
-          map[k].spend += Number(o.price_with_vat || 0) * Number(o.quantity || 1);
-          if (!map[k].lastOrder || o.created_at > map[k].lastOrder) map[k].lastOrder = o.created_at;
-        });
+        const STEP = 500;
+        for (let i = 0; i < ids.length; i += STEP) {
+          const batch = ids.slice(i, i + STEP);
+          const { data: ords } = await supabase
+            .from("orders")
+            .select("user_id, price_with_vat, quantity, created_at")
+            .in("user_id", batch);
+          (ords || []).forEach((o: any) => {
+            const k = o.user_id;
+            if (!map[k]) map[k] = { orders: 0, spend: 0 };
+            map[k].orders += 1;
+            map[k].spend += Number(o.price_with_vat || 0) * Number(o.quantity || 1);
+            if (!map[k].lastOrder || o.created_at > map[k].lastOrder) map[k].lastOrder = o.created_at;
+          });
+        }
         setStats(map);
       }
     } catch (e: any) {
@@ -147,6 +174,15 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
     return arr;
   }, [all, stats, filter, sortBy]);
 
+  // Reset stránky když se změní filtr / řazení
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [filter, sortBy, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageItems = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page, pageSize],
+  );
+
   const totals = useMemo(() => ({
     total: all.length,
     business: all.filter((p) => p.account_type === "business").length,
@@ -154,12 +190,84 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
     revenue: Object.values(stats).reduce((s, x) => s + (x.spend || 0), 0),
   }), [all, stats]);
 
-  const renderRow = (p: Profile) => {
+  const toggleOne = (uid: string) => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(uid)) n.delete(uid); else n.add(uid);
+      return n;
+    });
+  };
+
+  const allOnPageSelected = pageItems.length > 0 && pageItems.every((p) => selected.has(p.user_id));
+  const togglePage = () => {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (allOnPageSelected) pageItems.forEach((p) => n.delete(p.user_id));
+      else pageItems.forEach((p) => n.add(p.user_id));
+      return n;
+    });
+  };
+
+  const bulkSetStatus = async (status: "active" | "pending") => {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      const { error } = await supabase.from("profiles").update({ status }).in("user_id", ids);
+      if (error) throw error;
+
+      // Notifikace každému zákazníkovi
+      const title = status === "active" ? "✅ Účet schválen" : "⏳ Účet čeká na schválení";
+      const message = status === "active"
+        ? "Váš účet byl schválen. Nyní můžete plně využívat aplikaci a vytvářet objednávky."
+        : "Váš účet byl přepnut do stavu „čeká na schválení“. O dalším postupu vás budeme informovat.";
+      await supabase.from("notifications").insert(
+        ids.map((uid) => ({ user_id: uid, title, message })),
+      );
+
+      toast.success(`Upraveno ${ids.length} účtů (${status === "active" ? "schválené" : "čekající"})`);
+      setSelected(new Set());
+      await loadAll();
+    } catch (e: any) {
+      toast.error("Hromadná akce selhala: " + (e?.message || ""));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkNotify = async () => {
+    if (selected.size === 0 || !bulkTitle.trim()) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      const { error } = await supabase.from("notifications").insert(
+        ids.map((uid) => ({ user_id: uid, title: bulkTitle, message: bulkMsg })),
+      );
+      if (error) throw error;
+      toast.success(`Notifikace odeslána ${ids.length} zákazníkům`);
+      setBulkNotifyOpen(false); setBulkTitle(""); setBulkMsg("");
+      setSelected(new Set());
+    } catch (e: any) {
+      toast.error("Odeslání selhalo: " + (e?.message || ""));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const renderRow = (p: Profile, withCheckbox = false) => {
     const s = stats[p.user_id];
+    const isSel = selected.has(p.user_id);
     return (
-      <Card key={p.id} className="cursor-pointer hover:border-primary/40" onClick={() => onPick(p.user_id)}>
-        <CardContent className="p-3 flex items-center justify-between gap-2">
-          <div className="min-w-0 flex-1">
+      <Card key={p.id} className={`hover:border-primary/40 ${isSel ? "border-primary/60 bg-primary/5" : ""}`}>
+        <CardContent className="p-3 flex items-center gap-3">
+          {withCheckbox && (
+            <Checkbox
+              checked={isSel}
+              onCheckedChange={() => toggleOne(p.user_id)}
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <div className="min-w-0 flex-1 cursor-pointer" onClick={() => onPick(p.user_id)}>
             <p className="text-sm font-semibold truncate">
               {p.full_name || p.company_name || "(bez jména)"}
             </p>
@@ -226,7 +334,7 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
       {results.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-muted-foreground">Výsledky hledání ({results.length})</h3>
-          {results.map(renderRow)}
+          {results.map((p) => renderRow(p, false))}
         </div>
       )}
 
@@ -262,16 +370,105 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
             </div>
           </div>
 
+          {/* Hromadné akce */}
+          <div className="flex flex-wrap items-center gap-2 p-2 rounded-md border border-border/40 bg-card/40">
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <Checkbox checked={allOnPageSelected} onCheckedChange={togglePage} />
+              Označit stránku
+            </label>
+            <Badge variant="outline" className="text-[10px]">
+              Vybráno: {selected.size}
+            </Badge>
+            {selected.size > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} className="text-xs h-7">
+                Zrušit výběr
+              </Button>
+            )}
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Button
+                size="sm" variant="outline" disabled={selected.size === 0 || bulkBusy}
+                onClick={() => bulkSetStatus("active")} className="gap-1"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Schválit
+              </Button>
+              <Button
+                size="sm" variant="outline" disabled={selected.size === 0 || bulkBusy}
+                onClick={() => bulkSetStatus("pending")} className="gap-1"
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-400" /> Označit jako čekající
+              </Button>
+              <Button
+                size="sm" variant="default" disabled={selected.size === 0 || bulkBusy}
+                onClick={() => setBulkNotifyOpen(true)} className="gap-1"
+              >
+                <MailPlus className="w-3.5 h-3.5" /> Poslat notifikaci
+              </Button>
+            </div>
+          </div>
+
           {listLoading ? <Loader /> : (
             <div className="space-y-2">
               {filtered.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">Žádní zákazníci.</p>
               )}
-              {filtered.map(renderRow)}
+              {pageItems.map((p) => renderRow(p, true))}
+            </div>
+          )}
+
+          {/* Stránkování */}
+          {filtered.length > 0 && (
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-border/40">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>Na stránku:</span>
+                {[25, 50, 100, 200].map((n) => (
+                  <Button
+                    key={n} size="sm" variant={pageSize === n ? "default" : "ghost"}
+                    className="h-7 px-2 text-xs" onClick={() => setPageSize(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" className="h-7 px-2"
+                  disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-xs px-2 tabular-nums">
+                  {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} / {filtered.length}
+                  <span className="text-muted-foreground"> · str. {page}/{totalPages}</span>
+                </span>
+                <Button size="sm" variant="outline" className="h-7 px-2"
+                  disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog: hromadná notifikace */}
+      <Dialog open={bulkNotifyOpen} onOpenChange={setBulkNotifyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Hromadná notifikace — {selected.size} zákazníků</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Input placeholder="Titulek" value={bulkTitle} onChange={(e) => setBulkTitle(e.target.value)} />
+            <Textarea placeholder="Text zprávy" rows={4} value={bulkMsg} onChange={(e) => setBulkMsg(e.target.value)} />
+            <p className="text-[11px] text-muted-foreground">
+              Notifikace se zobrazí v aplikaci a (pokud je povoleno) odešle i jako push.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkNotifyOpen(false)}>Zrušit</Button>
+            <Button onClick={bulkNotify} disabled={!bulkTitle.trim() || bulkBusy}>
+              {bulkBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Odeslat"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
