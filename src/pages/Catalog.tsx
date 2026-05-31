@@ -73,6 +73,19 @@ function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean 
   return sub.keywords.some((k) => new RegExp(norm(k)).test(hay));
 }
 
+/** Axle position detection from part name/description/tecdoc section. */
+type AxlePos = "all" | "front" | "rear";
+function partMatchesAxle(part: CatalogPart, pos: AxlePos): boolean {
+  if (pos === "all") return true;
+  const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const hay = `${norm(part.name || "")} ${norm((part as any).description || "")} ${norm((part as any).tecdoc_section || "")}`;
+  if (pos === "front") return /(predn|vpredu|front|vorder|vorne)/.test(hay);
+  if (pos === "rear")  return /(zadn|vzadu|rear|hinter|hinten)/.test(hay);
+  return true;
+}
+const isAxleRelevantCategory = (label?: string | null) =>
+  !!label && /(brzd|tlumi|pruzin|pružin|naprav|lozisk|ložisk|kotouc|kotouč|destic|destič)/i.test(label);
+
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
   const { user, canPlaceOrder, isAdmin } = useAuth();
@@ -97,6 +110,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const [warning, setWarning] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [brakeSubtype, setBrakeSubtype] = useState<string>("all");
+  const [axlePos, setAxlePos] = useState<AxlePos>("all");
 
   // Brands
   useEffect(() => {
@@ -281,9 +295,16 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   }, [groups, categoryQuery]);
 
   const partsItems = selectedGroup
-    ? (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all"
-        ? selectedGroup.parts.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype))
-        : selectedGroup.parts)
+    ? (() => {
+        let arr = selectedGroup.parts;
+        if (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all") {
+          arr = arr.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype));
+        }
+        if (isAxleRelevantCategory(selectedGroup.label) && axlePos !== "all") {
+          arr = arr.filter((p) => partMatchesAxle(p, axlePos));
+        }
+        return arr;
+      })()
     : [];
 
   return (
@@ -488,6 +509,32 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 </div>
               );
             })()}
+
+            {isAxleRelevantCategory(selectedGroup.label) && selectedGroup.parts.length > 0 && (() => {
+              const base = (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all")
+                ? selectedGroup.parts.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype))
+                : selectedGroup.parts;
+              const frontN = base.filter((p) => partMatchesAxle(p, "front")).length;
+              const rearN  = base.filter((p) => partMatchesAxle(p, "rear")).length;
+              if (frontN === 0 && rearN === 0) return null;
+              const chip = (id: AxlePos, label: string, n: number) => (
+                <button key={id} onClick={() => setAxlePos(id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${axlePos === id ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
+                  {label} <span className="opacity-60 ml-1">{n}</span>
+                </button>
+              );
+              return (
+                <div className="mb-4 p-3 rounded-xl border border-border/40 bg-card/40">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pozice na vozidle</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {chip("all", "Vše", base.length)}
+                    {frontN > 0 && chip("front", "Přední", frontN)}
+                    {rearN > 0 && chip("rear", "Zadní", rearN)}
+                  </div>
+                </div>
+              );
+            })()}
+
 
             <CatalogListing
               items={partsItems}
