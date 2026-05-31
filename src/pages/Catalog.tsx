@@ -510,6 +510,32 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               );
             })()}
 
+            {isAxleRelevantCategory(selectedGroup.label) && selectedGroup.parts.length > 0 && (() => {
+              const base = (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all")
+                ? selectedGroup.parts.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype))
+                : selectedGroup.parts;
+              const frontN = base.filter((p) => partMatchesAxle(p, "front")).length;
+              const rearN  = base.filter((p) => partMatchesAxle(p, "rear")).length;
+              if (frontN === 0 && rearN === 0) return null;
+              const chip = (id: AxlePos, label: string, n: number) => (
+                <button key={id} onClick={() => setAxlePos(id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${axlePos === id ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>
+                  {label} <span className="opacity-60 ml-1">{n}</span>
+                </button>
+              );
+              return (
+                <div className="mb-4 p-3 rounded-xl border border-border/40 bg-card/40">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Pozice na vozidle</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {chip("all", "Vše", base.length)}
+                    {frontN > 0 && chip("front", "Přední", frontN)}
+                    {rearN > 0 && chip("rear", "Zadní", rearN)}
+                  </div>
+                </div>
+              );
+            })()}
+
+
             <CatalogListing
               items={partsItems}
               loading={partsLoading && partsItems.length === 0}
