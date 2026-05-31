@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
     for (const r of refreshedOems) {
       addOem(r.oem, r.params);
-      for (const oe of r.oe_numbers) addOem(oe, r.params);
+      for (const oe of r.oe_numbers) addOem(extractOemCode(oe), r.params);
     }
 
     const variants = Array.from(rawVariants);
