@@ -1041,9 +1041,14 @@ async function scrapeEshopProductPageImages(href: string): Promise<string[]> {
 
 async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): Promise<UnifiedPart> {
   const code = item.oem_number || fallbackCode;
+  const wantBrand = normalizeOemCode(item.brand || '');
   const images = new Set<string>((item.image_urls || []).filter(isRealImageUrl));
   let productId = Number(item.jm_internal_id || 0) || 0;
   let detailHref = '';
+  // Brand-match guard: code "116382" exists as Topran MAP sensor AND FEBI brake
+  // pads in J+M eshop. Without this guard we'd merge sensor attributes/OE/photos
+  // onto brake pads (data-integrity bug reported by audit).
+  let brandMatched = !wantBrand;
 
   try {
     const whisper = parseJsonStringMaybe(await jmPublicPostApi('search/get-smart-search-whispers-products', {
@@ -1052,14 +1057,35 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
       showHistory: false,
     }));
     const html = String(whisper?.WhispererHTMLContent || '');
-    for (const m of html.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) {
-      const u = htmlDecode(m[1]);
-      if (isRealImageUrl(u)) images.add(u);
+
+    // Parse each product anchor separately so we can match the right brand
+    // rather than just taking the first hit.
+    const candidates: Array<{ href: string; brandText: string; imgs: string[] }> = [];
+    for (const m of html.matchAll(/<a[^>]*href=["']([^"']*\/hledani\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      const href = htmlDecode(m[1] || '');
+      const inner = m[2] || '';
+      const brandText = cleanHtmlText(inner).slice(0, 200);
+      const imgs: string[] = [];
+      for (const im of inner.matchAll(/data-flex-async-image-src=["']([^"']+)["']/gi)) {
+        const u = htmlDecode(im[1]);
+        if (isRealImageUrl(u)) imgs.push(u);
+      }
+      candidates.push({ href, brandText, imgs });
     }
-    const href = html.match(/href=["']([^"']*\/hledani\/[^"']+)["']/i)?.[1] || '';
-    if (href) detailHref = htmlDecode(href);
-    const idFromHref = Number(href.match(/\/(\d+)(?:[?#]?)$/)?.[1] || 0);
-    if (idFromHref) productId = idFromHref;
+
+    let chosen: { href: string; brandText: string; imgs: string[] } | undefined = candidates[0];
+    if (wantBrand && candidates.length) {
+      const m = candidates.find((c) => normalizeOemCode(c.brandText).includes(wantBrand));
+      if (m) { chosen = m; brandMatched = true; }
+      else { chosen = undefined; brandMatched = false; }
+    }
+
+    if (chosen) {
+      for (const u of chosen.imgs) images.add(u);
+      if (chosen.href) detailHref = chosen.href;
+      const idFromHref = Number(chosen.href.match(/\/(\d+)(?:[?#]?)$/)?.[1] || 0);
+      if (idFromHref) productId = idFromHref;
+    }
   } catch (_) { /* optional eshop enrichment */ }
 
   const firstImage = [...images].find((url) => /PH\d{2}/i.test(url));
@@ -1081,7 +1107,9 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
     for (const u of scraped) images.add(u);
   }
 
-  if (!productId) {
+  // No productId OR brand mismatch → return base item without polluting it
+  // with another product's attributes/OE/applications.
+  if (!productId || !brandMatched) {
     const arr = [...images];
     return { ...item, image_urls: arr, image: arr[0] || item.image };
   }
@@ -1098,13 +1126,28 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
   const compatibleVehicles = parseApplicationsHtml(String(applicationsHtml || ''));
   const description = cleanHtmlText(String(descriptionHtml || ''));
 
+  // Sanity check: tech parameters typical of MAP sensors / cooling hoses must
+  // never be attached to brake / friction / steering parts (category mismatch
+  // = upstream J+M data corruption, drop the enrichment).
+  const cat = String(item.category || '').toLowerCase();
+  const isBrakeOrChassis = /(brzd|třmen|kotouč|destič|tlumič|odpruž|řízení|spojka|filtr)/i.test(cat);
+  const paramKeys = Object.keys(technicalParameters || {}).join(' ').toLowerCase();
+  const looksLikeSensor = /(snímač|sensor|zástrčk|kontaktů|hadičk plnicí|fluorokarbon|polybutylen|pólová)/i.test(paramKeys);
+  const techParamsClean = (isBrakeOrChassis && looksLikeSensor) ? {} : technicalParameters;
+  // OE numbers must include at least one Chrysler-group or item-brand match,
+  // otherwise they belong to a foreign product (e.g. VW/Audi codes on
+  // Chrysler brake pads).
+  const oeBrandWhitelist = /(CHRYSLER|DODGE|JEEP|RAM|MOPAR|CADILLAC|HUMMER|TESLA|LANCIA)/i;
+  const oeClean = (isBrakeOrChassis && oeNumbers.length && !oeNumbers.some((o: string) => oeBrandWhitelist.test(o)))
+    ? [] : oeNumbers;
+
   const arr = [...images];
   return {
     ...item,
     image: arr[0] || item.image,
     image_urls: arr,
-    technical_parameters: Object.keys(technicalParameters).length ? technicalParameters : item.technical_parameters,
-    oe_numbers: oeNumbers.length ? oeNumbers : item.oe_numbers,
+    technical_parameters: Object.keys(techParamsClean).length ? techParamsClean : item.technical_parameters,
+    oe_numbers: oeClean.length ? oeClean : item.oe_numbers,
     compatible_vehicles: compatibleVehicles.length ? compatibleVehicles : item.compatible_vehicles,
     description: description && description.length > 20 ? description : item.description,
   };
