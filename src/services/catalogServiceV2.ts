@@ -14,6 +14,37 @@ import { mapSectionToPath } from "./jmCategoryTaxonomy";
 const stripDia = (s: string) =>
   String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
+/**
+ * TecDoc gen_art_id → upřesňující suffix.
+ * Více různých TecDoc článků sdílí stejný český název ("Žárovka", "Těsnění", …).
+ * Tento map zachovává rozlišení v UI, aby zákazník viděl rozdíl mezi
+ * žárovkou do světlometu, brzdového světla a směrovky.
+ */
+const TECDOC_SUFFIX: Record<number, string> = {
+  // Žárovky
+  105: "hlavní světlomet",
+  114: "brzdové / koncové světlo",
+  152: "směrovka",
+  189: "mlhový světlomet",
+  238: "couvací světlo",
+  240: "osvětlení SPZ",
+  248: "interiér",
+  264: "denní svícení",
+  // Těsnění (motor)
+  27: "kolektor výfukových plynů",
+  28: "olejová vana",
+  42: "koleno sacího potrubí",
+  43: "sací potrubí (jiné)",
+  44: "kryt rozvodů",
+  314: "vodní čerpadlo",
+  318: "hlava válce",
+  319: "sada – hlava válce",
+  321: "kryt hlavy válce",
+  322: "obecné",
+  323: "dřík ventilu",
+};
+
+
 type TreeRow = {
   id: string;
   brand: string;
@@ -173,12 +204,20 @@ export async function fetchAllPartsForEngineV2(opts: {
 
   let kitoemInjected = 0;
 
-  // 1) Sloučení duplicit: stejný český gen_art_name (různé TecDoc IDs) → jedna kategorie.
-  const leafByName = new Map<string, { label: string; parts: CatalogPart[]; oemSet: Set<string> }>();
+  // 1) Buckety podle TecDoc gen_art_id (každý článek samostatně).
+  //    Dříve jsme slučovali podle stripDia(gen_art_name) — to ale schovávalo
+  //    rozdíl mezi 8× "Žárovka" (každá pro jinou pozici). Dedup popisků
+  //    se teď řeší až v UI vrstvě 4) přes TECDOC_SUFFIX.
+  const leafByName = new Map<
+    string,
+    { label: string; parts: CatalogPart[]; oemSet: Set<string>; genArtIds: Set<number> }
+  >();
   for (const r of rows) {
     const jmItems = (byNode.get(r.id) || []).map(jmRowToCatalog);
-    const key = stripDia(r.gen_art_name);
-    const bucket = leafByName.get(key) || { label: r.gen_art_name, parts: [], oemSet: new Set<string>() };
+    const key = `${stripDia(r.gen_art_name)}::${r.gen_art_id}`;
+    const bucket =
+      leafByName.get(key) || { label: r.gen_art_name, parts: [], oemSet: new Set<string>(), genArtIds: new Set<number>() };
+    bucket.genArtIds.add(r.gen_art_id);
     for (const p of jmItems) {
       const oemKey = p.oem_number.toUpperCase();
       if (!bucket.oemSet.has(oemKey)) {
@@ -189,9 +228,13 @@ export async function fetchAllPartsForEngineV2(opts: {
     leafByName.set(key, bucket);
   }
 
-  // 2) Injekce KITOEM ORIGINÁL na začátek odpovídající kategorie.
-  for (const [key, bucket] of leafByName) {
-    const matching = kitoemByCat.get(key) || [];
+  // 2) Injekce KITOEM ORIGINÁL na začátek kategorie podle gen_art_name.
+  //    Match je podle normalizovaného názvu (kitoem nemá gen_art_id), takže
+  //    jeden kitoem record může přijet do víc TecDoc bucketů — to je OK,
+  //    OEM díl se ukazuje u všech relevantních variant.
+  for (const [, bucket] of leafByName) {
+    const nameKey = stripDia(bucket.label);
+    const matching = kitoemByCat.get(nameKey) || [];
     if (matching.length === 0) continue;
     const kitoemOems = new Set(matching.map((k) => k.oem_number.toUpperCase()));
     bucket.parts = bucket.parts.filter((j) => !kitoemOems.has(j.oem_number.toUpperCase()));
@@ -199,6 +242,7 @@ export async function fetchAllPartsForEngineV2(opts: {
     kitoemInjected += originals.length;
     bucket.parts = [...originals, ...bucket.parts];
   }
+
 
   // 3) Sestavení hierarchie root → sub → leaf přes mapSectionToPath.
   type LeafGroup = CategoryGroup;
@@ -220,7 +264,10 @@ export async function fetchAllPartsForEngineV2(opts: {
       label: bucket.label,
       count: bucket.parts.length,
       parts: bucket.parts,
-    });
+      // gen_art_ids pass-through pro deduplikaci popisků
+      // (CategoryGroup type je tolerantní k extra polím)
+      ...({ genArtIds: Array.from(bucket.genArtIds) } as any),
+    } as any);
     subBuckets.set(subKey, slot);
   }
 
@@ -240,6 +287,26 @@ export async function fetchAllPartsForEngineV2(opts: {
       const subs = [...root.subs.values()]
         .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label, "cs"))
         .map((sub) => {
+          // ── Disambiguace duplicitních popisků v rámci jedné sub-kategorie ──
+          // Když má víc leafů stejný label (např. "Žárovka" 8×), doplníme
+          // upřesnění z TECDOC_SUFFIX, nebo „(č. {id})" jako fallback.
+          const labelCounts = new Map<string, number>();
+          for (const l of sub.leaves) {
+            const k = stripDia(l.label);
+            labelCounts.set(k, (labelCounts.get(k) || 0) + 1);
+          }
+          for (const l of sub.leaves) {
+            const k = stripDia(l.label);
+            if ((labelCounts.get(k) || 0) > 1) {
+              const ids: number[] = (l as any).genArtIds || [];
+              const suffixParts = ids
+                .map((id) => TECDOC_SUFFIX[id] || `č. ${id}`)
+                .filter(Boolean);
+              if (suffixParts.length > 0) {
+                l.label = `${l.label} (${suffixParts.join(", ")})`;
+              }
+            }
+          }
           const leaves = sub.leaves.sort((a, b) => a.label.localeCompare(b.label, "cs"));
           const subCount = leaves.reduce((s, l) => s + l.count, 0);
           // Pokud sub má jen jeden leaf se stejným názvem → zjednodušit (leaf = sub).
@@ -254,6 +321,7 @@ export async function fetchAllPartsForEngineV2(opts: {
             children: leaves,
           } as CategoryGroup;
         });
+
       const rootCount = subs.reduce((s, c) => s + c.count, 0);
       // Pokud root má jen jednu sub se stejným názvem → zjednodušit.
       if (subs.length === 1 && stripDia(subs[0].label) === stripDia(root.label)) {
