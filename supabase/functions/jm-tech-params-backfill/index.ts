@@ -127,37 +127,45 @@ Deno.serve(async (req) => {
   // Propagate technical_params to kitoem_parts by OEM match.
   let kitoemUpdated = 0;
   if (propagate && refreshedOems.length) {
-    // Build target OEM list (normalized for matching). We match the unique
-    // OE numbers that the freshly fetched J+M parts cross-reference.
-    const targetSet = new Set<string>();
-    const oemToParams = new Map<string, Record<string, string>>();
+    // Build normalized OEM → params map AND a set of raw string variants to
+    // query kitoem_parts. We add the raw OE number, the stripped-zero version,
+    // and a "K"-prefixed variant (Mopar). Matching uses normalize_oem() so
+    // formatting differences (K68145499AA vs 68145499AA vs 68-145499-AA) align.
+    const normToParams = new Map<string, Record<string, string>>();
+    const rawVariants = new Set<string>();
+
+    const addOem = (oem: string, params: Record<string, string>) => {
+      const raw = String(oem || "").trim();
+      if (!raw) return;
+      const norm = normOem(raw);
+      if (!norm) return;
+      if (!normToParams.has(norm)) normToParams.set(norm, params);
+
+      const upper = raw.toUpperCase();
+      rawVariants.add(upper);
+      const stripped = upper.replace(/^0+/, "");
+      if (stripped) rawVariants.add(stripped);
+      if (stripped && !stripped.startsWith("K")) rawVariants.add("K" + stripped);
+      if (upper.startsWith("K")) rawVariants.add(upper.replace(/^K/, ""));
+    };
+
     for (const r of refreshedOems) {
-      for (const oe of r.oe_numbers) {
-        const n = normOem(oe);
-        if (!n) continue;
-        targetSet.add(n);
-        if (!oemToParams.has(n)) oemToParams.set(n, r.params);
-      }
-      const own = normOem(r.oem);
-      if (own) {
-        targetSet.add(own);
-        if (!oemToParams.has(own)) oemToParams.set(own, r.params);
-      }
+      addOem(r.oem, r.params);
+      for (const oe of r.oe_numbers) addOem(oe, r.params);
     }
 
-    // Pull candidate kitoem rows that match any of these OEMs and lack params.
-    // We fetch in batches of 200 to keep .in() reasonable.
-    const targets = Array.from(targetSet);
-    for (let i = 0; i < targets.length; i += 200) {
-      const chunk = targets.slice(i, i + 200);
-      const { data: kits } = await sb
+    const variants = Array.from(rawVariants);
+    for (let i = 0; i < variants.length; i += 300) {
+      const chunk = variants.slice(i, i + 300);
+      const { data: kits, error: kerr } = await sb
         .from("kitoem_parts")
         .select("id, oem_number, technical_params")
         .is("technical_params", null)
         .in("oem_number", chunk);
+      if (kerr) { errors.push(`kitoem fetch: ${kerr.message}`); continue; }
       for (const k of kits || []) {
-        const norm = normOem(k.oem_number);
-        const params = oemToParams.get(norm);
+        const n = normOem(k.oem_number);
+        const params = normToParams.get(n);
         if (!params) continue;
         const { error: uerr } = await sb
           .from("kitoem_parts")
