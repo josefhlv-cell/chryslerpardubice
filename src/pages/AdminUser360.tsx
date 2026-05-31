@@ -309,8 +309,9 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="vehicles">
+      <Tabs defaultValue="history">
         <TabsList className="w-full overflow-x-auto flex-nowrap justify-start gap-1 h-auto p-1">
+          <TabsTrigger value="history"><History className="w-3 h-3 mr-1" />Historie</TabsTrigger>
           <TabsTrigger value="vehicles"><Car className="w-3 h-3 mr-1" />Vozy ({vehicles.length})</TabsTrigger>
           <TabsTrigger value="orders"><ShoppingCart className="w-3 h-3 mr-1" />Objednávky ({orders.length})</TabsTrigger>
           <TabsTrigger value="service"><Wrench className="w-3 h-3 mr-1" />Servis ({serviceOrders.length})</TabsTrigger>
@@ -321,6 +322,20 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
           <TabsTrigger value="notif"><Bell className="w-3 h-3 mr-1" />Push ({notifications.length})</TabsTrigger>
           <TabsTrigger value="obd"><Activity className="w-3 h-3 mr-1" />OBD ({obdSessions.length})</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="history" className="mt-3">
+          <HistoryTimeline
+            profile={profile}
+            vehicles={vehicles}
+            orders={orders}
+            bookings={bookings}
+            serviceOrders={serviceOrders}
+            faults={faults}
+            notifications={notifications}
+            obdSessions={obdSessions}
+          />
+        </TabsContent>
+
 
         <TabsContent value="vehicles" className="mt-3 space-y-2">
           {vehicles.length === 0 && <p className="text-xs text-muted-foreground">Žádné vozy</p>}
