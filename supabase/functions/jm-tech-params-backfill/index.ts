@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
       const { data: kits, error: kerr } = await sb
         .from("kitoem_parts")
         .select("id, oem_number, technical_params")
-        .is("technical_params", null)
+        .or("technical_params.is.null,technical_params.eq.{}")
         .in("oem_number", chunk);
       if (kerr) { errors.push(`kitoem fetch: ${kerr.message}`); continue; }
       for (const k of kits || []) {
