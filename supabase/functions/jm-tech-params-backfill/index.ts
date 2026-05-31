@@ -60,15 +60,19 @@ Deno.serve(async (req) => {
   const offset = parseInt(url.searchParams.get("offset") || "0");
   const propagate = url.searchParams.get("propagate") !== "0";
   const onlyMissing = url.searchParams.get("onlyMissing") !== "0";
+  const mode = url.searchParams.get("mode") || ""; // "auto" => DB-level filter for missing params
 
-  // Pull J+M rows that have oe_numbers in raw. Optionally skip those that
-  // already have non-empty technical_parameters.
+  // Pull J+M rows that have oe_numbers in raw. In "auto" mode, also filter
+  // at the DB level to rows that have no technical_parameters yet — this
+  // makes the cron job pick up un-fetched rows directly without scanning.
   let q = sb
     .from("jm_part_v2")
     .select("id, oem_number, name, raw")
-    .not("raw->oe_numbers", "is", null)
-    .order("oem_number", { ascending: true })
-    .range(offset, offset + limit - 1);
+    .not("raw->oe_numbers", "is", null);
+  if (mode === "auto") {
+    q = q.is("raw->technical_parameters", null);
+  }
+  q = q.order("oem_number", { ascending: true }).range(offset, offset + limit - 1);
 
   const { data: rows, error } = await q;
   if (error) {
