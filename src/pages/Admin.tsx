@@ -566,30 +566,14 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Upravit objednávku</DialogTitle></DialogHeader>
-          {editOrder && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium">{editOrder.part_name}</p>
-              <Select value={formStatus} onValueChange={setFormStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nova">Nová</SelectItem>
-                  <SelectItem value="zpracovava_se">Zpracovává se</SelectItem>
-                  <SelectItem value="vyrizena">Vyřízena</SelectItem>
-                  <SelectItem value="zrusena">Zrušena</SelectItem>
-                </SelectContent>
-              </Select>
-              <Textarea placeholder="Admin poznámka" value={formNote} onChange={(e) => setFormNote(e.target.value)} />
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOrder(null)}>Zrušit</Button>
-            <Button onClick={saveOrder}>Uložit</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Suspense fallback={null}>
+        <AdminOrderDetail
+          order={editOrder as any}
+          open={!!editOrder}
+          onClose={() => setEditOrder(null)}
+          onChanged={fetchAll}
+        />
+      </Suspense>
 
       <Dialog open={!!editBooking} onOpenChange={() => setEditBooking(null)}>
         <DialogContent>
