@@ -22,6 +22,16 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const normOem = (s: string) =>
   String(s || "").toUpperCase().replace(/[\s\-._/]/g, "");
 
+// J+M oe_numbers are formatted as "CHRYSLER: 68040206AA" — strip the brand
+// prefix before any further processing. Also tolerates plain numbers.
+function extractOemCode(raw: string): string {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const colon = s.lastIndexOf(":");
+  const part = colon >= 0 ? s.slice(colon + 1) : s;
+  return part.trim().toUpperCase();
+}
+
 async function callJm(action: string, payload: unknown): Promise<any> {
   try {
     const r = await fetch(`${SUPABASE_URL}/functions/v1/jm-proxy`, {
