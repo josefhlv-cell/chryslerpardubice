@@ -81,6 +81,7 @@ const AdminVinScanner = lazy(() => import("@/components/admin/AdminVinScanner"))
 const AdminPushSettings = lazy(() => import("@/components/admin/AdminPushSettings"));
 const AdminOfflineQueue = lazy(() => import("@/components/admin/AdminOfflineQueue"));
 const AdminAuditLog = lazy(() => import("@/components/admin/AdminAuditLog"));
+const AdminOrderDetail = lazy(() => import("@/components/admin/AdminOrderDetail"));
 
 type Profile = { id: string; user_id: string; full_name: string | null; email: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; status: string; discount_percent: number; created_at: string; };
 type OrderRow = { id: string; user_id: string; part_id: string | null; part_name: string | null; oem_number: string | null; order_type: string; quantity: number; unit_price: number | null; discount_percent: number | null; discounted_price: number | null; price_with_vat: number | null; status: string; admin_note: string | null; customer_note: string | null; catalog_source: string | null; created_at: string; profile_name?: string | null; profile_email?: string | null; };
@@ -565,30 +566,14 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editOrder} onOpenChange={() => setEditOrder(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Upravit objednávku</DialogTitle></DialogHeader>
-          {editOrder && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium">{editOrder.part_name}</p>
-              <Select value={formStatus} onValueChange={setFormStatus}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nova">Nová</SelectItem>
-                  <SelectItem value="zpracovava_se">Zpracovává se</SelectItem>
-                  <SelectItem value="vyrizena">Vyřízena</SelectItem>
-                  <SelectItem value="zrusena">Zrušena</SelectItem>
-                </SelectContent>
-              </Select>
-              <Textarea placeholder="Admin poznámka" value={formNote} onChange={(e) => setFormNote(e.target.value)} />
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOrder(null)}>Zrušit</Button>
-            <Button onClick={saveOrder}>Uložit</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <Suspense fallback={null}>
+        <AdminOrderDetail
+          order={editOrder as any}
+          open={!!editOrder}
+          onClose={() => setEditOrder(null)}
+          onChanged={fetchAll}
+        />
+      </Suspense>
 
       <Dialog open={!!editBooking} onOpenChange={() => setEditBooking(null)}>
         <DialogContent>
