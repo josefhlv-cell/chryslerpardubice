@@ -110,6 +110,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const [warning, setWarning] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [brakeSubtype, setBrakeSubtype] = useState<string>("all");
+  const [axlePos, setAxlePos] = useState<AxlePos>("all");
 
   // Brands
   useEffect(() => {
