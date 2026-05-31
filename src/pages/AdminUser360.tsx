@@ -47,18 +47,60 @@ const Loader = () => (
   </div>
 );
 
-/* ───────── SEARCH ───────── */
+/* ───────── SEARCH + LIST ───────── */
 function SearchView({ onPick }: { onPick: (userId: string) => void }) {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Browsable list of all customers
+  const [all, setAll] = useState<Profile[]>([]);
+  const [stats, setStats] = useState<Record<string, { orders: number; spend: number; lastOrder?: string }>>({});
+  const [listLoading, setListLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | "private" | "business" | "pending">("all");
+  const [sortBy, setSortBy] = useState<"recent" | "spend" | "orders" | "name">("recent");
+
+  const loadAll = async () => {
+    setListLoading(true);
+    try {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      const list = (profs as Profile[]) || [];
+      setAll(list);
+
+      const ids = list.map((p) => p.user_id);
+      if (ids.length) {
+        const { data: ords } = await supabase
+          .from("orders")
+          .select("user_id, price_with_vat, quantity, created_at")
+          .in("user_id", ids);
+        const map: Record<string, { orders: number; spend: number; lastOrder?: string }> = {};
+        (ords || []).forEach((o: any) => {
+          const k = o.user_id;
+          if (!map[k]) map[k] = { orders: 0, spend: 0 };
+          map[k].orders += 1;
+          map[k].spend += Number(o.price_with_vat || 0) * Number(o.quantity || 1);
+          if (!map[k].lastOrder || o.created_at > map[k].lastOrder) map[k].lastOrder = o.created_at;
+        });
+        setStats(map);
+      }
+    } catch (e: any) {
+      toast.error("Načítání zákazníků selhalo: " + (e?.message || ""));
+    } finally {
+      setListLoading(false);
+    }
+  };
+
+  useEffect(() => { loadAll(); }, []);
+
   const search = async () => {
     const term = q.trim();
-    if (!term) return;
+    if (!term) { setResults([]); return; }
     setLoading(true);
     try {
-      // 1) přímý fulltext na profiles
       const pat = `%${term}%`;
       const profQ = supabase
         .from("profiles")
@@ -67,8 +109,6 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
           `full_name.ilike.${pat},email.ilike.${pat},phone.ilike.${pat},company_name.ilike.${pat},ico.ilike.${pat}`,
         )
         .limit(40);
-
-      // 2) hledání podle VIN / SPZ v user_vehicles
       const vehQ = supabase
         .from("user_vehicles")
         .select("user_id")
@@ -81,10 +121,7 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
 
       let extra: Profile[] = [];
       if (extraIds.length) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .in("user_id", extraIds);
+        const { data } = await supabase.from("profiles").select("*").in("user_id", extraIds);
         extra = (data as Profile[]) || [];
       }
       setResults([...((profs as Profile[]) || []), ...extra]);
@@ -93,6 +130,71 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const filtered = useMemo(() => {
+    let arr = [...all];
+    if (filter === "private") arr = arr.filter((p) => p.account_type !== "business");
+    else if (filter === "business") arr = arr.filter((p) => p.account_type === "business");
+    else if (filter === "pending") arr = arr.filter((p) => p.status === "pending");
+
+    arr.sort((a, b) => {
+      if (sortBy === "spend") return (stats[b.user_id]?.spend || 0) - (stats[a.user_id]?.spend || 0);
+      if (sortBy === "orders") return (stats[b.user_id]?.orders || 0) - (stats[a.user_id]?.orders || 0);
+      if (sortBy === "name") return (a.full_name || a.company_name || "").localeCompare(b.full_name || b.company_name || "");
+      return (b.created_at || "").localeCompare(a.created_at || "");
+    });
+    return arr;
+  }, [all, stats, filter, sortBy]);
+
+  const totals = useMemo(() => ({
+    total: all.length,
+    business: all.filter((p) => p.account_type === "business").length,
+    pending: all.filter((p) => p.status === "pending").length,
+    revenue: Object.values(stats).reduce((s, x) => s + (x.spend || 0), 0),
+  }), [all, stats]);
+
+  const renderRow = (p: Profile) => {
+    const s = stats[p.user_id];
+    return (
+      <Card key={p.id} className="cursor-pointer hover:border-primary/40" onClick={() => onPick(p.user_id)}>
+        <CardContent className="p-3 flex items-center justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold truncate">
+              {p.full_name || p.company_name || "(bez jména)"}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {p.email || "—"} · {p.phone || "—"}
+            </p>
+            {p.company_name && (
+              <p className="text-[11px] text-muted-foreground truncate">
+                Firma: {p.company_name} · IČO {p.ico || "—"}
+              </p>
+            )}
+            <p className="text-[11px] text-amber-300 mt-0.5">
+              {s?.orders || 0} obj. · {Math.round(s?.spend || 0).toLocaleString("cs-CZ")} Kč
+              {s?.lastOrder && <span className="text-muted-foreground"> · poslední {fmt(s.lastOrder)}</span>}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <Badge variant="outline" className="text-[10px]">
+              {p.account_type === "business" ? "Firma" : "Soukromá"}
+            </Badge>
+            <Badge
+              className={
+                p.status === "active"
+                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+                  : p.status === "pending"
+                  ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+                  : "bg-red-500/15 text-red-300 border-red-500/30"
+              }
+            >
+              {p.status}
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -123,47 +225,53 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
 
       {results.length > 0 && (
         <div className="space-y-2">
-          {results.map((p) => (
-            <Card
-              key={p.id}
-              className="cursor-pointer hover:border-primary/40"
-              onClick={() => onPick(p.user_id)}
-            >
-              <CardContent className="p-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {p.full_name || p.company_name || "(bez jména)"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {p.email || "—"} · {p.phone || "—"}
-                  </p>
-                  {p.company_name && (
-                    <p className="text-[11px] text-muted-foreground">
-                      Firma: {p.company_name} · IČO {p.ico || "—"}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <Badge variant="outline" className="text-[10px]">
-                    {p.account_type === "business" ? "Firma" : "Soukromá"}
-                  </Badge>
-                  <Badge
-                    className={
-                      p.status === "active"
-                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-                        : p.status === "pending"
-                        ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
-                        : "bg-red-500/15 text-red-300 border-red-500/30"
-                    }
-                  >
-                    {p.status}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <h3 className="text-sm font-semibold text-muted-foreground">Výsledky hledání ({results.length})</h3>
+          {results.map(renderRow)}
         </div>
       )}
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
+            <span className="flex items-center gap-2">
+              <User className="w-4 h-4 text-amber-400" /> Všichni zákazníci
+              <Badge variant="outline" className="text-[10px]">{totals.total}</Badge>
+            </span>
+            <span className="text-[11px] text-muted-foreground font-normal">
+              {totals.business} firem · {totals.pending} čeká · obrat {Math.round(totals.revenue).toLocaleString("cs-CZ")} Kč
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {([
+              ["all", "Vše"], ["private", "Soukromí"], ["business", "Firmy"], ["pending", "Čekající"],
+            ] as const).map(([k, lbl]) => (
+              <Button key={k} size="sm" variant={filter === k ? "default" : "outline"} onClick={() => setFilter(k)}>
+                {lbl}
+              </Button>
+            ))}
+            <div className="ml-auto flex gap-1 flex-wrap">
+              {([
+                ["recent", "Nejnovější"], ["spend", "Útrata"], ["orders", "Objednávky"], ["name", "Jméno"],
+              ] as const).map(([k, lbl]) => (
+                <Button key={k} size="sm" variant={sortBy === k ? "default" : "ghost"} onClick={() => setSortBy(k)}>
+                  {lbl}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {listLoading ? <Loader /> : (
+            <div className="space-y-2">
+              {filtered.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Žádní zákazníci.</p>
+              )}
+              {filtered.map(renderRow)}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
