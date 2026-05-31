@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import {
   Search, User, Car, ShoppingCart, Wrench, Calendar, AlertTriangle,
-  Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil,
+  Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil, History, UserPlus,
 } from "lucide-react";
 
 type Profile = {
