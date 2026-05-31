@@ -14,6 +14,37 @@ import { mapSectionToPath } from "./jmCategoryTaxonomy";
 const stripDia = (s: string) =>
   String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
+/**
+ * TecDoc gen_art_id → upřesňující suffix.
+ * Více různých TecDoc článků sdílí stejný český název ("Žárovka", "Těsnění", …).
+ * Tento map zachovává rozlišení v UI, aby zákazník viděl rozdíl mezi
+ * žárovkou do světlometu, brzdového světla a směrovky.
+ */
+const TECDOC_SUFFIX: Record<number, string> = {
+  // Žárovky
+  105: "hlavní světlomet",
+  114: "brzdové / koncové světlo",
+  152: "směrovka",
+  189: "mlhový světlomet",
+  238: "couvací světlo",
+  240: "osvětlení SPZ",
+  248: "interiér",
+  264: "denní svícení",
+  // Těsnění (motor)
+  27: "kolektor výfukových plynů",
+  28: "olejová vana",
+  42: "koleno sacího potrubí",
+  43: "sací potrubí (jiné)",
+  44: "kryt rozvodů",
+  314: "vodní čerpadlo",
+  318: "hlava válce",
+  319: "sada – hlava válce",
+  321: "kryt hlavy válce",
+  322: "obecné",
+  323: "dřík ventilu",
+};
+
+
 type TreeRow = {
   id: string;
   brand: string;
