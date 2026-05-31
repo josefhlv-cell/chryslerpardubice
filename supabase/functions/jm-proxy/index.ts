@@ -1126,13 +1126,28 @@ async function enrichJmItemFromEshop(item: UnifiedPart, fallbackCode: string): P
   const compatibleVehicles = parseApplicationsHtml(String(applicationsHtml || ''));
   const description = cleanHtmlText(String(descriptionHtml || ''));
 
+  // Sanity check: tech parameters typical of MAP sensors / cooling hoses must
+  // never be attached to brake / friction / steering parts (category mismatch
+  // = upstream J+M data corruption, drop the enrichment).
+  const cat = String(item.category || '').toLowerCase();
+  const isBrakeOrChassis = /(brzd|třmen|kotouč|destič|tlumič|odpruž|řízení|spojka|filtr)/i.test(cat);
+  const paramKeys = Object.keys(technicalParameters || {}).join(' ').toLowerCase();
+  const looksLikeSensor = /(snímač|sensor|zástrčk|kontaktů|hadičk plnicí|fluorokarbon|polybutylen|pólová)/i.test(paramKeys);
+  const techParamsClean = (isBrakeOrChassis && looksLikeSensor) ? {} : technicalParameters;
+  // OE numbers must include at least one Chrysler-group or item-brand match,
+  // otherwise they belong to a foreign product (e.g. VW/Audi codes on
+  // Chrysler brake pads).
+  const oeBrandWhitelist = /(CHRYSLER|DODGE|JEEP|RAM|MOPAR|CADILLAC|HUMMER|TESLA|LANCIA)/i;
+  const oeClean = (isBrakeOrChassis && oeNumbers.length && !oeNumbers.some((o: string) => oeBrandWhitelist.test(o)))
+    ? [] : oeNumbers;
+
   const arr = [...images];
   return {
     ...item,
     image: arr[0] || item.image,
     image_urls: arr,
-    technical_parameters: Object.keys(technicalParameters).length ? technicalParameters : item.technical_parameters,
-    oe_numbers: oeNumbers.length ? oeNumbers : item.oe_numbers,
+    technical_parameters: Object.keys(techParamsClean).length ? techParamsClean : item.technical_parameters,
+    oe_numbers: oeClean.length ? oeClean : item.oe_numbers,
     compatible_vehicles: compatibleVehicles.length ? compatibleVehicles : item.compatible_vehicles,
     description: description && description.length > 20 ? description : item.description,
   };
