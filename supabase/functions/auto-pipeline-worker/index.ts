@@ -44,13 +44,17 @@ Deno.serve(async (req) => {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
     const admin = createClient(SUPABASE_URL, SERVICE);
 
+    const url = new URL(req.url);
+    const BATCH = Number(url.searchParams.get('batch') ?? '500');
+    const CONCURRENCY = Number(url.searchParams.get('concurrency') ?? '24');
+
     // Pull a batch of pending jobs
     const { data: jobs } = await admin
       .from('auto_pipeline_queue')
       .select('*')
       .eq('status', 'pending')
       .order('created_at', { ascending: true })
-      .limit(100);
+      .limit(BATCH);
 
     if (!jobs?.length) return j({ success: true, processed: 0 });
 
@@ -58,7 +62,8 @@ Deno.serve(async (req) => {
     await admin.from('auto_pipeline_queue').update({ status: 'processing', attempts: 1 }).in('id', ids);
 
     let done = 0, failed = 0;
-    for (const job of jobs) {
+
+    async function runJob(job: any) {
       try {
         if (job.job_type === 'categorize' && job.part_id) {
           const { data: p } = await admin.from('parts_new').select('name, category').eq('id', job.part_id).single();
@@ -67,18 +72,17 @@ Deno.serve(async (req) => {
             if (cat) await admin.from('parts_new').update({ category: cat }).eq('id', job.part_id);
           }
         } else if (job.job_type === 'fetch_price' && job.oem_number) {
-          // Best-effort fire to price-sync
           await fetch(`${SUPABASE_URL}/functions/v1/price-sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE}` },
             body: JSON.stringify({ oem_number: job.oem_number, force: true }),
-          }).catch(() => {});
+          });
         } else if (job.job_type === 'match_compat' && job.part_id) {
           await fetch(`${SUPABASE_URL}/functions/v1/compat-matcher`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE}` },
             body: JSON.stringify({ part_id: job.part_id }),
-          }).catch(() => {});
+          });
         }
         await admin.from('auto_pipeline_queue').update({ status: 'done', processed_at: new Date().toISOString() }).eq('id', job.id);
         done++;
@@ -90,7 +94,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    return j({ success: true, processed: jobs.length, done, failed });
+    // Parallel pool
+    const queue = [...jobs];
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length) {
+        const job = queue.shift();
+        if (!job) break;
+        await runJob(job);
+      }
+    });
+    await Promise.all(workers);
+
+    return j({ success: true, processed: jobs.length, done, failed, concurrency: CONCURRENCY });
   } catch (e: any) {
     return j({ success: false, error: e?.message || String(e) }, 500);
   }
