@@ -220,7 +220,7 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
       const title = status === "active" ? "✅ Účet schválen" : "⏳ Účet čeká na schválení";
       const message = status === "active"
         ? "Váš účet byl schválen. Nyní můžete plně využívat aplikaci a vytvářet objednávky."
-        : "Váš účet byl přepnut do stavu „čeká na schválení". O dalším postupu vás budeme informovat.";
+        : "Váš účet byl přepnut do stavu „čeká na schválení“. O dalším postupu vás budeme informovat.";
       await supabase.from("notifications").insert(
         ids.map((uid) => ({ user_id: uid, title, message })),
       );
