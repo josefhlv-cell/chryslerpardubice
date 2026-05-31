@@ -204,12 +204,20 @@ export async function fetchAllPartsForEngineV2(opts: {
 
   let kitoemInjected = 0;
 
-  // 1) Sloučení duplicit: stejný český gen_art_name (různé TecDoc IDs) → jedna kategorie.
-  const leafByName = new Map<string, { label: string; parts: CatalogPart[]; oemSet: Set<string> }>();
+  // 1) Buckety podle TecDoc gen_art_id (každý článek samostatně).
+  //    Dříve jsme slučovali podle stripDia(gen_art_name) — to ale schovávalo
+  //    rozdíl mezi 8× "Žárovka" (každá pro jinou pozici). Dedup popisků
+  //    se teď řeší až v UI vrstvě 4) přes TECDOC_SUFFIX.
+  const leafByName = new Map<
+    string,
+    { label: string; parts: CatalogPart[]; oemSet: Set<string>; genArtIds: Set<number> }
+  >();
   for (const r of rows) {
     const jmItems = (byNode.get(r.id) || []).map(jmRowToCatalog);
-    const key = stripDia(r.gen_art_name);
-    const bucket = leafByName.get(key) || { label: r.gen_art_name, parts: [], oemSet: new Set<string>() };
+    const key = `${stripDia(r.gen_art_name)}::${r.gen_art_id}`;
+    const bucket =
+      leafByName.get(key) || { label: r.gen_art_name, parts: [], oemSet: new Set<string>(), genArtIds: new Set<number>() };
+    bucket.genArtIds.add(r.gen_art_id);
     for (const p of jmItems) {
       const oemKey = p.oem_number.toUpperCase();
       if (!bucket.oemSet.has(oemKey)) {
@@ -220,9 +228,13 @@ export async function fetchAllPartsForEngineV2(opts: {
     leafByName.set(key, bucket);
   }
 
-  // 2) Injekce KITOEM ORIGINÁL na začátek odpovídající kategorie.
-  for (const [key, bucket] of leafByName) {
-    const matching = kitoemByCat.get(key) || [];
+  // 2) Injekce KITOEM ORIGINÁL na začátek kategorie podle gen_art_name.
+  //    Match je podle normalizovaného názvu (kitoem nemá gen_art_id), takže
+  //    jeden kitoem record může přijet do víc TecDoc bucketů — to je OK,
+  //    OEM díl se ukazuje u všech relevantních variant.
+  for (const [, bucket] of leafByName) {
+    const nameKey = stripDia(bucket.label);
+    const matching = kitoemByCat.get(nameKey) || [];
     if (matching.length === 0) continue;
     const kitoemOems = new Set(matching.map((k) => k.oem_number.toUpperCase()));
     bucket.parts = bucket.parts.filter((j) => !kitoemOems.has(j.oem_number.toUpperCase()));
@@ -230,6 +242,7 @@ export async function fetchAllPartsForEngineV2(opts: {
     kitoemInjected += originals.length;
     bucket.parts = [...originals, ...bucket.parts];
   }
+
 
   // 3) Sestavení hierarchie root → sub → leaf přes mapSectionToPath.
   type LeafGroup = CategoryGroup;
