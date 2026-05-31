@@ -295,9 +295,16 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   }, [groups, categoryQuery]);
 
   const partsItems = selectedGroup
-    ? (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all"
-        ? selectedGroup.parts.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype))
-        : selectedGroup.parts)
+    ? (() => {
+        let arr = selectedGroup.parts;
+        if (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all") {
+          arr = arr.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype));
+        }
+        if (isAxleRelevantCategory(selectedGroup.label) && axlePos !== "all") {
+          arr = arr.filter((p) => partMatchesAxle(p, axlePos));
+        }
+        return arr;
+      })()
     : [];
 
   return (
