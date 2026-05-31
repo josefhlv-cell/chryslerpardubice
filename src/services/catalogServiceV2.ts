@@ -251,7 +251,10 @@ export async function fetchAllPartsForEngineV2(opts: {
       label: bucket.label,
       count: bucket.parts.length,
       parts: bucket.parts,
-    });
+      // gen_art_ids pass-through pro deduplikaci popisků
+      // (CategoryGroup type je tolerantní k extra polím)
+      ...({ genArtIds: Array.from(bucket.genArtIds) } as any),
+    } as any);
     subBuckets.set(subKey, slot);
   }
 
@@ -271,6 +274,26 @@ export async function fetchAllPartsForEngineV2(opts: {
       const subs = [...root.subs.values()]
         .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label, "cs"))
         .map((sub) => {
+          // ── Disambiguace duplicitních popisků v rámci jedné sub-kategorie ──
+          // Když má víc leafů stejný label (např. "Žárovka" 8×), doplníme
+          // upřesnění z TECDOC_SUFFIX, nebo „(č. {id})" jako fallback.
+          const labelCounts = new Map<string, number>();
+          for (const l of sub.leaves) {
+            const k = stripDia(l.label);
+            labelCounts.set(k, (labelCounts.get(k) || 0) + 1);
+          }
+          for (const l of sub.leaves) {
+            const k = stripDia(l.label);
+            if ((labelCounts.get(k) || 0) > 1) {
+              const ids: number[] = (l as any).genArtIds || [];
+              const suffixParts = ids
+                .map((id) => TECDOC_SUFFIX[id] || `č. ${id}`)
+                .filter(Boolean);
+              if (suffixParts.length > 0) {
+                l.label = `${l.label} (${suffixParts.join(", ")})`;
+              }
+            }
+          }
           const leaves = sub.leaves.sort((a, b) => a.label.localeCompare(b.label, "cs"));
           const subCount = leaves.reduce((s, l) => s + l.count, 0);
           // Pokud sub má jen jeden leaf se stejným názvem → zjednodušit (leaf = sub).
@@ -285,6 +308,7 @@ export async function fetchAllPartsForEngineV2(opts: {
             children: leaves,
           } as CategoryGroup;
         });
+
       const rootCount = subs.reduce((s, c) => s + c.count, 0);
       // Pokud root má jen jednu sub se stejným názvem → zjednodušit.
       if (subs.length === 1 && stripDia(subs[0].label) === stripDia(root.label)) {
