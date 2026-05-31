@@ -45,8 +45,9 @@ Deno.serve(async (req) => {
     const admin = createClient(SUPABASE_URL, SERVICE);
 
     const url = new URL(req.url);
-    const BATCH = Number(url.searchParams.get('batch') ?? '500');
-    const CONCURRENCY = Number(url.searchParams.get('concurrency') ?? '24');
+    const BATCH = Number(url.searchParams.get('batch') ?? '600');
+    const CHUNK = Number(url.searchParams.get('chunk') ?? '50');     // OEMs per price-sync call
+    const SEGMENTS = Number(url.searchParams.get('segments') ?? '8'); // parallel price-sync locks
 
     // Pull a batch of pending jobs
     const { data: jobs } = await admin
@@ -63,49 +64,76 @@ Deno.serve(async (req) => {
 
     let done = 0, failed = 0;
 
-    async function runJob(job: any) {
+    // ── Split jobs by type ─────────────────────────────────────────
+    const priceJobs = jobs.filter((j: any) => j.job_type === 'fetch_price' && j.oem_number);
+    const catJobs   = jobs.filter((j: any) => j.job_type === 'categorize' && j.part_id);
+    const compatJobs = jobs.filter((j: any) => j.job_type === 'match_compat' && j.part_id);
+
+    // ── 1) Categorize (cheap, local) — parallel ────────────────────
+    await Promise.all(catJobs.map(async (job: any) => {
       try {
-        if (job.job_type === 'categorize' && job.part_id) {
-          const { data: p } = await admin.from('parts_new').select('name, category').eq('id', job.part_id).single();
-          if (p && (!p.category || p.category === '')) {
-            const cat = classify(p.name || '');
-            if (cat) await admin.from('parts_new').update({ category: cat }).eq('id', job.part_id);
-          }
-        } else if (job.job_type === 'fetch_price' && job.oem_number) {
-          await fetch(`${SUPABASE_URL}/functions/v1/price-sync`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE}` },
-            body: JSON.stringify({ oem_number: job.oem_number, force: true }),
-          });
-        } else if (job.job_type === 'match_compat' && job.part_id) {
-          await fetch(`${SUPABASE_URL}/functions/v1/compat-matcher`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE}` },
-            body: JSON.stringify({ part_id: job.part_id }),
-          });
+        const { data: p } = await admin.from('parts_new').select('name, category').eq('id', job.part_id).single();
+        if (p && (!p.category || p.category === '')) {
+          const cat = classify(p.name || '');
+          if (cat) await admin.from('parts_new').update({ category: cat }).eq('id', job.part_id);
         }
         await admin.from('auto_pipeline_queue').update({ status: 'done', processed_at: new Date().toISOString() }).eq('id', job.id);
         done++;
       } catch (e: any) {
-        await admin.from('auto_pipeline_queue').update({
-          status: 'failed', error_message: e?.message || String(e), processed_at: new Date().toISOString(),
-        }).eq('id', job.id);
+        await admin.from('auto_pipeline_queue').update({ status: 'failed', error_message: String(e?.message || e), processed_at: new Date().toISOString() }).eq('id', job.id);
         failed++;
       }
+    }));
+
+    // ── 2) Fetch price: chunk OEMs and call price-sync per segment lock ──
+    // Build chunks of CHUNK OEMs and distribute across SEGMENTS parallel locks.
+    const chunks: Array<{ jobs: any[]; segment: number }> = [];
+    for (let i = 0; i < priceJobs.length; i += CHUNK) {
+      chunks.push({ jobs: priceJobs.slice(i, i + CHUNK), segment: (chunks.length % SEGMENTS) });
     }
 
-    // Parallel pool
-    const queue = [...jobs];
-    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
-      while (queue.length) {
-        const job = queue.shift();
-        if (!job) break;
-        await runJob(job);
-      }
-    });
-    await Promise.all(workers);
+    // Group chunks by segment to serialize within a segment (lock-aware)
+    const bySegment: Record<number, Array<{ jobs: any[]; segment: number }>> = {};
+    for (const c of chunks) (bySegment[c.segment] ||= []).push(c);
 
-    return j({ success: true, processed: jobs.length, done, failed, concurrency: CONCURRENCY });
+    await Promise.all(Object.values(bySegment).map(async (segChunks) => {
+      for (const c of segChunks) {
+        const oems = c.jobs.map((x) => x.oem_number);
+        let chunkOk = false;
+        try {
+          const resp = await fetch(`${SUPABASE_URL}/functions/v1/price-sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE}` },
+            body: JSON.stringify({ partNumbers: oems, mode: 'force', segment: c.segment, batchSize: oems.length }),
+          });
+          chunkOk = resp.ok;
+        } catch { chunkOk = false; }
+
+        const finalStatus = chunkOk ? 'done' : 'failed';
+        await admin.from('auto_pipeline_queue')
+          .update({ status: finalStatus, processed_at: new Date().toISOString(), error_message: chunkOk ? null : 'price-sync chunk failed' })
+          .in('id', c.jobs.map((x) => x.id));
+        if (chunkOk) done += c.jobs.length; else failed += c.jobs.length;
+      }
+    }));
+
+    // ── 3) Match compat (lightweight, parallel) ────────────────────
+    await Promise.all(compatJobs.map(async (job: any) => {
+      try {
+        await fetch(`${SUPABASE_URL}/functions/v1/compat-matcher`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE}` },
+          body: JSON.stringify({ part_id: job.part_id }),
+        });
+        await admin.from('auto_pipeline_queue').update({ status: 'done', processed_at: new Date().toISOString() }).eq('id', job.id);
+        done++;
+      } catch (e: any) {
+        await admin.from('auto_pipeline_queue').update({ status: 'failed', error_message: String(e?.message || e), processed_at: new Date().toISOString() }).eq('id', job.id);
+        failed++;
+      }
+    }));
+
+    return j({ success: true, processed: jobs.length, done, failed, segments: SEGMENTS, chunk: CHUNK });
   } catch (e: any) {
     return j({ success: false, error: e?.message || String(e) }, 500);
   }
