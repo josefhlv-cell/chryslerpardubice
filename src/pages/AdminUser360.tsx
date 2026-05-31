@@ -21,6 +21,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -28,6 +29,7 @@ import { toast } from "sonner";
 import {
   Search, User, Car, ShoppingCart, Wrench, Calendar, AlertTriangle,
   Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil, History, UserPlus,
+  ChevronLeft, ChevronRight, CheckCircle2, Clock, MailPlus,
 } from "lucide-react";
 
 type Profile = {
