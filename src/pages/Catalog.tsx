@@ -73,6 +73,19 @@ function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean 
   return sub.keywords.some((k) => new RegExp(norm(k)).test(hay));
 }
 
+/** Axle position detection from part name/description/tecdoc section. */
+type AxlePos = "all" | "front" | "rear";
+function partMatchesAxle(part: CatalogPart, pos: AxlePos): boolean {
+  if (pos === "all") return true;
+  const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const hay = `${norm(part.name || "")} ${norm((part as any).description || "")} ${norm((part as any).tecdoc_section || "")}`;
+  if (pos === "front") return /(predn|vpredu|front|vorder|vorne)/.test(hay);
+  if (pos === "rear")  return /(zadn|vzadu|rear|hinter|hinten)/.test(hay);
+  return true;
+}
+const isAxleRelevantCategory = (label?: string | null) =>
+  !!label && /(brzd|tlumi|pruzin|pružin|naprav|lozisk|ložisk|kotouc|kotouč|destic|destič)/i.test(label);
+
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const navigate = useNavigate();
   const { user, canPlaceOrder, isAdmin } = useAuth();
