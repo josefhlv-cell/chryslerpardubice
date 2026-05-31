@@ -27,7 +27,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import {
   Search, User, Car, ShoppingCart, Wrench, Calendar, AlertTriangle,
-  Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil,
+  Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil, History, UserPlus,
 } from "lucide-react";
 
 type Profile = {
@@ -309,8 +309,9 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="vehicles">
+      <Tabs defaultValue="history">
         <TabsList className="w-full overflow-x-auto flex-nowrap justify-start gap-1 h-auto p-1">
+          <TabsTrigger value="history"><History className="w-3 h-3 mr-1" />Historie</TabsTrigger>
           <TabsTrigger value="vehicles"><Car className="w-3 h-3 mr-1" />Vozy ({vehicles.length})</TabsTrigger>
           <TabsTrigger value="orders"><ShoppingCart className="w-3 h-3 mr-1" />Objednávky ({orders.length})</TabsTrigger>
           <TabsTrigger value="service"><Wrench className="w-3 h-3 mr-1" />Servis ({serviceOrders.length})</TabsTrigger>
@@ -321,6 +322,20 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
           <TabsTrigger value="notif"><Bell className="w-3 h-3 mr-1" />Push ({notifications.length})</TabsTrigger>
           <TabsTrigger value="obd"><Activity className="w-3 h-3 mr-1" />OBD ({obdSessions.length})</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="history" className="mt-3">
+          <HistoryTimeline
+            profile={profile}
+            vehicles={vehicles}
+            orders={orders}
+            bookings={bookings}
+            serviceOrders={serviceOrders}
+            faults={faults}
+            notifications={notifications}
+            obdSessions={obdSessions}
+          />
+        </TabsContent>
+
 
         <TabsContent value="vehicles" className="mt-3 space-y-2">
           {vehicles.length === 0 && <p className="text-xs text-muted-foreground">Žádné vozy</p>}
@@ -512,6 +527,179 @@ const Stat = ({ label, value }: { label: string; value: any }) => (
     <p className="text-foreground">{value}</p>
   </div>
 );
+
+/* ───────── HISTORY TIMELINE ───────── */
+type TimelineEvent = {
+  id: string;
+  date: string;
+  kind: "register" | "vehicle" | "order" | "service" | "booking" | "fault" | "obd" | "notification";
+  title: string;
+  description: string;
+  link?: string;
+  badge?: string;
+};
+
+function HistoryTimeline({
+  profile, vehicles, orders, bookings, serviceOrders, faults, notifications, obdSessions,
+}: {
+  profile: Profile;
+  vehicles: any[]; orders: any[]; bookings: any[]; serviceOrders: any[];
+  faults: any[]; notifications: any[]; obdSessions: any[];
+}) {
+  const navigate = useNavigate();
+  const events: TimelineEvent[] = [];
+
+  // Registrace
+  if (profile.created_at) {
+    events.push({
+      id: `reg-${profile.id}`,
+      date: profile.created_at,
+      kind: "register",
+      title: "Registrace",
+      description: `Vytvořen účet (${profile.account_type === "business" ? "firma" : "soukromá osoba"})`,
+    });
+  }
+  // Vozidla
+  vehicles.forEach((v) => {
+    if (!v.created_at) return;
+    events.push({
+      id: `veh-${v.id}`,
+      date: v.created_at,
+      kind: "vehicle",
+      title: "Přidáno vozidlo",
+      description: `${v.brand || ""} ${v.model || ""} ${v.year || ""}${v.engine ? " · " + v.engine : ""}`.trim(),
+    });
+  });
+  // Objednávky
+  orders.forEach((o) => {
+    if (!o.created_at) return;
+    const price = o.price_with_vat != null ? ` · ${Number(o.price_with_vat).toLocaleString("cs")} Kč` : "";
+    events.push({
+      id: `ord-${o.id}`,
+      date: o.created_at,
+      kind: "order",
+      title: `Objednávka #${String(o.id).slice(0, 8)}`,
+      description: `${o.part_name || o.oem_number || "—"} × ${o.quantity || 1}${price}`,
+      badge: o.status,
+      link: `/admin?tab=orders&id=${o.id}`,
+    });
+  });
+  // Servisní zakázky
+  serviceOrders.forEach((s) => {
+    if (!s.created_at) return;
+    events.push({
+      id: `so-${s.id}`,
+      date: s.created_at,
+      kind: "service",
+      title: "Servisní zakázka",
+      description: s.title || s.service_type || "Zakázka",
+      badge: s.status,
+    });
+  });
+  // Rezervace
+  bookings.forEach((b) => {
+    if (!b.created_at) return;
+    events.push({
+      id: `bk-${b.id}`,
+      date: b.created_at,
+      kind: "booking",
+      title: "Rezervace servisu",
+      description: `${b.service_type || "—"}${b.preferred_date ? " · " + b.preferred_date : ""}`,
+      badge: b.status,
+    });
+  });
+  // Závady
+  faults.forEach((f) => {
+    if (!f.created_at) return;
+    events.push({
+      id: `flt-${f.id}`,
+      date: f.created_at,
+      kind: "fault",
+      title: "Hlášení závady",
+      description: `${f.vehicle_brand || ""} ${f.vehicle_model || ""} · ${String(f.description || "").slice(0, 80)}`,
+      badge: f.status,
+    });
+  });
+  // OBD
+  obdSessions.forEach((o) => {
+    if (!o.started_at) return;
+    events.push({
+      id: `obd-${o.id}`,
+      date: o.started_at,
+      kind: "obd",
+      title: "OBD diagnostika",
+      description: `${o.vehicle_brand || "—"} ${o.vehicle_model || ""} · ${o.status || ""}`,
+    });
+  });
+  // Notifikace
+  notifications.forEach((n) => {
+    if (!n.created_at) return;
+    events.push({
+      id: `not-${n.id}`,
+      date: n.created_at,
+      kind: "notification",
+      title: n.title || "Notifikace",
+      description: String(n.message || "").slice(0, 100),
+    });
+  });
+
+  events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const iconFor = (k: TimelineEvent["kind"]) => {
+    switch (k) {
+      case "register": return <UserPlus className="w-3.5 h-3.5" />;
+      case "vehicle": return <Car className="w-3.5 h-3.5" />;
+      case "order": return <ShoppingCart className="w-3.5 h-3.5" />;
+      case "service": return <Wrench className="w-3.5 h-3.5" />;
+      case "booking": return <Calendar className="w-3.5 h-3.5" />;
+      case "fault": return <AlertTriangle className="w-3.5 h-3.5" />;
+      case "obd": return <Activity className="w-3.5 h-3.5" />;
+      case "notification": return <Bell className="w-3.5 h-3.5" />;
+    }
+  };
+  const colorFor = (k: TimelineEvent["kind"]) => ({
+    register: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    vehicle: "bg-blue-500/15 text-blue-300 border-blue-500/30",
+    order: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+    service: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    booking: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+    fault: "bg-red-500/15 text-red-300 border-red-500/30",
+    obd: "bg-orange-500/15 text-orange-300 border-orange-500/30",
+    notification: "bg-slate-500/15 text-slate-300 border-slate-500/30",
+  }[k]);
+
+  if (events.length === 0) {
+    return <p className="text-xs text-muted-foreground">Žádné události.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{events.length} událostí celkem · řazeno od nejnovějších</p>
+      {events.map((e) => (
+        <Card
+          key={e.id}
+          className={e.link ? "cursor-pointer hover:border-primary/40" : ""}
+          onClick={() => e.link && navigate(e.link)}
+        >
+          <CardContent className="p-3 text-xs flex items-start gap-3">
+            <Badge variant="outline" className={`${colorFor(e.kind)} shrink-0 mt-0.5`}>
+              {iconFor(e.kind)}
+            </Badge>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="font-semibold">{e.title}</p>
+                <span className="text-[10px] text-muted-foreground">{fmt(e.date)}</span>
+              </div>
+              <p className="text-muted-foreground mt-0.5 break-words">{e.description}</p>
+              {e.badge && <Badge variant="outline" className="mt-1 text-[10px]">{e.badge}</Badge>}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+
 
 /* ───────── ROOT ───────── */
 const AdminUser360 = () => {
