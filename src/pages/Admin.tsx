@@ -81,6 +81,7 @@ const AdminVinScanner = lazy(() => import("@/components/admin/AdminVinScanner"))
 const AdminPushSettings = lazy(() => import("@/components/admin/AdminPushSettings"));
 const AdminOfflineQueue = lazy(() => import("@/components/admin/AdminOfflineQueue"));
 const AdminAuditLog = lazy(() => import("@/components/admin/AdminAuditLog"));
+const AdminOrderDetail = lazy(() => import("@/components/admin/AdminOrderDetail"));
 
 type Profile = { id: string; user_id: string; full_name: string | null; email: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; status: string; discount_percent: number; created_at: string; };
 type OrderRow = { id: string; user_id: string; part_id: string | null; part_name: string | null; oem_number: string | null; order_type: string; quantity: number; unit_price: number | null; discount_percent: number | null; discounted_price: number | null; price_with_vat: number | null; status: string; admin_note: string | null; customer_note: string | null; catalog_source: string | null; created_at: string; profile_name?: string | null; profile_email?: string | null; };
