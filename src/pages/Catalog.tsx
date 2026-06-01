@@ -314,6 +314,10 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const partsItems = selectedGroup
     ? (() => {
         let arr = selectedGroup.parts;
+        // HARD filter: in brake-pad listings, drop pumps/fuel/water/filter contamination.
+        if (isBrakePadCategory(selectedGroup.label)) {
+          arr = arr.filter(partAllowedInBrakePads);
+        }
         if (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all") {
           arr = arr.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype));
         }
