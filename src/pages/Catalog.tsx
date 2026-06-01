@@ -573,10 +573,17 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               items={partsItems}
               loading={partsLoading && partsItems.length === 0}
               onOrder={handleOrder}
-              emptyHint="V této kategorii nejsou žádné díly."
+              emptyHint={
+                totalInGroup > 0 && partsItems.length === 0
+                  ? "Žádné výsledky pro aktuální filtry. Zkuste 'Vše' nebo vypněte filtr pozice."
+                  : warning && jmCount === 0
+                    ? "V této kategorii se zatím nepodařilo načíst díly z J+M (zkuste obnovit za chvíli)."
+                    : "V této kategorii nejsou žádné díly."
+              }
             />
           </>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
