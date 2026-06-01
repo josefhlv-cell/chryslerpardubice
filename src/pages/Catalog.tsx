@@ -500,10 +500,22 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 </div>
         )}
 
-        {step === "parts" && selectedGroup && (
+        {step === "parts" && selectedGroup && (() => {
+          const totalInGroup = selectedGroup.parts.length;
+          const oemCount = partsItems.filter((p) => p.is_oem).length;
+          const jmCount = partsItems.length - oemCount;
+          const filteredOut = totalInGroup - partsItems.length;
+          let header = `${partsItems.length} dílů — ORIGINÁL první, pak NÁHRADY`;
+          if (oemCount === 0 && jmCount > 0) header = `${jmCount} dílů z J+M Autodíly (náhrady)`;
+          else if (oemCount > 0 && jmCount > 0) header = `${partsItems.length} dílů — ${oemCount}× ORIGINÁL + ${jmCount}× J+M`;
+          else if (partsItems.length === 0 && filteredOut > 0) header = `0 viditelných (${filteredOut} odfiltrováno)`;
+          return (
           <>
             <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground gap-3 flex-wrap">
-              <span>{selectedGroup.parts.length} dílů — ORIGINÁL první, pak NÁHRADY</span>
+              <span>{header}</span>
+              {filteredOut > 0 && partsItems.length > 0 && (
+                <span className="text-amber-300/80">+{filteredOut} skrytých nesouvisejících dílů</span>
+              )}
             </div>
 
             {isBrakeCategory(selectedGroup.label) && selectedGroup.parts.length > 0 && (() => {
