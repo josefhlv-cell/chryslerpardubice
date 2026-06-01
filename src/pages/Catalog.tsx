@@ -63,6 +63,23 @@ const BRAKE_SUBTYPES: { id: string; label: string; keywords: string[] }[] = [
 ];
 
 const isBrakeCategory = (label?: string | null) => !!label && /brzd/i.test(label);
+const isBrakePadCategory = (label?: string | null) =>
+  !!label && /(destič|destic|brake.?pad|bremsbelag|oblož|obloz)/i.test(label);
+
+// Hard-forbid contamination from unrelated systems when user is in a brake-pad listing.
+const BRAKE_FORBIDDEN_PATTERNS = [
+  /paliv/i, /fuel/i,
+  /\bpump\b/i, /\bčerpadl/i, /\bcerpadl/i,
+  /vodní čerpadl/i, /vodni cerpadl/i, /water.?pump/i, /wasserpump/i,
+  /steering pump/i, /posilov/i,
+  /\bfiltr\b/i, /\bfilter\b/i,
+];
+function partAllowedInBrakePads(part: CatalogPart): boolean {
+  const hay = `${part.name || ''} ${part.category || ''} ${(part as any).tecdoc_section || ''} ${part.description || ''}`;
+  if (BRAKE_FORBIDDEN_PATTERNS.some((re) => re.test(hay))) return false;
+  // Soft positive: must look brake-related at all
+  return /(brzd|brake|bremse|bremsbelag|destič|destic|pad|kotouč|kotouc|disc|rotor)/i.test(hay);
+}
 
 function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean {
   if (subtypeId === "all") return true;
