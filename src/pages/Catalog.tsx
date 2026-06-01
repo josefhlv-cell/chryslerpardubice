@@ -63,6 +63,23 @@ const BRAKE_SUBTYPES: { id: string; label: string; keywords: string[] }[] = [
 ];
 
 const isBrakeCategory = (label?: string | null) => !!label && /brzd/i.test(label);
+const isBrakePadCategory = (label?: string | null) =>
+  !!label && /(destič|destic|brake.?pad|bremsbelag|oblož|obloz)/i.test(label);
+
+// Hard-forbid contamination from unrelated systems when user is in a brake-pad listing.
+const BRAKE_FORBIDDEN_PATTERNS = [
+  /paliv/i, /fuel/i,
+  /\bpump\b/i, /\bčerpadl/i, /\bcerpadl/i,
+  /vodní čerpadl/i, /vodni cerpadl/i, /water.?pump/i, /wasserpump/i,
+  /steering pump/i, /posilov/i,
+  /\bfiltr\b/i, /\bfilter\b/i,
+];
+function partAllowedInBrakePads(part: CatalogPart): boolean {
+  const hay = `${part.name || ''} ${part.category || ''} ${(part as any).tecdoc_section || ''} ${part.description || ''}`;
+  if (BRAKE_FORBIDDEN_PATTERNS.some((re) => re.test(hay))) return false;
+  // Soft positive: must look brake-related at all
+  return /(brzd|brake|bremse|bremsbelag|destič|destic|pad|kotouč|kotouc|disc|rotor)/i.test(hay);
+}
 
 function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean {
   if (subtypeId === "all") return true;
@@ -297,6 +314,10 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const partsItems = selectedGroup
     ? (() => {
         let arr = selectedGroup.parts;
+        // HARD filter: in brake-pad listings, drop pumps/fuel/water/filter contamination.
+        if (isBrakePadCategory(selectedGroup.label)) {
+          arr = arr.filter(partAllowedInBrakePads);
+        }
         if (isBrakeCategory(selectedGroup.label) && brakeSubtype !== "all") {
           arr = arr.filter((p) => partMatchesBrakeSubtype(p, brakeSubtype));
         }
@@ -479,10 +500,22 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 </div>
         )}
 
-        {step === "parts" && selectedGroup && (
+        {step === "parts" && selectedGroup && (() => {
+          const totalInGroup = selectedGroup.parts.length;
+          const oemCount = partsItems.filter((p) => p.is_oem).length;
+          const jmCount = partsItems.length - oemCount;
+          const filteredOut = totalInGroup - partsItems.length;
+          let header = `${partsItems.length} dílů — ORIGINÁL první, pak NÁHRADY`;
+          if (oemCount === 0 && jmCount > 0) header = `${jmCount} dílů z J+M Autodíly (náhrady)`;
+          else if (oemCount > 0 && jmCount > 0) header = `${partsItems.length} dílů — ${oemCount}× ORIGINÁL + ${jmCount}× J+M`;
+          else if (partsItems.length === 0 && filteredOut > 0) header = `0 viditelných (${filteredOut} odfiltrováno)`;
+          return (
           <>
             <div className="flex items-center justify-between mb-4 text-xs text-muted-foreground gap-3 flex-wrap">
-              <span>{selectedGroup.parts.length} dílů — ORIGINÁL první, pak NÁHRADY</span>
+              <span>{header}</span>
+              {filteredOut > 0 && partsItems.length > 0 && (
+                <span className="text-amber-300/80">+{filteredOut} skrytých nesouvisejících dílů</span>
+              )}
             </div>
 
             {isBrakeCategory(selectedGroup.label) && selectedGroup.parts.length > 0 && (() => {
@@ -540,10 +573,17 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
               items={partsItems}
               loading={partsLoading && partsItems.length === 0}
               onOrder={handleOrder}
-              emptyHint="V této kategorii nejsou žádné díly."
+              emptyHint={
+                totalInGroup > 0 && partsItems.length === 0
+                  ? "Žádné výsledky pro aktuální filtry. Zkuste 'Vše' nebo vypněte filtr pozice."
+                  : warning && jmCount === 0
+                    ? "V této kategorii se zatím nepodařilo načíst díly z J+M (zkuste obnovit za chvíli)."
+                    : "V této kategorii nejsou žádné díly."
+              }
             />
           </>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

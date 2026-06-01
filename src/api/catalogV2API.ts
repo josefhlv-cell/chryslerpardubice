@@ -501,24 +501,146 @@ export async function fetchJmCategoryTree(opts: any) {
   }
 }
 
+// VALID ITEM RULE: keep J+M item if it has an identifier (oem/code/article).
+// Do NOT drop items just because price/stock/availability are unknown.
+function isValidJmItem(it: any): boolean {
+  if (!it) return false;
+  const id = it.oem_number || it.code || it.article || it.article_number || it.itemNo;
+  return !!(id && String(id).trim());
+}
+
+async function _invokeJmSearchByVehicle(payload: any) {
+  const { data, error } = await supabase.functions.invoke('jm-proxy', {
+    body: { action: 'searchByVehicle', payload },
+  });
+  if (error) return { raw: [], valid: [], warning: String(error.message || error) };
+  const p = unwrapFunctionPayload(data);
+  const raw: any[] = Array.isArray(p?.items) ? p.items : [];
+  const valid = raw.filter(isValidJmItem);
+  return { raw, valid, warning: p?.warning as string | undefined };
+}
+
 export async function fetchJmForVehicle(opts: any) {
   try {
-    const { data, error } = await supabase.functions.invoke('jm-proxy', {
-      body: { action: 'searchByVehicle', payload: opts }
-    });
-    if (error) {
-      console.warn('[fetchJmForVehicle] error:', error);
-      return { items: [], warning: 'Katalog dočasně nedostupný' };
+    // STEP 1: full payload with categoryKeywords (when provided).
+    const step1 = await _invokeJmSearchByVehicle(opts);
+    let finalRaw = step1.raw;
+    let finalValid = step1.valid;
+    let step2Triggered = false;
+    let step2Raw = 0;
+    let step2Valid = 0;
+    let warning = step1.warning;
+
+    // STEP 2: if STEP 1 returned 0 valid items AND we had keyword constraints,
+    // retry WITHOUT categoryKeywords while keeping vehicle context + sectionId.
+    if (finalValid.length === 0 && opts && (opts.categoryKeywords || opts.keywords)) {
+      step2Triggered = true;
+      const relaxed = { ...opts };
+      delete relaxed.categoryKeywords;
+      delete relaxed.keywords;
+      const step2 = await _invokeJmSearchByVehicle(relaxed);
+      step2Raw = step2.raw.length;
+      step2Valid = step2.valid.length;
+      if (step2.valid.length > 0) {
+        finalRaw = step2.raw;
+        finalValid = step2.valid;
+        warning = step2.warning;
+      }
     }
-    const payload = unwrapFunctionPayload(data);
-    return {
-      items: (payload?.items || []).map((it: any) => normalizeRow(it, 'jm')),
-      warning: payload?.warning
-    };
+
+    const items = finalValid.map((it: any) => {
+      const norm = normalizeRow(it, 'jm');
+      if (step2Triggered) (norm as any).fallback_unfiltered = true;
+      return norm;
+    });
+
+    console.log('[JM DEBUG]', JSON.stringify({
+      brand: opts?.brand, model: opts?.model, engine: opts?.engine,
+      categoryId: opts?.sectionId || opts?.categoryId || null,
+      categoryLabel: opts?.canonicalCategory || opts?.categoryLabel || null,
+      step1Raw: step1.raw.length, step1Valid: step1.valid.length,
+      step2Triggered, step2Raw, step2Valid,
+      finalCount: items.length,
+      warning: warning || null,
+    }));
+
+    // Only surface a warning when J+M truly failed AND we have 0 items.
+    const surfacedWarning = (items.length === 0 && warning) ? warning : undefined;
+    return { items, warning: surfacedWarning };
   } catch (err) {
     console.error('[fetchJmForVehicle] exception:', err);
     return { items: [], warning: String(err) };
   }
+}
+
+// =============================================================================
+// AUTOMATED CATALOG AUDIT
+// Iterates brands → models → engines → top-level canonical categories and logs
+// any failing combinations. Callable from browser console as `window.__auditCatalog()`.
+// =============================================================================
+export type CatalogAuditFailure = {
+  brand: string; model: string; engine: string;
+  categoryId: string; categoryLabel: string;
+  treeCount: number; oemCount: number; jmCount: number;
+  finalVisibleCount: number; failureReason: string;
+};
+
+export async function auditCatalog(limit = { brands: 4, models: 4, engines: 2 }): Promise<CatalogAuditFailure[]> {
+  const { fetchAllPartsForEngine } = await import('@/services/catalogService');
+  const failures: CatalogAuditFailure[] = [];
+  const brands = (await fetchBrands()).slice(0, limit.brands);
+  for (const brand of brands) {
+    const models = (await fetchModelsForBrand(brand)).slice(0, limit.models);
+    for (const model of models) {
+      const engines = (await fetchEnginesForModel(brand, model)).slice(0, limit.engines);
+      for (const engine of engines) {
+        if (!engine) continue;
+        try {
+          const res = await fetchAllPartsForEngine({ brand, model, engine });
+          const groups = res.groups || [];
+          if (groups.length === 0) {
+            failures.push({
+              brand, model, engine: String(engine),
+              categoryId: '-', categoryLabel: '-',
+              treeCount: 0, oemCount: 0, jmCount: 0, finalVisibleCount: 0,
+              failureReason: res.warning || 'no_groups',
+            });
+            console.warn('[CATALOG AUDIT FAIL]', { brand, model, engine, failureReason: res.warning || 'no_groups' });
+            continue;
+          }
+          const flatten = (g: any[]): any[] => g.flatMap((n) => [n, ...(n.children ? flatten(n.children) : [])]);
+          for (const node of flatten(groups)) {
+            const parts = node.parts || [];
+            const oemCount = parts.filter((p: any) => p.is_oem).length;
+            const jmCount = parts.length - oemCount;
+            if (node.count > 0 && parts.length === 0) {
+              const fail = {
+                brand, model, engine: String(engine),
+                categoryId: node.id, categoryLabel: node.label,
+                treeCount: node.count, oemCount, jmCount, finalVisibleCount: 0,
+                failureReason: 'tree_count_listing_mismatch',
+              };
+              failures.push(fail);
+              console.warn('[CATALOG AUDIT FAIL]', fail);
+            }
+          }
+        } catch (e: any) {
+          failures.push({
+            brand, model, engine: String(engine),
+            categoryId: '-', categoryLabel: '-',
+            treeCount: 0, oemCount: 0, jmCount: 0, finalVisibleCount: 0,
+            failureReason: 'exception:' + (e?.message || e),
+          });
+        }
+      }
+    }
+  }
+  console.log(`[CATALOG AUDIT] done. ${failures.length} failing cases.`);
+  return failures;
+}
+
+if (typeof window !== 'undefined') {
+  (window as any).__auditCatalog = auditCatalog;
 }
 
 const _jmCodeCache = new Map<string, { items: CatalogPart[]; ts: number }>();
