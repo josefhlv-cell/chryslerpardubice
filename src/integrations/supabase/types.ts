@@ -4768,6 +4768,19 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity_timeline: {
+        Row: {
+          badge: string | null
+          description: string | null
+          kind: string | null
+          link: string | null
+          occurred_at: string | null
+          ref_id: string | null
+          title: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       vehicles_public: {
         Row: {
           brand: string | null
