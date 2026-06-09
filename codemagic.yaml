@@ -80,15 +80,21 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
           /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Lokalizace je vyžadována pro Bluetooth Low Energy skenování.'" "$PLIST" 2>/dev/null || true
-      - name: Sync Capacitor (iOS)
+      - name: Sync Capacitor (iOS) — copy + update without auto-pod
         script: |
           set -e
-          npx cap sync ios
+          # Use copy + update instead of `cap sync` to avoid the automatic
+          # `pod install` that `cap sync` runs (it crashes on mac_mini_m2 due
+          # to FFI native gem arch mismatch). We run pod install ourselves
+          # in the next step with an x86_64 fallback.
+          export CAPACITOR_SKIP_NATIVE_INSTALL=true
+          npx cap copy ios
+          npx cap update ios --deployment || npx cap update ios || true
           if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile still missing after cap sync — forcing full re-add"
+            echo "Podfile missing after copy/update — forcing full re-add"
             rm -rf ios
             npx cap add ios
-            npx cap sync ios
+            npx cap copy ios
           fi
           ls -la ios/App/Podfile
       - name: Install CocoaPods dependencies
@@ -102,7 +108,7 @@ workflows:
           fi
           cd ios/App
           pod install --repo-update || {
-            echo "pod install failed, retrying with x86_64 arch (Apple Silicon fallback)"
+            echo "pod install failed, retrying with x86_64 arch (Apple Silicon FFI fallback)"
             arch -x86_64 pod install --repo-update
           }
       - name: Build iOS app (no codesigning)
