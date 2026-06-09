@@ -62,8 +62,13 @@ workflows:
           npm run build
       - name: Add iOS platform if missing
         script: |
-          if [ ! -d "ios" ]; then
+          set -e
+          if [ ! -f "ios/App/Podfile" ]; then
+            echo "Podfile missing — (re)adding iOS platform"
+            rm -rf ios
             npx cap add ios
+          else
+            echo "iOS platform already present"
           fi
       - name: Patch iOS Info.plist (Bluetooth & Camera permissions)
         script: |
@@ -77,10 +82,29 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Lokalizace je vyžadována pro Bluetooth Low Energy skenování.'" "$PLIST" 2>/dev/null || true
       - name: Sync Capacitor (iOS)
         script: |
+          set -e
           npx cap sync ios
+          if [ ! -f "ios/App/Podfile" ]; then
+            echo "Podfile still missing after cap sync — forcing full re-add"
+            rm -rf ios
+            npx cap add ios
+            npx cap sync ios
+          fi
+          ls -la ios/App/Podfile
       - name: Install CocoaPods dependencies
         script: |
-          cd ios/App && pod install --repo-update
+          set -e
+          if [ ! -f "ios/App/Podfile" ]; then
+            echo "FATAL: ios/App/Podfile not found. Aborting." >&2
+            ls -la ios || true
+            ls -la ios/App || true
+            exit 1
+          fi
+          cd ios/App
+          pod install --repo-update || {
+            echo "pod install failed, retrying with x86_64 arch (Apple Silicon fallback)"
+            arch -x86_64 pod install --repo-update
+          }
       - name: Build iOS app (no codesigning)
         script: |
           cd ios/App
