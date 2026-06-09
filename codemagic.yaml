@@ -42,12 +42,11 @@ workflows:
       - android/app/build/reports/**/*
 
   ios-workflow:
-    name: iOS Build (unsigned)
+    name: iOS Build (unsigned, SPM)
     max_build_duration: 90
     instance_type: mac_mini_m2
     environment:
       xcode: latest
-      cocoapods: default
       node: 22
     scripts:
       - name: Install npm dependencies (clean)
@@ -60,15 +59,17 @@ workflows:
       - name: Build web assets (Vite)
         script: |
           npm run build
-      - name: Add iOS platform if missing
+      - name: Add iOS platform if missing (SPM)
         script: |
           set -e
-          if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile missing — (re)adding iOS platform"
+          # Capacitor 8 defaults to Swift Package Manager (SPM) — no Podfile.
+          # Detect "iOS project present" by xcodeproj existence, not Podfile.
+          if [ ! -d "ios/App/App.xcodeproj" ]; then
+            echo "iOS project missing — adding fresh (SPM)"
             rm -rf ios
-            npx cap add ios
+            npx cap add ios --packagemanager SPM
           else
-            echo "iOS platform already present"
+            echo "iOS project already present"
           fi
       - name: Patch iOS Info.plist (Bluetooth & Camera permissions)
         script: |
@@ -80,39 +81,22 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
           /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Lokalizace je vyžadována pro Bluetooth Low Energy skenování.'" "$PLIST" 2>/dev/null || true
-      - name: Sync Capacitor (iOS) — copy + update without auto-pod
+      - name: Sync Capacitor (iOS, SPM — no pods)
         script: |
           set -e
-          # Use copy + update instead of `cap sync` to avoid the automatic
-          # `pod install` that `cap sync` runs (it crashes on mac_mini_m2 due
-          # to FFI native gem arch mismatch). We run pod install ourselves
-          # in the next step with an x86_64 fallback.
-          export CAPACITOR_SKIP_NATIVE_INSTALL=true
-          npx cap copy ios
-          npx cap update ios --deployment || npx cap update ios || true
-          if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile missing after copy/update — forcing full re-add"
-            rm -rf ios
-            npx cap add ios
-            npx cap copy ios
-          fi
-          ls -la ios/App/Podfile
-      - name: Install CocoaPods dependencies
+          npx cap sync ios
+          ls -la ios/App
+      - name: Resolve Swift Packages
         script: |
           set -e
-          if [ ! -f "ios/App/Podfile" ]; then
-            echo "FATAL: ios/App/Podfile not found. Aborting." >&2
-            ls -la ios || true
-            ls -la ios/App || true
-            exit 1
-          fi
           cd ios/App
-          pod install --repo-update || {
-            echo "pod install failed, retrying with x86_64 arch (Apple Silicon FFI fallback)"
-            arch -x86_64 pod install --repo-update
-          }
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -resolvePackageDependencies
       - name: Build iOS app (no codesigning)
         script: |
+          set -e
           cd ios/App
           xcodebuild \
             -workspace App.xcworkspace \
