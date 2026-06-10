@@ -270,6 +270,7 @@ const Admin = () => {
     {
       key: "users", label: "Zákazníci & role", icon: Users, children: [
         { key: "users-360", label: "Zákazník 360° (hledat)", icon: Users },
+        { key: "users-activity", label: "Aktivita zákazníků", icon: Activity },
         { key: "users-firms", label: "Firmy", badge: pendingOnly.length },
         ...(isEnabled("employees") ? [{ key: "users-employees", label: "Zaměstnanci", icon: UserCog }] : []),
         ...(isEnabled("mechanics_management") ? [{ key: "users-mechanics", label: "Mechanici" }] : []),
