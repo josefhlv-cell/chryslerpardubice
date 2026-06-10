@@ -499,6 +499,7 @@ const Admin = () => {
           </div>
         );
       case "users-360": navigate("/admin/users"); return <p className="text-sm text-muted-foreground">Otevírám Zákazník 360°…</p>;
+      case "users-activity": return <Suspense fallback={<Loader />}><AdminCustomerActivity /></Suspense>;
       case "users-employees": return <Suspense fallback={<Loader />}><AdminEmployees /></Suspense>;
       case "users-mechanics": return <Suspense fallback={<Loader />}><AdminMechanics /></Suspense>;
 
