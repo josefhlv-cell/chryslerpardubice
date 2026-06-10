@@ -370,6 +370,36 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
             </div>
           </div>
 
+          {/* A-Z rychlý skok (jen při řazení podle jména) */}
+          {sortBy === "name" && filtered.length > 0 && (
+            <div className="flex flex-wrap gap-1 p-2 rounded-md border border-border/40 bg-card/30">
+              <span className="text-[10px] text-muted-foreground mr-1 self-center">A–Z:</span>
+              {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((ch) => {
+                const idx = filtered.findIndex((p) => {
+                  const n = (p.full_name || p.company_name || "").trim().toUpperCase();
+                  // normalize diacritics
+                  const base = n.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                  return base.startsWith(ch);
+                });
+                const disabled = idx < 0;
+                return (
+                  <button
+                    key={ch}
+                    disabled={disabled}
+                    onClick={() => setPage(Math.floor(idx / pageSize) + 1)}
+                    className={`w-6 h-6 text-[11px] font-semibold rounded ${
+                      disabled
+                        ? "text-muted-foreground/30 cursor-not-allowed"
+                        : "text-amber-300 hover:bg-amber-500/15 cursor-pointer"
+                    }`}
+                  >
+                    {ch}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {/* Hromadné akce */}
           <div className="flex flex-wrap items-center gap-2 p-2 rounded-md border border-border/40 bg-card/40">
             <label className="flex items-center gap-2 text-xs cursor-pointer">
