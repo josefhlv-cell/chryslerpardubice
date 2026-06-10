@@ -63,6 +63,7 @@ const AdminVehicleListings = lazy(() => import("@/components/admin/AdminVehicleL
 const AdminFaultReports = lazy(() => import("@/components/admin/AdminFaultReports"));
 
 const AdminEmployees = lazy(() => import("@/components/admin/AdminEmployees"));
+const AdminCustomerActivity = lazy(() => import("@/components/admin/AdminCustomerActivity"));
 
 const AdminNotifications = lazy(() => import("@/components/admin/AdminNotifications"));
 const AdminNotificationToggle = lazy(() => import("@/components/admin/AdminNotificationToggle"));
