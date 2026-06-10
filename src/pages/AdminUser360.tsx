@@ -60,7 +60,7 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
   const [stats, setStats] = useState<Record<string, { orders: number; spend: number; lastOrder?: string }>>({});
   const [listLoading, setListLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "private" | "business" | "pending">("all");
-  const [sortBy, setSortBy] = useState<"recent" | "spend" | "orders" | "name">("recent");
+  const [sortBy, setSortBy] = useState<"recent" | "spend" | "orders" | "name">("name");
 
   // Pagination
   const [page, setPage] = useState(1);
