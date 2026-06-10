@@ -63,6 +63,7 @@ const AdminVehicleListings = lazy(() => import("@/components/admin/AdminVehicleL
 const AdminFaultReports = lazy(() => import("@/components/admin/AdminFaultReports"));
 
 const AdminEmployees = lazy(() => import("@/components/admin/AdminEmployees"));
+const AdminCustomerActivity = lazy(() => import("@/components/admin/AdminCustomerActivity"));
 
 const AdminNotifications = lazy(() => import("@/components/admin/AdminNotifications"));
 const AdminNotificationToggle = lazy(() => import("@/components/admin/AdminNotificationToggle"));
@@ -269,6 +270,7 @@ const Admin = () => {
     {
       key: "users", label: "Zákazníci & role", icon: Users, children: [
         { key: "users-360", label: "Zákazník 360° (hledat)", icon: Users },
+        { key: "users-activity", label: "Aktivita zákazníků", icon: Activity },
         { key: "users-firms", label: "Firmy", badge: pendingOnly.length },
         ...(isEnabled("employees") ? [{ key: "users-employees", label: "Zaměstnanci", icon: UserCog }] : []),
         ...(isEnabled("mechanics_management") ? [{ key: "users-mechanics", label: "Mechanici" }] : []),
@@ -497,6 +499,7 @@ const Admin = () => {
           </div>
         );
       case "users-360": navigate("/admin/users"); return <p className="text-sm text-muted-foreground">Otevírám Zákazník 360°…</p>;
+      case "users-activity": return <Suspense fallback={<Loader />}><AdminCustomerActivity /></Suspense>;
       case "users-employees": return <Suspense fallback={<Loader />}><AdminEmployees /></Suspense>;
       case "users-mechanics": return <Suspense fallback={<Loader />}><AdminMechanics /></Suspense>;
 
