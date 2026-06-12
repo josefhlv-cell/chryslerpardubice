@@ -27,7 +27,7 @@ workflows:
       - name: Build web assets (Vite)
         script: |
           npm run build
-      - name: Sync Capacitor (Android)
+      - name: Sync Capacitor Android
         script: |
           npx cap sync android
       - name: Validate Android project
@@ -44,7 +44,7 @@ workflows:
       - android/app/build/reports/**/*
 
   ios-testflight-workflow:
-    name: iOS TestFlight Build (signed)
+    name: iOS TestFlight Build signed
     max_build_duration: 90
     instance_type: mac_mini_m2
     integrations:
@@ -56,17 +56,19 @@ workflows:
         distribution_type: app_store
         bundle_identifier: CHDP.OBD.CHRYSL.VLINK
     scripts:
-      - name: Install npm dependencies (clean)
+      - name: Install npm dependencies clean
         script: |
           npm --version
           npm ci --legacy-peer-deps --no-audit --no-fund || {
             echo "npm ci failed, retrying with npm install"
             npm install --legacy-peer-deps --no-audit --no-fund
           }
-      - name: Build web assets (Vite)
+
+      - name: Build web assets Vite
         script: |
           npm run build
-      - name: Add iOS platform if missing (SPM)
+
+      - name: Add iOS platform if missing SPM
         script: |
           set -e
           if [ ! -d "ios/App/App.xcodeproj" ]; then
@@ -76,6 +78,7 @@ workflows:
           else
             echo "iOS project already exists"
           fi
+
       - name: Patch iOS Info.plist permissions
         script: |
           PLIST="ios/App/App/Info.plist"
@@ -83,18 +86,22 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Lokalizace je vyžadována pro Bluetooth Low Energy skenování.'" "$PLIST" 2>/dev/null || true
+
       - name: Sync Capacitor iOS
         script: |
           npx cap sync ios
+
       - name: Force iOS Bundle ID
         script: |
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = CHDP.OBD.CHRYSL.VLINK;/g' ios/App/App.xcodeproj/project.pbxproj
+
       - name: Set up code signing
         script: |
           keychain initialize
           app-store-connect fetch-signing-files CHDP.OBD.CHRYSL.VLINK --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
+
       - name: Build signed IPA
         script: |
           set -e
@@ -102,10 +109,12 @@ workflows:
           xcode-project build-ipa \
             --project App.xcodeproj \
             --scheme App
+
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
     publishing:
       app_store_connect:
         auth: integration
