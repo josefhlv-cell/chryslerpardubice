@@ -41,13 +41,18 @@ workflows:
       - android/app/build/outputs/**/mapping.txt
       - android/app/build/reports/**/*
 
-  ios-workflow:
-    name: iOS Build (unsigned, SPM)
+  ios-testflight-workflow:
+    name: iOS TestFlight Build (signed)
     max_build_duration: 90
     instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: "Garáž CHDP"
     environment:
       xcode: latest
       node: 22
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: cz.chdp.garage
     scripts:
       - name: Install npm dependencies (clean)
         script: |
@@ -62,8 +67,6 @@ workflows:
       - name: Add iOS platform if missing (SPM)
         script: |
           set -e
-          # Capacitor 8 defaults to Swift Package Manager (SPM) — no Podfile.
-          # Detect "iOS project present" by xcodeproj existence, not Podfile.
           if [ ! -d "ios/App/App.xcodeproj" ]; then
             echo "iOS project missing — adding fresh (SPM)"
             rm -rf ios
@@ -71,40 +74,35 @@ workflows:
           else
             echo "iOS project already present"
           fi
-      - name: Patch iOS Info.plist (Bluetooth & Camera permissions)
+      - name: Patch iOS Info.plist permissions
         script: |
           PLIST="ios/App/App/Info.plist"
-          /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru (Vgate iCar Pro 4.0).'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Set :NSBluetoothAlwaysUsageDescription 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru (Vgate iCar Pro 4.0).'" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Set :NSBluetoothPeripheralUsageDescription 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru.'" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSBluetoothAlwaysUsageDescription 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSBluetoothPeripheralUsageDescription 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth.'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Lokalizace je vyžadována pro Bluetooth Low Energy skenování.'" "$PLIST" 2>/dev/null || true
-      - name: Sync Capacitor (iOS, SPM — no pods)
+      - name: Sync Capacitor iOS
         script: |
           set -e
           npx cap sync ios
-          ls -la ios/App
-      - name: Resolve Swift Packages
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files cz.chdp.garage --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Build signed IPA
         script: |
           set -e
           cd ios/App
-          xcodebuild \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -resolvePackageDependencies
-      - name: Build iOS app (no codesigning)
-        script: |
-          set -e
-          cd ios/App
-          xcodebuild \
-            -workspace App.xcworkspace \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            build
+          xcode-project build-ipa \
+            --workspace App.xcworkspace \
+            --scheme App
     artifacts:
-      - ios/App/build/Build/Products/**/*.app
+      - ios/App/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
