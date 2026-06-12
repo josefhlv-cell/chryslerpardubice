@@ -52,7 +52,7 @@ workflows:
       node: 22
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: CHDP-OBD
+        bundle_identifier: CHDP.OBD.CHRYSL.VLINK
     scripts:
       - name: Install npm dependencies (clean)
         script: |
@@ -88,7 +88,7 @@ workflows:
       - name: Set up code signing
         script: |
           keychain initialize
-          app-store-connect fetch-signing-files CHDP-OBD --type IOS_APP_STORE --create
+          app-store-connect fetch-signing-files CHDP.OBD.CHRYSL.VLINK --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
       - name: Build signed IPA
