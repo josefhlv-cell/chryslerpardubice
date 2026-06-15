@@ -1,4 +1,4 @@
-workflows:
+mi workflows:
   android-workflow:
     name: Android Build (APK + AAB)
     max_build_duration: 60
@@ -108,7 +108,7 @@ workflows:
       - name: Increment iOS build number
         script: |
           cd ios/App
-          agvtool new-version -all 3
+          agvtool new-version -all 4
       - name: Build signed IPA
         script: |
           set -e
