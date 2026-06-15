@@ -108,7 +108,7 @@ workflows:
       - name: Increment iOS build number
         script: |
           cd ios/App
-          agvtool new-version -all 2
+          agvtool new-version -all 3
       - name: Build signed IPA
         script: |
           set -e
