@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import CatalogListing from "@/components/catalog/CatalogListing";
 import VinAndOemSearch from "@/components/catalog/VinAndOemSearch";
+import { BrandIcon } from "@/components/icons/BrandIcon";
 
 const BRAND_ORDER = ["Chrysler", "Dodge", "RAM", "Lancia"];
 
@@ -77,7 +78,6 @@ const BRAKE_FORBIDDEN_PATTERNS = [
 function partAllowedInBrakePads(part: CatalogPart): boolean {
   const hay = `${part.name || ''} ${part.category || ''} ${(part as any).tecdoc_section || ''} ${part.description || ''}`;
   if (BRAKE_FORBIDDEN_PATTERNS.some((re) => re.test(hay))) return false;
-  // Soft positive: must look brake-related at all
   return /(brzd|brake|bremse|bremsbelag|destič|destic|pad|kotouč|kotouc|disc|rotor)/i.test(hay);
 }
 
@@ -90,7 +90,6 @@ function partMatchesBrakeSubtype(part: CatalogPart, subtypeId: string): boolean 
   return sub.keywords.some((k) => new RegExp(norm(k)).test(hay));
 }
 
-/** Axle position detection from part name/description/tecdoc section. */
 type AxlePos = "all" | "front" | "rear";
 function partMatchesAxle(part: CatalogPart, pos: AxlePos): boolean {
   if (pos === "all") return true;
@@ -189,8 +188,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
     let cancelled = false;
     (async () => {
       try {
-        // Feature flag: use_jm_tree_v2 → načítat z jm_category_tree_v2 + jm_part_v2.
-        // Pokud flag ON a v2 vrátí data → použij. Jinak fallback na starý strom.
         let res: Awaited<ReturnType<typeof fetchAllPartsForEngine>> | null = null;
         try {
           const { data: flag } = await supabase
@@ -314,7 +311,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
   const partsItems = selectedGroup
     ? (() => {
         let arr = selectedGroup.parts;
-        // HARD filter: in brake-pad listings, drop pumps/fuel/water/filter contamination.
         if (isBrakePadCategory(selectedGroup.label)) {
           arr = arr.filter(partAllowedInBrakePads);
         }
@@ -385,9 +381,18 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             {brands.map((b) => (
               <button key={b} onClick={() => setBrand(b)}
-                className="group relative flex flex-col items-center justify-center p-6 rounded-2xl border border-border/40 bg-card hover:border-primary/60 hover:bg-card/80 hover:shadow-[0_0_30px_-10px_hsl(var(--primary)/0.4)] transition-all">
-                <div className="w-14 h-14 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                  <Car className="w-7 h-7" />
+                className={`group relative flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all duration-300 ${
+                  brand === b
+                    ? "border-orange-500 bg-card shadow-[0_0_20px_rgba(249,115,22,0.3)]"
+                    : "border-border/40 bg-card hover:border-primary/60 hover:bg-card/80"
+                }`}
+              >
+                <div className={`rounded-xl flex items-center justify-center mb-3 transition-all duration-300 ${
+                  brand === b
+                    ? "w-20 h-20 bg-orange-100 dark:bg-orange-950"
+                    : "w-14 h-14 bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground"
+                }`}>
+                  <BrandIcon brand={b} size={brand === b ? 64 : 48} isSelected={brand === b} />
                 </div>
                 <h3 className="font-semibold text-sm">{b}</h3>
               </button>
@@ -434,7 +439,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 );})}
               </div>
         )}
-
 
         {step === "category" && (
           loading
@@ -483,7 +487,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                                 <Badge variant={isRoot ? "secondary" : "outline"} className="text-[10px] h-4 px-1.5 shrink-0">{node.count}</Badge>
                               </div>
                               {children.length ? (
-                                isExpanded ? <ChevronDown className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-primary shrink-0`} /> : <ChevronRight className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-muted-foreground/40 group-hover:text-primary shrink-0`} />
+                                isExpanded ? <ChevronDown className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-primary shrink-0`} /> : <ChevronRight className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-muted-foreground/40 shrink-0`} />
                               ) : <ChevronRight className={`${isRoot ? "w-4 h-4" : "w-3.5 h-3.5"} text-muted-foreground/40 group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0`} />}
                             </button>
                             {isExpanded && !isLeaf && (
@@ -567,7 +571,6 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
                 </div>
               );
             })()}
-
 
             <CatalogListing
               items={partsItems}
