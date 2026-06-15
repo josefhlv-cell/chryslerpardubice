@@ -27,6 +27,10 @@ workflows:
       - name: Build web assets (Vite)
         script: |
           npm run build
+      - name: Generate Capacitor icons
+        script: |
+          npm install @capacitor/assets --save-dev
+          npx capacitor-assets generate --ios
       - name: Sync Capacitor Android
         script: |
           npx cap sync android
