@@ -101,7 +101,10 @@ workflows:
           app-store-connect fetch-signing-files CHDP.OBD.CHRYSL.VLINK --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
-
+      - name: Increment iOS build number
+        script: |
+          cd ios/App
+          agvtool new-version -all 2
       - name: Build signed IPA
         script: |
           set -e
