@@ -1,5 +1,3 @@
-Tady máš celý soubor upravený pro IOS-Vlink / Vgate / ELM327 BLE. Nahraď jím celý původní soubor.
-
 // BLE Manager for OBD2 adapter communication
 // Supports Vgate / IOS-Vlink / ELM327 BLE adapters
 // Uses @capacitor-community/bluetooth-le on native, simulates on web
