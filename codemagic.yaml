@@ -1,4 +1,4 @@
- workflows:
+workflows:
   android-workflow:
     name: Android Build (APK + AAB)
     max_build_duration: 60
@@ -16,6 +16,7 @@
             echo "npm ci failed, retrying with npm install"
             npm install --legacy-peer-deps --no-audit --no-fund
           }
+
       - name: Install required Android SDK packages
         script: |
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
@@ -24,23 +25,29 @@
           fi
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
       - name: Build web assets (Vite)
         script: |
           npm run build
+
       - name: Generate Capacitor icons
         script: |
           npm install @capacitor/assets --save-dev
           npx capacitor-assets generate --ios
+
       - name: Sync Capacitor Android
         script: |
           npx cap sync android
+
       - name: Validate Android project
         script: |
           chmod +x android/gradlew
           ./android/gradlew -p android :app:tasks --no-daemon --stacktrace
+
       - name: Build Android Debug APK and Release AAB
         script: |
           ./android/gradlew -p android :app:assembleDebug :app:bundleRelease --no-daemon --stacktrace --warning-mode all
+
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
       - android/app/build/outputs/bundle/release/app-release.aab
@@ -59,6 +66,7 @@
       ios_signing:
         distribution_type: app_store
         bundle_identifier: CHDP.OBD.CHRYSL.VLINK
+
     scripts:
       - name: Install npm dependencies clean
         script: |
@@ -83,6 +91,10 @@
             echo "iOS project already exists"
           fi
 
+      - name: Sync Capacitor iOS
+        script: |
+          npx cap sync ios
+
       - name: Patch iOS Info.plist permissions
         script: |
           set -e
@@ -101,10 +113,7 @@
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
 
           echo "Info.plist patched successfully"
-
-      - name: Sync Capacitor iOS
-        script: |
-          npx cap sync ios
+          plutil -p "$PLIST"
 
       - name: Force iOS Bundle ID
         script: |
@@ -116,10 +125,12 @@
           app-store-connect fetch-signing-files CHDP.OBD.CHRYSL.VLINK --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
+
       - name: Increment iOS build number
         script: |
           cd ios/App
           agvtool new-version -all 7
+
       - name: Build signed IPA
         script: |
           set -e
