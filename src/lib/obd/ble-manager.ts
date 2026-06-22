@@ -79,38 +79,123 @@ class BLEManager {
       }
     }
   }
-  async scan(duration = 8000): Promise<BLEDeviceInfo[]> {
-    this.setState('scanning');
-    const devices: BLEDeviceInfo[] = [];
-    if (!this.isNative) {
-      await new Promise(r => setTimeout(r, 1500));
-      const simDevices: BLEDeviceInfo[] = [
+  async scan(duration = 10000): Promise<BLEDeviceInfo[]> {
+  this.setState('scanning');
+
+  const devices: BLEDeviceInfo[] = [];
+
+  if (!this.isNative) {
+    await new Promise(r => setTimeout(r, 1500));
+
+    const simDevices: BLEDeviceInfo[] = [
+      {
+        deviceId: 'ios-vlink-001',
+        name: 'IOS-Vlink',
+        rssi: -45,
+        connected: false,
+      },
+      {
+        deviceId: 'vgate-icar-pro-001',
+        name: 'Vgate iCar Pro 4.0',
+        rssi: -50,
+        connected: false,
+      },
+      {
+        deviceId: 'obd-generic-002',
+        name: 'OBD-II Adapter',
+        rssi: -72,
+        connected: false,
+      },
+    ];
+
+    simDevices.forEach(d => {
+      devices.push(d);
+      this.emit({ type: 'deviceFound', payload: d });
+    });
+
+    this.setState('disconnected');
+    return devices;
+  }
+
+  try {
+    await this.ensureInitialized();
+
+    try {
+      await BleClient.stopLEScan();
+    } catch {}
+
+    await BleClient.requestLEScan(
+      {
+        services: [OBD_SERVICE_UUID],
+        allowDuplicates: false,
+      },
+      (result: ScanResult) => {
+        const dev = this.scanResultToDevice(result);
+
+        console.log('[BLE scan filtered]', dev);
+
+        if (!devices.find(d => d.deviceId === dev.deviceId)) {
+          devices.push(dev);
+          this.emit({ type: 'deviceFound', payload: dev });
+        }
+      }
+    );
+
+    await new Promise(r => setTimeout(r, duration / 2));
+
+    try {
+      await BleClient.stopLEScan();
+    } catch {}
+
+    if (devices.length === 0) {
+      console.log('[BLE] No fff0 devices, fallback to open scan');
+
+      await BleClient.requestLEScan(
         {
-          deviceId: 'ios-vlink-001',
-          name: 'IOS-Vlink',
-          rssi: -45,
-          connected: false,
+          allowDuplicates: false,
         },
-        {
-          deviceId: 'vgate-icar-pro-001',
-          name: 'Vgate iCar Pro 4.0',
-          rssi: -50,
-          connected: false,
-        },
-        {
-          deviceId: 'obd-generic-002',
-          name: 'OBD-II Adapter',
-          rssi: -72,
-          connected: false,
-        },
-      ];
-      simDevices.forEach(d => {
-        devices.push(d);
-        this.emit({ type: 'deviceFound', payload: d });
-      });
-      this.setState('disconnected');
-      return devices;
+        (result: ScanResult) => {
+          const name = (result.device.name || result.localName || '').trim();
+          const rssi = result.rssi ?? -100;
+
+          const looksLikeObd =
+            /obd|elm|vgate|icar|vlink|ios-vlink|obdlink|veepeak|bafx|ble|konnwei/i.test(name);
+
+          if (rssi > -90 || looksLikeObd || name.length > 0) {
+            const dev = this.scanResultToDevice(result);
+
+            console.log('[BLE scan fallback]', dev);
+
+            if (!devices.find(d => d.deviceId === dev.deviceId)) {
+              devices.push(dev);
+              this.emit({ type: 'deviceFound', payload: dev });
+            }
+          }
+        }
+      );
+
+      await new Promise(r => setTimeout(r, duration / 2));
+
+      try {
+        await BleClient.stopLEScan();
+      } catch {}
     }
+  } catch (e) {
+    console.error('BLE scan error:', e);
+
+    this.emit({
+      type: 'error',
+      payload: e,
+    });
+
+    try {
+      await BleClient.stopLEScan();
+    } catch {}
+  }
+
+  this.setState('disconnected');
+  return devices;
+}
     try {
       await this.ensureInitialized();
       try {
