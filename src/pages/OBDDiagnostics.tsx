@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BleClient, BleDevice } from "@capacitor-community/bluetooth-le";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
@@ -40,6 +39,11 @@ interface DTCCode {
   severity: "low" | "medium" | "high";
 }
 
+type ScannedDevice = {
+  device: BleDevice;
+  rssi: number;
+};
+
 const EMPTY_OBD_DATA: OBDData = {
   rpm: 0,
   coolantTemp: 0,
@@ -52,10 +56,46 @@ const EMPTY_OBD_DATA: OBDData = {
   boostPressure: 0,
 };
 
-const ELM327_SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
+const OBD_NAME_HINTS = [
+  "obd",
+  "elm",
+  "icar",
+  "vgate",
+  "ble",
+  "ios",
+  "car",
+  "diagnostic",
+];
 
-const GaugeCircle = ({ value, max, label, unit, color, icon: Icon }: {
-  value: number; max: number; label: string; unit: string; color: string; icon: any;
+const isLikelyOBDDevice = (device?: BleDevice | null) => {
+  const name = (device?.name || "").toLowerCase();
+  return OBD_NAME_HINTS.some((hint) => name.includes(hint));
+};
+
+const scoreDevice = (item: ScannedDevice) => {
+  let score = item.rssi || -100;
+
+  if (isLikelyOBDDevice(item.device)) {
+    score += 1000;
+  }
+
+  return score;
+};
+
+const GaugeCircle = ({
+  value,
+  max,
+  label,
+  unit,
+  color,
+  icon: Icon,
+}: {
+  value: number;
+  max: number;
+  label: string;
+  unit: string;
+  color: string;
+  icon: any;
 }) => {
   const percentage = Math.min((value / max) * 100, 100);
   const circumference = 2 * Math.PI * 40;
@@ -80,19 +120,29 @@ const GaugeCircle = ({ value, max, label, unit, color, icon: Icon }: {
             style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}
           />
         </svg>
+
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <Icon className="w-3.5 h-3.5 mb-0.5" style={{ color }} />
           <span className="font-display font-bold text-lg leading-none">{Math.round(value)}</span>
           <span className="text-[9px] text-muted-foreground">{unit}</span>
         </div>
       </div>
+
       <span className="text-[10px] font-medium text-muted-foreground text-center">{label}</span>
     </div>
   );
 };
 
-const LiveGraph = ({ data, label, color, unit }: {
-  data: number[]; label: string; color: string; unit: string;
+const LiveGraph = ({
+  data,
+  label,
+  color,
+  unit,
+}: {
+  data: number[];
+  label: string;
+  color: string;
+  unit: string;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -125,6 +175,7 @@ const LiveGraph = ({ data, label, color, unit }: {
     const range = max - min || 1;
 
     ctx.beginPath();
+
     data.forEach((v, i) => {
       const x = (i / (data.length - 1)) * w;
       const y = h - ((v - min) / range) * (h - 8) - 4;
@@ -146,6 +197,7 @@ const LiveGraph = ({ data, label, color, unit }: {
           {Math.round(currentValue)} {unit}
         </span>
       </div>
+
       <canvas ref={canvasRef} width={300} height={60} className="w-full h-[60px] rounded-lg" />
     </div>
   );
@@ -161,6 +213,8 @@ const OBDDiagnostics = () => {
   const [tempHistory, setTempHistory] = useState<number[]>([]);
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
 
+  const scanResultsRef = useRef<Map<string, ScannedDevice>>(new Map());
+
   const resetData = () => {
     setObdData(EMPTY_OBD_DATA);
     setDtcCodes([]);
@@ -169,16 +223,57 @@ const OBDDiagnostics = () => {
     setSpeedHistory([]);
   };
 
+  const scanForOBDDevice = async () => {
+    scanResultsRef.current.clear();
+
+    await BleClient.requestLEScan(
+      {
+        allowDuplicates: true,
+      },
+      (result: any) => {
+        const foundDevice: BleDevice | undefined = result.device;
+        const rssi: number = result.rssi ?? -100;
+
+        if (!foundDevice?.deviceId) return;
+
+        const existing = scanResultsRef.current.get(foundDevice.deviceId);
+
+        if (!existing || rssi > existing.rssi) {
+          scanResultsRef.current.set(foundDevice.deviceId, {
+            device: foundDevice,
+            rssi,
+          });
+        }
+      }
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+
+    await BleClient.stopLEScan();
+
+    const devices = Array.from(scanResultsRef.current.values()).sort(
+      (a, b) => scoreDevice(b) - scoreDevice(a)
+    );
+
+    return devices[0]?.device || null;
+  };
+
   const handleConnect = async () => {
     setConnecting(true);
 
     try {
       await BleClient.initialize();
 
-      const selectedDevice = await BleClient.requestDevice({
-        services: [ELM327_SERVICE_UUID],
-        optionalServices: [ELM327_SERVICE_UUID],
+      toast({
+        title: "Hledám OBD adaptér",
+        description: "Skenuji Bluetooth zařízení v okolí...",
       });
+
+      const selectedDevice = await scanForOBDDevice();
+
+      if (!selectedDevice) {
+        throw new Error("Nebyl nalezen žádný BLE OBD adaptér.");
+      }
 
       await BleClient.connect(selectedDevice.deviceId, () => {
         setConnected(false);
@@ -191,19 +286,28 @@ const OBDDiagnostics = () => {
         });
       });
 
+      try {
+        await BleClient.getServices(selectedDevice.deviceId);
+      } catch (serviceError) {
+        console.warn("BLE services read warning:", serviceError);
+      }
+
       setDevice(selectedDevice);
       setConnected(true);
       resetData();
 
       toast({
         title: "Připojeno",
-        description: `Zařízení: ${selectedDevice.name || "ELM327 adaptér"}`,
+        description: `Zařízení: ${selectedDevice.name || "OBD adaptér"}`,
       });
-
-      // Tady následně napoj čtení OBD dat přes charakteristiky adaptéru.
-      // Zatím už se NEPOUŽÍVAJÍ žádná demo data.
     } catch (error) {
       console.error("BLE connect error:", error);
+
+      try {
+        await BleClient.stopLEScan();
+      } catch {
+        // Scan už mohl být zastavený.
+      }
 
       setConnected(false);
       setDevice(null);
@@ -211,7 +315,8 @@ const OBDDiagnostics = () => {
 
       toast({
         title: "Bluetooth chyba",
-        description: "Nepodařilo se připojit k OBD adaptéru",
+        description:
+          "Nepodařilo se najít nebo připojit k OBD adaptéru. Zkontrolujte, že je adaptér zapnutý a poblíž telefonu.",
         variant: "destructive",
       });
     } finally {
@@ -264,10 +369,12 @@ const OBDDiagnostics = () => {
                     <Bluetooth className="w-5 h-5 text-muted-foreground" />
                   </div>
                 )}
+
                 <div>
                   <p className="font-display font-semibold text-sm">
                     {connected ? "Připojeno" : "ELM327 Adaptér"}
                   </p>
+
                   <p className="text-[11px] text-muted-foreground">
                     {connected
                       ? device?.name || "Live připojení aktivní"
@@ -290,6 +397,7 @@ const OBDDiagnostics = () => {
                 ) : (
                   <Wifi className="w-4 h-4 mr-1" />
                 )}
+
                 {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
               </Button>
             </div>
@@ -351,14 +459,23 @@ const OBDDiagnostics = () => {
                 ) : (
                   <div className="space-y-2">
                     {dtcCodes.map((dtc) => (
-                      <div key={dtc.code} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20">
+                      <div
+                        key={dtc.code}
+                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20"
+                      >
                         <div className="flex items-center gap-3">
-                          <code className="font-display font-bold text-sm text-foreground">{dtc.code}</code>
+                          <code className="font-display font-bold text-sm text-foreground">
+                            {dtc.code}
+                          </code>
                           <span className="text-xs text-muted-foreground">{dtc.description}</span>
                         </div>
 
                         <Badge className={severityColor(dtc.severity)}>
-                          {dtc.severity === "high" ? "Vážné" : dtc.severity === "medium" ? "Střední" : "Nízké"}
+                          {dtc.severity === "high"
+                            ? "Vážné"
+                            : dtc.severity === "medium"
+                              ? "Střední"
+                              : "Nízké"}
                         </Badge>
                       </div>
                     ))}
@@ -389,7 +506,10 @@ const OBDDiagnostics = () => {
                   { icon: AlertTriangle, label: "Chybové kódy" },
                   { icon: Activity, label: "Live grafy" },
                 ].map((f) => (
-                  <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15">
+                  <div
+                    key={f.label}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15"
+                  >
                     <f.icon className="w-5 h-5 text-primary" />
                     <span className="text-[10px] text-muted-foreground text-center">{f.label}</span>
                   </div>
