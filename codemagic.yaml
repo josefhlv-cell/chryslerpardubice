@@ -112,6 +112,10 @@ workflows:
           /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
 
+          /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string bluetooth-central" "$PLIST"
+
           echo "Info.plist patched successfully"
           plutil -p "$PLIST"
 
@@ -129,7 +133,7 @@ workflows:
       - name: Increment iOS build number
         script: |
           cd ios/App
-          agvtool new-version -all 10
+          agvtool new-version -all 11
 
       - name: Build signed IPA
         script: |
