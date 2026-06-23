@@ -182,6 +182,8 @@ const OBDDiagnostics = () => {
   const [rpmHistory, setRpmHistory] = useState<number[]>([]);
   const [tempHistory, setTempHistory] = useState<number[]>([]);
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [showDebug, setShowDebug] = useState(true);
 
   useEffect(() => {
     const unsubscribe = bleManager.subscribe((event) => {
@@ -194,8 +196,17 @@ const OBDDiagnostics = () => {
         );
       }
 
+      if (event.type === "debug") {
+        const line = String(event.payload);
+        setDebugLogs((prev) => [...prev.slice(-79), line]);
+      }
+
       if (event.type === "error") {
         console.error("BLE manager error:", event.payload);
+        setDebugLogs((prev) => [
+          ...prev.slice(-79),
+          `[ERROR] ${event.payload instanceof Error ? event.payload.message : String(event.payload)}`,
+        ]);
       }
     });
 
@@ -212,6 +223,7 @@ const OBDDiagnostics = () => {
 
   const handleConnect = async () => {
     setConnecting(true);
+    setDebugLogs([]);
 
     try {
       toast({
@@ -363,6 +375,40 @@ const OBDDiagnostics = () => {
             </div>
           </div>
         </motion.div>
+
+        <div className="luxury-card p-3">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div>
+              <p className="font-display font-semibold text-sm">BLE debug</p>
+              <p className="text-[10px] text-muted-foreground">
+                Pošli screenshot těchto logů, pokud se adaptér nepřipojí.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setDebugLogs([])}>
+                Smazat
+              </Button>
+              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setShowDebug(v => !v)}>
+                {showDebug ? "Skrýt" : "Zobrazit"}
+              </Button>
+            </div>
+          </div>
+
+          {showDebug && (
+            <div className="max-h-52 overflow-auto rounded-xl bg-black/40 border border-border/20 p-2 font-mono text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
+              {debugLogs.length === 0 ? (
+                <span>Žádné BLE logy zatím nejsou.</span>
+              ) : (
+                debugLogs.map((line, index) => (
+                  <div key={`${index}-${line}`}>
+                    {line}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
 
         <AnimatePresence>
           {connected && (
