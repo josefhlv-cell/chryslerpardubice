@@ -20,7 +20,7 @@ export type BLEConnectionState =
   | 'error';
 
 export type BLEEvent = {
-  type: 'stateChange' | 'deviceFound' | 'data' | 'error' | 'reconnecting';
+  type: 'stateChange' | 'deviceFound' | 'data' | 'error' | 'reconnecting' | 'debug';
   payload: any;
 };
 
@@ -134,17 +134,42 @@ class BLEManager {
     this.listeners.forEach(l => l(event));
   }
 
+  private safeStringify(value: any): string {
+    try {
+      if (value instanceof Error) return value.message;
+      if (typeof value === 'string') return value;
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  private debug(message: string, data?: any) {
+    const text = data === undefined ? message : `${message} ${this.safeStringify(data)}`;
+    console.log(text);
+    this.emit({ type: 'debug', payload: text });
+  }
+
+  private warn(message: string, data?: any) {
+    const text = data === undefined ? message : `${message} ${this.safeStringify(data)}`;
+    console.warn(text);
+    this.emit({ type: 'debug', payload: text });
+  }
+
   private setState(state: BLEConnectionState) {
     this.state = state;
     this.emit({ type: 'stateChange', payload: state });
+    this.debug('[BLE] STATE', state);
   }
 
   private async ensureInitialized(): Promise<void> {
     if (this.bleInitialized) return;
 
     if (this.isNative) {
+      this.debug('[BLE] INITIALIZE');
       await BleClient.initialize({ androidNeverForLocation: true });
       this.bleInitialized = true;
+      this.debug('[BLE] INITIALIZED');
     }
   }
 
@@ -172,14 +197,30 @@ class BLEManager {
       await new Promise(r => setTimeout(r, 1500));
 
       const simDevices: BLEDeviceInfo[] = [
-        { deviceId: 'ios-vlink-001', name: 'IOS-Vlink', rssi: -45, connected: false },
-        { deviceId: 'vgate-icar-pro-001', name: 'Vgate iCar Pro 4.0', rssi: -50, connected: false },
-        { deviceId: 'obd-generic-002', name: 'OBD-II Adapter', rssi: -72, connected: false },
+        {
+          deviceId: 'ios-vlink-001',
+          name: 'IOS-Vlink',
+          rssi: -45,
+          connected: false,
+        },
+        {
+          deviceId: 'vgate-icar-pro-001',
+          name: 'Vgate iCar Pro 4.0',
+          rssi: -50,
+          connected: false,
+        },
+        {
+          deviceId: 'obd-generic-002',
+          name: 'OBD-II Adapter',
+          rssi: -72,
+          connected: false,
+        },
       ];
 
       simDevices.forEach(d => {
         devices.set(d.deviceId, d);
         this.emit({ type: 'deviceFound', payload: d });
+        this.debug('[BLE] DEVICE FOUND', d);
       });
 
       this.setState('disconnected');
@@ -193,6 +234,8 @@ class BLEManager {
         await BleClient.stopLEScan();
       } catch {}
 
+      this.debug('[BLE] SCAN START');
+
       await BleClient.requestLEScan({ allowDuplicates: true }, (result: ScanResult) => {
         const dev = this.scanResultToDevice(result);
         const existing = devices.get(dev.deviceId);
@@ -202,7 +245,7 @@ class BLEManager {
           this.emit({ type: 'deviceFound', payload: dev });
         }
 
-        console.log('[BLE RAW SCAN]', {
+        this.debug('[BLE] RAW SCAN', {
           name: dev.name,
           deviceId: dev.deviceId,
           rssi: dev.rssi,
@@ -212,12 +255,16 @@ class BLEManager {
 
       await new Promise(r => setTimeout(r, duration));
     } catch (e) {
-      console.error('BLE scan error:', e);
+      this.warn('[BLE] SCAN ERROR', e);
       this.emit({ type: 'error', payload: e });
     } finally {
       try {
         await BleClient.stopLEScan();
       } catch {}
+
+      this.debug('[BLE] SCAN END', {
+        count: devices.size,
+      });
 
       this.setState('disconnected');
     }
@@ -262,10 +309,10 @@ class BLEManager {
     try {
       await this.ensureInitialized();
 
-      console.log('[BLE] CONNECT START', deviceId);
+      this.debug('[BLE] CONNECT START', deviceId);
 
       await BleClient.connect(deviceId, disconnectedId => {
-        console.log('[BLE] Disconnected:', disconnectedId);
+        this.warn('[BLE] DISCONNECTED', disconnectedId);
 
         this.connectedDevice = null;
         this.activeProfile = null;
@@ -273,15 +320,15 @@ class BLEManager {
         this.tryAutoReconnect();
       });
 
-      console.log('[BLE] CONNECT OK');
+      this.debug('[BLE] CONNECT OK');
 
       await new Promise(r => setTimeout(r, 800));
 
       try {
         const services = await BleClient.getServices(deviceId);
-        console.log('[BLE SERVICES]', services);
+        this.debug('[BLE] SERVICES', services);
       } catch (serviceErr) {
-        console.warn('[BLE] getServices warning:', serviceErr);
+        this.warn('[BLE] GET SERVICES WARNING', serviceErr);
       }
 
       const profile = await Promise.race([
@@ -310,12 +357,12 @@ class BLEManager {
       try {
         await this.initializeELM327();
       } catch (initError) {
-        console.warn('[BLE] ELM327 init failed, but keeping connection:', initError);
+        this.warn('[BLE] ELM327 INIT FAILED, KEEPING CONNECTION', initError);
       }
 
       return true;
     } catch (e) {
-      console.error('BLE connect error:', e);
+      this.warn('[BLE] CONNECT ERROR', e);
 
       try {
         await BleClient.disconnect(deviceId);
@@ -333,7 +380,7 @@ class BLEManager {
   private async findWorkingProfile(deviceId: string): Promise<OBDProfile | null> {
     for (const profile of OBD_PROFILES) {
       try {
-        console.log('[BLE] Trying profile:', profile.name);
+        this.debug('[BLE] TRY PROFILE', profile.name);
 
         this.responseBuffer = '';
 
@@ -345,6 +392,7 @@ class BLEManager {
             const text = new TextDecoder().decode(value);
             this.responseBuffer += text;
             this.emit({ type: 'data', payload: text });
+            this.debug('[BLE] RX', text);
           }
         );
 
@@ -353,17 +401,17 @@ class BLEManager {
         const ok = await this.probeProfile(deviceId, profile);
 
         if (ok) {
-          console.log('[BLE] Working OBD profile:', profile.name);
+          this.debug('[BLE] WORKING OBD PROFILE', profile.name);
           return profile;
         }
 
-        console.warn('[BLE] Profile notifications started but AT probe failed:', profile.name);
+        this.warn('[BLE] PROFILE AT PROBE FAILED', profile.name);
 
         try {
           await BleClient.stopNotifications(deviceId, profile.serviceUuid, profile.notifyUuid);
         } catch {}
       } catch (err) {
-        console.warn('[BLE] Profile failed:', profile.name, err);
+        this.warn(`[BLE] PROFILE FAILED ${profile.name}`, err);
 
         try {
           await BleClient.stopNotifications(deviceId, profile.serviceUuid, profile.notifyUuid);
@@ -381,9 +429,21 @@ class BLEManager {
       this.responseBuffer = '';
 
       try {
+        this.debug('[BLE] TX PROBE', {
+          profile: profile.name,
+          command,
+        });
+
         await this.writeToProfile(deviceId, profile, command);
+
         const response = await this.readResponse(1800).catch(() => '');
         const normalized = response.toUpperCase();
+
+        this.debug('[BLE] PROBE RESPONSE', {
+          profile: profile.name,
+          command,
+          response,
+        });
 
         if (
           normalized.includes('OK') ||
@@ -394,11 +454,15 @@ class BLEManager {
           normalized.includes('>') ||
           normalized.length > 0
         ) {
-          console.log('[BLE] AT probe OK:', profile.name, response);
+          this.debug('[BLE] AT PROBE OK', {
+            profile: profile.name,
+            response,
+          });
+
           return true;
         }
       } catch (err) {
-        console.warn('[BLE] AT probe failed:', profile.name, command, err);
+        this.warn(`[BLE] AT PROBE FAILED ${profile.name} ${command}`, err);
       }
     }
 
@@ -415,9 +479,22 @@ class BLEManager {
     const dataView = new DataView(encoded.buffer);
 
     try {
+      this.debug('[BLE] TX WRITE', {
+        profile: profile.name,
+        command: data,
+        mode: 'write',
+      });
+
       await BleClient.write(deviceId, profile.serviceUuid, profile.writeUuid, dataView);
     } catch (writeErr) {
-      console.warn('[BLE] write failed, trying writeWithoutResponse:', writeErr);
+      this.warn('[BLE] WRITE FAILED, TRYING WITHOUT RESPONSE', writeErr);
+
+      this.debug('[BLE] TX WRITE', {
+        profile: profile.name,
+        command: data,
+        mode: 'writeWithoutResponse',
+      });
+
       await BleClient.writeWithoutResponse(deviceId, profile.serviceUuid, profile.writeUuid, dataView);
     }
   }
@@ -428,10 +505,16 @@ class BLEManager {
     for (const command of commands) {
       try {
         this.responseBuffer = '';
+        this.debug('[BLE] INIT CMD', command);
         await this.write(command);
-        await this.readResponse(command === 'ATZ' || command === 'ATSP0' ? 3000 : 2000);
+        const response = await this.readResponse(command === 'ATZ' || command === 'ATSP0' ? 3000 : 2000);
+
+        this.debug('[BLE] INIT RESPONSE', {
+          command,
+          response,
+        });
       } catch (err) {
-        console.warn(`[BLE] OBD init command failed: ${command}`, err);
+        this.warn(`[BLE] OBD INIT COMMAND FAILED ${command}`, err);
       }
     }
   }
@@ -480,7 +563,7 @@ class BLEManager {
       try {
         await BleClient.disconnect(this.connectedDevice.deviceId);
       } catch (e) {
-        console.error('BLE disconnect error:', e);
+        this.warn('[BLE] DISCONNECT ERROR', e);
       }
     }
 
@@ -489,6 +572,7 @@ class BLEManager {
     this.responseBuffer = '';
     this.lastDeviceId = null;
     this.autoReconnect = true;
+
     this.setState('disconnected');
   }
 
@@ -529,8 +613,11 @@ class BLEManager {
           const partial = this.responseBuffer.trim();
           this.responseBuffer = '';
 
-          if (partial) resolve(partial);
-          else reject(new Error('TIMEOUT'));
+          if (partial) {
+            resolve(partial);
+          } else {
+            reject(new Error('TIMEOUT'));
+          }
         }
       }, 20);
     });
