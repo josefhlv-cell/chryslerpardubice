@@ -33,22 +33,29 @@ const INIT_SEQUENCE: { command: string; description: string }[] = [
   { command: 'ATST64', description: 'Timeout 400ms' },
 ];
 
-const ERROR_PATTERNS = ['NO DATA', 'UNABLE TO CONNECT', 'BUS INIT', 'CAN ERROR', 'BUFFER FULL', '?', 'ERROR'];
+const ERROR_PATTERNS = [
+  'NO DATA',
+  'UNABLE TO CONNECT',
+  'BUS INIT',
+  'CAN ERROR',
+  'BUFFER FULL',
+  '?',
+  'ERROR',
+];
 
-// Simulated OBD responses for web preview
 const SIMULATED_RESPONSES: Record<string, string> = {
-  'ATZ': 'ELM327 v2.3',
-  'ATE0': 'OK',
-  'ATL0': 'OK',
-  'ATS0': 'OK',
-  'ATH1': 'OK',
-  'ATSP0': 'OK',
-  'ATST64': 'OK',
-  'ATRV': '12.6V',
+  ATZ: 'ELM327 v2.3',
+  ATE0: 'OK',
+  ATL0: 'OK',
+  ATS0: 'OK',
+  ATH1: 'OK',
+  ATSP0: 'OK',
+  ATST64: 'OK',
+  ATRV: '12.6V',
   '0100': '7E80641002800180000000',
   '0105': '7E803410548',
   '010C': '7E804410C0D2C',
-  '010D': '7E80341OD00',
+  '010D': '7E803410D00',
   '0111': '7E803411119',
   '0142': '7E80441422F08',
   '0146': '7E803414632',
@@ -60,14 +67,16 @@ class ELM327Engine {
   private state: ELMState = 'idle';
   private queue: QueuedCommand[] = [];
   private processing = false;
-  private commandDelay = 80; // ms between commands
+  private commandDelay = 80;
   private initSteps: InitStep[] = [];
   private stateListeners: ((state: ELMState) => void)[] = [];
   private initListeners: ((steps: InitStep[]) => void)[] = [];
   private isNative = false;
 
   constructor() {
-    this.isNative = typeof (window as any).Capacitor !== 'undefined';
+    this.isNative =
+      typeof (window as any).Capacitor !== 'undefined' &&
+      (window as any).Capacitor.isNativePlatform?.();
   }
 
   getState(): ELMState {
@@ -88,12 +97,18 @@ class ELM327Engine {
 
   onStateChange(listener: (state: ELMState) => void): () => void {
     this.stateListeners.push(listener);
-    return () => { this.stateListeners = this.stateListeners.filter(l => l !== listener); };
+
+    return () => {
+      this.stateListeners = this.stateListeners.filter(l => l !== listener);
+    };
   }
 
   onInitProgress(listener: (steps: InitStep[]) => void): () => void {
     this.initListeners.push(listener);
-    return () => { this.initListeners = this.initListeners.filter(l => l !== listener); };
+
+    return () => {
+      this.initListeners = this.initListeners.filter(l => l !== listener);
+    };
   }
 
   private setState(state: ELMState) {
@@ -135,15 +150,17 @@ class ELM327Engine {
   }
 
   private async sendRaw(command: string): Promise<string> {
+    const cleanCommand = command.trim().replace(/\r/g, '');
+
     if (!this.isNative) {
-      // Simulate
       await this.delay(50 + Math.random() * 80);
-      const key = command.toUpperCase().replace(/\s/g, '');
+      const key = cleanCommand.toUpperCase().replace(/\s/g, '');
       return SIMULATED_RESPONSES[key] || 'NO DATA';
     }
 
-    await bleManager.write(command + '\r');
-    const response = await bleManager.readResponse(2000);
+    await bleManager.write(cleanCommand);
+    const response = await bleManager.readResponse(2500);
+
     return this.parseResponse(response);
   }
 
@@ -170,6 +187,7 @@ class ELM327Engine {
 
   private async processQueue() {
     if (this.processing || this.queue.length === 0) return;
+
     this.processing = true;
 
     while (this.queue.length > 0) {
@@ -201,16 +219,18 @@ class ELM327Engine {
   }
 
   parseResponse(raw: string): string {
-    // Strip prompt characters, whitespace, echoed commands
-    let cleaned = raw
+    return raw
       .replace(/>/g, '')
       .replace(/\r/g, '\n')
       .split('\n')
       .map(line => line.trim())
-      .filter(line => line.length > 0 && !line.startsWith('AT') && !line.startsWith('SEARCHING'))
+      .filter(
+        line =>
+          line.length > 0 &&
+          !line.toUpperCase().startsWith('AT') &&
+          !line.toUpperCase().startsWith('SEARCHING')
+      )
       .join('\n');
-
-    return cleaned;
   }
 
   parseMultiLine(raw: string): string[] {
