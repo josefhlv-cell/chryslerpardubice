@@ -236,22 +236,27 @@ class BLEManager {
 
       this.debug('[BLE] SCAN START');
 
-      await BleClient.requestLEScan({ allowDuplicates: true }, (result: ScanResult) => {
-        const dev = this.scanResultToDevice(result);
-        const existing = devices.get(dev.deviceId);
+      await BleClient.requestLEScan(
+        {
+          allowDuplicates: true,
+        },
+        (result: ScanResult) => {
+          const dev = this.scanResultToDevice(result);
+          const existing = devices.get(dev.deviceId);
 
-        if (!existing || dev.rssi > existing.rssi) {
-          devices.set(dev.deviceId, dev);
-          this.emit({ type: 'deviceFound', payload: dev });
+          if (!existing || dev.rssi > existing.rssi) {
+            devices.set(dev.deviceId, dev);
+            this.emit({ type: 'deviceFound', payload: dev });
+          }
+
+          this.debug('[BLE] RAW SCAN', {
+            name: dev.name,
+            deviceId: dev.deviceId,
+            rssi: dev.rssi,
+            uuids: result.uuids,
+          });
         }
-
-        this.debug('[BLE] RAW SCAN', {
-          name: dev.name,
-          deviceId: dev.deviceId,
-          rssi: dev.rssi,
-          uuids: result.uuids,
-        });
-      });
+      );
 
       await new Promise(r => setTimeout(r, duration));
     } catch (e) {
@@ -408,13 +413,21 @@ class BLEManager {
         this.warn('[BLE] PROFILE AT PROBE FAILED', profile.name);
 
         try {
-          await BleClient.stopNotifications(deviceId, profile.serviceUuid, profile.notifyUuid);
+          await BleClient.stopNotifications(
+            deviceId,
+            profile.serviceUuid,
+            profile.notifyUuid
+          );
         } catch {}
       } catch (err) {
         this.warn(`[BLE] PROFILE FAILED ${profile.name}`, err);
 
         try {
-          await BleClient.stopNotifications(deviceId, profile.serviceUuid, profile.notifyUuid);
+          await BleClient.stopNotifications(
+            deviceId,
+            profile.serviceUuid,
+            profile.notifyUuid
+          );
         } catch {}
       }
     }
@@ -485,7 +498,12 @@ class BLEManager {
         mode: 'write',
       });
 
-      await BleClient.write(deviceId, profile.serviceUuid, profile.writeUuid, dataView);
+      await BleClient.write(
+        deviceId,
+        profile.serviceUuid,
+        profile.writeUuid,
+        dataView
+      );
     } catch (writeErr) {
       this.warn('[BLE] WRITE FAILED, TRYING WITHOUT RESPONSE', writeErr);
 
@@ -495,7 +513,12 @@ class BLEManager {
         mode: 'writeWithoutResponse',
       });
 
-      await BleClient.writeWithoutResponse(deviceId, profile.serviceUuid, profile.writeUuid, dataView);
+      await BleClient.writeWithoutResponse(
+        deviceId,
+        profile.serviceUuid,
+        profile.writeUuid,
+        dataView
+      );
     }
   }
 
@@ -506,8 +529,12 @@ class BLEManager {
       try {
         this.responseBuffer = '';
         this.debug('[BLE] INIT CMD', command);
+
         await this.write(command);
-        const response = await this.readResponse(command === 'ATZ' || command === 'ATSP0' ? 3000 : 2000);
+
+        const response = await this.readResponse(
+          command === 'ATZ' || command === 'ATSP0' ? 3000 : 2000
+        );
 
         this.debug('[BLE] INIT RESPONSE', {
           command,
@@ -587,7 +614,11 @@ class BLEManager {
       throw new Error('BLE profile not ready');
     }
 
-    await this.writeToProfile(this.connectedDevice.deviceId, this.activeProfile, data);
+    await this.writeToProfile(
+      this.connectedDevice.deviceId,
+      this.activeProfile,
+      data
+    );
   }
 
   async readResponse(timeout = 2000): Promise<string> {
