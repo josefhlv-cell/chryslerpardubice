@@ -1,445 +1,526 @@
-// BLE Manager for OBD2 adapter communication
-// Supports Vgate / IOS-Vlink / ELM327 BLE adapters
-// Uses @capacitor-community/bluetooth-le on native, simulates on web
-
-import { BleClient, ScanResult } from '@capacitor-community/bluetooth-le';
-
-export type BLEDeviceInfo = {
-  deviceId: string;
-  name: string;
-  rssi: number;
-  connected: boolean;
-};
-
-export type BLEConnectionState =
-  | 'disconnected'
-  | 'scanning'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'error';
-
-export type BLEEvent = {
-  type: 'stateChange' | 'deviceFound' | 'data' | 'error' | 'reconnecting';
-  payload: any;
-};
-
-type BLEListener = (event: BLEEvent) => void;
-
-const OBD_SERVICE_UUID = '0000fff0-0000-1000-8000-00805f9b34fb';
-const OBD_CHAR_NOTIFY_UUID = '0000fff1-0000-1000-8000-00805f9b34fb';
-const OBD_CHAR_WRITE_UUID = '0000fff2-0000-1000-8000-00805f9b34fb';
-
-const OBD_CHAR_NOTIFY_ALT = '0000fff2-0000-1000-8000-00805f9b34fb';
-const OBD_CHAR_WRITE_ALT = '0000fff1-0000-1000-8000-00805f9b34fb';
-
-const MAX_RECONNECT_ATTEMPTS = 3;
-const RECONNECT_DELAY_MS = 2000;
-
-class BLEManager {
-  private state: BLEConnectionState = 'disconnected';
-  private listeners: BLEListener[] = [];
-  private connectedDevice: BLEDeviceInfo | null = null;
-  private responseBuffer = '';
-  private isNative = false;
-  private bleInitialized = false;
-  private autoReconnect = true;
-  private reconnectAttempts = 0;
-  private lastDeviceId: string | null = null;
-  private activeNotifyUuid = OBD_CHAR_NOTIFY_UUID;
-  private activeWriteUuid = OBD_CHAR_WRITE_UUID;
-
-  constructor() {
-    this.isNative =
-      typeof (window as any).Capacitor !== 'undefined' &&
-      (window as any).Capacitor.isNativePlatform?.();
-  }
-
-  getState(): BLEConnectionState {
-    return this.state;
-  }
-
-  getConnectedDevice(): BLEDeviceInfo | null {
-    return this.connectedDevice;
-  }
-
-  setAutoReconnect(enabled: boolean) {
-    this.autoReconnect = enabled;
-  }
-
-  subscribe(listener: BLEListener): () => void {
-    this.listeners.push(listener);
-
-    return () => {
-      this.listeners = this.listeners.filter(l => l !== listener);
-    };
-  }
-
-  private emit(event: BLEEvent) {
-    this.listeners.forEach(l => l(event));
-  }
-
-  private setState(state: BLEConnectionState) {
-    this.state = state;
-    this.emit({ type: 'stateChange', payload: state });
-  }
-
-  private async ensureInitialized(): Promise<void> {
-    if (this.bleInitialized) return;
-
-    if (this.isNative) {
-      try {
-        await BleClient.initialize({ androidNeverForLocation: true });
-        this.bleInitialized = true;
-      } catch (e) {
-        console.error('BLE init failed:', e);
-        this.emit({ type: 'error', payload: e });
-        throw e;
-      }
-    }
-  }
-
-  async scan(duration = 10000): Promise<BLEDeviceInfo[]> {
-    this.setState('scanning');
-
-    const devices: BLEDeviceInfo[] = [];
-
-    if (!this.isNative) {
-      await new Promise(r => setTimeout(r, 1500));
-
-      const simDevices: BLEDeviceInfo[] = [
-        {
-          deviceId: 'ios-vlink-001',
-          name: 'IOS-Vlink',
-          rssi: -45,
-          connected: false,
-        },
-        {
-          deviceId: 'vgate-icar-pro-001',
-          name: 'Vgate iCar Pro 4.0',
-          rssi: -50,
-          connected: false,
-        },
-        {
-          deviceId: 'obd-generic-002',
-          name: 'OBD-II Adapter',
-          rssi: -72,
-          connected: false,
-        },
-      ];
-
-      simDevices.forEach(d => {
-        devices.push(d);
-        this.emit({ type: 'deviceFound', payload: d });
-      });
-
-      this.setState('disconnected');
-      return devices;
-    }
-
-    try {
-      await this.ensureInitialized();
-
-      try {
-        await BleClient.stopLEScan();
-      } catch {}
-
-      await BleClient.requestLEScan(
-        {
-          allowDuplicates: false,
-        },
-        (result: ScanResult) => {
-          console.log('[BLE RAW SCAN]', {
-            name: result.device.name || result.localName || '',
-            deviceId: result.device.deviceId,
-            rssi: result.rssi,
-            uuids: result.uuids,
-          });
-
-          const dev = this.scanResultToDevice(result);
-
-          if (!devices.find(d => d.deviceId === dev.deviceId)) {
-            devices.push(dev);
-            this.emit({ type: 'deviceFound', payload: dev });
-          }
-        }
-      );
-
-      await new Promise(r => setTimeout(r, duration));
-
-      try {
-        await BleClient.stopLEScan();
-      } catch {}
-    } catch (e) {
-      console.error('BLE scan error:', e);
-
-      this.emit({
-        type: 'error',
-        payload: e,
-      });
-
-      try {
-        await BleClient.stopLEScan();
-      } catch {}
-    }
-
-    this.setState('disconnected');
-    return devices;
-  }
-
-  private scanResultToDevice(result: ScanResult): BLEDeviceInfo {
-    return {
-      deviceId: result.device.deviceId,
-      name: result.device.name || result.localName || 'Neznámé zařízení',
-      rssi: result.rssi ?? -100,
-      connected: false,
-    };
-  }
-
-  async connect(deviceId: string): Promise<boolean> {
-    this.setState('connecting');
-    this.lastDeviceId = deviceId;
-    this.reconnectAttempts = 0;
-
-    if (!this.isNative) {
-      await new Promise(r => setTimeout(r, 2000));
-
-      this.connectedDevice = {
-        deviceId,
-        name: 'IOS-Vlink',
-        rssi: -45,
-        connected: true,
-      };
-
-      this.setState('connected');
-      return true;
-    }
-
-    return this.performConnect(deviceId);
-  }
-
-  private async performConnect(deviceId: string): Promise<boolean> {
-    try {
-      await this.ensureInitialized();
-
-      await BleClient.connect(deviceId, disconnectedId => {
-        console.log('[BLE] Disconnected:', disconnectedId);
-
-        this.connectedDevice = null;
-        this.setState('disconnected');
-        this.tryAutoReconnect();
-      });
-
-      let notifyUuid = OBD_CHAR_NOTIFY_UUID;
-      let writeUuid = OBD_CHAR_WRITE_UUID;
-
-      try {
-        await BleClient.startNotifications(
-          deviceId,
-          OBD_SERVICE_UUID,
-          notifyUuid,
-          value => {
-            const text = new TextDecoder().decode(value);
-            this.responseBuffer += text;
-            this.emit({ type: 'data', payload: text });
-          }
-        );
-      } catch (notifyErr) {
-        console.warn(
-          '[BLE] FFF1 notify failed, trying FFF2 swapped layout:',
-          notifyErr
-        );
-
-        notifyUuid = OBD_CHAR_NOTIFY_ALT;
-        writeUuid = OBD_CHAR_WRITE_ALT;
-
-        await BleClient.startNotifications(
-          deviceId,
-          OBD_SERVICE_UUID,
-          notifyUuid,
-          value => {
-            const text = new TextDecoder().decode(value);
-            this.responseBuffer += text;
-            this.emit({ type: 'data', payload: text });
-          }
-        );
-      }
-
-      this.activeNotifyUuid = notifyUuid;
-      this.activeWriteUuid = writeUuid;
-
-      this.connectedDevice = {
-        deviceId,
-        name: 'IOS-Vlink',
-        rssi: -50,
-        connected: true,
-      };
-
-      this.reconnectAttempts = 0;
-      this.setState('connected');
-
-      try {
-        await this.write('ATZ');
-        await this.readResponse(3000);
-
-        await this.write('ATE0');
-        await this.readResponse(2000);
-
-        await this.write('ATL0');
-        await this.readResponse(2000);
-
-        await this.write('ATS0');
-        await this.readResponse(2000);
-
-        await this.write('ATH0');
-        await this.readResponse(2000);
-
-        await this.write('ATSP0');
-        await this.readResponse(3000);
-      } catch (initErr) {
-        console.warn('[BLE] OBD init commands failed:', initErr);
-      }
-
-      return true;
-    } catch (e) {
-      console.error('BLE connect error:', e);
-
-      this.connectedDevice = null;
-      this.setState('error');
-      this.emit({ type: 'error', payload: e });
-
-      return false;
-    }
-  }
-
-  private async tryAutoReconnect() {
-    if (
-      !this.autoReconnect ||
-      !this.lastDeviceId ||
-      this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS
-    ) {
-      return;
-    }
-
-    this.reconnectAttempts++;
-
-    console.log(
-      `[BLE] Auto-reconnect attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`
-    );
-
-    this.setState('reconnecting');
-
-    this.emit({
-      type: 'reconnecting',
-      payload: {
-        attempt: this.reconnectAttempts,
-        max: MAX_RECONNECT_ATTEMPTS,
-      },
-    });
-
-    await new Promise(r => setTimeout(r, RECONNECT_DELAY_MS));
-
-    const success = await this.performConnect(this.lastDeviceId);
-
-    if (!success && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-      this.tryAutoReconnect();
-    }
-  }
-
-  async disconnect(): Promise<void> {
-    this.autoReconnect = false;
-
-    if (this.isNative && this.connectedDevice) {
-      try {
-        await BleClient.stopNotifications(
-          this.connectedDevice.deviceId,
-          OBD_SERVICE_UUID,
-          this.activeNotifyUuid
-        );
-      } catch {}
-
-      try {
-        await BleClient.disconnect(this.connectedDevice.deviceId);
-      } catch (e) {
-        console.error('BLE disconnect error:', e);
-      }
-    }
-
-    this.connectedDevice = null;
-    this.responseBuffer = '';
-    this.lastDeviceId = null;
-    this.autoReconnect = true;
-
-    this.setState('disconnected');
-  }
-
-  async write(data: string): Promise<void> {
-    if (this.state !== 'connected') {
-      throw new Error('Not connected');
-    }
-
-    if (!this.isNative) return;
-
-    const encoded = new TextEncoder().encode(data + '\r');
-    const dataView = new DataView(encoded.buffer);
-
-    await BleClient.write(
-      this.connectedDevice!.deviceId,
-      OBD_SERVICE_UUID,
-      this.activeWriteUuid,
-      dataView
-    );
-  }
-
-  async readResponse(timeout = 2000): Promise<string> {
-    if (!this.isNative) {
-      await new Promise(r => setTimeout(r, 50 + Math.random() * 30));
-      return '';
-    }
-
-    return new Promise((resolve, reject) => {
-      const startTime = Date.now();
-
-      const check = setInterval(() => {
-        if (this.responseBuffer.includes('>')) {
-          clearInterval(check);
-
-          const response = this.responseBuffer
-            .trim()
-            .replace(/>$/, '')
-            .trim();
-
-          this.responseBuffer = '';
-          resolve(response);
-        } else if (Date.now() - startTime > timeout) {
-          clearInterval(check);
-
-          const partial = this.responseBuffer.trim();
-          this.responseBuffer = '';
-
-          if (partial) {
-            resolve(partial);
-          } else {
-            reject(new Error('TIMEOUT'));
-          }
-        }
-      }, 20);
-    });
-  }
-
-  getSignalQuality(): number {
-    if (!this.connectedDevice) return 0;
-
-    const rssi = this.connectedDevice.rssi;
-
-    if (rssi >= -50) return 100;
-    if (rssi >= -60) return 80;
-    if (rssi >= -70) return 60;
-    if (rssi >= -80) return 40;
-    if (rssi >= -90) return 20;
-
-    return 10;
-  }
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { BleClient, BleDevice } from "@capacitor-community/bluetooth-le";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
+import {
+  Bluetooth,
+  BluetoothConnected,
+  Thermometer,
+  Gauge,
+  AlertTriangle,
+  Activity,
+  Trash2,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Zap,
+  Fuel,
+  Wind,
+} from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+
+interface OBDData {
+  rpm: number;
+  coolantTemp: number;
+  intakeTemp: number;
+  speed: number;
+  throttle: number;
+  fuelPressure: number;
+  engineLoad: number;
+  voltage: number;
+  boostPressure: number;
 }
 
-export const bleManager = new BLEManager();
+interface DTCCode {
+  code: string;
+  description: string;
+  severity: "low" | "medium" | "high";
+}
+
+type ScannedDevice = {
+  device: BleDevice;
+  rssi: number;
+};
+
+const EMPTY_OBD_DATA: OBDData = {
+  rpm: 0,
+  coolantTemp: 0,
+  intakeTemp: 0,
+  speed: 0,
+  throttle: 0,
+  fuelPressure: 0,
+  engineLoad: 0,
+  voltage: 0,
+  boostPressure: 0,
+};
+
+const OBD_NAME_HINTS = [
+  "obd",
+  "elm",
+  "icar",
+  "vgate",
+  "ble",
+  "ios",
+  "car",
+  "diagnostic",
+];
+
+const isLikelyOBDDevice = (device?: BleDevice | null) => {
+  const name = (device?.name || "").toLowerCase();
+  return OBD_NAME_HINTS.some((hint) => name.includes(hint));
+};
+
+const scoreDevice = (item: ScannedDevice) => {
+  let score = item.rssi || -100;
+
+  if (isLikelyOBDDevice(item.device)) {
+    score += 1000;
+  }
+
+  return score;
+};
+
+const GaugeCircle = ({
+  value,
+  max,
+  label,
+  unit,
+  color,
+  icon: Icon,
+}: {
+  value: number;
+  max: number;
+  label: string;
+  unit: string;
+  color: string;
+  icon: any;
+}) => {
+  const percentage = Math.min((value / max) * 100, 100);
+  const circumference = 2 * Math.PI * 40;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative w-24 h-24">
+        <svg className="w-24 h-24 -rotate-90" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r="40" fill="none" stroke="hsl(0 0% 12%)" strokeWidth="5" />
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke={color}
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            className="transition-all duration-500 ease-out"
+            style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}
+          />
+        </svg>
+
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <Icon className="w-3.5 h-3.5 mb-0.5" style={{ color }} />
+          <span className="font-display font-bold text-lg leading-none">{Math.round(value)}</span>
+          <span className="text-[9px] text-muted-foreground">{unit}</span>
+        </div>
+      </div>
+
+      <span className="text-[10px] font-medium text-muted-foreground text-center">{label}</span>
+    </div>
+  );
+};
+
+const LiveGraph = ({
+  data,
+  label,
+  color,
+  unit,
+}: {
+  data: number[];
+  label: string;
+  color: string;
+  unit: string;
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = "hsl(0 0% 15%)";
+    ctx.lineWidth = 0.5;
+
+    for (let i = 0; i < 5; i++) {
+      const y = (h / 4) * i;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+
+    if (data.length < 2) return;
+
+    const max = Math.max(...data, 1);
+    const min = Math.min(...data, 0);
+    const range = max - min || 1;
+
+    ctx.beginPath();
+
+    data.forEach((v, i) => {
+      const x = (i / (data.length - 1)) * w;
+      const y = h - ((v - min) / range) * (h - 8) - 4;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }, [data, color]);
+
+  const currentValue = data.length > 0 ? data[data.length - 1] : 0;
+
+  return (
+    <div className="luxury-card p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+        <span className="font-display font-bold text-sm" style={{ color }}>
+          {Math.round(currentValue)} {unit}
+        </span>
+      </div>
+
+      <canvas ref={canvasRef} width={300} height={60} className="w-full h-[60px] rounded-lg" />
+    </div>
+  );
+};
+
+const OBDDiagnostics = () => {
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [device, setDevice] = useState<BleDevice | null>(null);
+  const [obdData, setObdData] = useState<OBDData>(EMPTY_OBD_DATA);
+  const [dtcCodes, setDtcCodes] = useState<DTCCode[]>([]);
+  const [rpmHistory, setRpmHistory] = useState<number[]>([]);
+  const [tempHistory, setTempHistory] = useState<number[]>([]);
+  const [speedHistory, setSpeedHistory] = useState<number[]>([]);
+
+  const scanResultsRef = useRef<Map<string, ScannedDevice>>(new Map());
+
+  const resetData = () => {
+    setObdData(EMPTY_OBD_DATA);
+    setDtcCodes([]);
+    setRpmHistory([]);
+    setTempHistory([]);
+    setSpeedHistory([]);
+  };
+
+  const scanForOBDDevice = async () => {
+    scanResultsRef.current.clear();
+
+    await BleClient.requestLEScan(
+      {
+        allowDuplicates: true,
+      },
+      (result: any) => {
+        const foundDevice: BleDevice | undefined = result.device;
+        const rssi: number = result.rssi ?? -100;
+
+        if (!foundDevice?.deviceId) return;
+
+        const existing = scanResultsRef.current.get(foundDevice.deviceId);
+
+        if (!existing || rssi > existing.rssi) {
+          scanResultsRef.current.set(foundDevice.deviceId, {
+            device: foundDevice,
+            rssi,
+          });
+        }
+      }
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 8000));
+
+    await BleClient.stopLEScan();
+
+    const devices = Array.from(scanResultsRef.current.values()).sort(
+      (a, b) => scoreDevice(b) - scoreDevice(a)
+    );
+
+    return devices[0]?.device || null;
+  };
+
+  const handleConnect = async () => {
+    setConnecting(true);
+
+    try {
+      await BleClient.initialize();
+
+      toast({
+        title: "Hledám OBD adaptér",
+        description: "Skenuji Bluetooth zařízení v okolí...",
+      });
+
+      const selectedDevice = await scanForOBDDevice();
+
+      if (!selectedDevice) {
+        throw new Error("Nebyl nalezen žádný BLE OBD adaptér.");
+      }
+
+      await BleClient.connect(selectedDevice.deviceId, () => {
+        setConnected(false);
+        setDevice(null);
+        resetData();
+
+        toast({
+          title: "Odpojeno",
+          description: "OBD adaptér byl odpojen",
+        });
+      });
+
+      try {
+        await BleClient.getServices(selectedDevice.deviceId);
+      } catch (serviceError) {
+        console.warn("BLE services read warning:", serviceError);
+      }
+
+      setDevice(selectedDevice);
+      setConnected(true);
+      resetData();
+
+      toast({
+        title: "Připojeno",
+        description: `Zařízení: ${selectedDevice.name || "OBD adaptér"}`,
+      });
+    } catch (error) {
+      console.error("BLE connect error:", error);
+
+      try {
+        await BleClient.stopLEScan();
+      } catch {
+        // Scan už mohl být zastavený.
+      }
+
+      setConnected(false);
+      setDevice(null);
+      resetData();
+
+      toast({
+        title: "Bluetooth chyba",
+        description:
+          "Nepodařilo se najít nebo připojit k OBD adaptéru. Zkontrolujte, že je adaptér zapnutý a poblíž telefonu.",
+        variant: "destructive",
+      });
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    try {
+      if (device?.deviceId) {
+        await BleClient.disconnect(device.deviceId);
+      }
+    } catch (error) {
+      console.warn("BLE disconnect warning:", error);
+    }
+
+    setConnected(false);
+    setDevice(null);
+    resetData();
+
+    toast({ title: "Odpojeno" });
+  };
+
+  const clearDTC = () => {
+    setDtcCodes([]);
+    toast({ title: "Chybové kódy vymazány" });
+  };
+
+  const severityColor = (s: string) => {
+    if (s === "high") return "bg-destructive/15 text-destructive border-0";
+    if (s === "medium") return "bg-warning/15 text-warning border-0";
+    return "bg-success/15 text-success border-0";
+  };
+
+  return (
+    <div className="min-h-screen pb-24 bg-background">
+      <PageHeader title="OBD Diagnostika" subtitle="Bluetooth · ELM327" />
+
+      <div className="px-4 max-w-4xl mx-auto space-y-4">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className={`luxury-card p-4 ${connected ? "border-success/30" : ""}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {connected ? (
+                  <div className="w-10 h-10 rounded-xl bg-success/15 flex items-center justify-center glow-success">
+                    <BluetoothConnected className="w-5 h-5 text-success" />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-xl brushed-metal border border-border/40 flex items-center justify-center">
+                    <Bluetooth className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                )}
+
+                <div>
+                  <p className="font-display font-semibold text-sm">
+                    {connected ? "Připojeno" : "ELM327 Adaptér"}
+                  </p>
+
+                  <p className="text-[11px] text-muted-foreground">
+                    {connected
+                      ? device?.name || "Live připojení aktivní"
+                      : "Připojte přes Bluetooth"}
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant={connected ? "destructive" : "hero"}
+                onClick={connected ? handleDisconnect : handleConnect}
+                disabled={connecting}
+                className="text-xs"
+              >
+                {connecting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin mr-1" />
+                ) : connected ? (
+                  <WifiOff className="w-4 h-4 mr-1" />
+                ) : (
+                  <Wifi className="w-4 h-4 mr-1" />
+                )}
+
+                {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+
+        <AnimatePresence>
+          {connected && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-4"
+            >
+              <div className="luxury-card p-4">
+                <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  Živé hodnoty
+                </h3>
+
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  <GaugeCircle value={obdData.rpm} max={7000} label="Otáčky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
+                  <GaugeCircle value={obdData.coolantTemp} max={120} label="Chladič" unit="°C" color={obdData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
+                  <GaugeCircle value={obdData.speed} max={220} label="Rychlost" unit="km/h" color="hsl(142, 71%, 45%)" icon={Gauge} />
+                  <GaugeCircle value={obdData.throttle} max={100} label="Plyn" unit="%" color="hsl(38, 92%, 50%)" icon={Zap} />
+                  <GaugeCircle value={obdData.engineLoad} max={100} label="Zatížení" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
+                  <GaugeCircle value={obdData.voltage} max={15} label="Napětí" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
+                  <GaugeCircle value={obdData.fuelPressure} max={70} label="Palivo" unit="kPa" color="hsl(20, 90%, 50%)" icon={Fuel} />
+                  <GaugeCircle value={obdData.intakeTemp} max={70} label="Sání" unit="°C" color="hsl(180, 60%, 50%)" icon={Wind} />
+                  <GaugeCircle value={obdData.boostPressure} max={2.5} label="Turbo" unit="bar" color="hsl(340, 80%, 55%)" icon={Wind} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <LiveGraph data={rpmHistory} label="Otáčky" color="hsl(347, 77%, 50%)" unit="RPM" />
+                <LiveGraph data={tempHistory} label="Teplota chladiče" color="hsl(200, 80%, 50%)" unit="°C" />
+                <LiveGraph data={speedHistory} label="Rychlost" color="hsl(142, 71%, 45%)" unit="km/h" />
+              </div>
+
+              <div className="luxury-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning" />
+                    Chybové kódy (DTC)
+                  </h3>
+
+                  {dtcCodes.length > 0 && (
+                    <Button size="sm" variant="ghost" onClick={clearDTC} className="text-xs h-7">
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Vymazat
+                    </Button>
+                  )}
+                </div>
+
+                {dtcCodes.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">Žádné chybové kódy</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {dtcCodes.map((dtc) => (
+                      <div
+                        key={dtc.code}
+                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <code className="font-display font-bold text-sm text-foreground">
+                            {dtc.code}
+                          </code>
+                          <span className="text-xs text-muted-foreground">{dtc.description}</span>
+                        </div>
+
+                        <Badge className={severityColor(dtc.severity)}>
+                          {dtc.severity === "high"
+                            ? "Vážné"
+                            : dtc.severity === "medium"
+                              ? "Střední"
+                              : "Nízké"}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {!connected && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+            <div className="luxury-card p-6 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full brushed-metal border border-border/40 mx-auto flex items-center justify-center">
+                <Bluetooth className="w-8 h-8 text-muted-foreground/40" />
+              </div>
+
+              <h3 className="font-display font-semibold text-lg">Připojte ELM327 adaptér</h3>
+
+              <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                Zasuňte OBD-II adaptér do diagnostického konektoru, zapněte Bluetooth a klikněte „Připojit“.
+              </p>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+                {[
+                  { icon: Gauge, label: "Otáčky & rychlost" },
+                  { icon: Thermometer, label: "Teploty motoru" },
+                  { icon: AlertTriangle, label: "Chybové kódy" },
+                  { icon: Activity, label: "Live grafy" },
+                ].map((f) => (
+                  <div
+                    key={f.label}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15"
+                  >
+                    <f.icon className="w-5 h-5 text-primary" />
+                    <span className="text-[10px] text-muted-foreground text-center">{f.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default OBDDiagnostics;
