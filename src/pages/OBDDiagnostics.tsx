@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { bleManager, BLEDeviceInfo } from "@/lib/obd/ble-manager";
+import { elm327 } from "@/lib/obd/elm327-engine";
 import {
   Bluetooth,
   BluetoothConnected,
@@ -20,6 +21,7 @@ import {
   Wind,
 } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+
 interface OBDData {
   rpm: number;
   coolantTemp: number;
@@ -31,11 +33,13 @@ interface OBDData {
   voltage: number;
   boostPressure: number;
 }
+
 interface DTCCode {
   code: string;
   description: string;
   severity: "low" | "medium" | "high";
 }
+
 const EMPTY_OBD_DATA: OBDData = {
   rpm: 0,
   coolantTemp: 0,
@@ -47,6 +51,7 @@ const EMPTY_OBD_DATA: OBDData = {
   voltage: 0,
   boostPressure: 0,
 };
+
 const GaugeCircle = ({
   value,
   max,
@@ -65,6 +70,7 @@ const GaugeCircle = ({
   const percentage = Math.min((value / max) * 100, 100);
   const circumference = 2 * Math.PI * 40;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative w-24 h-24">
@@ -84,16 +90,19 @@ const GaugeCircle = ({
             style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}
           />
         </svg>
+
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <Icon className="w-3.5 h-3.5 mb-0.5" style={{ color }} />
           <span className="font-display font-bold text-lg leading-none">{Math.round(value)}</span>
           <span className="text-[9px] text-muted-foreground">{unit}</span>
         </div>
       </div>
+
       <span className="text-[10px] font-medium text-muted-foreground text-center">{label}</span>
     </div>
   );
 };
+
 const LiveGraph = ({
   data,
   label,
@@ -106,16 +115,21 @@ const LiveGraph = ({
   unit: string;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
     const w = canvas.width;
     const h = canvas.height;
+
     ctx.clearRect(0, 0, w, h);
     ctx.strokeStyle = "hsl(0 0% 15%)";
     ctx.lineWidth = 0.5;
+
     for (let i = 0; i < 5; i++) {
       const y = (h / 4) * i;
       ctx.beginPath();
@@ -123,21 +137,28 @@ const LiveGraph = ({
       ctx.lineTo(w, y);
       ctx.stroke();
     }
+
     if (data.length < 2) return;
+
     const max = Math.max(...data, 1);
     const min = Math.min(...data, 0);
     const range = max - min || 1;
+
     ctx.beginPath();
+
     data.forEach((v, i) => {
       const x = (i / (data.length - 1)) * w;
       const y = h - ((v - min) / range) * (h - 8) - 4;
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     });
+
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.stroke();
   }, [data, color]);
+
   const currentValue = data.length > 0 ? data[data.length - 1] : 0;
+
   return (
     <div className="luxury-card p-3">
       <div className="flex items-center justify-between mb-2">
@@ -146,10 +167,12 @@ const LiveGraph = ({
           {Math.round(currentValue)} {unit}
         </span>
       </div>
+
       <canvas ref={canvasRef} width={300} height={60} className="w-full h-[60px] rounded-lg" />
     </div>
   );
 };
+
 const OBDDiagnostics = () => {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -159,6 +182,7 @@ const OBDDiagnostics = () => {
   const [rpmHistory, setRpmHistory] = useState<number[]>([]);
   const [tempHistory, setTempHistory] = useState<number[]>([]);
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
+
   useEffect(() => {
     const unsubscribe = bleManager.subscribe((event) => {
       if (event.type === "stateChange") {
@@ -169,12 +193,15 @@ const OBDDiagnostics = () => {
             event.payload === "reconnecting"
         );
       }
+
       if (event.type === "error") {
         console.error("BLE manager error:", event.payload);
       }
     });
+
     return unsubscribe;
   }, []);
+
   const resetData = () => {
     setObdData(EMPTY_OBD_DATA);
     setDtcCodes([]);
@@ -182,75 +209,112 @@ const OBDDiagnostics = () => {
     setTempHistory([]);
     setSpeedHistory([]);
   };
+
   const handleConnect = async () => {
     setConnecting(true);
+
     try {
       toast({
         title: "Hledám OBD adaptér",
         description: "Skenuji Bluetooth zařízení v okolí...",
       });
+
       const devices = await bleManager.scan(10000);
       const selectedDevice = devices[0];
+
       if (!selectedDevice) {
         throw new Error("Nebyl nalezen žádný BLE OBD adaptér.");
       }
+
       toast({
         title: "Nalezen adaptér",
         description: `Připojuji: ${selectedDevice.name}`,
       });
+
       const success = await bleManager.connect(selectedDevice.deviceId);
+
       if (!success) {
-        throw new Error("Připojení k OBD adaptéru selhalo.");
+        throw new Error("Adaptér byl nalezen, ale nepodařilo se navázat OBD komunikaci.");
       }
+
       const connectedDevice = bleManager.getConnectedDevice() || {
         ...selectedDevice,
         connected: true,
       };
+
+      toast({
+        title: "Inicializuji ELM327",
+        description: "Ověřuji komunikaci s OBD adaptérem...",
+      });
+
+      const elmReady = await elm327.initialize();
+
+      if (!elmReady) {
+        throw new Error("Adaptér je připojený, ale inicializace ELM327 selhala.");
+      }
+
       setDevice(connectedDevice);
       setConnected(true);
       resetData();
+
       toast({
         title: "Připojeno",
-        description: `Zařízení: ${connectedDevice.name || selectedDevice.name || "OBD adaptér"}`,
+        description: `Zařízení: ${selectedDevice.name || connectedDevice.name || "OBD adaptér"}`,
       });
     } catch (error) {
       console.error("OBD connect error:", error);
+
+      try {
+        await bleManager.disconnect();
+      } catch {}
+
       setConnected(false);
       setDevice(null);
       resetData();
+
       toast({
-        title: "Bluetooth chyba",
+        title: "Bluetooth / OBD chyba",
         description:
-          "Nepodařilo se najít nebo připojit k OBD adaptéru. Zkontrolujte, že je adaptér zapnutý a poblíž telefonu.",
+          error instanceof Error
+            ? error.message
+            : "Nepodařilo se najít nebo připojit k OBD adaptéru.",
         variant: "destructive",
       });
     } finally {
       setConnecting(false);
     }
   };
+
   const handleDisconnect = async () => {
     try {
+      elm327.clearQueue();
       await bleManager.disconnect();
     } catch (error) {
       console.warn("BLE disconnect warning:", error);
     }
+
     setConnected(false);
     setDevice(null);
     resetData();
+
     toast({ title: "Odpojeno" });
   };
+
   const clearDTC = () => {
     setDtcCodes([]);
     toast({ title: "Chybové kódy vymazány" });
   };
+
   const severityColor = (s: string) => {
     if (s === "high") return "bg-destructive/15 text-destructive border-0";
     if (s === "medium") return "bg-warning/15 text-warning border-0";
     return "bg-success/15 text-success border-0";
   };
+
   return (
     <div className="min-h-screen pb-24 bg-background">
       <PageHeader title="OBD Diagnostika" subtitle="Bluetooth · ELM327" />
+
       <div className="px-4 max-w-4xl mx-auto space-y-4">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className={`luxury-card p-4 ${connected ? "border-success/30" : ""}`}>
@@ -265,10 +329,12 @@ const OBDDiagnostics = () => {
                     <Bluetooth className="w-5 h-5 text-muted-foreground" />
                   </div>
                 )}
+
                 <div>
                   <p className="font-display font-semibold text-sm">
                     {connected ? "Připojeno" : "ELM327 Adaptér"}
                   </p>
+
                   <p className="text-[11px] text-muted-foreground">
                     {connected
                       ? device?.name || "Live připojení aktivní"
@@ -276,6 +342,7 @@ const OBDDiagnostics = () => {
                   </p>
                 </div>
               </div>
+
               <Button
                 size="sm"
                 variant={connected ? "destructive" : "hero"}
@@ -290,11 +357,13 @@ const OBDDiagnostics = () => {
                 ) : (
                   <Wifi className="w-4 h-4 mr-1" />
                 )}
+
                 {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
               </Button>
             </div>
           </div>
         </motion.div>
+
         <AnimatePresence>
           {connected && (
             <motion.div
@@ -308,6 +377,7 @@ const OBDDiagnostics = () => {
                   <Activity className="w-4 h-4 text-primary" />
                   Živé hodnoty
                 </h3>
+
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   <GaugeCircle value={obdData.rpm} max={7000} label="Otáčky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
                   <GaugeCircle value={obdData.coolantTemp} max={120} label="Chladič" unit="°C" color={obdData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
@@ -320,23 +390,27 @@ const OBDDiagnostics = () => {
                   <GaugeCircle value={obdData.boostPressure} max={2.5} label="Turbo" unit="bar" color="hsl(340, 80%, 55%)" icon={Wind} />
                 </div>
               </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <LiveGraph data={rpmHistory} label="Otáčky" color="hsl(347, 77%, 50%)" unit="RPM" />
                 <LiveGraph data={tempHistory} label="Teplota chladiče" color="hsl(200, 80%, 50%)" unit="°C" />
                 <LiveGraph data={speedHistory} label="Rychlost" color="hsl(142, 71%, 45%)" unit="km/h" />
               </div>
+
               <div className="luxury-card p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-display font-semibold text-sm flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-warning" />
                     Chybové kódy (DTC)
                   </h3>
+
                   {dtcCodes.length > 0 && (
                     <Button size="sm" variant="ghost" onClick={clearDTC} className="text-xs h-7">
                       <Trash2 className="w-3.5 h-3.5 mr-1" /> Vymazat
                     </Button>
                   )}
                 </div>
+
                 {dtcCodes.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-20" />
@@ -355,6 +429,7 @@ const OBDDiagnostics = () => {
                           </code>
                           <span className="text-xs text-muted-foreground">{dtc.description}</span>
                         </div>
+
                         <Badge className={severityColor(dtc.severity)}>
                           {dtc.severity === "high"
                             ? "Vážné"
@@ -370,16 +445,20 @@ const OBDDiagnostics = () => {
             </motion.div>
           )}
         </AnimatePresence>
+
         {!connected && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
             <div className="luxury-card p-6 text-center space-y-4">
               <div className="w-16 h-16 rounded-full brushed-metal border border-border/40 mx-auto flex items-center justify-center">
                 <Bluetooth className="w-8 h-8 text-muted-foreground/40" />
               </div>
+
               <h3 className="font-display font-semibold text-lg">Připojte ELM327 adaptér</h3>
+
               <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
                 Zasuňte OBD-II adaptér do diagnostického konektoru, zapněte Bluetooth a klikněte „Připojit“.
               </p>
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
                 {[
                   { icon: Gauge, label: "Otáčky & rychlost" },
@@ -403,4 +482,5 @@ const OBDDiagnostics = () => {
     </div>
   );
 };
+
 export default OBDDiagnostics;
