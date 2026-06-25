@@ -1,14 +1,8 @@
 /**
  * AccountSettings — centrum nastavení zákaznického účtu.
  * Sekce: Soukromí (OBD sdílení), Notifikace, Servisní historie, Účet.
- *
- * Doplněno:
- * - evidence verze souhlasu OBD diagnostiky,
- * - fallback, pokud DB ještě nemá sloupec accepted_version,
- * - jasnější text, co přesně servis uvidí,
- * - stav posledního udělení souhlasu.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
@@ -25,7 +19,6 @@ import {
   Trash2,
   Mail,
   Lock,
-  Info,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,81 +26,27 @@ import { toast } from "sonner";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 
-const OBD_CONSENT_VERSION = "obd-live-v1.0";
-
-const formatDate = (value?: string | null) => {
-  if (!value) return null;
-
-  try {
-    return new Intl.DateTimeFormat("cs-CZ", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(value));
-  } catch {
-    return null;
-  }
-};
-
 const AccountSettings = () => {
   const navigate = useNavigate();
-  const { user, profile, isLoading, refreshProfile, resetPassword } = useAuth();
+  const { user, profile, isLoading, signOut, refreshProfile, resetPassword } = useAuth();
   const { isEnabled } = useFeatureFlags();
 
-  const db = supabase as any;
-  const profileAny = profile as any;
-
   const [obdConsent, setObdConsent] = useState(false);
-  const [obdGrantedAt, setObdGrantedAt] = useState<string | null>(null);
-  const [obdConsentVersion, setObdConsentVersion] = useState<string | null>(null);
   const [obdSaving, setObdSaving] = useState(false);
   const [historySaving, setHistorySaving] = useState(false);
   const [loadingConsent, setLoadingConsent] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("obd_live_consents")
+        .select("granted")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      setObdConsent(!!data?.granted);
       setLoadingConsent(false);
-      return;
-    }
-
-    const loadConsent = async () => {
-      setLoadingConsent(true);
-
-      try {
-        let { data, error } = await db
-          .from("obd_live_consents")
-          .select("granted, granted_at, accepted_version")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (error && String(error.message || "").includes("accepted_version")) {
-          const fallback = await db
-            .from("obd_live_consents")
-            .select("granted, granted_at")
-            .eq("user_id", user.id)
-            .maybeSingle();
-
-          data = fallback.data;
-          error = fallback.error;
-        }
-
-        if (error) {
-          console.warn("OBD consent load error:", error);
-        }
-
-        setObdConsent(!!data?.granted);
-        setObdGrantedAt(data?.granted_at || null);
-        setObdConsentVersion(data?.accepted_version || null);
-      } catch (e) {
-        console.warn("OBD consent load exception:", e);
-      } finally {
-        setLoadingConsent(false);
-      }
-    };
-
-    loadConsent();
+    })();
   }, [user]);
 
   if (isLoading) {
@@ -127,63 +66,32 @@ const AccountSettings = () => {
         <PageHeader title="Nastavení" />
         <div className="p-4 max-w-lg mx-auto text-center py-12 space-y-4">
           <p className="text-sm text-muted-foreground">Pro nastavení účtu se přihlaste.</p>
-          <Button variant="hero" onClick={() => navigate("/auth")}>
-            Přihlásit se
-          </Button>
+          <Button variant="hero" onClick={() => navigate("/auth")}>Přihlásit se</Button>
         </div>
       </div>
     );
   }
 
-  const email = profileAny?.email || user.email || "";
-  const grantedAtLabel = formatDate(obdGrantedAt);
-
   const handleObdToggle = async (next: boolean) => {
     setObdSaving(true);
-
-    const now = new Date().toISOString();
-
-    const payloadWithVersion = {
-      user_id: user.id,
-      granted: next,
-      granted_at: next ? now : obdGrantedAt,
-      revoked_at: !next ? now : null,
-      accepted_version: next ? OBD_CONSENT_VERSION : obdConsentVersion,
-    };
-
-    const payloadFallback = {
-      user_id: user.id,
-      granted: next,
-      granted_at: next ? now : obdGrantedAt,
-      revoked_at: !next ? now : null,
-    };
-
     try {
-      let { error } = await db.from("obd_live_consents").upsert(payloadWithVersion, {
-        onConflict: "user_id",
-      });
-
-      if (error && String(error.message || "").includes("accepted_version")) {
-        const retry = await db.from("obd_live_consents").upsert(payloadFallback, {
-          onConflict: "user_id",
-        });
-
-        error = retry.error;
-      }
-
+      const { error } = await supabase
+        .from("obd_live_consents")
+        .upsert(
+          {
+            user_id: user.id,
+            granted: next,
+            granted_at: next ? new Date().toISOString() : null,
+            revoked_at: !next ? new Date().toISOString() : null,
+          },
+          { onConflict: "user_id" },
+        );
       if (error) throw error;
-
       setObdConsent(next);
-
-      if (next) {
-        setObdGrantedAt(now);
-        setObdConsentVersion(OBD_CONSENT_VERSION);
-      }
-
       toast.success(
         next
           ? "Sdílení OBD diagnostiky aktivováno"
-          : "Sdílení OBD diagnostiky vypnuto"
+          : "Sdílení OBD diagnostiky vypnuto",
       );
     } catch (e: any) {
       toast.error("Nepodařilo se uložit nastavení: " + (e?.message || "chyba"));
@@ -194,15 +102,12 @@ const AccountSettings = () => {
 
   const handleHistoryToggle = async (next: boolean) => {
     setHistorySaving(true);
-
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from("profiles")
         .update({ service_history_enabled: next })
         .eq("user_id", user.id);
-
       if (error) throw error;
-
       await refreshProfile();
       toast.success(next ? "Servisní historie zapnuta" : "Servisní historie vypnuta");
     } catch (e: any) {
@@ -213,14 +118,13 @@ const AccountSettings = () => {
   };
 
   const handlePasswordReset = async () => {
-    if (!email) {
+    if (!profile.email) {
       toast.error("Účet nemá nastavený e-mail.");
       return;
     }
-
     try {
-      await resetPassword(email);
-      toast.success("Odkaz pro reset hesla byl odeslán na " + email);
+      await resetPassword(profile.email);
+      toast.success("Odkaz pro reset hesla byl odeslán na " + profile.email);
     } catch (e: any) {
       toast.error("Nepodařilo se odeslat: " + (e?.message || "chyba"));
     }
@@ -228,21 +132,16 @@ const AccountSettings = () => {
 
   const handleDeleteAccount = async () => {
     const ok = window.confirm(
-      "Opravdu chcete požádat o smazání účtu? Pošleme žádost správci, který ji vyřídí do 30 dnů."
+      "Opravdu chcete požádat o smazání účtu? Pošleme žádost správci, který ji vyřídí do 30 dnů.",
     );
-
     if (!ok) return;
-
     try {
-      const { error } = await db.from("notifications").insert({
+      await supabase.from("notifications").insert({
         user_id: user.id,
         title: "Žádost o smazání účtu",
-        message: `Uživatel ${email || user.id} žádá o smazání účtu (GDPR).`,
+        message: `Uživatel ${profile.email || user.id} žádá o smazání účtu (GDPR).`,
       });
-
-      if (error) throw error;
-
-      toast.success("Žádost odeslána. Ozveme se na " + (email || "Váš e-mail") + ".");
+      toast.success("Žádost odeslána. Ozveme se na " + (profile.email || "Váš e-mail") + ".");
     } catch (e: any) {
       toast.error("Nepodařilo se odeslat: " + (e?.message || "chyba"));
     }
@@ -257,7 +156,7 @@ const AccountSettings = () => {
     icon: any;
     title: string;
     desc?: string;
-    children: ReactNode;
+    children: React.ReactNode;
   }) => (
     <div className="flex items-start justify-between gap-3 p-4">
       <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -274,8 +173,8 @@ const AccountSettings = () => {
   return (
     <div className="min-h-screen pb-20">
       <PageHeader title="Nastavení účtu" />
-
       <div className="p-4 space-y-4 max-w-lg mx-auto">
+        {/* Soukromí a sdílení dat */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -285,12 +184,11 @@ const AccountSettings = () => {
             <Shield className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-display font-semibold">Soukromí a sdílení dat</h2>
           </header>
-
           <div className="divide-y divide-border/20">
             <Row
               icon={Activity}
               title="Vzdálená OBD diagnostika"
-              desc="Povolit Chrysler Pardubice vidět živou OBD relaci pouze během aktivního připojení. Servis uvidí technická diagnostická data jako chyby, napětí, teploty, otáčky, rychlost, stav motoru a další hodnoty potřebné pro diagnostiku. Bez souhlasu admin neuvidí žádnou živou OBD relaci."
+              desc="Povolit servisu sledovat živá data z OBD adaptéru pro rychlejší diagnostiku závad. Bez souhlasu vidí servis jen Vaše vlastní záznamy."
             >
               <div className="flex flex-col items-end gap-1">
                 <Switch
@@ -298,53 +196,24 @@ const AccountSettings = () => {
                   disabled={obdSaving || loadingConsent}
                   onCheckedChange={handleObdToggle}
                 />
-
                 {obdConsent ? (
                   <Badge className="bg-success/15 text-success border-success/30 gap-1 text-[10px]">
-                    <ShieldCheck className="w-3 h-3" />
-                    Aktivní
+                    <ShieldCheck className="w-3 h-3" /> Aktivní
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-muted-foreground gap-1 text-[10px]">
-                    <ShieldX className="w-3 h-3" />
-                    Vypnuto
+                    <ShieldX className="w-3 h-3" /> Vypnuto
                   </Badge>
                 )}
               </div>
             </Row>
-
-            <div className="px-4 pb-4 -mt-1">
-              <div className="rounded-xl border border-border/20 bg-secondary/30 p-3 flex gap-2">
-                <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Souhlas můžete kdykoliv vypnout. Vypnutí zastaví zobrazení nových živých
-                    OBD relací v adminu.
-                  </p>
-
-                  {obdConsent && grantedAtLabel && (
-                    <p className="text-[10px] text-muted-foreground">
-                      Souhlas udělen: {grantedAtLabel}
-                      {obdConsentVersion ? ` · verze ${obdConsentVersion}` : ""}
-                    </p>
-                  )}
-
-                  {!obdConsent && (
-                    <p className="text-[10px] text-muted-foreground">
-                      Aktuálně vypnuto — servis neuvidí živou diagnostiku.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
             <Row
               icon={ClipboardList}
               title="Sdílet servisní historii"
               desc="Umožnit servisu vést kompletní digitální servisní knihu k Vašim vozům."
             >
               <Switch
-                checked={!!profileAny?.service_history_enabled}
+                checked={!!profile.service_history_enabled}
                 disabled={historySaving}
                 onCheckedChange={handleHistoryToggle}
               />
@@ -352,6 +221,7 @@ const AccountSettings = () => {
           </div>
         </motion.section>
 
+        {/* Notifikace */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -362,7 +232,6 @@ const AccountSettings = () => {
             <Bell className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-display font-semibold">Notifikace</h2>
           </header>
-
           <div className="p-4">
             {isEnabled("push_notifications") ? (
               <PushNotificationToggle />
@@ -374,6 +243,7 @@ const AccountSettings = () => {
           </div>
         </motion.section>
 
+        {/* Účet */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -384,12 +254,10 @@ const AccountSettings = () => {
             <Lock className="w-4 h-4 text-primary" />
             <h2 className="text-sm font-display font-semibold">Účet a bezpečnost</h2>
           </header>
-
           <div className="divide-y divide-border/20">
-            <Row icon={Mail} title="E-mail" desc={email || "—"}>
+            <Row icon={Mail} title="E-mail" desc={profile.email || "—"}>
               <span className="text-[10px] text-muted-foreground">nelze měnit</span>
             </Row>
-
             <button
               onClick={handlePasswordReset}
               className="w-full text-left hover:bg-primary/5 transition-colors"
@@ -402,7 +270,6 @@ const AccountSettings = () => {
                 <span className="text-xs text-primary">Odeslat</span>
               </Row>
             </button>
-
             <button
               onClick={handleDeleteAccount}
               className="w-full text-left hover:bg-destructive/5 transition-colors"
