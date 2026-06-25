@@ -1,5 +1,3 @@
-Tady je znovu celý opravený src/pages/Account.tsx — v tom tvém chybí Settings import a položka Nastavení účtu.
-
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
@@ -22,10 +20,12 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
+
 const Account = () => {
   const navigate = useNavigate();
   const { user, profile, isAdmin, isPendingBusiness, signOut, isLoading, employee } = useAuth();
   const { isEnabled } = useFeatureFlags();
+
   if (isLoading) {
     return (
       <div className="min-h-screen pb-20">
@@ -36,6 +36,7 @@ const Account = () => {
       </div>
     );
   }
+
   if (!user) {
     return (
       <div className="min-h-screen pb-20">
@@ -52,10 +53,12 @@ const Account = () => {
       </div>
     );
   }
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
+
   const navItems = [
     { label: "Moje objednávky", icon: ShoppingCart, path: "/orders" },
     { label: "Moje vozidla", icon: Car, path: "/my-vehicles" },
@@ -64,9 +67,11 @@ const Account = () => {
     { label: "Servisní zakázky", icon: ClipboardList, path: "/my-service-orders" },
     { label: "Nastavení účtu", icon: Settings, path: "/account/settings" },
   ];
+
   return (
     <div className="min-h-screen pb-20">
       <PageHeader title="Můj účet" />
+
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="luxury-card p-5">
@@ -76,6 +81,7 @@ const Account = () => {
                   {(profile?.full_name || "U").charAt(0).toUpperCase()}
                 </span>
               </div>
+
               <div className="flex-1 min-w-0">
                 <h2 className="font-display font-semibold text-lg truncate">
                   {profile?.full_name || "Uživatel"}
@@ -83,6 +89,7 @@ const Account = () => {
                 <p className="text-sm text-muted-foreground truncate">
                   {profile?.email || user.email}
                 </p>
+
                 {profile?.account_type === "business" && (
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
                     {profile.company_name} · IČO: {profile.ico || "–"}
@@ -90,6 +97,7 @@ const Account = () => {
                 )}
               </div>
             </div>
+
             {isPendingBusiness && (
               <div className="mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
@@ -98,6 +106,7 @@ const Account = () => {
                 </p>
               </div>
             )}
+
             {profile?.loyalty_active && profile.status === "active" && (
               <div className="mt-3 p-3 rounded-lg bg-primary/8 border border-primary/20">
                 <div className="flex items-center gap-2">
@@ -108,6 +117,7 @@ const Account = () => {
                       : "Věrnostní program aktivní"}
                   </span>
                 </div>
+
                 {profile.account_type === "private" && (
                   <p className="text-xs text-muted-foreground mt-1">
                     5 % sleva na díly · 10 % sleva na servis
@@ -117,6 +127,7 @@ const Account = () => {
             )}
           </div>
         </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -136,6 +147,7 @@ const Account = () => {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
             ))}
+
             {employee?.role === "mechanic" && (
               <button
                 onClick={() => navigate("/mechanic-dashboard")}
@@ -148,6 +160,7 @@ const Account = () => {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
+
             {isAdmin && (
               <button
                 onClick={() => navigate("/admin")}
@@ -162,6 +175,7 @@ const Account = () => {
             )}
           </div>
         </motion.div>
+
         {isEnabled("push_notifications") && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -171,6 +185,7 @@ const Account = () => {
             <PushNotificationToggle />
           </motion.div>
         )}
+
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -191,4 +206,5 @@ const Account = () => {
     </div>
   );
 };
+
 export default Account;
