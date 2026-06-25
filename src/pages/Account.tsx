@@ -2,21 +2,8 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import {
-  User,
-  ShoppingCart,
-  Wrench,
-  Percent,
-  LogOut,
-  ChevronRight,
-  Shield,
-  AlertTriangle,
-  Car,
-  Bell,
-  ClipboardList,
-  HardHat,
-  Settings,
-} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { User, ShoppingCart, Wrench, Percent, LogOut, ChevronRight, Shield, AlertTriangle, Car, Bell, ClipboardList, HardHat, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PushNotificationToggle from "@/components/PushNotificationToggle";
@@ -46,9 +33,7 @@ const Account = () => {
             <User className="w-8 h-8 text-muted-foreground/40" />
           </div>
           <p className="text-muted-foreground text-sm">Pro zobrazení účtu se přihlaste</p>
-          <Button variant="hero" onClick={() => navigate("/auth")}>
-            Přihlásit se
-          </Button>
+          <Button variant="hero" onClick={() => navigate("/auth")}>Přihlásit se</Button>
         </div>
       </div>
     );
@@ -71,8 +56,8 @@ const Account = () => {
   return (
     <div className="min-h-screen pb-20">
       <PageHeader title="Můj účet" />
-
       <div className="p-4 space-y-4 max-w-lg mx-auto">
+        {/* Profile card */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="luxury-card p-5">
             <div className="flex items-center gap-4">
@@ -81,19 +66,11 @@ const Account = () => {
                   {(profile?.full_name || "U").charAt(0).toUpperCase()}
                 </span>
               </div>
-
               <div className="flex-1 min-w-0">
-                <h2 className="font-display font-semibold text-lg truncate">
-                  {profile?.full_name || "Uživatel"}
-                </h2>
-                <p className="text-sm text-muted-foreground truncate">
-                  {profile?.email || user.email}
-                </p>
-
+                <h2 className="font-display font-semibold text-lg truncate">{profile?.full_name || "Uživatel"}</h2>
+                <p className="text-sm text-muted-foreground truncate">{profile?.email || user.email}</p>
                 {profile?.account_type === "business" && (
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {profile.company_name} · IČO: {profile.ico || "–"}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{profile.company_name} · IČO: {profile.ico || "–"}</p>
                 )}
               </div>
             </div>
@@ -101,9 +78,7 @@ const Account = () => {
             {isPendingBusiness && (
               <div className="mt-3 p-3 rounded-lg bg-warning/10 border border-warning/20 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                  Váš firemní účet čeká na schválení.
-                </p>
+                <p className="text-xs text-muted-foreground">Váš firemní účet čeká na schválení.</p>
               </div>
             )}
 
@@ -117,22 +92,16 @@ const Account = () => {
                       : "Věrnostní program aktivní"}
                   </span>
                 </div>
-
                 {profile.account_type === "private" && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    5 % sleva na díly · 10 % sleva na servis
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">5 % sleva na díly · 10 % sleva na servis</p>
                 )}
               </div>
             )}
           </div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-        >
+        {/* Navigation items */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <div className="luxury-card divide-y divide-border/20 overflow-hidden">
             {navItems.map((item) => (
               <button
@@ -147,7 +116,6 @@ const Account = () => {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
             ))}
-
             {employee?.role === "mechanic" && (
               <button
                 onClick={() => navigate("/mechanic-dashboard")}
@@ -160,7 +128,6 @@ const Account = () => {
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </button>
             )}
-
             {isAdmin && (
               <button
                 onClick={() => navigate("/admin")}
@@ -176,21 +143,15 @@ const Account = () => {
           </div>
         </motion.div>
 
+        {/* Push Notifications */}
         {isEnabled("push_notifications") && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
             <PushNotificationToggle />
           </motion.div>
         )}
 
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
+        {/* Logout */}
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <button
             onClick={handleSignOut}
             className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border border-border/20 text-muted-foreground hover:text-foreground hover:border-destructive/30 transition-colors"
