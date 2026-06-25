@@ -28,6 +28,7 @@ const Service = lazy(() => import("./pages/Service"));
 const Vehicles = lazy(() => import("./pages/Vehicles"));
 const VehicleDetail = lazy(() => import("./pages/VehicleDetail"));
 const Account = lazy(() => import("./pages/Account"));
+const AccountSettings = lazy(() => import("./pages/AccountSettings"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Contact = lazy(() => import("./pages/Contact"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -50,6 +51,7 @@ const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
 const AdminUser360 = lazy(() => import("./pages/AdminUser360"));
 const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
+
 import ProfileGate from "@/components/ProfileGate";
 
 const BOT_RE = /Lighthouse|PageSpeed|PTST|Googlebot|Chrome-Lighthouse/i;
@@ -78,57 +80,62 @@ const App = () => (
                   <IntroAnimation />
                 </Suspense>
               )}
+
               <OnboardingGuide />
               <AdminDailyReport />
               <ProfileGate />
               <TopBar />
+
               <div className="flex w-full">
                 <DesktopSidebar />
+
                 <div className="flex-1 min-w-0">
                   <ErrorBoundary>
-                  <Suspense fallback={<PageLoader />}>
-                  <Routes>
-                    <Route path="/" element={<Landing />} />
-                    <Route path="/shop" element={<Catalog />} />
-                    <Route path="/dily" element={<Catalog />} />
-                    <Route path="/catalog" element={<Catalog />} />
-                    <Route path="/epc" element={<EPC />} />
-                    <Route path="/graficky-katalog" element={<GraphicalCatalog />} />
-                    <Route path="/cart" element={<Cart />} />
-                    <Route path="/checkout" element={<Checkout />} />
-                    <Route path="/service" element={<Service />} />
-                    <Route path="/vehicles" element={<Vehicles />} />
-                    <Route path="/vehicles/:id" element={<VehicleDetail />} />
-                    <Route path="/vehicle-offer" element={<VehicleOffer />} />
-                    <Route path="/garage" element={<Garage />} />
-                    <Route path="/account" element={<Account />} />
-                    <Route path="/orders" element={<MyOrders />} />
-                    <Route path="/my-vehicles" element={<MyVehicles />} />
-                    <Route path="/notifications" element={<Notifications />} />
-                    <Route path="/contact" element={<Contact />} />
-                    <Route path="/ai-mechanic" element={<AiMechanic />} />
-                    <Route path="/emergency" element={<Emergency />} />
-                    <Route path="/service-plan" element={<ServicePlan />} />
-                    <Route path="/service-book" element={<ServiceBook />} />
-                    <Route path="/my-service-orders" element={<MyServiceOrders />} />
-                    <Route path="/obd" element={<OBDDiagnostics />} />
-                    <Route path="/presentation" element={<AppPresentation />} />
-                    <Route path="/auth" element={<Auth />} />
-                    <Route path="/complete-profile" element={<CompleteProfile />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/terms" element={<Terms />} />
-                    <Route path="/admin" element={<Admin />} />
-                    <Route path="/admin/compatibility" element={<AdminCompatibility />} />
-                    <Route path="/admin/users" element={<AdminUser360 />} />
-                    <Route path="/admin/users/:userId" element={<AdminUser360 />} />
-                    <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
-                    <Route path="/index" element={<Navigate to="/" replace />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                  </Suspense>
+                    <Suspense fallback={<PageLoader />}>
+                      <Routes>
+                        <Route path="/" element={<Landing />} />
+                        <Route path="/shop" element={<Catalog />} />
+                        <Route path="/dily" element={<Catalog />} />
+                        <Route path="/catalog" element={<Catalog />} />
+                        <Route path="/epc" element={<EPC />} />
+                        <Route path="/graficky-katalog" element={<GraphicalCatalog />} />
+                        <Route path="/cart" element={<Cart />} />
+                        <Route path="/checkout" element={<Checkout />} />
+                        <Route path="/service" element={<Service />} />
+                        <Route path="/vehicles" element={<Vehicles />} />
+                        <Route path="/vehicles/:id" element={<VehicleDetail />} />
+                        <Route path="/vehicle-offer" element={<VehicleOffer />} />
+                        <Route path="/garage" element={<Garage />} />
+                        <Route path="/account" element={<Account />} />
+                        <Route path="/account/settings" element={<AccountSettings />} />
+                        <Route path="/orders" element={<MyOrders />} />
+                        <Route path="/my-vehicles" element={<MyVehicles />} />
+                        <Route path="/notifications" element={<Notifications />} />
+                        <Route path="/contact" element={<Contact />} />
+                        <Route path="/ai-mechanic" element={<AiMechanic />} />
+                        <Route path="/emergency" element={<Emergency />} />
+                        <Route path="/service-plan" element={<ServicePlan />} />
+                        <Route path="/service-book" element={<ServiceBook />} />
+                        <Route path="/my-service-orders" element={<MyServiceOrders />} />
+                        <Route path="/obd" element={<OBDDiagnostics />} />
+                        <Route path="/presentation" element={<AppPresentation />} />
+                        <Route path="/auth" element={<Auth />} />
+                        <Route path="/complete-profile" element={<CompleteProfile />} />
+                        <Route path="/reset-password" element={<ResetPassword />} />
+                        <Route path="/terms" element={<Terms />} />
+                        <Route path="/admin" element={<Admin />} />
+                        <Route path="/admin/compatibility" element={<AdminCompatibility />} />
+                        <Route path="/admin/users" element={<AdminUser360 />} />
+                        <Route path="/admin/users/:userId" element={<AdminUser360 />} />
+                        <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
+                        <Route path="/index" element={<Navigate to="/" replace />} />
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </Suspense>
                   </ErrorBoundary>
                 </div>
               </div>
+
               <BottomNav />
             </BrowserRouter>
           </TooltipProvider>
