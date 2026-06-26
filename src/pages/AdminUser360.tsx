@@ -1,4 +1,4 @@
-**
+ **
  * AdminUser360 — kompletní pohled na zákazníka.
  *
  * Vyhledávání podle jména, e-mailu, telefonu, VIN nebo SPZ.
@@ -1290,7 +1290,7 @@ function HistoryTimeline({
 
 
 
-/* ───────── ROOT ───────── */
+/** ───────── ROOT ───────── */
 const AdminUser360 = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
