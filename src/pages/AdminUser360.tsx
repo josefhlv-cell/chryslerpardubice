@@ -1,4 +1,4 @@
-/**
+**
  * AdminUser360 — kompletní pohled na zákazníka.
  *
  * Vyhledávání podle jména, e-mailu, telefonu, VIN nebo SPZ.
@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -29,7 +30,7 @@ import { toast } from "sonner";
 import {
   Search, User, Car, ShoppingCart, Wrench, Calendar, AlertTriangle,
   Bell, Activity, ArrowLeft, BookOpen, Loader2, Send, Pencil, History, UserPlus,
-  ChevronLeft, ChevronRight, CheckCircle2, Clock, MailPlus,
+  ChevronLeft, ChevronRight, CheckCircle2, Clock, MailPlus, Settings,
 } from "lucide-react";
 
 type Profile = {
@@ -39,6 +40,95 @@ type Profile = {
   account_type: string; status: string; discount_percent: number;
   created_at: string;
 };
+
+
+type CustomerObdPermissions = {
+  user_id: string;
+  remote_obd_enabled: boolean;
+  live_data: boolean;
+  read_dtc: boolean;
+  clear_dtc: boolean;
+  gps_tracking: boolean;
+  service_history: boolean;
+  actuator_tests: boolean;
+  adaptations: boolean;
+  reset_service: boolean;
+  dpf_regeneration: boolean;
+  epb_service: boolean;
+  sas_calibration: boolean;
+  bms_reset: boolean;
+  coding: boolean;
+  ecu_flash: boolean;
+  updated_by?: string | null;
+  updated_at?: string | null;
+};
+
+const DEFAULT_OBD_PERMISSIONS: CustomerObdPermissions = {
+  user_id: "",
+  remote_obd_enabled: true,
+  live_data: true,
+  read_dtc: true,
+  clear_dtc: false,
+  gps_tracking: false,
+  service_history: true,
+  actuator_tests: false,
+  adaptations: false,
+  reset_service: false,
+  dpf_regeneration: false,
+  epb_service: false,
+  sas_calibration: false,
+  bms_reset: false,
+  coding: false,
+  ecu_flash: false,
+  updated_by: null,
+  updated_at: null,
+};
+
+const OBD_PERMISSION_GROUPS: Array<{
+  title: string;
+  description: string;
+  items: Array<{ key: keyof CustomerObdPermissions; label: string; description: string; dangerous?: boolean }>;
+}> = [
+  {
+    title: "Základní diagnostika",
+    description: "Funkce, které admin používá nejčastěji při vzdálené kontrole vozidla.",
+    items: [
+      { key: "remote_obd_enabled", label: "Vzdálená OBD diagnostika", description: "Hlavní vypínač. Když je vypnutý, admin se k zákazníkově OBD relaci nepřipojí." },
+      { key: "live_data", label: "Live Data", description: "Otáčky, rychlost, teploty, napětí, tlak, zatížení motoru a další živé hodnoty." },
+      { key: "read_dtc", label: "Čtení DTC", description: "Zobrazení chybových kódů uložených v řídicí jednotce." },
+      { key: "clear_dtc", label: "Mazání DTC", description: "Možnost mazat chybové kódy. Doporučeno zapínat jen při servisu.", dangerous: true },
+    ],
+  },
+  {
+    title: "Sdílení a servis",
+    description: "Data navázaná na servisní podporu a lokalizaci zákazníka.",
+    items: [
+      { key: "gps_tracking", label: "GPS poloha", description: "Poloha zákazníka/vozidla během diagnostiky." },
+      { key: "service_history", label: "Servisní historie", description: "Přístup k servisní historii zákazníka a vozidla." },
+      { key: "reset_service", label: "Reset servisního intervalu", description: "Povolit servisní reset po provedené údržbě.", dangerous: true },
+    ],
+  },
+  {
+    title: "Servisní procedury",
+    description: "Pokročilé funkce, které musí zůstat pod kontrolou admina.",
+    items: [
+      { key: "actuator_tests", label: "Test akčních členů", description: "Spouštění testů ventilátorů, relé, čerpadel a dalších akčních členů.", dangerous: true },
+      { key: "adaptations", label: "Adaptace", description: "Resety/adaptace hodnot řídicích jednotek.", dangerous: true },
+      { key: "dpf_regeneration", label: "DPF regenerace", description: "Spuštění servisní regenerace DPF.", dangerous: true },
+      { key: "epb_service", label: "EPB servisní režim", description: "Servisní režim elektronické parkovací brzdy.", dangerous: true },
+      { key: "sas_calibration", label: "SAS kalibrace", description: "Kalibrace snímače úhlu volantu.", dangerous: true },
+      { key: "bms_reset", label: "BMS / baterie", description: "Registrace nebo reset baterie/BMS.", dangerous: true },
+    ],
+  },
+  {
+    title: "Profesionální funkce",
+    description: "Nejrizikovější funkce. Nechávat vypnuté, pokud nejsou výslovně potřeba.",
+    items: [
+      { key: "coding", label: "Kódování", description: "Změny konfigurace modulů. Jen pro vyškolené osoby.", dangerous: true },
+      { key: "ecu_flash", label: "Flash ECU", description: "Programování řídicí jednotky. Zapínat pouze výjimečně.", dangerous: true },
+    ],
+  },
+];
 
 const fmt = (d?: string | null) =>
   !d ? "—" : new Date(d).toLocaleString("cs-CZ", { dateStyle: "short", timeStyle: "short" });
@@ -503,8 +593,96 @@ function SearchView({ onPick }: { onPick: (userId: string) => void }) {
   );
 }
 
+
+
+function ObdPermissionsPanel({
+  permissions,
+  loading,
+  savingKey,
+  onToggle,
+}: {
+  permissions: CustomerObdPermissions;
+  loading: boolean;
+  savingKey: keyof CustomerObdPermissions | null;
+  onToggle: (key: keyof CustomerObdPermissions, value: boolean) => void;
+}) {
+  if (loading) return <Loader />;
+
+  return (
+    <div className="space-y-3">
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold flex items-center gap-2">
+                <Settings className="w-4 h-4 text-primary" />
+                OBD oprávnění zákazníka
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tady admin zapíná nebo vypíná konkrétní OBD funkce pro tohoto zákazníka.
+                Zákazník pouze jednou odsouhlasí vzdálenou diagnostiku; jednotlivé funkce řídí servis.
+              </p>
+            </div>
+            <Badge className={permissions.remote_obd_enabled ? "bg-success/15 text-success border-success/30" : "bg-destructive/15 text-destructive border-destructive/30"}>
+              {permissions.remote_obd_enabled ? "OBD povoleno" : "OBD vypnuto"}
+            </Badge>
+          </div>
+          {permissions.updated_at && (
+            <p className="text-[10px] text-muted-foreground">
+              Poslední změna: {fmt(permissions.updated_at)}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {OBD_PERMISSION_GROUPS.map((group) => (
+        <Card key={group.title}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">{group.title}</CardTitle>
+            <p className="text-xs text-muted-foreground">{group.description}</p>
+          </CardHeader>
+          <CardContent className="divide-y divide-border/20 p-0">
+            {group.items.map((item) => {
+              const checked = Boolean(permissions[item.key]);
+              const disabled =
+                item.key !== "remote_obd_enabled" && !permissions.remote_obd_enabled;
+
+              return (
+                <div key={String(item.key)} className="flex items-start justify-between gap-3 p-4">
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">{item.label}</p>
+                      {item.dangerous && (
+                        <Badge variant="outline" className="text-[10px] text-warning border-warning/30">
+                          rizikové
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
+                    {disabled && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Neaktivní, protože hlavní vzdálená OBD diagnostika je vypnutá.
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={checked}
+                    disabled={disabled || savingKey === item.key}
+                    onCheckedChange={(value) => onToggle(item.key, value)}
+                  />
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 /* ───────── DETAIL ───────── */
 function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) {
+  const { user: adminUser } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -515,6 +693,9 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [obdSessions, setObdSessions] = useState<any[]>([]);
   const [serviceHistory, setServiceHistory] = useState<any[]>([]);
+  const [permissions, setPermissions] = useState<CustomerObdPermissions>({ ...DEFAULT_OBD_PERMISSIONS, user_id: userId });
+  const [permissionsLoading, setPermissionsLoading] = useState(true);
+  const [permissionSavingKey, setPermissionSavingKey] = useState<keyof CustomerObdPermissions | null>(null);
   const [loading, setLoading] = useState(true);
 
   // dialogs
@@ -560,10 +741,73 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
     setObdSessions(obdRes.data || []);
     setServiceHistory(shRes.data || []);
     if (vehRes.data?.[0]) setBookVehicle(vehRes.data[0].id);
+
+    setPermissionsLoading(true);
+    const { data: permissionData, error: permissionError } = await (supabase as any)
+      .from("customer_obd_permissions")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (permissionError) {
+      console.warn("customer_obd_permissions load error", permissionError);
+    }
+
+    setPermissions({
+      ...DEFAULT_OBD_PERMISSIONS,
+      user_id: userId,
+      ...(permissionData || {}),
+    });
+    setPermissionsLoading(false);
     setLoading(false);
   };
 
   useEffect(() => { load(); }, [userId]);
+
+  const updatePermission = async (key: keyof CustomerObdPermissions, value: boolean) => {
+    if (key === "user_id" || key === "updated_by" || key === "updated_at") return;
+
+    const nextPermissions: CustomerObdPermissions = {
+      ...permissions,
+      user_id: userId,
+      [key]: value,
+      updated_by: adminUser?.id || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (key === "remote_obd_enabled" && !value) {
+      nextPermissions.live_data = false;
+      nextPermissions.read_dtc = false;
+      nextPermissions.clear_dtc = false;
+      nextPermissions.gps_tracking = false;
+      nextPermissions.actuator_tests = false;
+      nextPermissions.adaptations = false;
+      nextPermissions.reset_service = false;
+      nextPermissions.dpf_regeneration = false;
+      nextPermissions.epb_service = false;
+      nextPermissions.sas_calibration = false;
+      nextPermissions.bms_reset = false;
+      nextPermissions.coding = false;
+      nextPermissions.ecu_flash = false;
+    }
+
+    setPermissionSavingKey(key);
+    setPermissions(nextPermissions);
+
+    const { error } = await (supabase as any)
+      .from("customer_obd_permissions")
+      .upsert(nextPermissions, { onConflict: "user_id" });
+
+    setPermissionSavingKey(null);
+
+    if (error) {
+      toast.error("Nepodařilo se uložit OBD oprávnění: " + error.message);
+      load();
+      return;
+    }
+
+    toast.success("OBD oprávnění uloženo");
+  };
 
   const sendPush = async () => {
     if (!pushTitle.trim()) return;
@@ -655,6 +899,7 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
           <TabsTrigger value="inquiries">Poptávky ({inquiries.length})</TabsTrigger>
           <TabsTrigger value="faults"><AlertTriangle className="w-3 h-3 mr-1" />Závady ({faults.length})</TabsTrigger>
           <TabsTrigger value="notif"><Bell className="w-3 h-3 mr-1" />Push ({notifications.length})</TabsTrigger>
+          <TabsTrigger value="permissions"><Settings className="w-3 h-3 mr-1" />Oprávnění</TabsTrigger>
           <TabsTrigger value="obd"><Activity className="w-3 h-3 mr-1" />OBD ({obdSessions.length})</TabsTrigger>
         </TabsList>
 
@@ -770,6 +1015,15 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
               <p className="text-[10px] text-muted-foreground mt-1">{fmt(n.created_at)}</p>
             </CardContent></Card>
           ))}
+        </TabsContent>
+
+        <TabsContent value="permissions" className="mt-3">
+          <ObdPermissionsPanel
+            permissions={permissions}
+            loading={permissionsLoading}
+            savingKey={permissionSavingKey}
+            onToggle={updatePermission}
+          />
         </TabsContent>
 
         <TabsContent value="obd" className="mt-3 space-y-2">
