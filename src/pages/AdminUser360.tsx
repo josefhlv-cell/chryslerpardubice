@@ -1,4 +1,4 @@
- **
+/**
  * AdminUser360 — kompletní pohled na zákazníka.
  *
  * Vyhledávání podle jména, e-mailu, telefonu, VIN nebo SPZ.
