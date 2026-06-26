@@ -1,13 +1,15 @@
-# workflows:
-android-workflow:
+workflows:
+  android-workflow:
     name: Android Build (APK + AAB)
     max_build_duration: 60
     instance_type: mac_mini_m2
+
     environment:
       java: 21
       node: 22
       vars:
         PACKAGE_NAME: "app.lovable.c6d932101224420590deeec3ccc6923f"
+
     scripts:
       - name: Install npm dependencies (clean)
         script: |
@@ -58,8 +60,10 @@ android-workflow:
     name: iOS TestFlight Build signed
     max_build_duration: 90
     instance_type: mac_mini_m2
+
     integrations:
       app_store_connect: "Garáž CHDP"
+
     environment:
       xcode: latest
       node: 22
