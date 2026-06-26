@@ -3,6 +3,7 @@
  * Admin vidí seznam zákazníků se souhlasem a jejich aktivní OBD relace v realtime.
  * Navíc respektuje individuální OBD oprávnění z tabulky customer_obd_permissions.
  */
+
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,40 +13,38 @@ import { Button } from "@/components/ui/button";
 
 interface CustomerObdPermissions {
   user_id: string;
-  remote_obd_enabled: boolean;
+  remote_obd: boolean;
   live_data: boolean;
   read_dtc: boolean;
   clear_dtc: boolean;
-  gps_tracking: boolean;
+  gps: boolean;
   service_history: boolean;
   actuator_tests: boolean;
   adaptations: boolean;
-  reset_service: boolean;
-  dpf_regeneration: boolean;
-  epb_service: boolean;
-  sas_calibration: boolean;
-  bms_reset: boolean;
   coding: boolean;
   ecu_flash: boolean;
+  dpf_regen: boolean;
+  epb_service: boolean;
+  bms_reset: boolean;
+  sos_mode: boolean;
 }
 
 const DEFAULT_PERMISSIONS: CustomerObdPermissions = {
   user_id: "",
-  remote_obd_enabled: true,
+  remote_obd: true,
   live_data: true,
   read_dtc: true,
   clear_dtc: false,
-  gps_tracking: false,
+  gps: false,
   service_history: true,
   actuator_tests: false,
   adaptations: false,
-  reset_service: false,
-  dpf_regeneration: false,
-  epb_service: false,
-  sas_calibration: false,
-  bms_reset: false,
   coding: false,
   ecu_flash: false,
+  dpf_regen: false,
+  epb_service: false,
+  bms_reset: false,
+  sos_mode: false,
 };
 
 interface Session {
@@ -86,7 +85,13 @@ const AdminRemoteOBD = () => {
       .limit(100);
 
     const list = (data as any[]) || [];
-    const userIds = [...new Set(list.map((s) => s.user_id))];
+    const userIds = [...new Set(list.map((s) => s.user_id).filter(Boolean))];
+
+    if (userIds.length === 0) {
+      setSessions([]);
+      setLoading(false);
+      return;
+    }
 
     const [{ data: profiles }, { data: permissions }] = await Promise.all([
       supabase
@@ -105,7 +110,8 @@ const AdminRemoteOBD = () => {
     setSessions(
       list.map((s) => {
         const p = permissionMap.get(s.user_id);
-        const mergedPermissions = {
+
+        const mergedPermissions: CustomerObdPermissions = {
           ...DEFAULT_PERMISSIONS,
           user_id: s.user_id,
           ...(p || {}),
@@ -125,6 +131,7 @@ const AdminRemoteOBD = () => {
 
   useEffect(() => {
     fetchSessions();
+
     const channel = supabase
       .channel("admin-obd-live")
       .on(
@@ -148,7 +155,7 @@ const AdminRemoteOBD = () => {
     s.is_active && Date.now() - new Date(s.last_seen).getTime() < 60_000;
 
   const visibleSessions = useMemo(() => {
-    return sessions.filter((s) => s.permissions?.remote_obd_enabled !== false);
+    return sessions.filter((s) => s.permissions?.remote_obd !== false);
   }, [sessions]);
 
   return (
@@ -164,12 +171,14 @@ const AdminRemoteOBD = () => {
             Jednotlivé funkce se řídí v kartě zákazníka → Oprávnění.
           </p>
         </div>
+
         <Button size="sm" variant="outline" onClick={fetchSessions}>
           Obnovit
         </Button>
       </div>
 
       {loading && <p className="text-sm text-muted-foreground">Načítám…</p>}
+
       {!loading && visibleSessions.length === 0 && (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
@@ -194,6 +203,7 @@ const AdminRemoteOBD = () => {
                   <p className="text-sm font-medium">{s.profile_name}</p>
                   <p className="text-[10px] text-muted-foreground">{s.profile_email}</p>
                 </div>
+
                 {isLive(s) ? (
                   <Badge className="bg-success/15 text-success border-success/30 gap-1">
                     <Wifi className="w-3 h-3" /> LIVE
@@ -204,15 +214,18 @@ const AdminRemoteOBD = () => {
                   </Badge>
                 )}
               </div>
+
               <p className="text-[11px] text-muted-foreground">
                 VIN: {s.vin || "—"} · DTCs: {Array.isArray(s.dtcs) ? s.dtcs.length : 0}
               </p>
+
               <div className="flex flex-wrap gap-1">
                 <PermissionBadge enabled={!!s.permissions?.live_data}>Live</PermissionBadge>
                 <PermissionBadge enabled={!!s.permissions?.read_dtc}>DTC</PermissionBadge>
                 <PermissionBadge enabled={!!s.permissions?.clear_dtc}>Mazání</PermissionBadge>
-                <PermissionBadge enabled={!!s.permissions?.gps_tracking}>GPS</PermissionBadge>
+                <PermissionBadge enabled={!!s.permissions?.gps}>GPS</PermissionBadge>
               </div>
+
               <p className="text-[10px] text-muted-foreground">
                 Posl. signál: {new Date(s.last_seen).toLocaleString("cs-CZ")}
               </p>
@@ -229,12 +242,13 @@ const AdminRemoteOBD = () => {
                 <ShieldCheck className="w-4 h-4 text-success" />
                 Detail relace · {selected.profile_name}
               </h3>
+
               <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>
                 Zavřít
               </Button>
             </div>
 
-            {!selected.permissions?.remote_obd_enabled ? (
+            {!selected.permissions?.remote_obd ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs flex gap-2">
                 <Lock className="w-4 h-4 text-destructive shrink-0" />
                 Vzdálená OBD diagnostika je pro tohoto zákazníka vypnutá.
@@ -249,7 +263,8 @@ const AdminRemoteOBD = () => {
                   <PermissionBadge enabled={!!selected.permissions?.live_data}>Live Data</PermissionBadge>
                   <PermissionBadge enabled={!!selected.permissions?.read_dtc}>Čtení DTC</PermissionBadge>
                   <PermissionBadge enabled={!!selected.permissions?.clear_dtc}>Mazání DTC</PermissionBadge>
-                  <PermissionBadge enabled={!!selected.permissions?.gps_tracking}>GPS</PermissionBadge>
+                  <PermissionBadge enabled={!!selected.permissions?.gps}>GPS</PermissionBadge>
+                  <PermissionBadge enabled={!!selected.permissions?.dpf_regen}>DPF</PermissionBadge>
                   <PermissionBadge enabled={!!selected.permissions?.coding}>Kódování</PermissionBadge>
                   <PermissionBadge enabled={!!selected.permissions?.ecu_flash}>Flash ECU</PermissionBadge>
                 </div>
@@ -283,6 +298,13 @@ const AdminRemoteOBD = () => {
                   <div className="rounded-lg border border-border/30 p-3 text-muted-foreground flex gap-2">
                     <Lock className="w-4 h-4 shrink-0" />
                     Čtení DTC je pro tohoto zákazníka vypnuté.
+                  </div>
+                )}
+
+                {!selected.permissions?.clear_dtc && (
+                  <div className="rounded-lg border border-border/30 p-3 text-muted-foreground flex gap-2">
+                    <Lock className="w-4 h-4 shrink-0" />
+                    Mazání DTC je pro tohoto zákazníka vypnuté.
                   </div>
                 )}
               </div>
