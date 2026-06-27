@@ -390,11 +390,15 @@ useEffect(() => {
 
   if (!shouldAutoConnect) return;
 
-  const timer = setTimeout(() => {
+  const timer = setTimeout(async () => {
     if (!connected && !connecting) {
-      handleConnect();
+        const ok = await bleManager.reconnectLastDevice();
+
+        if (!ok) {
+            await handleConnect();
+        }
     }
-  }, 1000);
+}, 1000);
 
   return () => clearTimeout(timer);
 }, []);
