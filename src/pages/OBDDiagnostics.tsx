@@ -354,8 +354,8 @@ const OBDDiagnostics = () => {
 
       setDevice(connectedDevice);
       setConnected(true);
-      localStorage.setItem("obd_auto_connect", "true");
       resetData();
+      
       localStorage.setItem("obd_auto_connect", "true");
 
       toast({
