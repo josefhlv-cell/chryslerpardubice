@@ -383,6 +383,23 @@ class BLEManager {
     }
   }
 
+}
+}
+
+async reconnectLastDevice(): Promise<boolean> {
+  const deviceId = localStorage.getItem("last_obd_device_id");
+
+  if (!deviceId) return false;
+
+  try {
+    return await this.connect(deviceId);
+  } catch {
+    return false;
+  }
+}
+
+private async findWorkingProfile(...)
+
   private async findWorkingProfile(deviceId: string): Promise<OBDProfile | null> {
     for (const profile of OBD_PROFILES) {
       try {
