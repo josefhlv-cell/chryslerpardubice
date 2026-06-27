@@ -386,7 +386,7 @@ class BLEManager {
 }
 }
 
-async reconnectLastDevice(): Promise<boolean> {
+  async reconnectLastDevice(): Promise<boolean> {
   const deviceId = localStorage.getItem("last_obd_device_id");
 
   if (!deviceId) return false;
