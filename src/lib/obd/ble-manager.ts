@@ -385,12 +385,14 @@ class BLEManager {
 
 
   async reconnectLastDevice(): Promise<boolean> {
-  const deviceId = localStorage.getItem("last_obd_device_id");
-
-  if (!deviceId) return false;
-
   try {
-    return await this.connect(deviceId);
+    const devices = await BleClient.getConnectedDevices([]);
+
+    if (!devices.length) {
+      return false;
+    }
+
+    return await this.connect(devices[0].deviceId);
   } catch {
     return false;
   }
