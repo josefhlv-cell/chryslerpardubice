@@ -184,7 +184,6 @@ const OBDDiagnostics = () => {
   const [tempHistory, setTempHistory] = useState<number[]>([]);
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [showDebug, setShowDebug] = useState(true);
 
   useEffect(() => {
     const unsubscribe = bleManager.subscribe((event) => {
