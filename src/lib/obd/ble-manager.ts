@@ -291,6 +291,7 @@ class BLEManager {
   async connect(deviceId: string): Promise<boolean> {
     this.setState('connecting');
     this.lastDeviceId = deviceId;
+    localStorage.setItem("last_obd_device_id", deviceId);
     this.reconnectAttempts = 0;
 
     if (!this.isNative) {
