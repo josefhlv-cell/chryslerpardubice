@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { bleManager, BLEDeviceInfo } from "@/lib/obd/ble-manager";
 import { elm327 } from "@/lib/obd/elm327-engine";
-import { LIVE_PIDS, PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
+import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
 import {
   Bluetooth,
   BluetoothConnected,
@@ -215,28 +215,28 @@ const OBDDiagnostics = () => {
   }, []);
 
   // === LIVE POLLING LOOP ===
-  // Po pÅipojenÃ­ k ELM327 cyklicky Äteme vÅ¡echny LIVE_PIDS a aktualizujeme obdData.
-  // Bez tohoto effectu by vÅ¡echny ukazatele zÅ¯staly na 0 (pÅ¯vodnÃ­ bug).
+  // Po připojení k ELM327 cyklicky čteme všechny LIVE_PIDS a aktualizujeme obdData.
+  // Bez tohoto effectu by všechny ukazatele zůstaly na 0 (původní bug).
   useEffect(() => {
     if (!connected) return;
 
     let cancelled = false;
 
     const pidToKey: Record<string, keyof OBDData> = {
-      '010C': 'rpm',
-      '010D': 'speed',
-      '0105': 'coolantTemp',
-      '0111': 'throttle',
-      '0104': 'engineLoad',
-      '010F': 'intakeTemp',
-      '010A': 'fuelPressure',
-      '010B': 'boostPressure', // budeme pÅepoÄÃ­tÃ¡vat kPa -> bar (relativnÃ­ k atmosfÃ©Åe)
-      '0142': 'voltage',
+      "010C": "rpm",
+      "010D": "speed",
+      "0105": "coolantTemp",
+      "0111": "throttle",
+      "0104": "engineLoad",
+      "010F": "intakeTemp",
+      "010A": "fuelPressure",
+      "010B": "boostPressure", // budeme přepočítávat kPa -> bar (relativní k atmosféře)
+      "0142": "voltage",
     };
 
     const readVoltageFallback = async (): Promise<number | null> => {
       try {
-        const raw = await elm327.sendCommand('ATRV');
+        const raw = await elm327.sendCommand("ATRV");
         if (!raw) return null;
         const m = String(raw).match(/(\d+(?:\.\d+)?)/);
         return m ? parseFloat(m[1]) : null;
@@ -257,8 +257,8 @@ const OBDDiagnostics = () => {
             value = parsePIDResponse(pid, raw);
           }
 
-          // SpeciÃ¡lnÃ­ fallback pro napÄtÃ­: pouÅ¾ij ATRV pokud 0142 nevracÃ­ data
-          if (pid === '0142' && (value === null || value === 0)) {
+          // Speciální fallback pro napětí: použij ATRV pokud 0142 nevrací data
+          if (pid === "0142" && (value === null || value === 0)) {
             value = await readVoltageFallback();
           }
 
@@ -268,8 +268,8 @@ const OBDDiagnostics = () => {
           if (!key) continue;
 
           let finalValue = value;
-          if (pid === '010B') {
-            // MAP (kPa absolutnÃ­) -> turbo boost v bar (relativnÃ­ k 101.3 kPa)
+          if (pid === "010B") {
+            // MAP (kPa absolutní) -> turbo boost v bar (relativní k 101.3 kPa)
             finalValue = Math.max(0, (value - 101.3) / 100);
           }
 
@@ -277,10 +277,9 @@ const OBDDiagnostics = () => {
 
           setObdData((prev) => ({ ...prev, [key]: finalValue }));
 
-          // historie pro grafy
-          if (pid === '010C') setRpmHistory((h) => [...h.slice(-59), finalValue]);
-          if (pid === '0105') setTempHistory((h) => [...h.slice(-59), finalValue]);
-          if (pid === '010D') setSpeedHistory((h) => [...h.slice(-59), finalValue]);
+          if (pid === "010C") setRpmHistory((h) => [...h.slice(-59), finalValue]);
+          if (pid === "0105") setTempHistory((h) => [...h.slice(-59), finalValue]);
+          if (pid === "010D") setSpeedHistory((h) => [...h.slice(-59), finalValue]);
         } catch (err) {
           setDebugLogs((prev) => [
             ...prev.slice(-79),
@@ -290,7 +289,7 @@ const OBDDiagnostics = () => {
       }
     };
 
-    // PrvnÃ­ ÄtenÃ­ hned, potom kaÅ¾dÃ½ch 600 ms (pÅimÄÅenÄ k BLE ELM327)
+    // První čtení hned, potom každých 600 ms (přiměřeně k BLE ELM327)
     pollOnce();
     const interval = window.setInterval(() => {
       if (!cancelled) pollOnce();
@@ -316,26 +315,26 @@ const OBDDiagnostics = () => {
 
     try {
       toast({
-        title: "HledÃ¡m OBD adaptÃ©r",
-        description: "Skenuji Bluetooth zaÅÃ­zenÃ­ v okolÃ­...",
+        title: "Hledám OBD adaptér",
+        description: "Skenuji Bluetooth zařízení v okolí...",
       });
 
       const devices = await bleManager.scan(10000);
       const selectedDevice = devices[0];
 
       if (!selectedDevice) {
-        throw new Error("Nebyl nalezen Å¾Ã¡dnÃ½ BLE OBD adaptÃ©r.");
+        throw new Error("Nebyl nalezen žádný BLE OBD adaptér.");
       }
 
       toast({
-        title: "Nalezen adaptÃ©r",
-        description: `PÅipojuji: ${selectedDevice.name}`,
+        title: "Nalezen adaptér",
+        description: `Připojuji: ${selectedDevice.name}`,
       });
 
       const success = await bleManager.connect(selectedDevice.deviceId);
 
       if (!success) {
-        throw new Error("AdaptÃ©r byl nalezen, ale nepodaÅilo se navÃ¡zat OBD komunikaci.");
+        throw new Error("Adaptér byl nalezen, ale nepodařilo se navázat OBD komunikaci.");
       }
 
       const connectedDevice = bleManager.getConnectedDevice() || {
@@ -345,13 +344,13 @@ const OBDDiagnostics = () => {
 
       toast({
         title: "Inicializuji ELM327",
-        description: "OvÄÅuji komunikaci s OBD adaptÃ©rem...",
+        description: "Ověřuji komunikaci s OBD adaptérem...",
       });
 
       const elmReady = await elm327.initialize();
 
       if (!elmReady) {
-        throw new Error("AdaptÃ©r je pÅipojenÃ½, ale inicializace ELM327 selhala.");
+        throw new Error("Adaptér je připojený, ale inicializace ELM327 selhala.");
       }
 
       setDevice(connectedDevice);
@@ -359,8 +358,8 @@ const OBDDiagnostics = () => {
       resetData();
 
       toast({
-        title: "PÅipojeno",
-        description: `ZaÅÃ­zenÃ­: ${selectedDevice.name || connectedDevice.name || "OBD adaptÃ©r"}`,
+        title: "Připojeno",
+        description: `Zařízení: ${selectedDevice.name || connectedDevice.name || "OBD adaptér"}`,
       });
     } catch (error) {
       console.error("OBD connect error:", error);
@@ -378,7 +377,7 @@ const OBDDiagnostics = () => {
         description:
           error instanceof Error
             ? error.message
-            : "NepodaÅilo se najÃ­t nebo pÅipojit k OBD adaptÃ©ru.",
+            : "Nepodařilo se najít nebo připojit k OBD adaptéru.",
         variant: "destructive",
       });
     } finally {
@@ -403,7 +402,7 @@ const OBDDiagnostics = () => {
 
   const clearDTC = () => {
     setDtcCodes([]);
-    toast({ title: "ChybovÃ© kÃ³dy vymazÃ¡ny" });
+    toast({ title: "Chybové kódy vymazány" });
   };
 
   const severityColor = (s: string) => {
@@ -414,7 +413,7 @@ const OBDDiagnostics = () => {
 
   return (
     <div className="min-h-screen pb-24 bg-background">
-      <PageHeader title="OBD Diagnostika" subtitle="Bluetooth Â· ELM327" />
+      <PageHeader title="OBD Diagnostika" subtitle="Bluetooth · ELM327" />
 
       <div className="px-4 max-w-4xl mx-auto space-y-4">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -433,13 +432,13 @@ const OBDDiagnostics = () => {
 
                 <div>
                   <p className="font-display font-semibold text-sm">
-                    {connected ? "PÅipojeno" : "ELM327 AdaptÃ©r"}
+                    {connected ? "Připojeno" : "ELM327 Adaptér"}
                   </p>
 
                   <p className="text-[11px] text-muted-foreground">
                     {connected
-                      ? device?.name || "Live pÅipojenÃ­ aktivnÃ­"
-                      : "PÅipojte pÅes Bluetooth"}
+                      ? device?.name || "Live připojení aktivní"
+                      : "Připojte přes Bluetooth"}
                   </p>
                 </div>
               </div>
@@ -459,7 +458,7 @@ const OBDDiagnostics = () => {
                   <Wifi className="w-4 h-4 mr-1" />
                 )}
 
-                {connecting ? "HledÃ¡m..." : connected ? "Odpojit" : "PÅipojit"}
+                {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
               </Button>
             </div>
           </div>
@@ -470,7 +469,7 @@ const OBDDiagnostics = () => {
             <div>
               <p className="font-display font-semibold text-sm">BLE debug</p>
               <p className="text-[10px] text-muted-foreground">
-                PoÅ¡li screenshot tÄchto logÅ¯, pokud se adaptÃ©r nepÅipojÃ­.
+                Pošli screenshot těchto logů, pokud se adaptér nepřipojí.
               </p>
             </div>
 
@@ -479,7 +478,7 @@ const OBDDiagnostics = () => {
                 Smazat
               </Button>
               <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => setShowDebug(v => !v)}>
-                {showDebug ? "SkrÃ½t" : "Zobrazit"}
+                {showDebug ? "Skrýt" : "Zobrazit"}
               </Button>
             </div>
           </div>
@@ -487,12 +486,10 @@ const OBDDiagnostics = () => {
           {showDebug && (
             <div className="max-h-52 overflow-auto rounded-xl bg-black/40 border border-border/20 p-2 font-mono text-[10px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
               {debugLogs.length === 0 ? (
-                <span>Å½Ã¡dnÃ© BLE logy zatÃ­m nejsou.</span>
+                <span>Žádné BLE logy zatím nejsou.</span>
               ) : (
                 debugLogs.map((line, index) => (
-                  <div key={`${index}-${line}`}>
-                    {line}
-                  </div>
+                  <div key={`${index}-${line}`}>{line}</div>
                 ))
               )}
             </div>
@@ -510,25 +507,25 @@ const OBDDiagnostics = () => {
               <div className="luxury-card p-4">
                 <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-primary" />
-                  Å½ivÃ© hodnoty
+                  Živé hodnoty
                 </h3>
 
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <GaugeCircle value={obdData.rpm} max={7000} label="OtÃ¡Äky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
-                  <GaugeCircle value={obdData.coolantTemp} max={120} label="ChladiÄ" unit="Â°C" color={obdData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
+                  <GaugeCircle value={obdData.rpm} max={7000} label="Otáčky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
+                  <GaugeCircle value={obdData.coolantTemp} max={120} label="Chladič" unit="°C" color={obdData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
                   <GaugeCircle value={obdData.speed} max={220} label="Rychlost" unit="km/h" color="hsl(142, 71%, 45%)" icon={Gauge} />
                   <GaugeCircle value={obdData.throttle} max={100} label="Plyn" unit="%" color="hsl(38, 92%, 50%)" icon={Zap} />
-                  <GaugeCircle value={obdData.engineLoad} max={100} label="ZatÃ­Å¾enÃ­" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
-                  <GaugeCircle value={obdData.voltage} max={15} label="NapÄtÃ­" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
+                  <GaugeCircle value={obdData.engineLoad} max={100} label="Zatížení" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
+                  <GaugeCircle value={obdData.voltage} max={15} label="Napětí" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
                   <GaugeCircle value={obdData.fuelPressure} max={70} label="Palivo" unit="kPa" color="hsl(20, 90%, 50%)" icon={Fuel} />
-                  <GaugeCircle value={obdData.intakeTemp} max={70} label="SÃ¡nÃ­" unit="Â°C" color="hsl(180, 60%, 50%)" icon={Wind} />
+                  <GaugeCircle value={obdData.intakeTemp} max={70} label="Sání" unit="°C" color="hsl(180, 60%, 50%)" icon={Wind} />
                   <GaugeCircle value={obdData.boostPressure} max={2.5} label="Turbo" unit="bar" color="hsl(340, 80%, 55%)" icon={Wind} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <LiveGraph data={rpmHistory} label="OtÃ¡Äky" color="hsl(347, 77%, 50%)" unit="RPM" />
-                <LiveGraph data={tempHistory} label="Teplota chladiÄe" color="hsl(200, 80%, 50%)" unit="Â°C" />
+                <LiveGraph data={rpmHistory} label="Otáčky" color="hsl(347, 77%, 50%)" unit="RPM" />
+                <LiveGraph data={tempHistory} label="Teplota chladiče" color="hsl(200, 80%, 50%)" unit="°C" />
                 <LiveGraph data={speedHistory} label="Rychlost" color="hsl(142, 71%, 45%)" unit="km/h" />
               </div>
 
@@ -536,7 +533,7 @@ const OBDDiagnostics = () => {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-display font-semibold text-sm flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-warning" />
-                    ChybovÃ© kÃ³dy (DTC)
+                    Chybové kódy (DTC)
                   </h3>
 
                   {dtcCodes.length > 0 && (
@@ -549,28 +546,19 @@ const OBDDiagnostics = () => {
                 {dtcCodes.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">Å½Ã¡dnÃ© chybovÃ© kÃ³dy</p>
+                    <p className="text-sm">Žádné chybové kódy</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {dtcCodes.map((dtc) => (
-                      <div
-                        key={dtc.code}
-                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20"
-                      >
+                      <div key={dtc.code} className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20">
                         <div className="flex items-center gap-3">
-                          <code className="font-display font-bold text-sm text-foreground">
-                            {dtc.code}
-                          </code>
+                          <code className="font-display font-bold text-sm text-foreground">{dtc.code}</code>
                           <span className="text-xs text-muted-foreground">{dtc.description}</span>
                         </div>
 
                         <Badge className={severityColor(dtc.severity)}>
-                          {dtc.severity === "high"
-                            ? "VÃ¡Å¾nÃ©"
-                            : dtc.severity === "medium"
-                              ? "StÅednÃ­"
-                              : "NÃ­zkÃ©"}
+                          {dtc.severity === "high" ? "Vážné" : dtc.severity === "medium" ? "Střední" : "Nízké"}
                         </Badge>
                       </div>
                     ))}
@@ -588,23 +576,20 @@ const OBDDiagnostics = () => {
                 <Bluetooth className="w-8 h-8 text-muted-foreground/40" />
               </div>
 
-              <h3 className="font-display font-semibold text-lg">PÅipojte ELM327 adaptÃ©r</h3>
+              <h3 className="font-display font-semibold text-lg">Připojte ELM327 adaptér</h3>
 
               <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                ZasuÅte OBD-II adaptÃ©r do diagnostickÃ©ho konektoru, zapnÄte Bluetooth a kliknÄte âPÅipojitâ.
+                Zasuňte OBD-II adaptér do diagnostického konektoru, zapněte Bluetooth a klikněte „Připojit“.
               </p>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
                 {[
-                  { icon: Gauge, label: "OtÃ¡Äky & rychlost" },
+                  { icon: Gauge, label: "Otáčky & rychlost" },
                   { icon: Thermometer, label: "Teploty motoru" },
-                  { icon: AlertTriangle, label: "ChybovÃ© kÃ³dy" },
+                  { icon: AlertTriangle, label: "Chybové kódy" },
                   { icon: Activity, label: "Live grafy" },
                 ].map((f) => (
-                  <div
-                    key={f.label}
-                    className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15"
-                  >
+                  <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15">
                     <f.icon className="w-5 h-5 text-primary" />
                     <span className="text-[10px] text-muted-foreground text-center">{f.label}</span>
                   </div>
