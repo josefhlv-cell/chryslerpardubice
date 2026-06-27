@@ -398,8 +398,6 @@ async reconnectLastDevice(): Promise<boolean> {
   }
 }
 
-private async findWorkingProfile(...)
-
   private async findWorkingProfile(deviceId: string): Promise<OBDProfile | null> {
     for (const profile of OBD_PROFILES) {
       try {
