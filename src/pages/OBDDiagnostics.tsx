@@ -453,6 +453,19 @@ const OBDDiagnostics = () => {
   };
 
 useEffect(() => {
+  const shouldAutoConnect =
+    localStorage.getItem("obd_auto_connect") === "true";
+
+  if (!shouldAutoConnect) return;
+  if (connected || connecting || bleManager.getConnectedDevice()) return;
+
+  const timer = window.setTimeout(async () => {
+    await handleConnect();
+  }, 2000);
+
+  return () => window.clearTimeout(timer);
+}, [connected, connecting]);
+useEffect(() => {
   if (!connected) return;
 
   let cancelled = false;
