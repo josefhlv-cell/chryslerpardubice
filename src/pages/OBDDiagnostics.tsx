@@ -389,15 +389,15 @@ useEffect(() => {
   const shouldAutoConnect =
     localStorage.getItem("obd_auto_connect") === "true";
 
-if (!shouldAutoConnect) return;
+  if (!shouldAutoConnect) return;
 
-const timer = setTimeout(async () => {
-  if (!connected && !connecting && !bleManager.getConnectedDevice()) {
-    await handleConnect();
-  }
-}, 2000);
+  const timer = window.setTimeout(async () => {
+    if (!connected && !connecting && !bleManager.getConnectedDevice()) {
+      await handleConnect();
+    }
+  }, 2000);
 
-  return () => clearTimeout(timer);
+  return () => window.clearTimeout(timer);
 }, []);
 
   const handleDisconnect = async () => {
