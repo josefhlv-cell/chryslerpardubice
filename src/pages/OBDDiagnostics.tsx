@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { bleManager, BLEDeviceInfo } from "@/lib/obd/ble-manager";
 import { elm327 } from "@/lib/obd/elm327-engine";
 import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
@@ -184,6 +185,64 @@ const OBDDiagnostics = () => {
   const [tempHistory, setTempHistory] = useState<number[]>([]);
   const [speedHistory, setSpeedHistory] = useState<number[]>([]);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const sessionUserIdRef = useRef<string | null>(null);
+  const lastSessionUpdateRef = useRef<number>(0);
+
+  const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
+    const { data } = await supabase.auth.getUser();
+    const user = data.user;
+
+    if (!user) return;
+
+    sessionUserIdRef.current = user.id;
+
+    await supabase.from("obd_live_sessions").upsert(
+      {
+        user_id: user.id,
+        vin: null,
+        is_active: true,
+        last_seen: new Date().toISOString(),
+        payload,
+        dtcs: dtcCodes,
+      } as any,
+      { onConflict: "user_id" }
+    );
+  };
+
+  const updateLiveSessionPayload = async (nextData: OBDData) => {
+    const now = Date.now();
+
+    if (now - lastSessionUpdateRef.current < 2000) return;
+
+    lastSessionUpdateRef.current = now;
+
+    const userId = sessionUserIdRef.current;
+    if (!userId) return;
+
+    await supabase
+      .from("obd_live_sessions")
+      .update({
+        is_active: true,
+        last_seen: new Date().toISOString(),
+        payload: nextData,
+        dtcs: dtcCodes,
+      } as any)
+      .eq("user_id", userId);
+  };
+
+  const closeObdSession = async () => {
+    const userId = sessionUserIdRef.current;
+
+    if (!userId) return;
+
+    await supabase
+      .from("obd_live_sessions")
+      .update({
+        is_active: false,
+        last_seen: new Date().toISOString(),
+      } as any)
+      .eq("user_id", userId);
+  };
 
   useEffect(() => {
     const unsubscribe = bleManager.subscribe((event) => {
@@ -213,9 +272,6 @@ const OBDDiagnostics = () => {
     return unsubscribe;
   }, []);
 
-  // === LIVE POLLING LOOP ===
-  // Po připojení k ELM327 cyklicky čteme všechny LIVE_PIDS a aktualizujeme obdData.
-  // Bez tohoto effectu by všechny ukazatele zůstaly na 0 (původní bug).
   useEffect(() => {
     if (!connected) return;
 
@@ -229,7 +285,7 @@ const OBDDiagnostics = () => {
       "0104": "engineLoad",
       "010F": "intakeTemp",
       "010A": "fuelPressure",
-      "010B": "boostPressure", // budeme přepočítávat kPa -> bar (relativní k atmosféře)
+      "010B": "boostPressure",
       "0142": "voltage",
     };
 
@@ -237,6 +293,7 @@ const OBDDiagnostics = () => {
       try {
         const raw = await elm327.sendCommand("ATRV");
         if (!raw) return null;
+
         const m = String(raw).match(/(\d+(?:\.\d+)?)/);
         return m ? parseFloat(m[1]) : null;
       } catch {
@@ -256,7 +313,6 @@ const OBDDiagnostics = () => {
             value = parsePIDResponse(pid, raw);
           }
 
-          // Speciální fallback pro napětí: použij ATRV pokud 0142 nevrací data
           if (pid === "0142" && (value === null || value === 0)) {
             value = await readVoltageFallback();
           }
@@ -267,14 +323,20 @@ const OBDDiagnostics = () => {
           if (!key) continue;
 
           let finalValue = value;
+
           if (pid === "010B") {
-            // MAP (kPa absolutní) -> turbo boost v bar (relativní k 101.3 kPa)
             finalValue = Math.max(0, (value - 101.3) / 100);
           }
 
           if (cancelled) return;
 
-          setObdData((prev) => ({ ...prev, [key]: finalValue }));
+          setObdData((prev) => {
+            const next = { ...prev, [key]: finalValue };
+
+            updateLiveSessionPayload(next);
+
+            return next;
+          });
 
           if (pid === "010C") setRpmHistory((h) => [...h.slice(-59), finalValue]);
           if (pid === "0105") setTempHistory((h) => [...h.slice(-59), finalValue]);
@@ -288,8 +350,8 @@ const OBDDiagnostics = () => {
       }
     };
 
-    // První čtení hned, potom každých 600 ms (přiměřeně k BLE ELM327)
     pollOnce();
+
     const interval = window.setInterval(() => {
       if (!cancelled) pollOnce();
     }, 600);
@@ -298,7 +360,7 @@ const OBDDiagnostics = () => {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [connected]);
+  }, [connected, dtcCodes]);
 
   const resetData = () => {
     setObdData(EMPTY_OBD_DATA);
@@ -309,6 +371,8 @@ const OBDDiagnostics = () => {
   };
 
   const handleConnect = async () => {
+    if (connected || connecting || bleManager.getConnectedDevice()) return;
+
     setConnecting(true);
     setDebugLogs([]);
 
@@ -355,8 +419,10 @@ const OBDDiagnostics = () => {
       setDevice(connectedDevice);
       setConnected(true);
       resetData();
-      
+
       localStorage.setItem("obd_auto_connect", "true");
+
+      await createOrUpdateObdSession(EMPTY_OBD_DATA);
 
       toast({
         title: "Připojeno",
@@ -385,23 +451,25 @@ const OBDDiagnostics = () => {
       setConnecting(false);
     }
   };
-useEffect(() => {
-  const shouldAutoConnect =
-    localStorage.getItem("obd_auto_connect") === "true";
 
-  if (!shouldAutoConnect) return;
-  if (connected || connecting || bleManager.getConnectedDevice()) return;
+  useEffect(() => {
+    const shouldAutoConnect =
+      localStorage.getItem("obd_auto_connect") === "true";
 
-  const timer = window.setTimeout(async () => {
-    await handleConnect();
-  }, 2000);
+    if (!shouldAutoConnect) return;
+    if (connected || connecting || bleManager.getConnectedDevice()) return;
 
-  return () => window.clearTimeout(timer);
-}, [connected, connecting]);
+    const timer = window.setTimeout(async () => {
+      await handleConnect();
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [connected, connecting]);
 
   const handleDisconnect = async () => {
     try {
       elm327.clearQueue();
+      await closeObdSession();
       await bleManager.disconnect();
     } catch (error) {
       console.warn("BLE disconnect warning:", error);
