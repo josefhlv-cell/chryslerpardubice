@@ -318,15 +318,21 @@ class BLEManager {
       this.debug('[BLE] CONNECT START', deviceId);
 
       await BleClient.connect(deviceId, disconnectedId => {
+      await new Promise(resolve => setTimeout(resolve, 800));
         this.warn('[BLE] DISCONNECTED', disconnectedId);
 
+      await BleClient.connect(deviceId, disconnectedId => {
+        this.warn('[BLE] DISCONNECTED', disconnectedId);
+      
         this.connectedDevice = null;
         this.activeProfile = null;
         this.setState('disconnected');
         this.tryAutoReconnect();
-      });
+});
 
-      this.debug('[BLE] CONNECT OK');
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+        this.debug('[BLE] CONNECT OK');
 
       await new Promise(r => setTimeout(r, 800));
 
