@@ -465,6 +465,7 @@ useEffect(() => {
 
   return () => window.clearTimeout(timer);
 }, [connected, connecting]);
+
 useEffect(() => {
   if (!connected) return;
 
