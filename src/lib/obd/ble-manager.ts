@@ -311,83 +311,77 @@ class BLEManager {
     return this.performConnect(deviceId);
   }
 
-  private async performConnect(deviceId: string): Promise<boolean> {
-    try {
-      await this.ensureInitialized();
+private async performConnect(deviceId: string): Promise<boolean> {
+  try {
+    await this.ensureInitialized();
 
-      this.debug('[BLE] CONNECT START', deviceId);
+    this.debug('[BLE] CONNECT START', deviceId);
 
-      await BleClient.connect(deviceId, disconnectedId => {
-      await new Promise(resolve => setTimeout(resolve, 800));
-        this.warn('[BLE] DISCONNECTED', disconnectedId);
-
-      await BleClient.connect(deviceId, disconnectedId => {
-        this.warn('[BLE] DISCONNECTED', disconnectedId);
-      
-        this.connectedDevice = null;
-        this.activeProfile = null;
-        this.setState('disconnected');
-        this.tryAutoReconnect();
-});
-
-      await new Promise(resolve => setTimeout(resolve, 800));
-
-        this.debug('[BLE] CONNECT OK');
-
-      await new Promise(r => setTimeout(r, 800));
-
-      try {
-        const services = await BleClient.getServices(deviceId);
-        this.debug('[BLE] SERVICES', services);
-      } catch (serviceErr) {
-        this.warn('[BLE] GET SERVICES WARNING', serviceErr);
-      }
-
-      const profile = await Promise.race([
-        this.findWorkingProfile(deviceId),
-        new Promise<null>(resolve => {
-          setTimeout(() => resolve(null), 12000);
-        }),
-      ]);
-
-      if (!profile) {
-        throw new Error('Adaptér byl nalezen, ale neodpovídá jako ELM327 / OBD adaptér.');
-      }
-
-      this.activeProfile = profile;
-
-      this.connectedDevice = {
-        deviceId,
-        name: 'OBD adaptér',
-        rssi: -50,
-        connected: true,
-      };
-
-      this.reconnectAttempts = 0;
-      this.setState('connected');
-
-      try {
-        await this.initializeELM327();
-      } catch (initError) {
-        this.warn('[BLE] ELM327 INIT FAILED, KEEPING CONNECTION', initError);
-      }
-
-      return true;
-    } catch (e) {
-      this.warn('[BLE] CONNECT ERROR', e);
-
-      try {
-        await BleClient.disconnect(deviceId);
-      } catch {}
+    await BleClient.connect(deviceId, disconnectedId => {
+      this.warn('[BLE] DISCONNECTED', disconnectedId);
 
       this.connectedDevice = null;
       this.activeProfile = null;
-      this.setState('error');
-      this.emit({ type: 'error', payload: e });
+      this.setState('disconnected');
+      this.tryAutoReconnect();
+    });
 
-      return false;
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    this.debug('[BLE] CONNECT OK');
+
+    try {
+      const services = await BleClient.getServices(deviceId);
+      this.debug('[BLE] SERVICES', services);
+    } catch (serviceErr) {
+      this.warn('[BLE] GET SERVICES WARNING', serviceErr);
     }
+
+    const profile = await Promise.race([
+      this.findWorkingProfile(deviceId),
+      new Promise<null>(resolve => {
+        setTimeout(() => resolve(null), 12000);
+      }),
+    ]);
+
+    if (!profile) {
+      throw new Error('Adaptér byl nalezen, ale neodpovídá jako ELM327 / OBD adaptér.');
+    }
+
+    this.activeProfile = profile;
+
+    this.connectedDevice = {
+      deviceId,
+      name: 'OBD adaptér',
+      rssi: -50,
+      connected: true,
+    };
+
+    this.reconnectAttempts = 0;
+    this.setState('connected');
+
+    try {
+      await this.initializeELM327();
+    } catch (initError) {
+      this.warn('[BLE] ELM327 INIT FAILED, KEEPING CONNECTION', initError);
+    }
+
+    return true;
+  } catch (e) {
+    this.warn('[BLE] CONNECT ERROR', e);
+
+    try {
+      await BleClient.disconnect(deviceId);
+    } catch {}
+
+    this.connectedDevice = null;
+    this.activeProfile = null;
+    this.setState('error');
+    this.emit({ type: 'error', payload: e });
+
+    return false;
   }
+}
 
 
   async reconnectLastDevice(): Promise<boolean> {
