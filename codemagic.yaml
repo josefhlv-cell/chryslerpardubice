@@ -1,4 +1,4 @@
- rworkflows:
+  rworkflows:
   android-workflow:
     name: Android Build (APK + AAB)
     max_build_duration: 60
