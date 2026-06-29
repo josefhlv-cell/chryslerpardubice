@@ -452,19 +452,6 @@ const OBDDiagnostics = () => {
     }
   };
 
-  useEffect(() => {
-    const shouldAutoConnect =
-      localStorage.getItem("obd_auto_connect") === "true";
-
-    if (!shouldAutoConnect) return;
-    if (connected || connecting || bleManager.getConnectedDevice()) return;
-
-    const timer = window.setTimeout(async () => {
-      await handleConnect();
-    }, 2000);
-
-    return () => window.clearTimeout(timer);
-  }, [connected, connecting]);
 useEffect(() => {
   if (!connected) return;
 
@@ -485,23 +472,21 @@ useEffect(() => {
   };
 }, [connected, obdData, dtcCodes]);
 
-// AŽ POD TÍM zůstane:
+const handleDisconnect = async () => {
+  try {
+    elm327.reset();
+    await closeObdSession();
+    await bleManager.disconnect();
+  } catch (error) {
+    console.warn("BLE disconnect warning:", error);
+  }
 
-  const handleDisconnect = async () => 
-    try {
-      elm327.reset();
-      await closeObdSession();
-      await bleManager.disconnect();
-    } catch (error) {
-      console.warn("BLE disconnect warning:", error);
-    }
+  setConnected(false);
+  setDevice(null);
+  resetData();
 
-    setConnected(false);
-    setDevice(null);
-    resetData();
-
-    toast({ title: "Odpojeno" });
-  };
+  toast({ title: "Odpojeno" });
+};
 
   const clearDTC = () => {
     setDtcCodes([]);
