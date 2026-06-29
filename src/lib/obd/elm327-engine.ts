@@ -489,20 +489,20 @@ useEffect(() => {
 const handleDisconnect = async () => {
 
   const handleDisconnect = async () => {
-    try {
-      elm327.reset();
-      await closeObdSession();
-      await bleManager.disconnect();
-    } catch (error) {
-      console.warn("BLE disconnect warning:", error);
-    }
+  try {
+    elm327.reset();
+    await closeObdSession();
+    await bleManager.disconnect();
+  } catch (error) {
+    console.warn("BLE disconnect warning:", error);
+  }
 
-    setConnected(false);
-    setDevice(null);
-    resetData();
+  setConnected(false);
+  setDevice(null);
+  resetData();
 
-    toast({ title: "Odpojeno" });
-  };
+  toast({ title: "Odpojeno" });
+};
 
   const clearDTC = () => {
     setDtcCodes([]);
