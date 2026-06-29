@@ -465,7 +465,53 @@ const OBDDiagnostics = () => {
 
     return () => window.clearTimeout(timer);
   }, [connected, connecting]);
+useEffect(() => {
 
+  if (!connected) return;
+
+  let cancelled = false;
+
+  const heartbeat = async () => {
+
+    if (cancelled) return;
+
+    await supabase
+
+      .from("obd_live_sessions")
+
+      .update({
+
+        is_active: true,
+
+        last_seen: new Date().toISOString(),
+
+        payload: obdData,
+
+        dtcs: dtcCodes,
+
+      })
+
+      .eq("user_id", user.id);
+
+  };
+
+  heartbeat();
+
+  const interval = window.setInterval(heartbeat, 5000);
+
+  return () => {
+
+    cancelled = true;
+
+    window.clearInterval(interval);
+
+  };
+
+}, [connected, obdData, dtcCodes]);
+
+// AŽ POD TÍM zůstane:
+
+const handleDisconnect = async () => 
   const handleDisconnect = async () => {
     try {
       elm327.reset();
