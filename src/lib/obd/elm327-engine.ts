@@ -486,7 +486,6 @@ useEffect(() => {
   };
 }, [connected, obdData, dtcCodes]);
 
- {
 
 const handleDisconnect = async () => {
   try {
