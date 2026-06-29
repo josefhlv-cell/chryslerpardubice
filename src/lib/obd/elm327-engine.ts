@@ -490,7 +490,7 @@ const handleDisconnect = async () => {
 
   const handleDisconnect = async () => {
     try {
-      elm327.clearQueue();
+      elm327.reset();
       await closeObdSession();
       await bleManager.disconnect();
     } catch (error) {
