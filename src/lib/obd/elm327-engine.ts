@@ -1,5 +1,3 @@
-Zkopíruj celý elm327-engine.ts tímhle. Hlavní oprava: když data chodí, inicializace už nesmí shodit připojení.
-
 // ELM327 Protocol Engine
 // Handles initialization, command queuing, and response parsing
 import { bleManager } from "@/lib/obd/ble-manager";
