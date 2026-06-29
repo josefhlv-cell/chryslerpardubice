@@ -613,7 +613,6 @@ private async performConnect(deviceId: string): Promise<boolean> {
     this.connectedDevice = null;
     this.activeProfile = null;
     this.responseBuffer = '';
-    this.lastDeviceId = null;
     this.autoReconnect = true;
 
     this.setState('disconnected');
