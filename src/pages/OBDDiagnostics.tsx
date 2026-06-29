@@ -398,7 +398,7 @@ useEffect(() => {
   }, 2000);
 
   return () => window.clearTimeout(timer);
-}, []);
+}, [connected, connecting]);
 
   const handleDisconnect = async () => {
     try {
