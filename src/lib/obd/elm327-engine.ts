@@ -464,7 +464,29 @@ const OBDDiagnostics = () => {
     }, 2000);
 
     return () => window.clearTimeout(timer);
-  }, [connected, connecting]);
+}, [connected, connecting]);
+
+useEffect(() => {
+  if (!connected) return;
+
+  let cancelled = false;
+
+  const heartbeat = async () => {
+    if (cancelled) return;
+    await createOrUpdateObdSession(obdData);
+  };
+
+  heartbeat();
+
+  const interval = window.setInterval(heartbeat, 5000);
+
+  return () => {
+    cancelled = true;
+    window.clearInterval(interval);
+  };
+}, [connected, obdData, dtcCodes]);
+
+const handleDisconnect = async () => {
 
   const handleDisconnect = async () => {
     try {
