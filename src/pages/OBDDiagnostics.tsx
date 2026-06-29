@@ -487,8 +487,7 @@ useEffect(() => {
 
 // AŽ POD TÍM zůstane:
 
-const handleDisconnect = async () => 
-  const handleDisconnect = async () => {
+  const handleDisconnect = async () => 
     try {
       elm327.reset();
       await closeObdSession();
