@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+.import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -388,6 +388,8 @@ const OBDDiagnostics = () => {
 useEffect(() => {
   const shouldAutoConnect =
     localStorage.getItem("obd_auto_connect") === "true";
+
+if (!shouldAutoConnect) return;
 
 const timer = setTimeout(async () => {
   if (!connected && !connecting && !bleManager.getConnectedDevice()) {
