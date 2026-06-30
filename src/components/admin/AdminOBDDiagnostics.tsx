@@ -124,6 +124,7 @@ const AdminOBDDiagnostics = () => {
   });
 
 const { data: customerObdSession } = useQuery({
+  const liveData = (customerObdSession?.payload as any) || localLiveData;
   queryKey: ['admin-obd-live-session', selectedUserId],
   queryFn: async () => {
     if (!selectedUserId) return null;
