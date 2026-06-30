@@ -123,6 +123,25 @@ const AdminOBDDiagnostics = () => {
     enabled: !!selectedUserId,
   });
 
+const { data: customerObdSession } = useQuery({
+  queryKey: ['admin-obd-live-session', selectedUserId],
+  queryFn: async () => {
+    if (!selectedUserId) return null;
+
+    const { data, error } = await supabase
+      .from('obd_live_sessions')
+      .select('*')
+      .eq('user_id', selectedUserId)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+  enabled: !!selectedUserId,
+  refetchInterval: 2000,
+});
+
   const selectedProfile = profiles.find(p => p.user_id === selectedUserId);
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
