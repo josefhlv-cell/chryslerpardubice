@@ -144,6 +144,7 @@ const { data: customerObdSession } = useQuery({
 });
 
   const selectedProfile = profiles.find(p => p.user_id === selectedUserId);
+  const selectedProfile = profiles.find(...)
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
 
   const handleConnect = useCallback(async (deviceId: string) => {
