@@ -188,28 +188,46 @@ const OBDDiagnostics = () => {
   const sessionUserIdRef = useRef<string | null>(null);
   const lastSessionUpdateRef = useRef<number>(0);
 
-  const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
-    const { data } = await supabase.auth.getUser();
-    const user = data.user;
+const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
 
-    if (!user) {
-      console.warn("OBD session: user není přihlášený");
-      return;
-    }
+  if (!user) return;
 
-    sessionUserIdRef.current = user.id;
+  sessionUserIdRef.current = user.id;
 
-    const { error } = await supabase.from("obd_live_sessions").upsert(
-      {
-        user_id: user.id,
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from("obd_live_sessions")
+    .select("id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing?.id) {
+    await supabase
+      .from("obd_live_sessions")
+      .update({
         vin: null,
         is_active: true,
-        last_seen: new Date().toISOString(),
+        last_seen: now,
         payload,
         dtcs: dtcCodes,
-      } as any,
-      { onConflict: "user_id" }
-    );
+      } as any)
+      .eq("id", existing.id);
+
+    return;
+  }
+
+  await supabase.from("obd_live_sessions").insert({
+    user_id: user.id,
+    vin: null,
+    is_active: true,
+    last_seen: now,
+    payload,
+    dtcs: dtcCodes,
+  } as any);
+};
 
     if (error) {
       console.error("OBD session upsert error:", error);
