@@ -192,11 +192,14 @@ const OBDDiagnostics = () => {
     const { data } = await supabase.auth.getUser();
     const user = data.user;
 
-    if (!user) return;
+    if (!user) {
+      console.warn("OBD session: user není přihlášený");
+      return;
+    }
 
     sessionUserIdRef.current = user.id;
 
-    await supabase.from("obd_live_sessions").upsert(
+    const { error } = await supabase.from("obd_live_sessions").upsert(
       {
         user_id: user.id,
         vin: null,
@@ -207,6 +210,15 @@ const OBDDiagnostics = () => {
       } as any,
       { onConflict: "user_id" }
     );
+
+    if (error) {
+      console.error("OBD session upsert error:", error);
+      toast({
+        title: "OBD relace chyba",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const updateLiveSessionPayload = async (nextData: OBDData) => {
@@ -219,7 +231,7 @@ const OBDDiagnostics = () => {
     const userId = sessionUserIdRef.current;
     if (!userId) return;
 
-    await supabase
+    const { error } = await supabase
       .from("obd_live_sessions")
       .update({
         is_active: true,
@@ -228,6 +240,10 @@ const OBDDiagnostics = () => {
         dtcs: dtcCodes,
       } as any)
       .eq("user_id", userId);
+
+    if (error) {
+      console.error("OBD session update error:", error);
+    }
   };
 
   const closeObdSession = async () => {
@@ -235,13 +251,17 @@ const OBDDiagnostics = () => {
 
     if (!userId) return;
 
-    await supabase
+    const { error } = await supabase
       .from("obd_live_sessions")
       .update({
         is_active: false,
         last_seen: new Date().toISOString(),
       } as any)
       .eq("user_id", userId);
+
+    if (error) {
+      console.error("OBD session close error:", error);
+    }
   };
 
   useEffect(() => {
@@ -416,9 +436,9 @@ const OBDDiagnostics = () => {
         throw new Error("Adaptér je připojený, ale inicializace ELM327 selhala.");
       }
 
+      resetData();
       setDevice(connectedDevice);
       setConnected(true);
-      resetData();
 
       localStorage.setItem("obd_auto_connect", "true");
 
@@ -452,55 +472,55 @@ const OBDDiagnostics = () => {
     }
   };
 
-useEffect(() => {
-  const shouldAutoConnect =
-    localStorage.getItem("obd_auto_connect") === "true";
+  useEffect(() => {
+    const shouldAutoConnect =
+      localStorage.getItem("obd_auto_connect") === "true";
 
-  if (!shouldAutoConnect) return;
-  if (connected || connecting || bleManager.getConnectedDevice()) return;
+    if (!shouldAutoConnect) return;
+    if (connected || connecting || bleManager.getConnectedDevice()) return;
 
-  const timer = window.setTimeout(async () => {
-    await handleConnect();
-  }, 2000);
+    const timer = window.setTimeout(async () => {
+      await handleConnect();
+    }, 2000);
 
-  return () => window.clearTimeout(timer);
-}, [connected, connecting]);
+    return () => window.clearTimeout(timer);
+  }, [connected, connecting]);
 
-useEffect(() => {
-  if (!connected) return;
+  useEffect(() => {
+    if (!connected) return;
 
-  let cancelled = false;
+    let cancelled = false;
 
-  const heartbeat = async () => {
-    if (cancelled) return;
-    await createOrUpdateObdSession(obdData);
+    const heartbeat = async () => {
+      if (cancelled) return;
+      await createOrUpdateObdSession(obdData);
+    };
+
+    heartbeat();
+
+    const interval = window.setInterval(heartbeat, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [connected, obdData, dtcCodes]);
+
+  const handleDisconnect = async () => {
+    try {
+      elm327.reset();
+      await closeObdSession();
+      await bleManager.disconnect();
+    } catch (error) {
+      console.warn("BLE disconnect warning:", error);
+    }
+
+    setConnected(false);
+    setDevice(null);
+    resetData();
+
+    toast({ title: "Odpojeno" });
   };
-
-  heartbeat();
-
-  const interval = window.setInterval(heartbeat, 5000);
-
-  return () => {
-    cancelled = true;
-    window.clearInterval(interval);
-  };
-}, [connected, obdData, dtcCodes]);
-
-const handleDisconnect = async () => {
-  try {
-    elm327.reset();
-    await closeObdSession();
-    await bleManager.disconnect();
-  } catch (error) {
-    console.warn("BLE disconnect warning:", error);
-  }
-
-  setConnected(false);
-  setDevice(null);
-  resetData();
-
-  toast({ title: "Odpojeno" });
-};
 
   const clearDTC = () => {
     setDtcCodes([]);
