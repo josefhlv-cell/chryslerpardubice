@@ -91,7 +91,7 @@ const AdminOBDDiagnostics = () => {
   // BLE & ELM327
   const { connectionState, devices, signalQuality, scan, connect, disconnect } = useBLE();
   const { elmState, initSteps, initialize, sendCommand } = useELM327();
-  const liveData = useLiveData(elmState === 'ready' && activeTab === 'dashboard');
+  const localLiveData = useLiveData(elmState === 'ready' && activeTab === 'dashboard');
   const elmReady = elmState === 'ready';
   const connectedDevice = bleManager.getConnectedDevice();
 
