@@ -188,49 +188,70 @@ const OBDDiagnostics = () => {
   const sessionUserIdRef = useRef<string | null>(null);
   const lastSessionUpdateRef = useRef<number>(0);
 
-const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
-  const { data } = await supabase.auth.getUser();
-  const user = data.user;
+  const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
+    const { data: authData } = await supabase.auth.getUser();
+    const user = authData.user;
 
-  if (!user) return;
+    if (!user) return;
 
-  sessionUserIdRef.current = user.id;
+    sessionUserIdRef.current = user.id;
 
-  const now = new Date().toISOString();
+    const now = new Date().toISOString();
 
-  const { data: existing } = await supabase
-    .from("obd_live_sessions")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (existing?.id) {
-    await supabase
+    const { data: existingRows, error: selectError } = await supabase
       .from("obd_live_sessions")
-      .update({
-        vin: null,
-        is_active: true,
-        last_seen: now,
-        payload,
-        dtcs: dtcCodes,
-      } as any)
-      .eq("id", existing.id);
+      .select("id")
+      .eq("user_id", user.id)
+      .order("last_seen", { ascending: false })
+      .limit(1);
 
-    return;
-  }
+    if (selectError) {
+      console.error("OBD session select error:", selectError);
+      toast({
+        title: "OBD relace chyba",
+        description: selectError.message,
+        variant: "destructive",
+      });
+      return;
+    }
 
-  await supabase.from("obd_live_sessions").insert({
-    user_id: user.id,
-    vin: null,
-    is_active: true,
-    last_seen: now,
-    payload,
-    dtcs: dtcCodes,
-  } as any);
-};
+    const existing = existingRows?.[0];
+
+    if (existing?.id) {
+      const { error } = await supabase
+        .from("obd_live_sessions")
+        .update({
+          vin: null,
+          is_active: true,
+          last_seen: now,
+          payload,
+          dtcs: dtcCodes,
+        } as any)
+        .eq("id", existing.id);
+
+      if (error) {
+        console.error("OBD session update error:", error);
+        toast({
+          title: "OBD relace chyba",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+
+      return;
+    }
+
+    const { error } = await supabase.from("obd_live_sessions").insert({
+      user_id: user.id,
+      vin: null,
+      is_active: true,
+      last_seen: now,
+      payload,
+      dtcs: dtcCodes,
+    } as any);
 
     if (error) {
-      console.error("OBD session upsert error:", error);
+      console.error("OBD session insert error:", error);
       toast({
         title: "OBD relace chyba",
         description: error.message,
@@ -370,9 +391,7 @@ const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
 
           setObdData((prev) => {
             const next = { ...prev, [key]: finalValue };
-
             updateLiveSessionPayload(next);
-
             return next;
           });
 
@@ -491,8 +510,7 @@ const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
   };
 
   useEffect(() => {
-    const shouldAutoConnect =
-      localStorage.getItem("obd_auto_connect") === "true";
+    const shouldAutoConnect = localStorage.getItem("obd_auto_connect") === "true";
 
     if (!shouldAutoConnect) return;
     if (connected || connecting || bleManager.getConnectedDevice()) return;
@@ -576,9 +594,7 @@ const createOrUpdateObdSession = async (payload: Partial<OBDData> = {}) => {
                   </p>
 
                   <p className="text-[11px] text-muted-foreground">
-                    {connected
-                      ? device?.name || "Live připojení aktivní"
-                      : "Připojte přes Bluetooth"}
+                    {connected ? device?.name || "Live připojení aktivní" : "Připojte přes Bluetooth"}
                   </p>
                 </div>
               </div>
