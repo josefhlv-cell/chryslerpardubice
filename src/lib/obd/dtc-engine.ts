@@ -192,14 +192,14 @@ class DTCEngine {
   private enrichCode(code: string, isPending: boolean): DTCCode {
     const prefix = code[0];
     const system: DTCSystem = prefix === 'P' ? 'powertrain' : prefix === 'B' ? 'body' : prefix === 'C' ? 'chassis' : 'network';
-    const dbEntry = DTC_DATABASE[code];
+    const info = resolveDTCInfo(code);
     return {
       code,
       system,
-      description: dbEntry?.desc || GENERIC_DESCRIPTIONS[code] || `Neznámý kód ${code}`,
-      severity: dbEntry?.severity || (code.startsWith('P03') ? 'high' : 'medium'),
-      possibleCause: dbEntry?.cause || 'Vyžaduje další diagnostiku podle servisního manuálu.',
-      relatedSignals: dbEntry?.signals || [],
+      description: info.description,
+      severity: info.severity,
+      possibleCause: info.cause,
+      relatedSignals: info.signals,
       isActive: !isPending,
       isPending,
       occurenceCount: 1,
