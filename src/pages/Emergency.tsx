@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
+import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot, Truck } from "lucide-react";
 import TondaAvatar from "@/components/TondaAvatar";
+import TowRequestDialog from "@/components/TowRequestDialog";
 
 const SERVICE_PHONE = "+420603372911";
 
