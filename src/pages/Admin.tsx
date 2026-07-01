@@ -217,6 +217,19 @@ const Admin = () => {
 
   useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin]);
 
+  // Auto-open detail dialog when arriving via notification deep-link ?id=
+  useEffect(() => {
+    if (!focusId) return;
+    if (section === "orders-list" || section === "orders") {
+      const o = orders.find((x) => x.id === focusId);
+      if (o) openOrderEdit(o);
+    } else if (section === "service-bookings" || section === "service") {
+      const b = bookings.find((x) => x.id === focusId);
+      if (b) openBookingEdit(b);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, section, orders.length, bookings.length]);
+
   const approveProfile = async (id: string, discount: number) => {
     const { error } = await supabase.from("profiles").update({ status: "active", discount_percent: discount }).eq("id", id);
     if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
