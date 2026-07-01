@@ -44,43 +44,37 @@ type Profile = {
 
 type CustomerObdPermissions = {
   user_id: string;
-  remote_obd_enabled: boolean;
   live_data: boolean;
-  read_dtc: boolean;
-  clear_dtc: boolean;
-  gps_tracking: boolean;
-  service_history: boolean;
-  actuator_tests: boolean;
-  adaptations: boolean;
-  reset_service: boolean;
-  dpf_regeneration: boolean;
-  epb_service: boolean;
-  sas_calibration: boolean;
-  bms_reset: boolean;
+  dtc_read: boolean;
+  dtc_clear: boolean;
+  can_bus: boolean;
+  uds: boolean;
   coding: boolean;
-  ecu_flash: boolean;
-  updated_by?: string | null;
+  terminal: boolean;
+  logging: boolean;
+  reverse_engineering: boolean;
+  discovery: boolean;
+  ai_diagnostics: boolean;
+  dev_mode: boolean;
+  flash: boolean;
   updated_at?: string | null;
 };
 
 const DEFAULT_OBD_PERMISSIONS: CustomerObdPermissions = {
   user_id: "",
-  remote_obd_enabled: true,
   live_data: true,
-  read_dtc: true,
-  clear_dtc: false,
-  gps_tracking: false,
-  service_history: true,
-  actuator_tests: false,
-  adaptations: false,
-  reset_service: false,
-  dpf_regeneration: false,
-  epb_service: false,
-  sas_calibration: false,
-  bms_reset: false,
+  dtc_read: true,
+  dtc_clear: false,
+  can_bus: false,
+  uds: false,
   coding: false,
-  ecu_flash: false,
-  updated_by: null,
+  terminal: false,
+  logging: true,
+  reverse_engineering: false,
+  discovery: false,
+  ai_diagnostics: true,
+  dev_mode: false,
+  flash: false,
   updated_at: null,
 };
 
@@ -91,41 +85,33 @@ const OBD_PERMISSION_GROUPS: Array<{
 }> = [
   {
     title: "Základní diagnostika",
-    description: "Funkce, které admin používá nejčastěji při vzdálené kontrole vozidla.",
+    description: "Hlavní OBD funkce dostupné zákaznické aplikaci a vzdálené správě.",
     items: [
-      { key: "remote_obd_enabled", label: "Vzdálená OBD diagnostika", description: "Hlavní vypínač. Když je vypnutý, admin se k zákazníkově OBD relaci nepřipojí." },
-      { key: "live_data", label: "Live Data", description: "Otáčky, rychlost, teploty, napětí, tlak, zatížení motoru a další živé hodnoty." },
-      { key: "read_dtc", label: "Čtení DTC", description: "Zobrazení chybových kódů uložených v řídicí jednotce." },
-      { key: "clear_dtc", label: "Mazání DTC", description: "Možnost mazat chybové kódy. Doporučeno zapínat jen při servisu.", dangerous: true },
+      { key: "live_data", label: "Live Data", description: "Otáčky, rychlost, teploty, napětí, tlak a zatížení motoru." },
+      { key: "dtc_read", label: "Čtení DTC", description: "Zobrazení chybových kódů uložených v řídicí jednotce." },
+      { key: "dtc_clear", label: "Mazání DTC", description: "Možnost mazat chybové kódy. Doporučeno zapínat jen při servisu.", dangerous: true },
+      { key: "logging", label: "Logování", description: "Ukládání diagnostických záznamů a průběhu relace." },
     ],
   },
   {
-    title: "Sdílení a servis",
-    description: "Data navázaná na servisní podporu a lokalizaci zákazníka.",
+    title: "Pokročilé protokoly",
+    description: "Funkce pro práci s CAN/UDS a pro hledání signálů.",
     items: [
-      { key: "gps_tracking", label: "GPS poloha", description: "Poloha zákazníka/vozidla během diagnostiky." },
-      { key: "service_history", label: "Servisní historie", description: "Přístup k servisní historii zákazníka a vozidla." },
-      { key: "reset_service", label: "Reset servisního intervalu", description: "Povolit servisní reset po provedené údržbě.", dangerous: true },
+      { key: "can_bus", label: "CAN bus", description: "CAN analyzátor a nízkoúrovňová práce se sběrnicí.", dangerous: true },
+      { key: "uds", label: "UDS", description: "UDS diagnostika a čtení servisních dat.", dangerous: true },
+      { key: "discovery", label: "Discovery", description: "Skenování dostupných PID/DID a modulů." },
+      { key: "reverse_engineering", label: "Reverse engineering", description: "Nástroje pro analýzu neznámých signálů.", dangerous: true },
     ],
   },
   {
-    title: "Servisní procedury",
-    description: "Pokročilé funkce, které musí zůstat pod kontrolou admina.",
+    title: "Servisní a vývojové funkce",
+    description: "Rizikovější funkce, které nechávej vypnuté, pokud nejsou potřeba.",
     items: [
-      { key: "actuator_tests", label: "Test akčních členů", description: "Spouštění testů ventilátorů, relé, čerpadel a dalších akčních členů.", dangerous: true },
-      { key: "adaptations", label: "Adaptace", description: "Resety/adaptace hodnot řídicích jednotek.", dangerous: true },
-      { key: "dpf_regeneration", label: "DPF regenerace", description: "Spuštění servisní regenerace DPF.", dangerous: true },
-      { key: "epb_service", label: "EPB servisní režim", description: "Servisní režim elektronické parkovací brzdy.", dangerous: true },
-      { key: "sas_calibration", label: "SAS kalibrace", description: "Kalibrace snímače úhlu volantu.", dangerous: true },
-      { key: "bms_reset", label: "BMS / baterie", description: "Registrace nebo reset baterie/BMS.", dangerous: true },
-    ],
-  },
-  {
-    title: "Profesionální funkce",
-    description: "Nejrizikovější funkce. Nechávat vypnuté, pokud nejsou výslovně potřeba.",
-    items: [
+      { key: "terminal", label: "Terminál", description: "Ruční AT/OBD příkazy a vzdálené vlastní příkazy.", dangerous: true },
       { key: "coding", label: "Kódování", description: "Změny konfigurace modulů. Jen pro vyškolené osoby.", dangerous: true },
-      { key: "ecu_flash", label: "Flash ECU", description: "Programování řídicí jednotky. Zapínat pouze výjimečně.", dangerous: true },
+      { key: "ai_diagnostics", label: "AI diagnostika", description: "AI analýza DTC a živých dat." },
+      { key: "dev_mode", label: "Developer režim", description: "Interní vývojové nástroje.", dangerous: true },
+      { key: "flash", label: "Flash", description: "Programování řídicí jednotky. Zapínat pouze výjimečně.", dangerous: true },
     ],
   },
 ];
@@ -623,8 +609,8 @@ function ObdPermissionsPanel({
                 Zákazník pouze jednou odsouhlasí vzdálenou diagnostiku; jednotlivé funkce řídí servis.
               </p>
             </div>
-            <Badge className={permissions.remote_obd_enabled ? "bg-success/15 text-success border-success/30" : "bg-destructive/15 text-destructive border-destructive/30"}>
-              {permissions.remote_obd_enabled ? "OBD povoleno" : "OBD vypnuto"}
+            <Badge className={permissions.live_data ? "bg-success/15 text-success border-success/30" : "bg-destructive/15 text-destructive border-destructive/30"}>
+              {permissions.live_data ? "OBD live povoleno" : "OBD live vypnuto"}
             </Badge>
           </div>
           {permissions.updated_at && (
@@ -644,8 +630,7 @@ function ObdPermissionsPanel({
           <CardContent className="divide-y divide-border/20 p-0">
             {group.items.map((item) => {
               const checked = Boolean(permissions[item.key]);
-              const disabled =
-                item.key !== "remote_obd_enabled" && !permissions.remote_obd_enabled;
+              const disabled = false;
 
               return (
                 <div key={String(item.key)} className="flex items-start justify-between gap-3 p-4">
@@ -659,11 +644,6 @@ function ObdPermissionsPanel({
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">{item.description}</p>
-                    {disabled && (
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        Neaktivní, protože hlavní vzdálená OBD diagnostika je vypnutá.
-                      </p>
-                    )}
                   </div>
                   <Switch
                     checked={checked}
@@ -682,7 +662,6 @@ function ObdPermissionsPanel({
 
 /* ───────── DETAIL ───────── */
 function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) {
-  const { user: adminUser } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -744,13 +723,13 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
 
     setPermissionsLoading(true);
     const { data: permissionData, error: permissionError } = await (supabase as any)
-      .from("customer_obd_permissions")
+      .from("obd_permissions")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (permissionError) {
-      console.warn("customer_obd_permissions load error", permissionError);
+      console.warn("obd_permissions load error", permissionError);
     }
 
     setPermissions({
@@ -765,38 +744,22 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
   useEffect(() => { load(); }, [userId]);
 
   const updatePermission = async (key: keyof CustomerObdPermissions, value: boolean) => {
-    if (key === "user_id" || key === "updated_by" || key === "updated_at") return;
+    if (key === "user_id" || key === "updated_at") return;
 
     const nextPermissions: CustomerObdPermissions = {
       ...permissions,
       user_id: userId,
       [key]: value,
-      updated_by: adminUser?.id || null,
       updated_at: new Date().toISOString(),
     };
-
-    if (key === "remote_obd_enabled" && !value) {
-      nextPermissions.live_data = false;
-      nextPermissions.read_dtc = false;
-      nextPermissions.clear_dtc = false;
-      nextPermissions.gps_tracking = false;
-      nextPermissions.actuator_tests = false;
-      nextPermissions.adaptations = false;
-      nextPermissions.reset_service = false;
-      nextPermissions.dpf_regeneration = false;
-      nextPermissions.epb_service = false;
-      nextPermissions.sas_calibration = false;
-      nextPermissions.bms_reset = false;
-      nextPermissions.coding = false;
-      nextPermissions.ecu_flash = false;
-    }
 
     setPermissionSavingKey(key);
     setPermissions(nextPermissions);
 
-    const { error } = await (supabase as any)
-      .from("customer_obd_permissions")
-      .upsert(nextPermissions, { onConflict: "user_id" });
+    const { updated_at: _updatedAt, ...payload } = nextPermissions;
+    const { error } = await supabase
+      .from("obd_permissions")
+      .upsert(payload, { onConflict: "user_id" });
 
     setPermissionSavingKey(null);
 
