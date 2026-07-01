@@ -51,6 +51,7 @@ const MyServiceOrders = () => {
   const [reviews, setReviews] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [bookings, setBookings] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate("/auth");
@@ -59,18 +60,34 @@ const MyServiceOrders = () => {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
-    const [ordersData, vehiclesData, reviewsData] = await Promise.all([
+    const [ordersData, vehiclesData, reviewsData, bookingsData] = await Promise.all([
       fetchUserServiceOrders(user.id),
       fetchUserVehicles(user.id),
       fetchUserReviews(user.id),
+      fetchMyBookings(user.id).catch(() => []),
     ]);
     setOrders(ordersData);
     setVehicles(vehiclesData);
+    setBookings(bookingsData || []);
     const reviewMap: Record<string, any> = {};
     reviewsData.forEach((r: any) => { reviewMap[r.service_order_id] = r; });
     setReviews(reviewMap);
     setLoading(false);
   };
+
+  const cancelBooking = async (id: string) => {
+    const { error } = await supabase
+      .from("service_bookings")
+      .update({ status: "cancelled" as any, admin_note: "Zrušeno na žádost zákazníka" })
+      .eq("id", id);
+    if (error) {
+      toast.error("Nepodařilo se zrušit rezervaci", { description: error.message });
+      return;
+    }
+    toast.success("Rezervace zrušena");
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
+  };
+
 
   useEffect(() => {
     if (user) fetchData();
