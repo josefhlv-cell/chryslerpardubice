@@ -92,7 +92,7 @@ const LiveGraph = ({ data, label, color, unit }: { data: number[]; label: string
 };
 
 const OBDDiagnostics = () => {
-  const { connected, connecting, device, liveData, dtcs, connect, disconnect, clearDtcs } = useObd();
+  const { connected, connecting, device, liveData, dtcs, connect, disconnect, readDtcs, clearDtcs } = useObd();
   const { permissions, loading: permsLoading } = useObdPermissions();
 
   const [rpmHistory, setRpmHistory] = useState<number[]>([]);
@@ -108,13 +108,13 @@ const OBDDiagnostics = () => {
 
   const handleConnect = async () => {
     try {
-      toast({ title: "Hledám OBD adaptér", description: "Skenuji Bluetooth zařízení v okolí..." });
+      toast({ title: "HledÃ¡m OBD adaptÃ©r", description: "Skenuji Bluetooth zaÅÃ­zenÃ­ v okolÃ­..." });
       await connect();
-      toast({ title: "Připojeno", description: "OBD relace aktivní. Spojení běží i při přechodu na jinou stránku." });
+      toast({ title: "PÅipojeno", description: "OBD relace aktivnÃ­. SpojenÃ­ bÄÅ¾Ã­ i pÅi pÅechodu na jinou strÃ¡nku." });
     } catch (e) {
       toast({
         title: "Bluetooth / OBD chyba",
-        description: e instanceof Error ? e.message : "Nepodařilo se připojit.",
+        description: e instanceof Error ? e.message : "NepodaÅilo se pÅipojit.",
         variant: "destructive",
       });
     }
@@ -134,9 +134,35 @@ const OBDDiagnostics = () => {
 
   const liveAllowed = permsLoading || permissions.live_data;
 
+  const handleReadDtcs = async () => {
+    try {
+      const codes = await readDtcs();
+      toast({ title: "DTC naÄteny", description: codes.length ? `${codes.length} kÃ³dÅ¯` : "Å½Ã¡dnÃ© chybovÃ© kÃ³dy" });
+    } catch (e) {
+      toast({
+        title: "ÄtenÃ­ DTC selhalo",
+        description: e instanceof Error ? e.message : "NepodaÅilo se naÄÃ­st DTC.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleClearDtcs = async () => {
+    try {
+      await clearDtcs();
+      toast({ title: "ChybovÃ© kÃ³dy vymazÃ¡ny" });
+    } catch (e) {
+      toast({
+        title: "MazÃ¡nÃ­ DTC selhalo",
+        description: e instanceof Error ? e.message : "NepodaÅilo se vymazat DTC.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen pb-24 bg-background">
-      <PageHeader title="OBD Diagnostika" subtitle="Bluetooth · ELM327" />
+      <PageHeader title="OBD Diagnostika" subtitle="Bluetooth Â· ELM327" />
 
       <div className="px-4 max-w-4xl mx-auto space-y-4">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -154,10 +180,10 @@ const OBDDiagnostics = () => {
                 )}
                 <div>
                   <p className="font-display font-semibold text-sm">
-                    {connected ? "Připojeno" : "ELM327 Adaptér"}
+                    {connected ? "PÅipojeno" : "ELM327 AdaptÃ©r"}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    {connected ? device?.name || "Live připojení aktivní" : "Připojte přes Bluetooth"}
+                    {connected ? device?.name || "Live pÅipojenÃ­ aktivnÃ­" : "PÅipojte pÅes Bluetooth"}
                   </p>
                 </div>
               </div>
@@ -171,7 +197,7 @@ const OBDDiagnostics = () => {
                 {connecting ? (<RefreshCw className="w-4 h-4 animate-spin mr-1" />)
                   : connected ? (<WifiOff className="w-4 h-4 mr-1" />)
                   : (<Wifi className="w-4 h-4 mr-1" />)}
-                {connecting ? "Hledám..." : connected ? "Odpojit" : "Připojit"}
+                {connecting ? "HledÃ¡m..." : connected ? "Odpojit" : "PÅipojit"}
               </Button>
             </div>
           </div>
@@ -181,9 +207,9 @@ const OBDDiagnostics = () => {
           <div className="luxury-card p-4 border-warning/30 flex items-center gap-3">
             <Lock className="w-5 h-5 text-warning" />
             <div>
-              <p className="text-sm font-semibold">OBD funkce jsou pro váš účet vypnuté</p>
+              <p className="text-sm font-semibold">OBD funkce jsou pro vÃ¡Å¡ ÃºÄet vypnutÃ©</p>
               <p className="text-[11px] text-muted-foreground">
-                Kontaktujte správce a požádejte o povolení diagnostiky.
+                Kontaktujte sprÃ¡vce a poÅ¾Ã¡dejte o povolenÃ­ diagnostiky.
               </p>
             </div>
           </div>
@@ -194,42 +220,54 @@ const OBDDiagnostics = () => {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-4">
               <div className="luxury-card p-4">
                 <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-primary" /> Živé hodnoty
+                  <Activity className="w-4 h-4 text-primary" /> Å½ivÃ© hodnoty
                 </h3>
                 <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <GaugeCircle value={liveData.rpm} max={7000} label="Otáčky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
-                  <GaugeCircle value={liveData.coolantTemp} max={120} label="Chladič" unit="°C" color={liveData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
+                  <GaugeCircle value={liveData.rpm} max={7000} label="OtÃ¡Äky" unit="RPM" color="hsl(347, 77%, 50%)" icon={Gauge} />
+                  <GaugeCircle value={liveData.coolantTemp} max={120} label="ChladiÄ" unit="Â°C" color={liveData.coolantTemp > 100 ? "hsl(347, 77%, 50%)" : "hsl(200, 80%, 50%)"} icon={Thermometer} />
                   <GaugeCircle value={liveData.speed} max={220} label="Rychlost" unit="km/h" color="hsl(142, 71%, 45%)" icon={Gauge} />
                   <GaugeCircle value={liveData.throttle} max={100} label="Plyn" unit="%" color="hsl(38, 92%, 50%)" icon={Zap} />
-                  <GaugeCircle value={liveData.engineLoad} max={100} label="Zatížení" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
-                  <GaugeCircle value={liveData.voltage} max={15} label="Napětí" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
+                  <GaugeCircle value={liveData.engineLoad} max={100} label="ZatÃ­Å¾enÃ­" unit="%" color="hsl(280, 70%, 55%)" icon={Activity} />
+                  <GaugeCircle value={liveData.voltage} max={15} label="NapÄtÃ­" unit="V" color="hsl(50, 90%, 50%)" icon={Zap} />
                   <GaugeCircle value={liveData.fuelPressure} max={70} label="Palivo" unit="kPa" color="hsl(20, 90%, 50%)" icon={Fuel} />
-                  <GaugeCircle value={liveData.intakeTemp} max={70} label="Sání" unit="°C" color="hsl(180, 60%, 50%)" icon={Wind} />
+                  <GaugeCircle value={liveData.intakeTemp} max={70} label="SÃ¡nÃ­" unit="Â°C" color="hsl(180, 60%, 50%)" icon={Wind} />
                   <GaugeCircle value={liveData.boostPressure} max={2.5} label="Turbo" unit="bar" color="hsl(340, 80%, 55%)" icon={Wind} />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <LiveGraph data={rpmHistory} label="Otáčky" color="hsl(347, 77%, 50%)" unit="RPM" />
-                <LiveGraph data={tempHistory} label="Teplota chladiče" color="hsl(200, 80%, 50%)" unit="°C" />
+                <LiveGraph data={rpmHistory} label="OtÃ¡Äky" color="hsl(347, 77%, 50%)" unit="RPM" />
+                <LiveGraph data={tempHistory} label="Teplota chladiÄe" color="hsl(200, 80%, 50%)" unit="Â°C" />
                 <LiveGraph data={speedHistory} label="Rychlost" color="hsl(142, 71%, 45%)" unit="km/h" />
               </div>
 
               <div className="luxury-card p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-display font-semibold text-sm flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-warning" /> Chybové kódy (DTC)
+                    <AlertTriangle className="w-4 h-4 text-warning" /> ChybovÃ© kÃ³dy (DTC)
                   </h3>
-                  {dtcs.length > 0 && permissions.dtc_clear && (
-                    <Button size="sm" variant="ghost" onClick={() => { clearDtcs(); toast({ title: "Chybové kódy vymazány" }); }} className="text-xs h-7">
-                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Vymazat
-                    </Button>
-                  )}
+                  <div className="flex gap-1">
+                    {permissions.dtc_read && (
+                      <Button size="sm" variant="ghost" onClick={handleReadDtcs} className="text-xs h-7">
+                        <RefreshCw className="w-3.5 h-3.5 mr-1" /> NaÄÃ­st
+                      </Button>
+                    )}
+                    {dtcs.length > 0 && permissions.dtc_clear && (
+                      <Button size="sm" variant="ghost" onClick={handleClearDtcs} className="text-xs h-7">
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Vymazat
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                {dtcs.length === 0 ? (
+                {!permissions.dtc_read ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Lock className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm">ÄtenÃ­ DTC nenÃ­ pro vÃ¡Å¡ ÃºÄet povoleno</p>
+                  </div>
+                ) : dtcs.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">Žádné chybové kódy</p>
+                    <p className="text-sm">Å½Ã¡dnÃ© chybovÃ© kÃ³dy</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -240,7 +278,7 @@ const OBDDiagnostics = () => {
                           <span className="text-xs text-muted-foreground">{dtc.description}</span>
                         </div>
                         <Badge className={severityColor(dtc.severity)}>
-                          {dtc.severity === "high" ? "Vážné" : dtc.severity === "medium" ? "Střední" : "Nízké"}
+                          {dtc.severity === "high" ? "VÃ¡Å¾nÃ©" : dtc.severity === "medium" ? "StÅednÃ­" : "NÃ­zkÃ©"}
                         </Badge>
                       </div>
                     ))}
@@ -257,15 +295,15 @@ const OBDDiagnostics = () => {
               <div className="w-16 h-16 rounded-full brushed-metal border border-border/40 mx-auto flex items-center justify-center">
                 <Bluetooth className="w-8 h-8 text-muted-foreground/40" />
               </div>
-              <h3 className="font-display font-semibold text-lg">Připojte ELM327 adaptér</h3>
+              <h3 className="font-display font-semibold text-lg">PÅipojte ELM327 adaptÃ©r</h3>
               <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                Zasuňte OBD-II adaptér do diagnostického konektoru, zapněte Bluetooth a klikněte „Připojit". Po prvním úspěšném spárování se aplikace bude připojovat automaticky.
+                ZasuÅte OBD-II adaptÃ©r do diagnostickÃ©ho konektoru, zapnÄte Bluetooth a kliknÄte âPÅipojit". Po prvnÃ­m ÃºspÄÅ¡nÃ©m spÃ¡rovÃ¡nÃ­ se aplikace bude pÅipojovat automaticky.
               </p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
                 {[
-                  { icon: Gauge, label: "Otáčky & rychlost" },
+                  { icon: Gauge, label: "OtÃ¡Äky & rychlost" },
                   { icon: Thermometer, label: "Teploty motoru" },
-                  { icon: AlertTriangle, label: "Chybové kódy" },
+                  { icon: AlertTriangle, label: "ChybovÃ© kÃ³dy" },
                   { icon: Activity, label: "Live grafy" },
                 ].map((f) => (
                   <div key={f.label} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-secondary/30 border border-border/15">
