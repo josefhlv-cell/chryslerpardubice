@@ -51,13 +51,19 @@ const MyOrders = () => {
     if (!user) return;
     const fetch = async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-      setOrders((data as Order[]) || []);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        setOrders((data as Order[]) || []);
+      } catch (err: any) {
+        console.error("MyOrders fetch failed", err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetch();
   }, [user]);

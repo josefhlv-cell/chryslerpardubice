@@ -233,7 +233,9 @@ const Admin = () => {
         { key: "catalog-jm-audit", label: "Audit J+M 1:1", icon: ShieldCheck },
         { key: "catalog-inspector", label: "Inspektor & opravy (AI)", icon: Brain },
         { key: "catalog-repair", label: "Diagnostika & opravy" },
+        { key: "catalog-pipeline", label: "Auto pipeline & matcher" },
         { key: "catalog-import", label: "Import OEM/CSV" },
+        { key: "catalog-7zap", label: "7zap scraper" },
         ...(isEnabled("price_management") ? [{ key: "catalog-prices", label: "Ceny" }] : []),
         ...(isEnabled("epc_diagrams") ? [{ key: "catalog-epc", label: "OEM EPC nákresy" }] : []),
         { key: "catalog-graphical", label: "Grafický katalog (J+M)" },
@@ -498,7 +500,7 @@ const Admin = () => {
             ))}
           </div>
         );
-      case "users-360": navigate("/admin/users"); return <p className="text-sm text-muted-foreground">Otevírám Zákazník 360°…</p>;
+      case "users-360": return <Suspense fallback={<Loader />}><UsersRedirect /></Suspense>;
       case "users-activity": return <Suspense fallback={<Loader />}><AdminCustomerActivity /></Suspense>;
       case "users-employees": return <Suspense fallback={<Loader />}><AdminEmployees /></Suspense>;
       case "users-mechanics": return <Suspense fallback={<Loader />}><AdminMechanics /></Suspense>;

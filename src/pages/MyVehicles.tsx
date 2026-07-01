@@ -87,13 +87,19 @@ const MyVehicles = () => {
   const fetchVehicles = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
-      .from("user_vehicles")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    setVehicles((data as UserVehicle[]) || []);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from("user_vehicles")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      setVehicles((data as UserVehicle[]) || []);
+    } catch (err: any) {
+      console.error("fetchVehicles failed", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
