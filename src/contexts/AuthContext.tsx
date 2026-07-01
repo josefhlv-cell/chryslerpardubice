@@ -35,6 +35,7 @@ interface AuthContextType {
   employee: Employee | null;
   isAdmin: boolean;
   isLoading: boolean;
+  isRoleLoading: boolean;
   isPendingBusiness: boolean;
   canPlaceOrder: boolean;
   signUp: (email: string, password: string, meta: SignUpMeta) => Promise<void>;
@@ -62,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRoleLoading, setIsRoleLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -74,13 +76,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const checkAdmin = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    setIsAdmin(!!data);
+    setIsRoleLoading(true);
+    try {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      setIsAdmin(!!data);
+    } finally {
+      setIsRoleLoading(false);
+    }
   };
 
   const fetchEmployee = async (userId: string) => {
@@ -114,6 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setProfile(null);
           setIsAdmin(false);
           setEmployee(null);
+          setIsRoleLoading(false);
         }
         setIsLoading(false);
       }
@@ -126,6 +134,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         fetchProfile(session.user.id);
         checkAdmin(session.user.id);
         fetchEmployee(session.user.id);
+      } else {
+        setIsRoleLoading(false);
       }
       setIsLoading(false);
     });
@@ -176,7 +186,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, session, profile, employee, isAdmin, isLoading,
+      user, session, profile, employee, isAdmin, isLoading, isRoleLoading,
       isPendingBusiness, canPlaceOrder,
       signUp, signIn, signOut, refreshProfile, resetPassword,
     }}>

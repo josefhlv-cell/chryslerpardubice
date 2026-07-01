@@ -118,7 +118,7 @@ const statusLabel: Record<string, string> = {
 const Loader = () => <div className="flex items-center justify-center p-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>;
 
 const Admin = () => {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, isAdmin, isLoading, isRoleLoading } = useAuth();
   const navigate = useNavigate();
   const { isEnabled } = useFeatureFlags();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -189,8 +189,8 @@ const Admin = () => {
   const [formReplacementConfirmed, setFormReplacementConfirmed] = useState("");
 
   useEffect(() => {
-    if (!isLoading && (!user || !isAdmin)) navigate("/auth");
-  }, [isLoading, user, isAdmin, navigate]);
+    if (!isLoading && !isRoleLoading && (!user || !isAdmin)) navigate("/auth");
+  }, [isLoading, isRoleLoading, user, isAdmin, navigate]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -271,7 +271,7 @@ const Admin = () => {
   const allBusiness = pendingProfiles;
   const filteredOrders = orderTypeFilter === "all" ? orders : orders.filter((o) => o.order_type === orderTypeFilter);
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>;
+  if (isLoading || isRoleLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>;
   if (!isAdmin) return null;
 
   // === Strom navigace ===
