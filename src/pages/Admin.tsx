@@ -503,6 +503,7 @@ const Admin = () => {
       case "vehicles-listings": return <Suspense fallback={<Loader />}><AdminVehicleListings /></Suspense>;
       case "vehicles-offers": return <Suspense fallback={<Loader />}><AdminVehicleOffers /></Suspense>;
       case "vehicles-faults": return <Suspense fallback={<Loader />}><AdminFaultReports /></Suspense>;
+      case "admin-tow": return <Suspense fallback={<Loader />}><AdminTowRequests /></Suspense>;
 
       // ----- USERS -----
       case "users":
