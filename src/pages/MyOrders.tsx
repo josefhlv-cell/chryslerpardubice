@@ -175,6 +175,30 @@ const MyOrders = () => {
                 <span className="font-medium">Odpověď:</span> {o.admin_note}
               </div>
             )}
+
+            {CANCELABLE.has(o.status) && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
+                    <X className="w-3.5 h-3.5 mr-1" /> Stornovat objednávku
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Zrušit objednávku?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Opravdu chcete stornovat objednávku {o.part_name || o.oem_number || ""}? Tuto akci nelze vrátit zpět.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Zpět</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => cancelOrder(o.id)} className="bg-destructive hover:bg-destructive/90">
+                      Ano, stornovat
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </motion.div>
         ))}
       </div>
