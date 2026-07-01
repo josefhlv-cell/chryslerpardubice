@@ -213,7 +213,32 @@ const AdminRemoteOBD = () => {
             ) : <div className="rounded-lg border p-3 text-muted-foreground flex gap-2 text-xs"><Lock className="w-4 h-4" /> Live Data jsou vypnutá.</div>}
 
             {selected.permissions?.dtc_read ? (
-              <div><strong className="text-xs">DTC kódy ({Array.isArray(selected.dtcs) ? selected.dtcs.length : 0}):</strong><div className="mt-1 flex flex-wrap gap-1">{(selected.dtcs || []).map((d: any, i: number) => <Badge key={i} variant="outline">{typeof d === "string" ? d : d.code}</Badge>)}</div></div>
+              <div>
+                <strong className="text-xs">DTC kódy ({Array.isArray(selected.dtcs) ? selected.dtcs.length : 0}):</strong>
+                <div className="mt-1 space-y-1">
+                  {(selected.dtcs || []).length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">Žádné aktivní kódy.</p>
+                  )}
+                  {(selected.dtcs || []).map((d: any, i: number) => {
+                    const code = typeof d === "string" ? d : d.code;
+                    const info = typeof d === "string" ? resolveDTCInfo(d) : {
+                      description: d.description || resolveDTCInfo(code).description,
+                      severity: d.severity || resolveDTCInfo(code).severity,
+                    };
+                    const sevColor = info.severity === "critical" || info.severity === "high"
+                      ? "text-destructive border-destructive/40"
+                      : info.severity === "medium" ? "text-amber-500 border-amber-500/40"
+                      : "text-muted-foreground";
+                    return (
+                      <div key={i} className={`flex items-start gap-2 rounded border p-2 text-[11px] ${sevColor}`}>
+                        <Badge variant="outline" className="font-mono">{code}</Badge>
+                        <span className="flex-1">{info.description}</span>
+                        <span className="uppercase text-[9px] opacity-70">{info.severity}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ) : <div className="rounded-lg border p-3 text-muted-foreground flex gap-2 text-xs"><Lock className="w-4 h-4" /> Čtení DTC je vypnuté.</div>}
 
             <div className="flex flex-wrap gap-2">
