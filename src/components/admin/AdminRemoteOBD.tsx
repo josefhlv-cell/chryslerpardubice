@@ -114,7 +114,7 @@ const AdminRemoteOBD = () => {
         const mergedPermissions: CustomerObdPermissions = {
           ...DEFAULT_PERMISSIONS,
           user_id: s.user_id,
-          ...(p || {}),
+          ...((p as Record<string, unknown>) || {}),
         };
 
         return {

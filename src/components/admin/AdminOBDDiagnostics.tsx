@@ -35,6 +35,7 @@ import { CANAnalyzerView } from "@/components/obd/CANAnalyzerView";
 import { SmartDashboard } from "@/components/obd/SmartDashboard";
 import { CodingView } from "@/components/obd/CodingView";
 import { StatusBar as OBDStatusBar } from "@/components/obd/StatusBar";
+import AdminObdPermissions from "@/components/admin/AdminObdPermissions";
 
 import { useBLE, useELM327, useLiveData } from "@/hooks/obd/use-obd";
 import { bleManager } from "@/lib/obd/ble-manager";
@@ -256,6 +257,15 @@ const AdminOBDDiagnostics = () => {
           )}
         </CardContent>
       </Card>
+
+      {selectedUserId && (
+        <AdminObdPermissions
+          userId={selectedUserId}
+          userLabel={selectedProfile?.full_name || selectedProfile?.email || undefined}
+        />
+      )}
+
+
 
       <OBDStatusBar
         connectionState={connectionState}
