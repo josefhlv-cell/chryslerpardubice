@@ -22,6 +22,13 @@ import { sourceLabel } from "@/api/partsAPI";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
 
+// Inline helper — safely runs navigate() inside a hook, not during render
+const UsersRedirect = () => {
+  const nav = useNavigate();
+  useEffect(() => { nav("/admin/users"); }, [nav]);
+  return <p className="text-sm text-muted-foreground">Otevírám Zákazník 360°…</p>;
+};
+
 // Lazy admin moduly (zachované)
 const AdminCatalogUnified = lazy(() => import("@/components/admin/AdminCatalogUnified"));
 const AdminCatalogHub = lazy(() => import("@/components/admin/AdminCatalogHub"));
