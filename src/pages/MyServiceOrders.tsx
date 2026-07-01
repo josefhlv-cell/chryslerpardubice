@@ -136,11 +136,63 @@ const MyServiceOrders = () => {
     );
   }
 
+  const activeBookings = bookings.filter((b) => b.status === "pending" || b.status === "confirmed");
+
   return (
     <div className="min-h-screen pb-20 bg-background">
       <PageHeader title="Servisní zakázky" showBack />
       <div className="p-4 max-w-lg mx-auto space-y-3">
-        {orders.length === 0 ? (
+        {activeBookings.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold px-1">Moje rezervace</h2>
+            {activeBookings.map((b) => (
+              <div key={b.id} className="glass-card p-4 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <CalendarDays className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <p className="text-sm font-semibold truncate">{b.service_type || "Servis"}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {[b.vehicle_brand, b.vehicle_model].filter(Boolean).join(" ") || "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {b.confirmed_date
+                        ? `Potvrzeno: ${new Date(b.confirmed_date).toLocaleDateString("cs-CZ")}`
+                        : `Preferováno: ${new Date(b.preferred_date).toLocaleDateString("cs-CZ")}`}
+                    </p>
+                  </div>
+                  <Badge className={b.status === "confirmed" ? "bg-success/15 text-success border-0" : "bg-warning/15 text-warning border-0"}>
+                    {b.status === "confirmed" ? "Potvrzeno" : "Čeká"}
+                  </Badge>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
+                      <X className="w-3.5 h-3.5 mr-1" /> Zrušit rezervaci
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Zrušit rezervaci?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Opravdu chcete zrušit rezervaci na {b.service_type}? Doporučujeme nás informovat i telefonicky.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Zpět</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => cancelBooking(b.id)} className="bg-destructive hover:bg-destructive/90">
+                        Ano, zrušit
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {orders.length === 0 && activeBookings.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <Wrench className="w-8 h-8 text-muted-foreground" />
