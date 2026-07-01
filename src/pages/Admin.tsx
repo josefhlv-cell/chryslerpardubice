@@ -271,7 +271,7 @@ const Admin = () => {
   const allBusiness = pendingProfiles;
   const filteredOrders = orderTypeFilter === "all" ? orders : orders.filter((o) => o.order_type === orderTypeFilter);
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>;
+  if (isLoading || isRoleLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="w-6 h-6 animate-spin text-primary" /></div>;
   if (!isAdmin) return null;
 
   // === Strom navigace ===
