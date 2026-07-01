@@ -1,15 +1,15 @@
 // DTC Engine — Diagnostic Trouble Code reader, parser, and analyzer
-// Supports OBD Mode 03/04 and UDS 0x19 ReadDTCInformation
-// Now integrated with centralized Chrysler database
+// Supports OBD Mode 03/04 and keeps a local session history.
 
-import { udsEngine } from '@/lib/obd/uds-engine';
-import { CHRYSLER_DATABASE, getDTCInfo } from '@/lib/obd/chrysler-database';
-// ─── Types ───
+import { elm327 } from '@/lib/obd/elm327-engine';
+import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
+import { dtcCache } from '@/lib/obd/offline-cache';
+
 export type DTCSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type DTCSystem = 'powertrain' | 'body' | 'chassis' | 'network';
 
 export type DTCCode = {
-  code: string;          // e.g. "P0300"
+  code: string;
   system: DTCSystem;
   description: string;
   severity: DTCSeverity;
@@ -37,7 +37,6 @@ export type DTCState = {
   lastScan: number | null;
 };
 
-// Build DTC_DATABASE from centralized Chrysler database
 const DTC_DATABASE: Record<string, { desc: string; severity: DTCSeverity; cause: string; signals: string[] }> = {};
 for (const dtc of CHRYSLER_DATABASE.dtcCodes) {
   DTC_DATABASE[dtc.code] = {
@@ -48,8 +47,13 @@ for (const dtc of CHRYSLER_DATABASE.dtcCodes) {
   };
 }
 
-// Simulated DTCs for demo
-const SIMULATED_DTCS = ['P0128', 'P0456', 'P0562', 'B1004', 'U0401'];
+const GENERIC_DESCRIPTIONS: Record<string, string> = {
+  P0130: 'O2 Sensor Circuit Malfunction (Bank 1 Sensor 1)',
+  P0300: 'Random/Multiple Cylinder Misfire Detected',
+  P0420: 'Catalyst System Efficiency Below Threshold',
+  P0456: 'EVAP System Small Leak Detected',
+  P0562: 'System Voltage Low',
+};
 
 class DTCEngine {
   private state: DTCState = {
@@ -68,112 +72,91 @@ class DTCEngine {
   }
 
   private emit() {
-    this.listeners.forEach(l => l({ ...this.state }));
+    this.listeners.forEach(l => l({ ...this.state, activeCodes: [...this.state.activeCodes], history: [...this.state.history] }));
   }
 
   getState(): DTCState { return this.state; }
 
-  // ─── Read DTCs ───
   async scanDTCs(): Promise<DTCCode[]> {
     this.state.scanning = true;
     this.emit();
 
-    // Simulate OBD Mode 03 + UDS 0x19
-    await new Promise(r => setTimeout(r, 800 + Math.random() * 600));
+    try {
+      const raw = await elm327.sendCommand('03', 'high');
+      const codes = this.parseDTCResponse(raw).map(code => this.enrichCode(code, false));
 
-    const codes: DTCCode[] = SIMULATED_DTCS.map(code => {
-      const prefix = code[0];
-      const system: DTCSystem = prefix === 'P' ? 'powertrain' : prefix === 'B' ? 'body' : prefix === 'C' ? 'chassis' : 'network';
-      const dbEntry = DTC_DATABASE[code];
-
-      return {
-        code,
-        system,
-        description: dbEntry?.desc || `Unknown code ${code}`,
-        severity: dbEntry?.severity || 'low',
-        possibleCause: dbEntry?.cause || 'Unknown',
-        relatedSignals: dbEntry?.signals || [],
-        isActive: Math.random() > 0.3,
-        isPending: Math.random() > 0.7,
-        occurenceCount: Math.floor(Math.random() * 20) + 1,
-        firstSeen: Date.now() - Math.floor(Math.random() * 86400000 * 30),
-        lastSeen: Date.now() - Math.floor(Math.random() * 3600000),
+      this.state.activeCodes = codes;
+      this.state.lastScan = Date.now();
+      const session = {
+        id: `dtc_${Date.now()}`,
+        timestamp: Date.now(),
+        codes: [...codes],
+        clearedCodes: [],
       };
-    });
+      this.state.history.push(session);
+      dtcCache.save({
+        ...session,
+        codes: codes.map(c => ({ code: c.code, severity: c.severity, description: c.description })),
+      }).catch(e => console.warn('[DTC] offline cache save failed', e));
 
-    this.state.activeCodes = codes;
-    this.state.scanning = false;
-    this.state.lastScan = Date.now();
-
-    // Save to history
-    this.state.history.push({
-      id: `dtc_${Date.now()}`,
-      timestamp: Date.now(),
-      codes: [...codes],
-      clearedCodes: [],
-    });
-
-    this.emit();
-    return codes;
+      return codes;
+    } finally {
+      this.state.scanning = false;
+      this.emit();
+    }
   }
 
-  // ─── Clear DTCs ───
   async clearDTCs(): Promise<boolean> {
     this.state.clearing = true;
     this.emit();
 
-    // Simulate OBD Mode 04
-    await new Promise(r => setTimeout(r, 600));
+    try {
+      const response = await elm327.sendCommand('04', 'high');
+      if (/ERROR|UNABLE|BUS INIT|CAN ERROR|\?/i.test(response)) {
+        throw new Error(response || 'Mazání DTC selhalo');
+      }
 
-    const clearedCodes = this.state.activeCodes.map(c => c.code);
-
-    if (this.state.history.length > 0) {
-      this.state.history[this.state.history.length - 1].clearedCodes = clearedCodes;
+      const clearedCodes = this.state.activeCodes.map(c => c.code);
+      if (this.state.history.length > 0) {
+        this.state.history[this.state.history.length - 1].clearedCodes = clearedCodes;
+        const last = this.state.history[this.state.history.length - 1];
+        dtcCache.save({
+          ...last,
+          codes: last.codes.map(c => ({ code: c.code, severity: c.severity, description: c.description })),
+        }).catch(e => console.warn('[DTC] offline cache save failed', e));
+      }
+      this.state.activeCodes = [];
+      return true;
+    } finally {
+      this.state.clearing = false;
+      this.emit();
     }
-
-    this.state.activeCodes = [];
-    this.state.clearing = false;
-    this.emit();
-    return true;
   }
 
-  // ─── Analysis ───
-  getCriticalCodes(): DTCCode[] {
-    return this.state.activeCodes.filter(c => c.severity === 'critical' || c.severity === 'high');
-  }
+  parseDTCResponse(raw: string): string[] {
+    if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|SEARCHING|\?/i.test(raw)) return [];
 
-  getCodesBySystem(system: DTCSystem): DTCCode[] {
-    return this.state.activeCodes.filter(c => c.system === system);
-  }
+    const found = new Set<string>();
+    const lines = raw.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+    const candidates = lines.length ? lines : [raw];
 
-  getSuggestions(): { code: string; suggestion: string }[] {
-    return this.state.activeCodes.map(c => ({
-      code: c.code,
-      suggestion: c.possibleCause,
-    }));
-  }
+    for (const line of candidates) {
+      const clean = line.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+      const marker = clean.indexOf('43');
+      if (marker < 0) continue;
 
-  // Link DTCs with sensor anomalies
-  getLinkedAnomalies(sensorValues: Record<string, number>): { code: string; signal: string; anomaly: string }[] {
-    const anomalies: { code: string; signal: string; anomaly: string }[] = [];
-
-    for (const dtc of this.state.activeCodes) {
-      for (const signal of dtc.relatedSignals) {
-        const value = sensorValues[signal];
-        if (value !== undefined) {
-          if (signal === 'Battery Voltage' && (value < 11.5 || value > 15)) {
-            anomalies.push({ code: dtc.code, signal, anomaly: `Abnormal voltage: ${value}V` });
-          }
-          if (signal === 'Coolant Temp' && value > 110) {
-            anomalies.push({ code: dtc.code, signal, anomaly: `High temp: ${value}°C` });
-          }
-          if (signal === 'RPM' && value > 6500) {
-            anomalies.push({ code: dtc.code, signal, anomaly: `High RPM: ${value}` });
-          }
-        }
+      const data = clean.slice(marker + 2);
+      for (let i = 0; i + 3 < data.length; i += 4) {
+        const pair = data.slice(i, i + 4);
+        if (pair === '0000') continue;
+        const bytes = [parseInt(pair.slice(0, 2), 16), parseInt(pair.slice(2, 4), 16)];
+        if (bytes.some(Number.isNaN)) continue;
+        const code = this.parseDTCCode(bytes);
+        if (code !== 'Unknown') found.add(code);
       }
     }
-    return anomalies;
+
+    return [...found];
   }
 
   parseDTCCode(raw: number[]): string {
@@ -187,6 +170,51 @@ class DTCEngine {
     const digit3 = (byte1 >> 4) & 0x0F;
     const digit4 = byte1 & 0x0F;
     return `${prefix}${digit1}${digit2.toString(16).toUpperCase()}${digit3.toString(16).toUpperCase()}${digit4.toString(16).toUpperCase()}`;
+  }
+
+  private enrichCode(code: string, isPending: boolean): DTCCode {
+    const prefix = code[0];
+    const system: DTCSystem = prefix === 'P' ? 'powertrain' : prefix === 'B' ? 'body' : prefix === 'C' ? 'chassis' : 'network';
+    const dbEntry = DTC_DATABASE[code];
+    return {
+      code,
+      system,
+      description: dbEntry?.desc || GENERIC_DESCRIPTIONS[code] || `Neznámý kód ${code}`,
+      severity: dbEntry?.severity || (code.startsWith('P03') ? 'high' : 'medium'),
+      possibleCause: dbEntry?.cause || 'Vyžaduje další diagnostiku podle servisního manuálu.',
+      relatedSignals: dbEntry?.signals || [],
+      isActive: !isPending,
+      isPending,
+      occurenceCount: 1,
+      firstSeen: Date.now(),
+      lastSeen: Date.now(),
+    };
+  }
+
+  getCriticalCodes(): DTCCode[] {
+    return this.state.activeCodes.filter(c => c.severity === 'critical' || c.severity === 'high');
+  }
+
+  getCodesBySystem(system: DTCSystem): DTCCode[] {
+    return this.state.activeCodes.filter(c => c.system === system);
+  }
+
+  getSuggestions(): { code: string; suggestion: string }[] {
+    return this.state.activeCodes.map(c => ({ code: c.code, suggestion: c.possibleCause }));
+  }
+
+  getLinkedAnomalies(sensorValues: Record<string, number>): { code: string; signal: string; anomaly: string }[] {
+    const anomalies: { code: string; signal: string; anomaly: string }[] = [];
+    for (const dtc of this.state.activeCodes) {
+      for (const signal of dtc.relatedSignals) {
+        const value = sensorValues[signal];
+        if (value === undefined) continue;
+        if (signal === 'Battery Voltage' && (value < 11.5 || value > 15)) anomalies.push({ code: dtc.code, signal, anomaly: `Abnormal voltage: ${value}V` });
+        if (signal === 'Coolant Temp' && value > 110) anomalies.push({ code: dtc.code, signal, anomaly: `High temp: ${value}°C` });
+        if (signal === 'RPM' && value > 6500) anomalies.push({ code: dtc.code, signal, anomaly: `High RPM: ${value}` });
+      }
+    }
+    return anomalies;
   }
 }
 
