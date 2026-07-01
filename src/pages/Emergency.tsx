@@ -133,6 +133,7 @@ const Emergency = () => {
           </motion.div>
         ))}
       </div>
+      <TowRequestDialog open={towOpen} onOpenChange={setTowOpen} />
     </div>
   );
 };
