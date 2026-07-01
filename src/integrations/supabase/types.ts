@@ -2917,6 +2917,48 @@ export type Database = {
         }
         Relationships: []
       }
+      obd_remote_commands: {
+        Row: {
+          command_payload: Json
+          command_type: string
+          created_at: string
+          created_by: string | null
+          error: string | null
+          executed_at: string | null
+          id: string
+          result: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          command_payload?: Json
+          command_type: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          executed_at?: string | null
+          id?: string
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          command_payload?: Json
+          command_type?: string
+          created_at?: string
+          created_by?: string | null
+          error?: string | null
+          executed_at?: string | null
+          id?: string
+          result?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           admin_note: string | null
