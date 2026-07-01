@@ -4937,10 +4937,6 @@ export type Database = {
           removed: number
         }[]
       }
-      ensure_obd_permissions_for_user: {
-        Args: { p_user_id: string }
-        Returns: undefined
-      }
       find_or_create_nextis_vehicle: {
         Args: {
           _brand: string

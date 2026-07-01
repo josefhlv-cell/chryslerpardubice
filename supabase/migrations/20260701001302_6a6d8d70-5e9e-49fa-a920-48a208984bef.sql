@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.ensure_obd_permissions_for_user(uuid);
