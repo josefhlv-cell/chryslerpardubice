@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, TrendingUp, ShoppingCart, Wrench, Car, Star } from "lucide-react";
+import { Loader2, TrendingUp, ShoppingCart, Wrench, Car, Star, Users } from "lucide-react";
 
-const AdminDashboardStats = () => {
+interface Props {
+  onNavigate?: (section: string) => void;
+}
+
+const AdminDashboardStats = ({ onNavigate }: Props) => {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,18 +53,22 @@ const AdminDashboardStats = () => {
   if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>;
 
   const cards = [
-    { label: "Tržby (30 dní)", value: `${stats.totalRevenue.toLocaleString("cs-CZ")} Kč`, icon: TrendingUp, color: "text-success" },
-    { label: "Objednávky dílů", value: stats.totalOrders, icon: ShoppingCart, color: "text-primary" },
-    { label: "Servisní zakázky", value: `${stats.completedServiceOrders}/${stats.totalServiceOrders}`, icon: Wrench, color: "text-blue-400" },
-    { label: "Rezervace servisu", value: stats.totalBookings, icon: Car, color: "text-purple-400" },
-    { label: "Hodnocení servisu", value: `${stats.avgRating} ⭐ (${stats.reviewCount})`, icon: Star, color: "text-primary" },
-    { label: "Registrovaní uživatelé", value: stats.totalUsers, icon: Car, color: "text-cyan-400" },
+    { label: "Tržby (30 dní)", value: `${stats.totalRevenue.toLocaleString("cs-CZ")} Kč`, icon: TrendingUp, color: "text-success", target: "orders-list" },
+    { label: "Objednávky dílů", value: stats.totalOrders, icon: ShoppingCart, color: "text-primary", target: "orders-list" },
+    { label: "Servisní zakázky", value: `${stats.completedServiceOrders}/${stats.totalServiceOrders}`, icon: Wrench, color: "text-blue-400", target: "service-orders" },
+    { label: "Rezervace servisu", value: stats.totalBookings, icon: Car, color: "text-purple-400", target: "service-bookings" },
+    { label: "Hodnocení servisu", value: `${stats.avgRating} ⭐ (${stats.reviewCount})`, icon: Star, color: "text-primary", target: "service-reviews" },
+    { label: "Registrovaní uživatelé", value: stats.totalUsers, icon: Users, color: "text-cyan-400", target: "users-360" },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-3">
       {cards.map((c, i) => (
-        <Card key={i}>
+        <Card
+          key={i}
+          className={onNavigate ? "cursor-pointer hover:border-primary/40 active:scale-[0.98] transition" : ""}
+          onClick={() => onNavigate?.(c.target)}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <c.icon className={`w-4 h-4 ${c.color}`} />
