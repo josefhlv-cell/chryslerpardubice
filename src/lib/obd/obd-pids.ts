@@ -130,24 +130,32 @@ export const LIVE_PIDS = ['010C', '010D', '0111', '0104', '0105', '010F', '010A'
 
 export function parsePIDResponse(pid: string, rawHex: string): number | null {
   const def = PIDS[pid];
-  if (!def) return null;
+  if (!def || !rawHex || /NO\s*DATA|UNABLE|ERROR|STOPPED|SEARCHING|\?/i.test(rawHex)) return null;
 
-  // Strip header (first 3 bytes = 6 hex chars for 7E8 header + service byte + pid byte)
-  const clean = rawHex.replace(/\s/g, '');
-  // Find data bytes after the response header
-  // Response format: HEADER + 41 + PID + DATA
-  const idx41 = clean.indexOf('41');
-  if (idx41 === -1) return null;
+  const pidHex = pid.substring(2).toUpperCase();
+  const cleanLines = rawHex
+    .split(/[\r\n]+/)
+    .map(line => line.replace(/[^0-9A-Fa-f]/g, '').toUpperCase())
+    .filter(Boolean);
 
-  const pidHex = pid.substring(2); // e.g., '0C' from '010C'
-  const dataStart = idx41 + 2 + pidHex.length;
-  const dataHex = clean.substring(dataStart);
+  const candidates = cleanLines.length ? cleanLines : [rawHex.replace(/[^0-9A-Fa-f]/g, '').toUpperCase()];
 
-  const bytes: number[] = [];
-  for (let i = 0; i < dataHex.length; i += 2) {
-    bytes.push(parseInt(dataHex.substring(i, i + 2), 16));
+  for (const clean of candidates) {
+    const marker = `41${pidHex}`;
+    const idx = clean.indexOf(marker);
+    if (idx === -1) continue;
+
+    const dataHex = clean.substring(idx + marker.length);
+    const bytes: number[] = [];
+    for (let i = 0; i + 1 < dataHex.length; i += 2) {
+      const byte = parseInt(dataHex.substring(i, i + 2), 16);
+      if (!Number.isNaN(byte)) bytes.push(byte);
+    }
+
+    if (bytes.length === 0) continue;
+    const value = def.formula(bytes);
+    if (Number.isFinite(value)) return value;
   }
 
-  if (bytes.length === 0) return null;
-  return def.formula(bytes);
+  return null;
 }
