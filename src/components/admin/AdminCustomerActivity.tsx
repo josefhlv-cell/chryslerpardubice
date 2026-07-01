@@ -91,49 +91,49 @@ const AdminCustomerActivity = () => {
         id: `order-${o.id}`, kind: "order", created_at: o.created_at, user_id: o.user_id,
         title: `${o.quantity || 1}× ${o.part_name || o.oem_number || "díl"}`,
         detail: `${o.oem_number || "—"} · ${o.price_with_vat ? Math.round(o.price_with_vat) + " Kč" : "—"} · ${o.catalog_source || "—"}`,
-        status: o.status, link: `/admin?tab=orders-list&id=${o.id}`,
+        status: o.status, link: `/admin#orders-list?id=${o.id}`,
       }));
 
       (bookingsR.data || []).forEach((b: any) => evts.push({
         id: `booking-${b.id}`, kind: "booking", created_at: b.created_at, user_id: b.user_id,
         title: `${b.vehicle_brand || ""} ${b.vehicle_model || ""} · ${b.service_type}`.trim(),
         detail: `Preferováno: ${b.preferred_date ? new Date(b.preferred_date).toLocaleDateString("cs-CZ") : "—"}`,
-        status: b.status, link: `/admin?tab=service-bookings&id=${b.id}`,
+        status: b.status, link: `/admin#service-bookings?id=${b.id}`,
       }));
 
       (inquiriesR.data || []).forEach((i: any) => evts.push({
         id: `inquiry-${i.id}`, kind: "inquiry", created_at: i.created_at, user_id: i.user_id,
         title: `Poptávka ${i.name || i.email || "anonymní"}`,
         detail: `${i.message ? i.message.slice(0, 100) : "—"} · ${i.phone || i.email || "—"}`,
-        status: i.status, link: `/admin?tab=vehicles-inquiries&id=${i.id}`,
+        status: i.status, link: `/admin#vehicles-inquiries?id=${i.id}`,
       }));
 
       (faultsR.data || []).forEach((f: any) => evts.push({
         id: `fault-${f.id}`, kind: "fault", created_at: f.created_at, user_id: f.user_id,
         title: `${f.vehicle_brand || ""} ${f.vehicle_model || ""}`.trim() || "Závada",
         detail: (f.description || "").slice(0, 140),
-        status: f.status, link: `/admin?tab=vehicles-faults&id=${f.id}`,
+        status: f.status, link: `/admin#vehicles-faults?id=${f.id}`,
       }));
 
       (buybacksR.data || []).forEach((b: any) => evts.push({
         id: `buyback-${b.id}`, kind: "buyback", created_at: b.created_at, user_id: b.user_id,
         title: `${b.brand || ""} ${b.model || ""} (${b.year || "—"})`,
         detail: `${b.name || "—"} · ${b.phone || b.email || "—"}`,
-        link: `/admin?tab=vehicles-offers&id=${b.id}`,
+        link: `/admin#vehicles-offers?id=${b.id}`,
       }));
 
       (importsR.data || []).forEach((b: any) => evts.push({
         id: `import-${b.id}`, kind: "import", created_at: b.created_at, user_id: b.user_id,
         title: `${b.brand || ""} ${b.model || ""}`,
         detail: `${b.name || "—"} · ${b.phone || b.email || "—"}`,
-        link: `/admin?tab=vehicles-offers&id=${b.id}`,
+        link: `/admin#vehicles-offers?id=${b.id}`,
       }));
 
       (usedReqR.data || []).forEach((u: any) => evts.push({
         id: `used-${u.id}`, kind: "used_request", created_at: u.created_at, user_id: u.user_id,
         title: u.part_name || "Náhradní díl",
         detail: `${u.brand || ""} ${u.model || ""}`.trim() || "—",
-        status: u.status, link: `/admin?tab=orders-list&id=${u.id}`,
+        status: u.status, link: `/admin#orders-list?id=${u.id}`,
       }));
 
       // profile map + user-registration events

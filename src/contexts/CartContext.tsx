@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect } from "react";
 
 export interface CartItem {
   id: string;
@@ -25,9 +25,31 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const STORAGE_KEY = "cd_cart_v1";
+const DISCOUNT_KEY = "cd_cart_discount_v1";
+
+const readStored = <T,>(key: string, fallback: T): T => {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [items, setItems] = useState<CartItem[]>([]);
-  const [discountPercent, setDiscountPercent] = useState(5); // loyalty default
+  const [items, setItems] = useState<CartItem[]>(() => readStored<CartItem[]>(STORAGE_KEY, []));
+  const [discountPercent, setDiscountPercent] = useState<number>(() => readStored<number>(DISCOUNT_KEY, 5));
+
+  // Persist to localStorage
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch {}
+  }, [items]);
+  useEffect(() => {
+    try { window.localStorage.setItem(DISCOUNT_KEY, JSON.stringify(discountPercent)); } catch {}
+  }, [discountPercent]);
 
   const addItem = useCallback((item: Omit<CartItem, "quantity">) => {
     setItems((prev) => {

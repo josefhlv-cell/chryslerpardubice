@@ -66,12 +66,20 @@ const AdminPushSettings = () => {
   };
 
   const removeSub = async (id: string) => {
-    await supabase.from("admin_push_subscriptions").delete().eq("id", id);
+    const { error } = await supabase.from("admin_push_subscriptions").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Nepodařilo se smazat", description: error.message, variant: "destructive" });
+      return;
+    }
     fetchData();
   };
 
   const removeNative = async (id: string) => {
-    await supabase.from("device_tokens").delete().eq("id", id);
+    const { error } = await supabase.from("device_tokens").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Nepodařilo se smazat", description: error.message, variant: "destructive" });
+      return;
+    }
     fetchData();
   };
 

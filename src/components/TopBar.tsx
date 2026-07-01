@@ -27,7 +27,7 @@ const TopBar = () => {
     <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 border-b border-border/20 bg-background/95 backdrop-blur-xl safe-top">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate("/shop")} className="flex items-center gap-2.5">
-          <img src="/images/logo-cd-pardubice.png" alt="Chrysler&amp;Dodge Pardubice" className="h-10 object-contain" />
+          <img src="/images/logo-cd-pardubice.webp" alt="Chrysler&amp;Dodge Pardubice" className="h-10 object-contain" />
         </button>
         <nav className="hidden sm:flex items-center gap-1">
           {menuItems.map(item => (

@@ -95,7 +95,7 @@ const DesktopSidebar = () => {
       {/* Logo */}
       <div className="p-4 flex items-center gap-3 border-b border-border/20">
         <button onClick={() => navigate("/catalog")} className="shrink-0">
-          <img src="/images/logo-cd-pardubice.png" alt="Logo" className="h-9 object-contain" />
+          <img src="/images/logo-cd-pardubice.webp" alt="Logo" className="h-9 object-contain" />
         </button>
         {!collapsed && (
           <span className="font-display font-semibold text-[11px] leading-tight truncate tracking-wide text-foreground/80">

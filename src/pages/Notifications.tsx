@@ -33,9 +33,14 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     if (!user) return;
     setLoading(true);
-    const data = await apiFetchNotifications(user.id);
-    setNotifications(data);
-    setLoading(false);
+    try {
+      const data = await apiFetchNotifications(user.id);
+      setNotifications(data);
+    } catch (err) {
+      console.error("Notifications fetch failed", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {

@@ -110,7 +110,7 @@ const Auth = () => {
         {/* Logo */}
         <div className="flex flex-col items-center gap-5">
           <img
-            src="/images/logo-cd-pardubice.png"
+            src="/images/logo-cd-pardubice.webp"
             alt="Chrysler&Dodge Pardubice"
             className="h-16 object-contain"
           />

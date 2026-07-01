@@ -148,9 +148,6 @@ const VehicleDetail = () => {
 
       <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t border-border">
         <div className="flex gap-3 max-w-lg mx-auto">
-          <Button variant="outline" size="lg" className="shrink-0" onClick={() => toast.success("Přidáno do oblíbených")}>
-            <Heart className="w-5 h-5" />
-          </Button>
           <Button variant="hero" size="lg" className="flex-1" disabled={inquiryLoading} onClick={async () => {
             if (!vehicle) return;
             setInquiryLoading(true);

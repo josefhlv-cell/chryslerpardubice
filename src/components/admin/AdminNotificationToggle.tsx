@@ -26,11 +26,15 @@ const AdminNotificationToggle = () => {
   const [search, setSearch] = useState("");
 
   const fetchProfiles = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("id, user_id, email, full_name, company_name, notifications_enabled")
       .order("created_at", { ascending: false });
-    if (data) setProfiles(data as Profile[]);
+    if (error) {
+      toast({ title: "Nepodařilo se načíst profily", description: error.message, variant: "destructive" });
+    } else if (data) {
+      setProfiles(data as Profile[]);
+    }
     setLoading(false);
   };
 
