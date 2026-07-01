@@ -26,7 +26,7 @@ const AdminNotifications = () => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const { toast } = ((): any => ({ toast: (require("@/hooks/use-toast") as any).toast }))();
+  
 
 
   useEffect(() => {
