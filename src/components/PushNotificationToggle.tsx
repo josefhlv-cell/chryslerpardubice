@@ -71,32 +71,51 @@ const PushNotificationToggle = () => {
   const registerNative = async () => {
     if (!isNative || !user) return;
     setRegistering(true);
+    let regListener: any = null;
+    let errListener: any = null;
     try {
       const { PushNotifications } = await import("@capacitor/push-notifications");
       const { Device } = await import("@capacitor/device");
 
-      const perm = await PushNotifications.requestPermissions();
+      // 1) požádej o systémové oprávnění
+      let perm = await PushNotifications.checkPermissions();
       if (perm.receive !== "granted") {
-        toast({ title: "Notifikace nepovoleny v systému", variant: "destructive" });
+        perm = await PushNotifications.requestPermissions();
+      }
+      if (perm.receive !== "granted") {
+        toast({
+          title: "Notifikace nepovoleny",
+          description: "Zapněte je v Nastavení telefonu → Chrysler Pardubice → Oznámení.",
+          variant: "destructive",
+        });
         setRegistering(false);
         return;
       }
 
+      // 2) posluchače MUSÍ být zaregistrovány PŘED voláním register()
+      const info = await Device.getInfo();
+      const id = await Device.getId();
+
       const token: string = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error("Timeout při čekání na push token")), 15_000);
+        const timer = setTimeout(
+          () => reject(new Error("Push token nepřišel do 30 s. Zkontrolujte připojení a zkuste znovu.")),
+          30_000,
+        );
         PushNotifications.addListener("registration", (t) => {
           clearTimeout(timer);
           resolve(t.value);
-        });
+        }).then((h) => { regListener = h; });
         PushNotifications.addListener("registrationError", (err) => {
           clearTimeout(timer);
-          reject(new Error(err.error || "Registration error"));
+          reject(new Error(err?.error || "Registrace push tokenu selhala"));
+        }).then((h) => { errListener = h; });
+        // až teď register()
+        PushNotifications.register().catch((e) => {
+          clearTimeout(timer);
+          reject(e instanceof Error ? e : new Error(String(e)));
         });
-        PushNotifications.register().catch(reject);
       });
 
-      const info = await Device.getInfo();
-      const id = await Device.getId();
       const { error } = await supabase.from("device_tokens").upsert(
         {
           user_id: user.id,
@@ -113,8 +132,14 @@ const PushNotificationToggle = () => {
       await supabase.from("profiles").update({ notifications_enabled: true }).eq("user_id", user.id);
       toast({ title: "✅ Push notifikace aktivovány", description: `Zařízení: ${info.model || Capacitor.getPlatform()}` });
     } catch (e: any) {
-      toast({ title: "Chyba", description: e.message, variant: "destructive" });
+      toast({
+        title: "Chyba při aktivaci",
+        description: e?.message || "Neznámá chyba. Restartujte aplikaci a zkuste znovu.",
+        variant: "destructive",
+      });
     } finally {
+      try { regListener?.remove?.(); } catch { /* noop */ }
+      try { errListener?.remove?.(); } catch { /* noop */ }
       setRegistering(false);
     }
   };

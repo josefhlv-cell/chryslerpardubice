@@ -26,20 +26,12 @@ interface Props {
 const STORAGE_KEY = "admin:expanded-groups";
 
 const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  });
+  // Vždy začínáme se sbaleným stromem — admin si sám rozklikne, co potřebuje.
+  // (Nepersistujeme, aby po každém návratu byl přehled čistý.)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(expanded));
-  }, [expanded]);
-
-  // auto-expand parent of active key
+  // auto-expand parent of active key (jen když admin klikne na dítě přes deep-link)
   useEffect(() => {
     const findParent = (nodes: AdminTreeNode[], parent: string | null): string | null => {
       for (const n of nodes) {
@@ -55,13 +47,18 @@ const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
     if (parent) setExpanded((e) => ({ ...e, [parent]: true }));
   }, [activeKey, tree]);
 
+  // vyčisti starý persistentní stav (jednorázová migrace)
+  useEffect(() => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }, []);
+
   const toggle = (key: string) => setExpanded((e) => ({ ...e, [key]: !e[key] }));
 
   const renderNode = (node: AdminTreeNode, depth = 0) => {
     if (node.hidden) return null;
     const hasChildren = !!node.children?.length;
     const isActive = activeKey === node.key;
-    const isOpen = expanded[node.key] ?? depth === 0;
+    const isOpen = !!expanded[node.key]; // vždy defaultně sbalené
     const Icon = node.icon;
 
     return (
@@ -106,15 +103,15 @@ const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
 
   return (
     <div className="flex w-full min-h-[calc(100vh-3.5rem)]">
-      {/* Mobile menu button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="lg:hidden fixed bottom-20 right-4 z-40 shadow-lg"
+      {/* Mobile menu button — výrazně viditelný FAB nad BottomNavem */}
+      <button
+        className="lg:hidden fixed right-4 z-40 flex items-center gap-2 h-11 px-4 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-2xl shadow-black/40 border border-primary/40 active:scale-95 transition"
+        style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}
         onClick={() => setMobileOpen(true)}
+        aria-label="Otevřít admin sekce"
       >
-        <Menu className="w-4 h-4 mr-1" /> Sekce
-      </Button>
+        <Menu className="w-4 h-4" /> Sekce
+      </button>
 
       {/* Sidebar */}
       <aside

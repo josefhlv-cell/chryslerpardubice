@@ -392,7 +392,7 @@ const Admin = () => {
                 </Card>
               ))}
             </div>
-            <Suspense fallback={<Loader />}>{isEnabled("admin_statistics") && <AdminDashboardStats />}</Suspense>
+            <Suspense fallback={<Loader />}>{isEnabled("admin_statistics") && <AdminDashboardStats onNavigate={goto} />}</Suspense>
           </div>
         );
 
