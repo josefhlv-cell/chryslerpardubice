@@ -145,7 +145,7 @@ const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
       )}
 
       {/* Content */}
-      <main className="flex-1 min-w-0 p-3 lg:p-4 overflow-x-hidden">{children}</main>
+      <main className="flex-1 min-w-0 p-3 lg:p-4 pb-32 lg:pb-8 overflow-x-hidden">{children}</main>
     </div>
   );
 };
