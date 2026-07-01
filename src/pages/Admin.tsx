@@ -118,7 +118,7 @@ const statusLabel: Record<string, string> = {
 const Loader = () => <div className="flex items-center justify-center p-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>;
 
 const Admin = () => {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, isAdmin, isLoading, isRoleLoading } = useAuth();
   const navigate = useNavigate();
   const { isEnabled } = useFeatureFlags();
   const [searchParams, setSearchParams] = useSearchParams();
