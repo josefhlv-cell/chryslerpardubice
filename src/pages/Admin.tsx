@@ -307,6 +307,7 @@ const Admin = () => {
           { key: "vehicles-offers", label: "Výkup / Dovoz", icon: ArrowDownUp },
         ] : []),
         ...(isEnabled("fault_reports") ? [{ key: "vehicles-faults", label: "Hlášení závad", icon: AlertTriangle }] : []),
+        { key: "admin-tow", label: "Odtahy", icon: AlertTriangle },
       ],
     },
     {
