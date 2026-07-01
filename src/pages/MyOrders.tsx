@@ -5,7 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, ShoppingCart, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { RefreshCw, ShoppingCart, Package, X } from "lucide-react";
+
+const CANCELABLE = new Set(["nova", "prijata", "zpracovava_se"]);
 
 interface Order {
   id: string;
@@ -70,6 +78,19 @@ const MyOrders = () => {
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("cs-CZ");
 
+  const cancelOrder = async (id: string) => {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "zrusena" as any, admin_note: "Storno na žádost zákazníka" })
+      .eq("id", id);
+    if (error) {
+      toast.error("Nepodařilo se stornovat", { description: error.message });
+      return;
+    }
+    toast.success("Objednávka stornována");
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "zrusena" } : o)));
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -77,6 +98,7 @@ const MyOrders = () => {
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen pb-20">
@@ -152,6 +174,30 @@ const MyOrders = () => {
               <div className="text-xs bg-primary/10 rounded-lg p-2 border border-primary/20">
                 <span className="font-medium">Odpověď:</span> {o.admin_note}
               </div>
+            )}
+
+            {CANCELABLE.has(o.status) && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
+                    <X className="w-3.5 h-3.5 mr-1" /> Stornovat objednávku
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Zrušit objednávku?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Opravdu chcete stornovat objednávku {o.part_name || o.oem_number || ""}? Tuto akci nelze vrátit zpět.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Zpět</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => cancelOrder(o.id)} className="bg-destructive hover:bg-destructive/90">
+                      Ano, stornovat
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </motion.div>
         ))}
