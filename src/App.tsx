@@ -71,6 +71,7 @@ const App = () => (
     <AuthProvider>
       <I18nProvider>
         <CartProvider>
+         <ObdProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
