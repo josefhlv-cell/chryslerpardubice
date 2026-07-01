@@ -26,6 +26,8 @@ const AdminNotifications = () => {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const { toast } = ((): any => ({ toast: (require("@/hooks/use-toast") as any).toast }))();
+
 
   useEffect(() => {
     const load = async () => {
@@ -33,7 +35,9 @@ const AdminNotifications = () => {
       try {
         const data = await fetchAllProfiles();
         setProfiles(data as Profile[]);
-      } catch {}
+      } catch (err: any) {
+        toast({ title: "Chyba načítání profilů", description: err?.message || "Zkuste to prosím znovu.", variant: "destructive" });
+      }
       setLoading(false);
     };
     load();
