@@ -121,11 +121,27 @@ const Admin = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
   const { isEnabled } = useFeatureFlags();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Map ?tab= aliases (used in notification deep links) to internal section keys
+  const TAB_ALIAS: Record<string, string> = {
+    orders: "orders-list",
+    "service-bookings": "service-bookings",
+    "vehicle-requests": "vehicles-offers",
+    "fault-reports": "vehicles-faults",
+    users: "users-360",
+    tow: "admin-tow",
+  };
+  const resolveSection = (raw: string | null) => (raw && (TAB_ALIAS[raw] || raw)) || "";
 
   const [section, setSection] = useState<string>(() => {
+    const fromQuery = resolveSection(new URLSearchParams(window.location.search).get("tab"));
     const hash = window.location.hash.replace("#", "");
-    return hash || "overview";
+    return fromQuery || hash || "overview";
   });
+
+  // Deep-link record id (passed to sections that support opening a detail)
+  const focusId = searchParams.get("id");
 
   useEffect(() => {
     const onHash = () => setSection(window.location.hash.replace("#", "") || "overview");
@@ -133,9 +149,25 @@ const Admin = () => {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // React to ?tab= changes (e.g. clicking a notification while on /admin)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab) {
+      const next = resolveSection(tab);
+      if (next && next !== section) setSection(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const goto = (key: string) => {
     setSection(key);
     window.location.hash = key;
+    // clear stale ?tab / ?id when navigating via sidebar
+    if (searchParams.get("tab") || searchParams.get("id")) {
+      const sp = new URLSearchParams(searchParams);
+      sp.delete("tab"); sp.delete("id");
+      setSearchParams(sp, { replace: true });
+    }
   };
 
   // Inline data pro firmy/objednávky/servis/poptávky (zachovaná původní logika)
