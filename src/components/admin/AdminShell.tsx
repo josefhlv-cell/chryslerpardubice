@@ -103,15 +103,15 @@ const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
 
   return (
     <div className="flex w-full min-h-[calc(100vh-3.5rem)]">
-      {/* Mobile menu button */}
-      <Button
-        variant="outline"
-        size="sm"
-        className="lg:hidden fixed bottom-20 right-4 z-40 shadow-lg"
+      {/* Mobile menu button — výrazně viditelný FAB nad BottomNavem */}
+      <button
+        className="lg:hidden fixed right-4 z-40 flex items-center gap-2 h-11 px-4 rounded-full bg-primary text-primary-foreground font-semibold text-sm shadow-2xl shadow-black/40 border border-primary/40 active:scale-95 transition"
+        style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px))" }}
         onClick={() => setMobileOpen(true)}
+        aria-label="Otevřít admin sekce"
       >
-        <Menu className="w-4 h-4 mr-1" /> Sekce
-      </Button>
+        <Menu className="w-4 h-4" /> Sekce
+      </button>
 
       {/* Sidebar */}
       <aside
