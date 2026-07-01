@@ -36,7 +36,7 @@ const Garage = () => {
   ];
 
   return (
-    <div className="min-h-screen pb-24 bg-background">
+    <div className="min-h-screen pb-40 bg-background">
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>

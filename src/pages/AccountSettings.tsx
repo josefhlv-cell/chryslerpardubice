@@ -51,7 +51,7 @@ const AccountSettings = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen pb-20">
+      <div className="min-h-screen pb-40">
         <PageHeader title="Nastavení" />
         <div className="flex items-center justify-center py-20">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -62,7 +62,7 @@ const AccountSettings = () => {
 
   if (!user || !profile) {
     return (
-      <div className="min-h-screen pb-20">
+      <div className="min-h-screen pb-40">
         <PageHeader title="Nastavení" />
         <div className="p-4 max-w-lg mx-auto text-center py-12 space-y-4">
           <p className="text-sm text-muted-foreground">Pro nastavení účtu se přihlaste.</p>
@@ -171,7 +171,7 @@ const AccountSettings = () => {
   );
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-40">
       <PageHeader title="Nastavení účtu" />
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         {/* Soukromí a sdílení dat */}
