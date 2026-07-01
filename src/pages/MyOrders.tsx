@@ -91,11 +91,14 @@ const MyOrders = () => {
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "zrusena" } : o)));
   };
 
+  if (authLoading || loading) {
+    return (
       <div className="min-h-screen flex items-center justify-center">
         <RefreshCw className="w-6 h-6 animate-spin text-primary" />
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen pb-20">
