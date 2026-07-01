@@ -26,20 +26,12 @@ interface Props {
 const STORAGE_KEY = "admin:expanded-groups";
 
 const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  });
+  // Vždy začínáme se sbaleným stromem — admin si sám rozklikne, co potřebuje.
+  // (Nepersistujeme, aby po každém návratu byl přehled čistý.)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(expanded));
-  }, [expanded]);
-
-  // auto-expand parent of active key
+  // auto-expand parent of active key (jen když admin klikne na dítě přes deep-link)
   useEffect(() => {
     const findParent = (nodes: AdminTreeNode[], parent: string | null): string | null => {
       for (const n of nodes) {
@@ -55,13 +47,18 @@ const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
     if (parent) setExpanded((e) => ({ ...e, [parent]: true }));
   }, [activeKey, tree]);
 
+  // vyčisti starý persistentní stav (jednorázová migrace)
+  useEffect(() => {
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }, []);
+
   const toggle = (key: string) => setExpanded((e) => ({ ...e, [key]: !e[key] }));
 
   const renderNode = (node: AdminTreeNode, depth = 0) => {
     if (node.hidden) return null;
     const hasChildren = !!node.children?.length;
     const isActive = activeKey === node.key;
-    const isOpen = expanded[node.key] ?? depth === 0;
+    const isOpen = !!expanded[node.key]; // vždy defaultně sbalené
     const Icon = node.icon;
 
     return (
