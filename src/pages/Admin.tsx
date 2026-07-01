@@ -1,5 +1,5 @@
 import { useEffect, useState, lazy, Suspense } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -90,6 +90,7 @@ const AdminPushSettings = lazy(() => import("@/components/admin/AdminPushSetting
 const AdminOfflineQueue = lazy(() => import("@/components/admin/AdminOfflineQueue"));
 const AdminAuditLog = lazy(() => import("@/components/admin/AdminAuditLog"));
 const AdminOrderDetail = lazy(() => import("@/components/admin/AdminOrderDetail"));
+const AdminTowRequests = lazy(() => import("@/components/admin/AdminTowRequests"));
 
 type Profile = { id: string; user_id: string; full_name: string | null; email: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; status: string; discount_percent: number; created_at: string; };
 type OrderRow = { id: string; user_id: string; part_id: string | null; part_name: string | null; oem_number: string | null; order_type: string; quantity: number; unit_price: number | null; discount_percent: number | null; discounted_price: number | null; price_with_vat: number | null; status: string; admin_note: string | null; customer_note: string | null; catalog_source: string | null; created_at: string; profile_name?: string | null; profile_email?: string | null; };
@@ -120,11 +121,27 @@ const Admin = () => {
   const { user, isAdmin, isLoading } = useAuth();
   const navigate = useNavigate();
   const { isEnabled } = useFeatureFlags();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Map ?tab= aliases (used in notification deep links) to internal section keys
+  const TAB_ALIAS: Record<string, string> = {
+    orders: "orders-list",
+    "service-bookings": "service-bookings",
+    "vehicle-requests": "vehicles-offers",
+    "fault-reports": "vehicles-faults",
+    users: "users-360",
+    tow: "admin-tow",
+  };
+  const resolveSection = (raw: string | null) => (raw && (TAB_ALIAS[raw] || raw)) || "";
 
   const [section, setSection] = useState<string>(() => {
+    const fromQuery = resolveSection(new URLSearchParams(window.location.search).get("tab"));
     const hash = window.location.hash.replace("#", "");
-    return hash || "overview";
+    return fromQuery || hash || "overview";
   });
+
+  // Deep-link record id (passed to sections that support opening a detail)
+  const focusId = searchParams.get("id");
 
   useEffect(() => {
     const onHash = () => setSection(window.location.hash.replace("#", "") || "overview");
@@ -132,9 +149,25 @@ const Admin = () => {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // React to ?tab= changes (e.g. clicking a notification while on /admin)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab) {
+      const next = resolveSection(tab);
+      if (next && next !== section) setSection(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const goto = (key: string) => {
     setSection(key);
     window.location.hash = key;
+    // clear stale ?tab / ?id when navigating via sidebar
+    if (searchParams.get("tab") || searchParams.get("id")) {
+      const sp = new URLSearchParams(searchParams);
+      sp.delete("tab"); sp.delete("id");
+      setSearchParams(sp, { replace: true });
+    }
   };
 
   // Inline data pro firmy/objednávky/servis/poptávky (zachovaná původní logika)
@@ -183,6 +216,19 @@ const Admin = () => {
   };
 
   useEffect(() => { if (isAdmin) fetchAll(); }, [isAdmin]);
+
+  // Auto-open detail dialog when arriving via notification deep-link ?id=
+  useEffect(() => {
+    if (!focusId) return;
+    if (section === "orders-list" || section === "orders") {
+      const o = orders.find((x) => x.id === focusId);
+      if (o) openOrderEdit(o);
+    } else if (section === "service-bookings" || section === "service") {
+      const b = bookings.find((x) => x.id === focusId);
+      if (b) openBookingEdit(b);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId, section, orders.length, bookings.length]);
 
   const approveProfile = async (id: string, discount: number) => {
     const { error } = await supabase.from("profiles").update({ status: "active", discount_percent: discount }).eq("id", id);
@@ -274,6 +320,7 @@ const Admin = () => {
           { key: "vehicles-offers", label: "Výkup / Dovoz", icon: ArrowDownUp },
         ] : []),
         ...(isEnabled("fault_reports") ? [{ key: "vehicles-faults", label: "Hlášení závad", icon: AlertTriangle }] : []),
+        { key: "admin-tow", label: "Odtahy", icon: AlertTriangle },
       ],
     },
     {
@@ -469,6 +516,7 @@ const Admin = () => {
       case "vehicles-listings": return <Suspense fallback={<Loader />}><AdminVehicleListings /></Suspense>;
       case "vehicles-offers": return <Suspense fallback={<Loader />}><AdminVehicleOffers /></Suspense>;
       case "vehicles-faults": return <Suspense fallback={<Loader />}><AdminFaultReports /></Suspense>;
+      case "admin-tow": return <Suspense fallback={<Loader />}><AdminTowRequests /></Suspense>;
 
       // ----- USERS -----
       case "users":
