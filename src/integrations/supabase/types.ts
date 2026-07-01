@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -4978,10 +4978,6 @@ export type Database = {
         Returns: {
           removed: number
         }[]
-      }
-      ensure_obd_permissions_for_user: {
-        Args: { p_user_id: string }
-        Returns: undefined
       }
       find_or_create_nextis_vehicle: {
         Args: {

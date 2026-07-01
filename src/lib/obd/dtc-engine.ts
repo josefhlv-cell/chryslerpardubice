@@ -4,6 +4,7 @@
 import { elm327 } from '@/lib/obd/elm327-engine';
 import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
 import { dtcCache } from '@/lib/obd/offline-cache';
+import { lookupGenericDTC } from '@/lib/obd/dtc-database';
 
 export type DTCSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type DTCSystem = 'powertrain' | 'body' | 'chassis' | 'network';
@@ -47,13 +48,29 @@ for (const dtc of CHRYSLER_DATABASE.dtcCodes) {
   };
 }
 
-const GENERIC_DESCRIPTIONS: Record<string, string> = {
-  P0130: 'O2 Sensor Circuit Malfunction (Bank 1 Sensor 1)',
-  P0300: 'Random/Multiple Cylinder Misfire Detected',
-  P0420: 'Catalyst System Efficiency Below Threshold',
-  P0456: 'EVAP System Small Leak Detected',
-  P0562: 'System Voltage Low',
-};
+/**
+ * Resolve DTC description/severity/cause from a layered database:
+ *   1. Chrysler-specific DB (highest priority)
+ *   2. Generic OBD-II P-code DB (P0100-P0599)
+ *   3. Fallback "Neznámý kód"
+ */
+export function resolveDTCInfo(code: string): { description: string; severity: DTCSeverity; cause: string; signals: string[] } {
+  const upper = code.toUpperCase();
+  const chrysler = DTC_DATABASE[upper];
+  if (chrysler) {
+    return { description: chrysler.desc, severity: chrysler.severity, cause: chrysler.cause, signals: chrysler.signals };
+  }
+  const generic = lookupGenericDTC(upper);
+  if (generic) {
+    return { description: generic.desc, severity: generic.severity, cause: generic.cause, signals: [] };
+  }
+  return {
+    description: `Neznámý kód ${upper}`,
+    severity: upper.startsWith('P03') ? 'high' : 'medium',
+    cause: 'Kód není v lokální databázi — vyžaduje kontrolu servisním manuálem.',
+    signals: [],
+  };
+}
 
 class DTCEngine {
   private state: DTCState = {
@@ -175,14 +192,14 @@ class DTCEngine {
   private enrichCode(code: string, isPending: boolean): DTCCode {
     const prefix = code[0];
     const system: DTCSystem = prefix === 'P' ? 'powertrain' : prefix === 'B' ? 'body' : prefix === 'C' ? 'chassis' : 'network';
-    const dbEntry = DTC_DATABASE[code];
+    const info = resolveDTCInfo(code);
     return {
       code,
       system,
-      description: dbEntry?.desc || GENERIC_DESCRIPTIONS[code] || `Neznámý kód ${code}`,
-      severity: dbEntry?.severity || (code.startsWith('P03') ? 'high' : 'medium'),
-      possibleCause: dbEntry?.cause || 'Vyžaduje další diagnostiku podle servisního manuálu.',
-      relatedSignals: dbEntry?.signals || [],
+      description: info.description,
+      severity: info.severity,
+      possibleCause: info.cause,
+      relatedSignals: info.signals,
       isActive: !isPending,
       isPending,
       occurenceCount: 1,
