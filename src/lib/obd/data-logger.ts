@@ -1,3 +1,5 @@
+import { sessionCache } from '@/lib/obd/offline-cache';
+
 /**
  * Data Logger Engine
  * Multi-session recording with timestamps, tagging, export, and replay.
@@ -82,6 +84,16 @@ class DataLoggerEngine {
     this.activeSession.metadata.tagSummary = this.computeTagSummary(this.activeSession);
     this.sessions.unshift(this.activeSession);
     const ended = this.activeSession;
+    sessionCache.save({
+      id: ended.id,
+      timestamp: ended.startTime,
+      duration: (ended.endTime ?? Date.now()) - ended.startTime,
+      vehicle: ended.metadata.deviceName || 'OBD session',
+      dataPoints: ended.entries.length,
+      liveSensorSnapshots: this.buildLiveSensorSnapshots(ended),
+      discoveredDIDs: this.extractDiscoveredDIDs(ended),
+      notes: ended.name,
+    }).catch(e => console.warn('[DataLogger] offline cache save failed', e));
     this.activeSession = null;
     this.notifySessions();
     this.notifyActive();
@@ -155,6 +167,26 @@ class DataLoggerEngine {
       }
     }
     return summary as Record<LogTag, number>;
+  }
+
+  private buildLiveSensorSnapshots(session: LogSession): Record<string, number[]> {
+    const snapshots: Record<string, number[]> = {};
+    for (const entry of session.entries) {
+      if (typeof entry.decoded !== 'number') continue;
+      if (!snapshots[entry.did]) snapshots[entry.did] = [];
+      snapshots[entry.did].push(entry.decoded);
+    }
+    return snapshots;
+  }
+
+  private extractDiscoveredDIDs(session: LogSession): number[] {
+    const dids = new Set<number>();
+    for (const entry of session.entries) {
+      const normalized = entry.did.replace(/^0x/i, '');
+      const did = parseInt(normalized, 16);
+      if (Number.isFinite(did)) dids.add(did);
+    }
+    return [...dids];
   }
 
   // --- Export ---
