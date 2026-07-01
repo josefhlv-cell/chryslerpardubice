@@ -2857,6 +2857,66 @@ export type Database = {
         }
         Relationships: []
       }
+      obd_permissions: {
+        Row: {
+          ai_diagnostics: boolean
+          can_bus: boolean
+          coding: boolean
+          created_at: string
+          dev_mode: boolean
+          discovery: boolean
+          dtc_clear: boolean
+          dtc_read: boolean
+          flash: boolean
+          id: string
+          live_data: boolean
+          logging: boolean
+          reverse_engineering: boolean
+          terminal: boolean
+          uds: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_diagnostics?: boolean
+          can_bus?: boolean
+          coding?: boolean
+          created_at?: string
+          dev_mode?: boolean
+          discovery?: boolean
+          dtc_clear?: boolean
+          dtc_read?: boolean
+          flash?: boolean
+          id?: string
+          live_data?: boolean
+          logging?: boolean
+          reverse_engineering?: boolean
+          terminal?: boolean
+          uds?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_diagnostics?: boolean
+          can_bus?: boolean
+          coding?: boolean
+          created_at?: string
+          dev_mode?: boolean
+          discovery?: boolean
+          dtc_clear?: boolean
+          dtc_read?: boolean
+          flash?: boolean
+          id?: string
+          live_data?: boolean
+          logging?: boolean
+          reverse_engineering?: boolean
+          terminal?: boolean
+          uds?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           admin_note: string | null
@@ -4876,6 +4936,10 @@ export type Database = {
         Returns: {
           removed: number
         }[]
+      }
+      ensure_obd_permissions_for_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
       find_or_create_nextis_vehicle: {
         Args: {
