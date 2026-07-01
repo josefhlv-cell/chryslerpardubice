@@ -85,43 +85,57 @@ const ServicePlan = () => {
 
   const fetchPlans = async () => {
     setLoading(true);
-    const { data } = await supabase.from("service_plans")
-      .select("*")
-      .eq("vehicle_id", selectedVehicle)
-      .eq("is_active", true)
-      .order("interval_km", { ascending: true });
-    const items = (data as ServicePlanItem[]) || [];
-    setPlans(items);
+    try {
+      const { data, error } = await supabase.from("service_plans")
+        .select("*")
+        .eq("vehicle_id", selectedVehicle)
+        .eq("is_active", true)
+        .order("interval_km", { ascending: true });
+      if (error) throw error;
+      const items = (data as ServicePlanItem[]) || [];
+      setPlans(items);
 
-    // Fetch related parts
-    const oems = items.map(p => p.recommended_part_oem).filter(Boolean) as string[];
-    if (oems.length) {
-      const { data: partsData } = await supabase.from("parts_new")
-        .select("oem_number, name, price_with_vat")
-        .in("oem_number", oems);
-      const map: Record<string, PartInfo> = {};
-      partsData?.forEach(p => { map[p.oem_number] = p as PartInfo; });
-      setParts(map);
+      // Fetch related parts
+      const oems = items.map(p => p.recommended_part_oem).filter(Boolean) as string[];
+      if (oems.length) {
+        const { data: partsData } = await supabase.from("parts_new")
+          .select("oem_number, name, price_with_vat")
+          .in("oem_number", oems);
+        const map: Record<string, PartInfo> = {};
+        partsData?.forEach(p => { map[p.oem_number] = p as PartInfo; });
+        setParts(map);
+      }
+    } catch (err: any) {
+      toast({ title: "Chyba načítání plánu", description: err?.message || "Zkuste to prosím znovu.", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const generatePlan = async () => {
     if (!user || !selectedVehicle) return;
+    // Guard: don't create duplicates
+    if (plans.length > 0) {
+      toast({ title: "Plán už existuje", description: "Pro toto vozidlo je již servisní plán vytvořen." });
+      return;
+    }
     setGenerating(true);
     const vehicle = vehicles.find(v => v.id === selectedVehicle);
-    
-    for (const plan of DEFAULT_PLANS) {
-      await supabase.from("service_plans").insert({
+    try {
+      const rows = DEFAULT_PLANS.map(plan => ({
         vehicle_id: selectedVehicle,
         user_id: user.id,
         ...plan,
-      } as any);
+      }));
+      const { error } = await supabase.from("service_plans").insert(rows as any);
+      if (error) throw error;
+      toast({ title: "Servisní plán vytvořen", description: `Pro ${vehicle?.brand} ${vehicle?.model}` });
+      await fetchPlans();
+    } catch (err: any) {
+      toast({ title: "Chyba vytvoření plánu", description: err?.message || "Zkuste to prosím znovu.", variant: "destructive" });
+    } finally {
+      setGenerating(false);
     }
-    
-    toast({ title: "Servisní plán vytvořen", description: `Pro ${vehicle?.brand} ${vehicle?.model}` });
-    setGenerating(false);
-    fetchPlans();
   };
 
   const getStatus = (plan: ServicePlanItem) => {

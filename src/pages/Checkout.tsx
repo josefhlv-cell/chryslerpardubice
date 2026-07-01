@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
@@ -16,7 +16,7 @@ import { logger } from "@/lib/logger";
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, discountPercent, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form state
@@ -33,10 +33,20 @@ const Checkout = () => {
   const shippingCost = shipping === "pickup" ? 0 : shipping === "dpd" ? 149 : 129;
   const finalPrice = totalPrice - discountAmount + shippingCost;
 
-  if (items.length === 0) {
-    navigate("/catalog");
-    return null;
-  }
+  // Auth gate — must be logged in to check out
+  useEffect(() => {
+    if (!authLoading && !user) {
+      toast.error("Pro dokončení objednávky se prosím přihlaste.");
+      navigate("/auth");
+    }
+  }, [authLoading, user, navigate]);
+
+  // Empty cart guard (side-effect, not during render)
+  useEffect(() => {
+    if (items.length === 0) navigate("/catalog");
+  }, [items.length, navigate]);
+
+  if (items.length === 0 || !user) return null;
 
   const validateStep1 = () => {
     if (!name.trim() || !email.trim() || !phone.trim()) {
@@ -55,56 +65,60 @@ const Checkout = () => {
     setSubmitting(true);
 
     try {
-      // Save each cart item as an order — never block on failure
-      const userId = user?.id;
-      if (userId) {
-        const orderPromises = items.map((item) =>
-          supabase
-            .from("orders")
-            .insert({
-              user_id: userId,
-              part_name: item.name,
-              oem_number: item.oem,
-              unit_price: item.price,
-              quantity: item.quantity,
-              order_type: item.type === "used" ? "used" as const : "new" as const,
-              catalog_source: item.catalog_source || null,
-              customer_note: `Doprava: ${shipping}`,
-            })
-            .select("id")
-            .single()
-        );
-
-        const results = await Promise.allSettled(orderPromises);
-        const succeeded = results.filter((r) => r.status === "fulfilled").length;
-        const failed = results.filter((r) => r.status === "rejected").length;
-
-        if (failed > 0) {
-          logger.error("Checkout", "ORDER_PARTIAL_FAIL", new Error(`${failed}/${items.length} orders failed`), { succeeded, failed });
-        }
-        if (succeeded > 0) {
-          logger.info("Checkout", "ORDER_CREATED", { count: succeeded, total: finalPrice });
-        }
-
-        // Non-blocking notification — never crashes order
-        sendNotificationSafe([
-          {
+      const userId = user.id;
+      const orderPromises = items.map((item) =>
+        supabase
+          .from("orders")
+          .insert({
             user_id: userId,
-            title: "Objednávka přijata",
-            message: `Vaše objednávka (${succeeded} položek) byla odeslána. Celkem: ${finalPrice.toLocaleString("cs")} Kč`,
-          },
-        ]);
+            part_name: item.name,
+            oem_number: item.oem,
+            unit_price: item.price,
+            quantity: item.quantity,
+            order_type: item.type === "used" ? "used" as const : "new" as const,
+            catalog_source: item.catalog_source || null,
+            customer_note: `Doprava: ${shipping}`,
+          })
+          .select("id")
+          .single()
+      );
+
+      const results = await Promise.allSettled(orderPromises);
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
+
+      if (failed > 0) {
+        logger.error("Checkout", "ORDER_PARTIAL_FAIL", new Error(`${failed}/${items.length} orders failed`), { succeeded, failed });
+      }
+      if (succeeded > 0) {
+        logger.info("Checkout", "ORDER_CREATED", { count: succeeded, total: finalPrice });
       }
 
-      toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
+      if (succeeded === 0) {
+        // Nothing saved — do not lie to the user
+        toast.error("Objednávku se nepodařilo uložit. Zkuste to prosím znovu nebo zavolejte na servis.");
+        return;
+      }
+
+      // Non-blocking notification
+      sendNotificationSafe([
+        {
+          user_id: userId,
+          title: "Objednávka přijata",
+          message: `Vaše objednávka (${succeeded} položek) byla odeslána. Celkem: ${finalPrice.toLocaleString("cs")} Kč`,
+        },
+      ]);
+
+      toast.success(
+        failed > 0
+          ? `Objednávka částečně odeslána (${succeeded}/${items.length}). Potvrzení obdržíte na email.`
+          : "Objednávka odeslána! Potvrzení obdržíte na email."
+      );
       clearCart();
-      navigate("/catalog");
+      navigate("/orders");
     } catch (err) {
-      // FAIL-SAFE: even if DB insert crashes, confirm to user and log
       logger.error("Checkout", "ORDER_FAILED", err instanceof Error ? err : new Error(String(err)));
-      toast.success("Objednávka odeslána! Potvrzení obdržíte na email.");
-      clearCart();
-      navigate("/catalog");
+      toast.error("Odeslání objednávky selhalo. Zkuste to prosím znovu.");
     } finally {
       setSubmitting(false);
     }

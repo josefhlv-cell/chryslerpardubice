@@ -22,6 +22,7 @@ import {
 import PageHeader from "@/components/PageHeader";
 import { useObd } from "@/contexts/ObdContext";
 import { useObdPermissions } from "@/hooks/obd/use-obd-permissions";
+import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 
 const GaugeCircle = ({
   value,
@@ -228,7 +229,7 @@ const OBDDiagnostics = () => {
     return "bg-success/15 text-success border-0";
   };
 
-  const liveAllowed = permsLoading || permissions.live_data;
+  const liveAllowed = !permsLoading && !!permissions.live_data;
 
   const handleReadDtcs = async () => {
     try {
@@ -496,29 +497,39 @@ const OBDDiagnostics = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {dtcs.map((dtc) => (
-                      <div
-                        key={dtc.code}
-                        className="flex items-center justify-between p-3 rounded-xl bg-secondary/40 border border-border/20"
-                      >
-                        <div className="flex items-center gap-3">
-                          <code className="font-display font-bold text-sm text-foreground">
-                            {dtc.code}
-                          </code>
-                          <span className="text-xs text-muted-foreground">
-                            {dtc.description}
-                          </span>
-                        </div>
+                    {dtcs.map((dtc) => {
+                      const info = resolveDTCInfo(dtc.code);
+                      const desc = info.description || dtc.description || "Neznámý kód";
+                      const severity = info.severity || dtc.severity;
+                      return (
+                        <div
+                          key={dtc.code}
+                          className="flex items-start justify-between gap-3 p-3 rounded-xl bg-secondary/40 border border-border/20"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <code className="font-display font-bold text-sm text-foreground">
+                                {dtc.code}
+                              </code>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{desc}</p>
+                            {info.cause && (
+                              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                                Možná příčina: {info.cause}
+                              </p>
+                            )}
+                          </div>
 
-                        <Badge className={severityColor(dtc.severity)}>
-                          {dtc.severity === "high"
-                            ? "Vážné"
-                            : dtc.severity === "medium"
-                              ? "Střední"
-                              : "Nízké"}
-                        </Badge>
-                      </div>
-                    ))}
+                          <Badge className={severityColor(severity)}>
+                            {severity === "high" || severity === "critical"
+                              ? "Vážné"
+                              : severity === "medium"
+                                ? "Střední"
+                                : "Nízké"}
+                          </Badge>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

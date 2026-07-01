@@ -73,7 +73,7 @@ export const subscribeToServiceOrders = (
   onUpdate: () => void
 ) => {
   const channel = supabase
-    .channel("my-service-orders")
+    .channel(`my-service-orders-${userId}`)
     .on(
       "postgres_changes",
       {

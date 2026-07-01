@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, FileDown, Wrench, Filter, Download } from "lucide-react";
+import { Loader2, FileDown, Wrench } from "lucide-react";
 import { motion } from "framer-motion";
 
 type Vehicle = {
@@ -51,20 +51,22 @@ const ServiceBook = () => {
 
   useEffect(() => {
     if (!user) return;
-    supabase.from("user_vehicles").select("*").eq("user_id", user.id).order("created_at").then(({ data }) => {
+    supabase.from("user_vehicles").select("*").eq("user_id", user.id).order("created_at").then(({ data, error }) => {
+      if (error) toast({ title: "Nepodařilo se načíst vozidla", description: error.message, variant: "destructive" });
       setVehicles((data as Vehicle[]) || []);
       if (!selectedVehicleId && data?.length) setSelectedVehicleId(data[0].id);
       setLoading(false);
-    });
+    }, () => setLoading(false));
   }, [user]);
 
   useEffect(() => {
     if (!selectedVehicleId) { setRecords([]); return; }
     setLoading(true);
-    supabase.from("service_history").select("*").eq("vehicle_id", selectedVehicleId).order("service_date", { ascending: false }).then(({ data }) => {
+    supabase.from("service_history").select("*").eq("vehicle_id", selectedVehicleId).order("service_date", { ascending: false }).then(({ data, error }) => {
+      if (error) toast({ title: "Nepodařilo se načíst historii", description: error.message, variant: "destructive" });
       setRecords((data as ServiceRecord[]) || []);
       setLoading(false);
-    });
+    }, () => setLoading(false));
   }, [selectedVehicleId]);
 
   const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
@@ -142,10 +144,6 @@ const ServiceBook = () => {
                   {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                <Filter className="w-3.5 h-3.5" />
-                <span className="text-xs">Filtrovat</span>
-              </Button>
             </div>
           </div>
         )}
