@@ -136,6 +136,7 @@ const App = () => (
               <BottomNav />
             </BrowserRouter>
           </TooltipProvider>
+         </ObdProvider>
         </CartProvider>
       </I18nProvider>
     </AuthProvider>
