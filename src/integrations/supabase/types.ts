@@ -4215,6 +4215,57 @@ export type Database = {
           },
         ]
       }
+      tow_requests: {
+        Row: {
+          accuracy: number | null
+          admin_note: string | null
+          created_at: string
+          id: string
+          latitude: number | null
+          location_text: string | null
+          longitude: number | null
+          passengers: number
+          phone: string
+          problem_type: string
+          status: string
+          updated_at: string
+          user_id: string
+          vehicle_info: string
+        }
+        Insert: {
+          accuracy?: number | null
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          location_text?: string | null
+          longitude?: number | null
+          passengers?: number
+          phone: string
+          problem_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+          vehicle_info: string
+        }
+        Update: {
+          accuracy?: number | null
+          admin_note?: string | null
+          created_at?: string
+          id?: string
+          latitude?: number | null
+          location_text?: string | null
+          longitude?: number | null
+          passengers?: number
+          phone?: string
+          problem_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_info?: string
+        }
+        Relationships: []
+      }
       tsbs: {
         Row: {
           brand: string | null

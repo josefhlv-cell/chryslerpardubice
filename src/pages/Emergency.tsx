@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot } from "lucide-react";
+import { Phone, Wrench, AlertTriangle, Battery, Thermometer, Gauge, CircleDot, Truck } from "lucide-react";
 import TondaAvatar from "@/components/TondaAvatar";
+import TowRequestDialog from "@/components/TowRequestDialog";
 
 const SERVICE_PHONE = "+420603372911";
 
@@ -61,6 +63,7 @@ const emergencyGuides = [
 
 const Emergency = () => {
   const navigate = useNavigate();
+  const [towOpen, setTowOpen] = useState(false);
 
   return (
     <div className="min-h-screen pb-20">
@@ -76,6 +79,16 @@ const Emergency = () => {
             </p>
           </CardContent>
         </Card>
+
+        {/* Tow request — priority CTA */}
+        <Button
+          size="lg"
+          className="w-full h-16 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg"
+          onClick={() => setTowOpen(true)}
+        >
+          <Truck className="w-6 h-6 mr-2" />
+          Odtah — přivolat pomoc
+        </Button>
 
         {/* Quick actions */}
         <div className="grid grid-cols-2 gap-3">
@@ -120,6 +133,7 @@ const Emergency = () => {
           </motion.div>
         ))}
       </div>
+      <TowRequestDialog open={towOpen} onOpenChange={setTowOpen} />
     </div>
   );
 };
