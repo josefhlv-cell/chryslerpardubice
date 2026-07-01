@@ -185,16 +185,14 @@ const ServiceBook = () => {
                         )}
                       </div>
                       {/* Meta row */}
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex gap-3 text-[11px] text-muted-foreground">
-                          {r.mileage != null && <span>{r.mileage.toLocaleString("cs")} km</span>}
-                          {r.parts_used && <span>{r.parts_used}</span>}
+                      {(r.mileage != null || r.parts_used) && (
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex gap-3 text-[11px] text-muted-foreground">
+                            {r.mileage != null && <span>{r.mileage.toLocaleString("cs")} km</span>}
+                            {r.parts_used && <span>{r.parts_used}</span>}
+                          </div>
                         </div>
-                        <button className="flex items-center gap-1 text-[11px] text-primary hover:underline">
-                          <Download className="w-3 h-3" />
-                          Protokol
-                        </button>
-                      </div>
+                      )}
                     </CardContent>
                   </div>
                 </Card>
