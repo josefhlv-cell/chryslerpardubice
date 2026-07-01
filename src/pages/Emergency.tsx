@@ -80,6 +80,16 @@ const Emergency = () => {
           </CardContent>
         </Card>
 
+        {/* Tow request — priority CTA */}
+        <Button
+          size="lg"
+          className="w-full h-16 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg"
+          onClick={() => setTowOpen(true)}
+        >
+          <Truck className="w-6 h-6 mr-2" />
+          Odtah — přivolat pomoc
+        </Button>
+
         {/* Quick actions */}
         <div className="grid grid-cols-2 gap-3">
           <Button variant="destructive" className="h-16 flex-col gap-1" onClick={() => window.location.href = `tel:${SERVICE_PHONE}`}>
