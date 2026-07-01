@@ -121,6 +121,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setProfile(null);
           setIsAdmin(false);
           setEmployee(null);
+          setIsRoleLoading(false);
         }
         setIsLoading(false);
       }
