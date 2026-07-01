@@ -18,11 +18,13 @@ export type InitStep = {
   response?: string;
 };
 const INIT_SEQUENCE = [
+  { command: "ATZ", description: "Reset adapter" },
   { command: "ATE0", description: "Echo off" },
   { command: "ATL0", description: "Linefeeds off" },
   { command: "ATS0", description: "Spaces off" },
   { command: "ATH0", description: "Headers off" },
   { command: "ATSP0", description: "Auto protocol" },
+  { command: "ATST64", description: "Timeout 400ms" },
   { command: "010C", description: "RPM test" },
 ];
 const ERROR_PATTERNS = [
@@ -33,14 +35,26 @@ const ERROR_PATTERNS = [
   "ERROR",
 ];
 const SIMULATED_RESPONSES: Record<string, string> = {
+  ATZ: "ELM327 v2.3",
   ATE0: "OK",
   ATL0: "OK",
   ATS0: "OK",
   ATH0: "OK",
   ATSP0: "OK",
+  ATST64: "OK",
   ATRV: "12.6V",
-  "010C": "410C0C1C",
-  "0105": "41054D",
+  "0100": "7E8064100983B8013",
+  "010C": "7E804410C0D2C",
+  "010D": "7E803410D2A",
+  "0105": "7E803410548",
+  "0104": "7E803410440",
+  "010F": "7E803410F46",
+  "010A": "7E803410A20",
+  "010B": "7E803410B66",
+  "0111": "7E803411119",
+  "0142": "7E80441422F08",
+  "03": "7E80643013004560000",
+  "04": "44",
 };
 class ELM327Engine {
   private state: ELMState = "idle";
@@ -130,9 +144,9 @@ class ELM327Engine {
       this.emitInitProgress();
       await this.delay(this.commandDelay);
     }
-    // DŮLEŽITÉ:
-    // Pokud prošel aspoň jeden AT/OBD příkaz, necháme spojení běžet.
-    // Některé iOS-VLink adaptéry vrací divné odpovědi, ale live data normálně chodí.
+    // DÅ®LEÅ½ITÃ:
+    // Pokud proÅ¡el aspoÅ jeden AT/OBD pÅÃ­kaz, nechÃ¡me spojenÃ­ bÄÅ¾et.
+    // NÄkterÃ© iOS-VLink adaptÃ©ry vracÃ­ divnÃ© odpovÄdi, ale live data normÃ¡lnÄ chodÃ­.
     if (successCount > 0) {
       this.initialized = true;
       this.setState("ready");
