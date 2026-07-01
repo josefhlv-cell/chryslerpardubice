@@ -52,7 +52,9 @@ const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
 const AdminUser360 = lazy(() => import("./pages/AdminUser360"));
 const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
+const MyTowRequests = lazy(() => import("./pages/MyTowRequests"));
 import ProfileGate from "@/components/ProfileGate";
+import PushDeepLink from "@/components/PushDeepLink";
 
 const BOT_RE = /Lighthouse|PageSpeed|PTST|Googlebot|Chrome-Lighthouse/i;
 const isBot = typeof navigator !== "undefined" && BOT_RE.test(navigator.userAgent);
@@ -84,6 +86,7 @@ const App = () => (
               <OnboardingGuide />
               <AdminDailyReport />
               <ProfileGate />
+              <PushDeepLink />
               <TopBar />
               <div className="flex w-full">
                 <DesktopSidebar />
@@ -115,6 +118,7 @@ const App = () => (
                     <Route path="/service-plan" element={<ServicePlan />} />
                     <Route path="/service-book" element={<ServiceBook />} />
                     <Route path="/my-service-orders" element={<MyServiceOrders />} />
+                    <Route path="/my-tow-requests" element={<MyTowRequests />} />
                     <Route path="/obd" element={<OBDDiagnostics />} />
                     <Route path="/presentation" element={<AppPresentation />} />
                     <Route path="/auth" element={<Auth />} />
