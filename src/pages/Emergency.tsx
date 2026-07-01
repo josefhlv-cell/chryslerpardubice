@@ -63,6 +63,7 @@ const emergencyGuides = [
 
 const Emergency = () => {
   const navigate = useNavigate();
+  const [towOpen, setTowOpen] = useState(false);
 
   return (
     <div className="min-h-screen pb-20">
