@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -2917,48 +2917,6 @@ export type Database = {
         }
         Relationships: []
       }
-      obd_remote_commands: {
-        Row: {
-          command_payload: Json
-          command_type: string
-          created_at: string
-          created_by: string | null
-          error: string | null
-          executed_at: string | null
-          id: string
-          result: Json | null
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          command_payload?: Json
-          command_type: string
-          created_at?: string
-          created_by?: string | null
-          error?: string | null
-          executed_at?: string | null
-          id?: string
-          result?: Json | null
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          command_payload?: Json
-          command_type?: string
-          created_at?: string
-          created_by?: string | null
-          error?: string | null
-          executed_at?: string | null
-          id?: string
-          result?: Json | null
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       orders: {
         Row: {
           admin_note: string | null
@@ -4978,10 +4936,6 @@ export type Database = {
         Returns: {
           removed: number
         }[]
-      }
-      ensure_obd_permissions_for_user: {
-        Args: { p_user_id: string }
-        Returns: undefined
       }
       find_or_create_nextis_vehicle: {
         Args: {
