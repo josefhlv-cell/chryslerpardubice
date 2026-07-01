@@ -189,8 +189,8 @@ const Admin = () => {
   const [formReplacementConfirmed, setFormReplacementConfirmed] = useState("");
 
   useEffect(() => {
-    if (!isLoading && (!user || !isAdmin)) navigate("/auth");
-  }, [isLoading, user, isAdmin, navigate]);
+    if (!isLoading && !isRoleLoading && (!user || !isAdmin)) navigate("/auth");
+  }, [isLoading, isRoleLoading, user, isAdmin, navigate]);
 
   const fetchAll = async () => {
     setLoading(true);
