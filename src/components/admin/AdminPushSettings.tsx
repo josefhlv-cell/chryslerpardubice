@@ -1,36 +1,42 @@
 /**
- * AdminPushSettings — správa Web Push odběrů a FCM tokenů adminu.
+ * AdminPushSettings — správa Web Push odběrů a native (FCM/APNs) tokenů adminu.
  * Web Push: registruje service worker, ukládá subscription do admin_push_subscriptions.
- * FCM: jen scaffold pro Capacitor (vyžaduje Firebase setup → google-services.json).
+ * Native Push: čte device_tokens (kam ukládá src/lib/native/index.ts při startu aplikace)
+ * a nabízí ruční re-registraci na Capacitor platformě.
  */
 import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, BellOff, Smartphone, Globe, Trash2 } from "lucide-react";
+import { Bell, Smartphone, Globe, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 const AdminPushSettings = () => {
   const { user } = useAuth();
   const [webSubs, setWebSubs] = useState<any[]>([]);
-  const [fcmTokens, setFcmTokens] = useState<any[]>([]);
+  const [nativeTokens, setNativeTokens] = useState<any[]>([]);
   const [supported, setSupported] = useState(false);
+  const [isNative, setIsNative] = useState(false);
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     setSupported("serviceWorker" in navigator && "PushManager" in window);
+    setIsNative(Capacitor.isNativePlatform());
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const fetchData = async () => {
     if (!user) return;
-    const [w, f] = await Promise.all([
+    const [w, d] = await Promise.all([
       supabase.from("admin_push_subscriptions").select("*").eq("user_id", user.id),
-      supabase.from("admin_fcm_tokens").select("*").eq("user_id", user.id),
+      supabase.from("device_tokens").select("*").eq("user_id", user.id).in("platform", ["ios", "android"]),
     ]);
     setWebSubs(w.data || []);
-    setFcmTokens(f.data || []);
+    setNativeTokens(d.data || []);
   };
 
   const enableWebPush = async () => {
@@ -62,6 +68,69 @@ const AdminPushSettings = () => {
   const removeSub = async (id: string) => {
     await supabase.from("admin_push_subscriptions").delete().eq("id", id);
     fetchData();
+  };
+
+  const removeNative = async (id: string) => {
+    await supabase.from("device_tokens").delete().eq("id", id);
+    fetchData();
+  };
+
+  const registerNative = async () => {
+    if (!isNative || !user) {
+      toast({
+        title: "Pouze v mobilní APK",
+        description: "Native push funguje jen v Capacitor buildu pro iOS/Android.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setRegistering(true);
+    try {
+      const { PushNotifications } = await import("@capacitor/push-notifications");
+      const { Device } = await import("@capacitor/device");
+
+      const perm = await PushNotifications.requestPermissions();
+      if (perm.receive !== "granted") {
+        toast({ title: "Notifikace nepovoleny v systému", variant: "destructive" });
+        return;
+      }
+
+      // register + wait for the first 'registration' event
+      const token: string = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("Timeout při čekání na FCM/APNs token")), 15_000);
+        PushNotifications.addListener("registration", (t) => {
+          clearTimeout(timer);
+          resolve(t.value);
+        });
+        PushNotifications.addListener("registrationError", (err) => {
+          clearTimeout(timer);
+          reject(new Error(err.error || "Registration error"));
+        });
+        PushNotifications.register().catch(reject);
+      });
+
+      const info = await Device.getInfo();
+      const id = await Device.getId();
+      const { error } = await supabase.from("device_tokens").upsert(
+        {
+          user_id: user.id,
+          token,
+          platform: Capacitor.getPlatform(),
+          device_id: id.identifier,
+          model: info.model,
+          os_version: info.osVersion,
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: "token" },
+      );
+      if (error) throw error;
+      toast({ title: "✅ Native push aktivováno", description: `Token uložen (${Capacitor.getPlatform()})` });
+      fetchData();
+    } catch (e: any) {
+      toast({ title: "Chyba native push", description: e.message, variant: "destructive" });
+    } finally {
+      setRegistering(false);
+    }
   };
 
   return (
@@ -106,25 +175,45 @@ const AdminPushSettings = () => {
       </Card>
 
       <Card>
-        <CardContent className="p-4 space-y-2">
-          <div className="flex items-center gap-2">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <Smartphone className="w-4 h-4 text-primary" />
-            <h3 className="font-medium">Native Push (FCM, Android)</h3>
-            {fcmTokens.length > 0 ? (
-              <Badge className="bg-success/15 text-success">{fcmTokens.length} zařízení</Badge>
+            <h3 className="font-medium">Native Push (FCM / APNs)</h3>
+            {nativeTokens.length > 0 ? (
+              <Badge className="bg-success/15 text-success">{nativeTokens.length} zařízení</Badge>
             ) : (
-              <Badge variant="outline">Nepřipojeno</Badge>
+              <Badge variant="outline">{isNative ? "Nepřipojeno" : "Nedostupné (web)"}</Badge>
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Pro mobilní APK: vyžaduje Firebase projekt a nahrání <code>google-services.json</code>.
-            Po setupu se token registruje automaticky při přihlášení.
+            Pro nativní APK / IPA: token se registruje automaticky po přihlášení. Pokud se nezaregistroval,
+            klikni na tlačítko níže. Vyžaduje nastavené credentials na serveru (FCM service account, APNs klíč).
           </p>
-          {fcmTokens.length > 0 && (
-            <div className="space-y-1">
-              {fcmTokens.map((t) => (
-                <div key={t.id} className="text-xs p-2 rounded bg-muted/30 truncate">
-                  📱 {t.platform} · {t.token.slice(0, 30)}…
+
+          <Button onClick={registerNative} disabled={!isNative || registering}>
+            {registering ? (
+              <><RefreshCw className="w-4 h-4 mr-1 animate-spin" /> Registruji…</>
+            ) : (
+              <><Smartphone className="w-4 h-4 mr-1" /> Aktivovat native push</>
+            )}
+          </Button>
+
+          {!isNative && (
+            <p className="text-[11px] text-muted-foreground">
+              Otevři aplikaci jako nainstalovanou APK/IPA (Capacitor build), ne v prohlížeči.
+            </p>
+          )}
+
+          {nativeTokens.length > 0 && (
+            <div className="space-y-1 pt-2">
+              {nativeTokens.map((t) => (
+                <div key={t.id} className="flex items-center justify-between text-xs p-2 rounded bg-muted/30 gap-2">
+                  <span className="truncate flex-1">
+                    📱 {t.platform} · {t.model || "?"} · {(t.token || "").slice(0, 24)}…
+                  </span>
+                  <Button size="icon" variant="ghost" onClick={() => removeNative(t.id)}>
+                    <Trash2 className="w-3 h-3 text-destructive" />
+                  </Button>
                 </div>
               ))}
             </div>
