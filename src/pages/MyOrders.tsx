@@ -5,7 +5,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, ShoppingCart, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { RefreshCw, ShoppingCart, Package, X } from "lucide-react";
+
+const CANCELABLE = new Set(["nova", "prijata", "zpracovava_se"]);
 
 interface Order {
   id: string;
