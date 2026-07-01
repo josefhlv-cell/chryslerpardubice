@@ -2,11 +2,19 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchUserServiceOrders, fetchUserReviews, subscribeToServiceOrders } from "@/api/serviceOrdersAPI";
 import { fetchUserVehicles } from "@/api/garageAPI";
+import { fetchMyBookings } from "@/api/serviceBookingsAPI";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Wrench, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Wrench, ChevronRight, CalendarDays, X } from "lucide-react";
 import { motion } from "framer-motion";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
 import ServiceProgressIndicator from "@/components/ServiceProgressIndicator";
