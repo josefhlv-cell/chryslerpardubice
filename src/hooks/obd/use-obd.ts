@@ -77,6 +77,7 @@ export function useLiveData(active: boolean) {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionUserIdRef = useRef<string | null>(null);
   const lastSessionUpdateRef = useRef<number>(0);
+  const pollingRef = useRef(false);
 
   const updateObdSession = useCallback(async (nextData: LiveData) => {
     const now = Date.now();
@@ -89,7 +90,7 @@ export function useLiveData(active: boolean) {
     const user = authData.user;
 
     if (!user) {
-      console.warn('OBD live session: user není přihlášený');
+      console.warn('OBD live session: user nenÃ­ pÅihlÃ¡Å¡enÃ½');
       return;
     }
 
@@ -136,14 +137,15 @@ export function useLiveData(active: boolean) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-
-      closeObdSession();
       return;
     }
 
     let cancelled = false;
 
     const poll = async () => {
+      if (pollingRef.current) return;
+      pollingRef.current = true;
+      try {
       for (const pid of LIVE_PIDS) {
         if (cancelled) return;
 
@@ -167,6 +169,9 @@ export function useLiveData(active: boolean) {
           // Skip failed reads
         }
       }
+      } finally {
+        pollingRef.current = false;
+      }
     };
 
     poll();
@@ -179,10 +184,14 @@ export function useLiveData(active: boolean) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-
-      closeObdSession();
     };
-  }, [active, updateObdSession, closeObdSession]);
+  }, [active, updateObdSession]);
+
+  useEffect(() => {
+    const close = () => { closeObdSession(); };
+    window.addEventListener('beforeunload', close);
+    return () => window.removeEventListener('beforeunload', close);
+  }, [closeObdSession]);
 
   return data;
 }
