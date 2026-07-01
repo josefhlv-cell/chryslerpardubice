@@ -35,6 +35,7 @@ interface AuthContextType {
   employee: Employee | null;
   isAdmin: boolean;
   isLoading: boolean;
+  isRoleLoading: boolean;
   isPendingBusiness: boolean;
   canPlaceOrder: boolean;
   signUp: (email: string, password: string, meta: SignUpMeta) => Promise<void>;
