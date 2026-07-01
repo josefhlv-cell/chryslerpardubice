@@ -258,6 +258,15 @@ const AdminOBDDiagnostics = () => {
         </CardContent>
       </Card>
 
+      {selectedUserId && (
+        <AdminObdPermissions
+          userId={selectedUserId}
+          userLabel={selectedProfile?.full_name || selectedProfile?.email || undefined}
+        />
+      )}
+
+
+
       <OBDStatusBar
         connectionState={connectionState}
         signalQuality={signalQuality}
