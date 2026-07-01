@@ -132,7 +132,7 @@ const AdminShell = ({ tree, activeKey, onSelect, children }: Props) => {
             <X className="w-4 h-4" />
           </button>
         </div>
-        <nav className="p-2 space-y-0.5 overflow-y-auto h-full">
+        <nav className="p-2 pb-32 space-y-0.5 overflow-y-auto h-[calc(100vh-3.5rem)] lg:h-full">
           {tree.map((n) => renderNode(n))}
         </nav>
       </aside>
