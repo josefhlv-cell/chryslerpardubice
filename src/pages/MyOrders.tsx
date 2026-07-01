@@ -78,8 +78,19 @@ const MyOrders = () => {
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("cs-CZ");
 
-  if (authLoading || loading) {
-    return (
+  const cancelOrder = async (id: string) => {
+    const { error } = await supabase
+      .from("orders")
+      .update({ status: "zrusena" as any, admin_note: "Storno na žádost zákazníka" })
+      .eq("id", id);
+    if (error) {
+      toast.error("Nepodařilo se stornovat", { description: error.message });
+      return;
+    }
+    toast.success("Objednávka stornována");
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "zrusena" } : o)));
+  };
+
       <div className="min-h-screen flex items-center justify-center">
         <RefreshCw className="w-6 h-6 animate-spin text-primary" />
       </div>
