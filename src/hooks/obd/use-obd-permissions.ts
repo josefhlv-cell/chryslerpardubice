@@ -10,6 +10,7 @@ export type ObdPermissions = {
   live_data: boolean;
   dtc_read: boolean;
   dtc_clear: boolean;
+  dpf: boolean;
   can_bus: boolean;
   uds: boolean;
   coding: boolean;
@@ -26,6 +27,7 @@ export const DEFAULT_OBD_PERMISSIONS: ObdPermissions = {
   live_data: true,
   dtc_read: true,
   dtc_clear: false,
+  dpf: false,
   can_bus: false,
   uds: false,
   coding: false,
@@ -42,6 +44,7 @@ export const FULL_OBD_PERMISSIONS: ObdPermissions = {
   live_data: true,
   dtc_read: true,
   dtc_clear: true,
+  dpf: true,
   can_bus: true,
   uds: true,
   coding: true,
