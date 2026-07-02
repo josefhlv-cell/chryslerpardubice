@@ -408,6 +408,22 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
           result = { command: rawCommand, response };
           break;
         }
+        case "dpf":
+        case "dpf_status":
+        case "dpf_regen": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const dpf = await readDpfSnapshot();
+          const next = { ...liveDataRef.current, dpf };
+          setLiveData(next);
+          liveDataRef.current = next;
+          await upsertSession(next, dtcsRef.current, true);
+          if (!dpf.supported) {
+            result = { dpf, note: "DPF PIDy nejsou pro toto vozidlo dostupné." };
+          } else {
+            result = { dpf };
+          }
+          break;
+        }
         default:
           throw new Error(`Nepodporovaný vzdálený příkaz: ${type}`);
       }
