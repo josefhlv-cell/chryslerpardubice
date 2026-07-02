@@ -23,6 +23,7 @@ import PageHeader from "@/components/PageHeader";
 import { useObd } from "@/contexts/ObdContext";
 import { useObdPermissions } from "@/hooks/obd/use-obd-permissions";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
+import { DpfCard } from "@/components/obd/DpfCard";
 
 const GaugeCircle = ({
   value,
@@ -448,6 +449,10 @@ const OBDDiagnostics = () => {
                   unit="km/h"
                 />
               </div>
+
+              {permissions.dpf && (
+                <DpfCard dpf={liveData.dpf} />
+              )}
 
               <div className="luxury-card p-4">
                 <div className="flex items-center justify-between mb-3">
