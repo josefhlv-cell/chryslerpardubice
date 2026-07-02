@@ -81,6 +81,7 @@ const AdminDashboardStats = lazy(() => import("@/components/admin/AdminDashboard
 
 // Nové moduly
 const AdminRemoteOBD = lazy(() => import("@/components/admin/AdminRemoteOBD"));
+const AdminChdpDiag = lazy(() => import("@/components/admin/AdminChdpDiag"));
 const AdminDTCLibrary = lazy(() => import("@/components/admin/AdminDTCLibrary"));
 const AdminTSBs = lazy(() => import("@/components/admin/AdminTSBs"));
 const AdminDiagPDFs = lazy(() => import("@/components/admin/AdminDiagPDFs"));
