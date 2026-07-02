@@ -388,6 +388,27 @@ const AdminChdpDiag = () => {
               </CardContent>
             </Card>
 
+            {/* DPF panel */}
+            <Card>
+              <CardContent className="p-4">
+                <DpfCard
+                  admin
+                  dpf={session?.payload?.dpf ?? null}
+                  onRequestSnapshot={() => sendCmd("dpf_status")}
+                  requestPending={commands.some(
+                    (c) => (c.command_type === "dpf_status" || c.command_type === "dpf") && (c.status === "pending" || c.status === "running"),
+                  )}
+                  requestDisabledReason={
+                    !live
+                      ? "Zákazník není online"
+                      : !permissions.dpf
+                        ? "DPF není povoleno v oprávněních"
+                        : undefined
+                  }
+                />
+              </CardContent>
+            </Card>
+
             {/* Vzdálené příkazy */}
             <Card>
               <CardContent className="p-4 space-y-3">
