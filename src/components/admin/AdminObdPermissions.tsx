@@ -17,6 +17,7 @@ const FIELDS: { key: keyof ObdPermissions; label: string; hint?: string }[] = [
   { key: "live_data", label: "Živá data", hint: "Otáčky, teplota, rychlost, plyn" },
   { key: "dtc_read", label: "Čtení DTC" },
   { key: "dtc_clear", label: "Mazání DTC", hint: "POZOR – ovlivňuje diagnostiku" },
+  { key: "dpf", label: "DPF diagnostika", hint: "Stav filtru, regenerace, tlak" },
   { key: "can_bus", label: "CAN analyzátor" },
   { key: "uds", label: "UDS diagnostika" },
   { key: "coding", label: "Kódování řídicích jednotek" },
