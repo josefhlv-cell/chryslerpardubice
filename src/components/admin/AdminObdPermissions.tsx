@@ -57,6 +57,7 @@ const AdminObdPermissions = ({ userId, userLabel }: Props) => {
             live_data: data.live_data,
             dtc_read: data.dtc_read,
             dtc_clear: data.dtc_clear,
+            dpf: (data as any).dpf ?? false,
             can_bus: data.can_bus,
             uds: data.uds,
             coding: data.coding,
