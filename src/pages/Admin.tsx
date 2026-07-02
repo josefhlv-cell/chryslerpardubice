@@ -334,11 +334,12 @@ const Admin = () => {
       ],
     },
     {
-      key: "diag", label: "Diagnostika", icon: Activity, children: [
-        { key: "diag-remote", label: "Vzdálené OBD live" },
-        { key: "diag-dtc", label: "DTC knihovna", icon: BookOpen },
-        { key: "diag-tsb", label: "TSB databáze", icon: FileText },
-        { key: "diag-pdf", label: "Protokoly (PDF)", icon: FileSpreadsheet },
+     key: "diag", label: "Diagnostika", icon: Activity, children: [
+       { key: "diag-chdp", label: "CHDP diag", icon: Activity },
+       { key: "diag-remote", label: "Vzdálené OBD live" },
+       { key: "diag-dtc", label: "DTC knihovna", icon: BookOpen },
+       { key: "diag-tsb", label: "TSB databáze", icon: FileText },
+       { key: "diag-pdf", label: "Protokoly (PDF)", icon: FileSpreadsheet },
       ],
     },
     {
