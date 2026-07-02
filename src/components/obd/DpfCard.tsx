@@ -65,7 +65,7 @@ export function DpfCard({ dpf, admin, onRequestSnapshot, requestPending, request
         {header}
         <p className="text-xs text-muted-foreground flex items-center gap-2">
           <Info className="w-3.5 h-3.5" />
-          Data DPF nejsou dostupná. {onRequestSnapshot ? "Klikněte na „Načíst DPF stav" pro dotaz do vozidla." : ""}
+          Data DPF nejsou dostupná. {onRequestSnapshot ? "Klikněte na „Načíst DPF stav“ pro dotaz do vozidla." : ""}
         </p>
         {requestDisabledReason && (
           <p className="text-[11px] text-amber-500">{requestDisabledReason}</p>
