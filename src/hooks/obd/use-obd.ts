@@ -90,7 +90,7 @@ export function useLiveData(active: boolean) {
     const user = authData.user;
 
     if (!user) {
-      console.warn('OBD live session: user nenÃ­ pÅihlÃ¡Å¡enÃ½');
+      console.warn('OBD live session: user není přihlášený');
       return;
     }
 

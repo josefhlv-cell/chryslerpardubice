@@ -282,7 +282,7 @@ class BLEManager {
   private scanResultToDevice(result: ScanResult): BLEDeviceInfo {
     return {
       deviceId: result.device.deviceId,
-      name: result.device.name || result.localName || 'NeznÃ¡mÃ© zaÅÃ­zenÃ­',
+      name: result.device.name || result.localName || 'Neznámé zařízení',
       rssi: result.rssi ?? -100,
       connected: false,
     };
@@ -345,14 +345,14 @@ private async performConnect(deviceId: string): Promise<boolean> {
     ]);
 
     if (!profile) {
-      throw new Error('AdaptÃ©r byl nalezen, ale neodpovÃ­dÃ¡ jako ELM327 / OBD adaptÃ©r.');
+      throw new Error('Adaptér byl nalezen, ale neodpovídá jako ELM327 / OBD adaptér.');
     }
 
     this.activeProfile = profile;
 
     this.connectedDevice = {
       deviceId,
-      name: 'OBD adaptÃ©r',
+      name: 'OBD adaptér',
       rssi: -50,
       connected: true,
     };
