@@ -29,6 +29,7 @@ export type ObdLiveData = {
   engineLoad: number;
   voltage: number;
   boostPressure: number;
+  dpf?: DpfSnapshot;
 };
 
 export type ObdDtc = DTCCode;
