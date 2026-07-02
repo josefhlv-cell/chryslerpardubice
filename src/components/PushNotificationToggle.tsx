@@ -77,9 +77,9 @@ const PushNotificationToggle = () => {
       const { PushNotifications } = await import("@capacitor/push-notifications");
       const { Device } = await import("@capacitor/device");
 
-      // 1) požádej o systémové oprávnění
+      // 1) systémové oprávnění
       let perm = await PushNotifications.checkPermissions();
-      if (perm.receive !== "granted") {
+      if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
         perm = await PushNotifications.requestPermissions();
       }
       if (perm.receive !== "granted") {
@@ -92,29 +92,45 @@ const PushNotificationToggle = () => {
         return;
       }
 
-      // 2) posluchače MUSÍ být zaregistrovány PŘED voláním register()
       const info = await Device.getInfo();
       const id = await Device.getId();
 
-      const token: string = await new Promise((resolve, reject) => {
-        const timer = setTimeout(
-          () => reject(new Error("Push token nepřišel do 30 s. Zkontrolujte připojení a zkuste znovu.")),
-          30_000,
-        );
-        PushNotifications.addListener("registration", (t) => {
-          clearTimeout(timer);
-          resolve(t.value);
-        }).then((h) => { regListener = h; });
-        PushNotifications.addListener("registrationError", (err) => {
-          clearTimeout(timer);
-          reject(new Error(err?.error || "Registrace push tokenu selhala"));
-        }).then((h) => { errListener = h; });
-        // až teď register()
-        PushNotifications.register().catch((e) => {
-          clearTimeout(timer);
-          reject(e instanceof Error ? e : new Error(String(e)));
-        });
+      // 2) KRITICKÉ: posluchače musí být opravdu aktivní PŘED voláním register().
+      //    Předtím se registrovaly asynchronně přes .then() – token mohl přijít
+      //    dřív než handler existoval → timeout 30 s a chyba "Push token nepřišel".
+      let resolveToken!: (t: string) => void;
+      let rejectToken!: (e: Error) => void;
+      const tokenPromise = new Promise<string>((res, rej) => {
+        resolveToken = res;
+        rejectToken = rej;
       });
+
+      regListener = await PushNotifications.addListener("registration", (t) => {
+        resolveToken(t.value);
+      });
+      errListener = await PushNotifications.addListener("registrationError", (err) => {
+        rejectToken(new Error(err?.error || "APNs/FCM registrace selhala"));
+      });
+
+      // 3) teď teprve register()
+      await PushNotifications.register();
+
+      const token = await Promise.race([
+        tokenPromise,
+        new Promise<string>((_, rej) =>
+          setTimeout(
+            () =>
+              rej(
+                new Error(
+                  Capacitor.getPlatform() === "ios"
+                    ? "APNs neodpověděl (60 s). Zkontrolujte, že máte internet a že Push Notifications capability je v Xcode zapnutá."
+                    : "FCM neodpověděl (60 s). Zkontrolujte internetové připojení a google-services.json.",
+                ),
+              ),
+            60_000,
+          ),
+        ),
+      ]);
 
       const { error } = await supabase.from("device_tokens").upsert(
         {
@@ -138,8 +154,8 @@ const PushNotificationToggle = () => {
         variant: "destructive",
       });
     } finally {
-      try { regListener?.remove?.(); } catch { /* noop */ }
-      try { errListener?.remove?.(); } catch { /* noop */ }
+      try { await regListener?.remove?.(); } catch { /* noop */ }
+      try { await errListener?.remove?.(); } catch { /* noop */ }
       setRegistering(false);
     }
   };
