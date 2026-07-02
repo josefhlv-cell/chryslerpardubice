@@ -456,6 +456,17 @@ const OBDDiagnostics = () => {
                     Chybové kódy (DTC)
                   </h3>
 
+              {permissions.dpf && (
+                <DpfCard dpf={liveData.dpf} />
+              )}
+
+              <div className="luxury-card p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-display font-semibold text-sm flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-warning" />
+                    Chybové kódy (DTC)
+                  </h3>
+
                   <div className="flex gap-1">
                     {permissions.dtc_read && (
                       <Button
