@@ -11,6 +11,7 @@
         "@capacitor/cli": "^8.1.0",
         "@capacitor/core": "^8.1.0",
         "@capacitor/device": "^8",
+        "@capacitor/geolocation": "^8",
         "@capacitor/ios": "^8.1.0",
         "@capacitor/push-notifications": "^8",
         "@capacitor/splash-screen": "^8",
@@ -296,6 +297,8 @@
 
     "@capacitor/device": ["@capacitor/device@8.0.2", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/device/-/device-8.0.2.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-fIqSXnG0s6bz5A/0xFgSXDkbU+Xl65ti80LhucNvLI4kGhJzcNn6SwWVwpXN9SJTOFWXblXknHNppheP8X1frQ=="],
 
+    "@capacitor/geolocation": ["@capacitor/geolocation@8.2.0", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/geolocation/-/geolocation-8.2.0.tgz", { "dependencies": { "@capacitor/synapse": "^1.0.4" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-N29QcoIPmme0xSxRkm7+3hjoHp6mBAOarxecvtCCZKyOBeKiJsFUq981cezg2XWBa6fhCXJMCCjQPngKK/dIag=="],
+
     "@capacitor/ios": ["@capacitor/ios@8.1.0", "", { "peerDependencies": { "@capacitor/core": "^8.1.0" } }, "sha512-wPaQ8ayL0UY+SxydZbrmfzPs8TryZVEB6hrL/XBnXxQtb6rpEmIy/3GIltPwM+/T4m/IuaSDZOToWK65ruC00g=="],
 
     "@capacitor/push-notifications": ["@capacitor/push-notifications@8.1.1", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/push-notifications/-/push-notifications-8.1.1.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-WqzjPKIbYbARMN+GC0XMAJcxJpUUzqgzS/Ny8RODLrro38pQhm3GXYwX2Mwd+LZlLY39rGImkCkrKyQSNfuikA=="],
@@ -303,6 +306,8 @@
     "@capacitor/splash-screen": ["@capacitor/splash-screen@8.0.1", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/splash-screen/-/splash-screen-8.0.1.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-c/ew/Z3eA7z8l06WoRAtzVF16VwYYrExmHmfGq1Cg675pVzaC/yuucB8/1xG1vhEfnW4fZ1KhSf/kzR1RiVYgg=="],
 
     "@capacitor/status-bar": ["@capacitor/status-bar@8.0.2", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/status-bar/-/status-bar-8.0.2.tgz", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-WXs8YB8B9eEaPZz+bcdY6t2nForF1FLoj/JU0Dl9RRgQnddnS98FEEyDooQhaY7wivr000j4+SC1FyeJkrFO7A=="],
+
+    "@capacitor/synapse": ["@capacitor/synapse@1.0.4", "https://europe-west1-npm.pkg.dev/lovable-core-prod/sandbox-npm-cache/@capacitor/synapse/-/synapse-1.0.4.tgz", {}, "sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.0", "", { "os": "aix", "cpu": "ppc64" }, "sha512-O7vun9Sf8DFjH2UtqK8Ku3LkquL9SZL8OLY1T5NZkA34+wG3OQF7cl4Ql8vdNzM6fzBbYfLaiRLIOZ+2FOCgBQ=="],
 
