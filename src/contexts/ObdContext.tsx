@@ -86,6 +86,9 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
   ai_diagnostics: "ai_diagnostics",
   dev_mode: "dev_mode",
   flash: "flash",
+  dpf: "dpf",
+  dpf_status: "dpf",
+  dpf_regen: "dpf",
 };
 
 const AUTO_KEY = "obd_auto_connect";
