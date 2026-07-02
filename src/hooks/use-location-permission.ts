@@ -29,7 +29,8 @@ export function useLocationPermission() {
     try {
       const cap = (window as any).Capacitor;
       if (cap?.isNativePlatform?.()) {
-        const mod = await import("@capacitor/geolocation").catch(() => null);
+        // @ts-ignore optional native module — installed at native build time
+        const mod = await import(/* @vite-ignore */ "@capacitor/geolocation").catch(() => null);
         if (!mod) {
           setStatus("unsupported");
           return;
