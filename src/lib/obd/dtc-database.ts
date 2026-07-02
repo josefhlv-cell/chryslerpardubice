@@ -120,9 +120,8 @@ export const GENERIC_DTC_DB: Record<string, GenericDTCEntry> = {
   P0562: { desc: 'Systémové napětí nízké', descEn: 'System Voltage Low', severity: 'high', cause: 'Slabý alternátor nebo baterie.' },
   P0563: { desc: 'Systémové napětí vysoké', descEn: 'System Voltage High', severity: 'high', cause: 'Vadný regulátor alternátoru.' },
   P0571: { desc: 'Přepínač brzdového pedálu — porucha obvodu A', descEn: 'Brake Switch A Circuit Malfunction', severity: 'medium', cause: 'Vadný spínač brzdových světel.' },
-};
 
-  P0571: { desc: 'Přepínač brzdového pedálu — porucha obvodu A', descEn: 'Brake Switch A Circuit Malfunction', severity: 'medium', cause: 'Vadný spínač brzdových světel.' },
+
 
   // P06xx — Computer / Auxiliary Output
   P0600: { desc: 'Chyba komunikace sériové sběrnice řídicí jednotky', descEn: 'Serial Communication Link Malfunction', severity: 'high', cause: 'Chyba CAN/K-line mezi ECU.' },
