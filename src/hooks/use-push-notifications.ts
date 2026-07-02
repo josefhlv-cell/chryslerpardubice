@@ -52,7 +52,8 @@ export function usePushNotifications() {
     }
 
     try {
-      const mod = await import("@capacitor/push-notifications").catch(() => null);
+      // @ts-ignore optional native module — installed at native build time
+      const mod = await import(/* @vite-ignore */ "@capacitor/push-notifications").catch(() => null);
       if (!mod) {
         setError("Push modul není v tomto buildu dostupný.");
         setStatus("unsupported");
