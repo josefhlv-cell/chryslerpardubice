@@ -144,9 +144,9 @@ class ELM327Engine {
       this.emitInitProgress();
       await this.delay(this.commandDelay);
     }
-    // DÅ®LEÅ½ITÃ:
-    // Pokud proÅ¡el aspoÅ jeden AT/OBD pÅÃ­kaz, nechÃ¡me spojenÃ­ bÄÅ¾et.
-    // NÄkterÃ© iOS-VLink adaptÃ©ry vracÃ­ divnÃ© odpovÄdi, ale live data normÃ¡lnÄ chodÃ­.
+    // DŮLEŽITÉ:
+    // Pokud prošel aspoň jeden AT/OBD příkaz, necháme spojení běžet.
+    // Některé iOS-VLink adaptéry vrací divné odpovědi, ale live data normálně chodí.
     if (successCount > 0) {
       this.initialized = true;
       this.setState("ready");

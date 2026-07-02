@@ -16,6 +16,7 @@ import { bleManager, BLEDeviceInfo, BLEConnectionState } from "@/lib/obd/ble-man
 import { elm327 } from "@/lib/obd/elm327-engine";
 import { dtcEngine, type DTCCode } from "@/lib/obd/dtc-engine";
 import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
+import { readDpfSnapshot, type DpfSnapshot } from "@/lib/obd/dpf-engine";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
@@ -28,6 +29,7 @@ export type ObdLiveData = {
   engineLoad: number;
   voltage: number;
   boostPressure: number;
+  dpf?: DpfSnapshot;
 };
 
 export type ObdDtc = DTCCode;
@@ -302,6 +304,19 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
       setLiveData(next);
       liveDataRef.current = next;
+
+      // DPF čtení jen pokud má oprávnění a jen občas (každý 5. cyklus)
+      if ((isAdminRef.current || permissionsRef.current.dpf) && forceUpsert) {
+        try {
+          const dpf = await readDpfSnapshot();
+          next = { ...next, dpf };
+          setLiveData(next);
+          liveDataRef.current = next;
+        } catch (e) {
+          console.warn("[OBD] DPF read failed", e);
+        }
+      }
+
       await upsertSession(next, dtcsRef.current, forceUpsert);
       return next;
     } finally {
@@ -391,6 +406,22 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
           if (!rawCommand) throw new Error("Chybí command_payload.command.");
           const response = await sendCommand(rawCommand);
           result = { command: rawCommand, response };
+          break;
+        }
+        case "dpf":
+        case "dpf_status":
+        case "dpf_regen": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const dpf = await readDpfSnapshot();
+          const next = { ...liveDataRef.current, dpf };
+          setLiveData(next);
+          liveDataRef.current = next;
+          await upsertSession(next, dtcsRef.current, true);
+          if (!dpf.supported) {
+            result = { dpf, note: "DPF PIDy nejsou pro toto vozidlo dostupné." };
+          } else {
+            result = { dpf };
+          }
           break;
         }
         default:
@@ -542,13 +573,24 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     liveDataRef.current = EMPTY_LIVE;
   }, []);
 
+  // Auto-connect (jen když má zákazník OBD povolené od admina, nebo je admin)
   useEffect(() => {
+    if (!authUserId) return;
     const auto = localStorage.getItem(AUTO_KEY) === "true";
     const savedId = localStorage.getItem(DEVICE_KEY);
     if (!auto || !savedId) return;
     if (connectedRef.current) return;
 
     const timer = window.setTimeout(async () => {
+      // Ověření oprávnění – musí být admin nebo mít alespoň live_data
+      const p = permissionsRef.current;
+      const allowed = isAdminRef.current || p.live_data || p.dtc_read || p.dpf;
+      if (!allowed) {
+        console.info("[OBD] auto-connect přeskočen: chybí oprávnění.");
+        return;
+      }
+      if (connectedRef.current) return;
+
       try {
         setConnecting(true);
         const ok = await bleManager.connect(savedId);
@@ -556,6 +598,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
           try { await elm327.initialize(); } catch {}
           setDevice(bleManager.getConnectedDevice());
           await upsertSession(EMPTY_LIVE, [], true);
+        } else {
+          console.info("[OBD] Poslední adaptér není dostupný – vyžadováno ruční připojení.");
         }
       } catch (e) {
         console.warn("[OBD] auto-connect failed", e);
@@ -565,7 +609,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     }, 1500);
 
     return () => window.clearTimeout(timer);
-  }, [upsertSession]);
+  }, [authUserId, upsertSession]);
+
 
   useEffect(() => {
     const handler = () => {
