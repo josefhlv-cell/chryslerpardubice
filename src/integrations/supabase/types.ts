@@ -3474,6 +3474,8 @@ export type Database = {
           full_name: string | null
           ico: string | null
           id: string
+          location_asked_at: string | null
+          location_permission: string | null
           loyalty_active: boolean
           notifications_enabled: boolean
           phone: string | null
@@ -3492,6 +3494,8 @@ export type Database = {
           full_name?: string | null
           ico?: string | null
           id?: string
+          location_asked_at?: string | null
+          location_permission?: string | null
           loyalty_active?: boolean
           notifications_enabled?: boolean
           phone?: string | null
@@ -3510,6 +3514,8 @@ export type Database = {
           full_name?: string | null
           ico?: string | null
           id?: string
+          location_asked_at?: string | null
+          location_permission?: string | null
           loyalty_active?: boolean
           notifications_enabled?: boolean
           phone?: string | null
@@ -4368,6 +4374,45 @@ export type Database = {
           updated_at?: string
           user_id?: string
           year?: string | null
+        }
+        Relationships: []
+      }
+      user_push_tokens: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          device_id: string | null
+          enabled: boolean
+          id: string
+          last_seen_at: string
+          platform: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          device_id?: string | null
+          enabled?: boolean
+          id?: string
+          last_seen_at?: string
+          platform: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          device_id?: string | null
+          enabled?: boolean
+          id?: string
+          last_seen_at?: string
+          platform?: string
+          token?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
