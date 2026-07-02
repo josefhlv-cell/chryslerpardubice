@@ -564,6 +564,8 @@ const Admin = () => {
 
       // ----- DIAGNOSTIKA -----
       case "diag":
+      case "diag":
+      case "diag-chdp": return <Suspense fallback={<Loader />}><AdminChdpDiag /></Suspense>;
       case "diag-remote": return <Suspense fallback={<Loader />}><AdminRemoteOBD /></Suspense>;
       case "diag-dtc": return <Suspense fallback={<Loader />}><AdminDTCLibrary /></Suspense>;
       case "diag-tsb": return <Suspense fallback={<Loader />}><AdminTSBs /></Suspense>;
