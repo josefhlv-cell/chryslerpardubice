@@ -304,6 +304,19 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
       setLiveData(next);
       liveDataRef.current = next;
+
+      // DPF čtení jen pokud má oprávnění a jen občas (každý 5. cyklus)
+      if ((isAdminRef.current || permissionsRef.current.dpf) && forceUpsert) {
+        try {
+          const dpf = await readDpfSnapshot();
+          next = { ...next, dpf };
+          setLiveData(next);
+          liveDataRef.current = next;
+        } catch (e) {
+          console.warn("[OBD] DPF read failed", e);
+        }
+      }
+
       await upsertSession(next, dtcsRef.current, forceUpsert);
       return next;
     } finally {
