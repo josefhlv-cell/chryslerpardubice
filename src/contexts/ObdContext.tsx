@@ -573,13 +573,24 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     liveDataRef.current = EMPTY_LIVE;
   }, []);
 
+  // Auto-connect (jen když má zákazník OBD povolené od admina, nebo je admin)
   useEffect(() => {
+    if (!authUserId) return;
     const auto = localStorage.getItem(AUTO_KEY) === "true";
     const savedId = localStorage.getItem(DEVICE_KEY);
     if (!auto || !savedId) return;
     if (connectedRef.current) return;
 
     const timer = window.setTimeout(async () => {
+      // Ověření oprávnění – musí být admin nebo mít alespoň live_data
+      const p = permissionsRef.current;
+      const allowed = isAdminRef.current || p.live_data || p.dtc_read || p.dpf;
+      if (!allowed) {
+        console.info("[OBD] auto-connect přeskočen: chybí oprávnění.");
+        return;
+      }
+      if (connectedRef.current) return;
+
       try {
         setConnecting(true);
         const ok = await bleManager.connect(savedId);
@@ -587,6 +598,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
           try { await elm327.initialize(); } catch {}
           setDevice(bleManager.getConnectedDevice());
           await upsertSession(EMPTY_LIVE, [], true);
+        } else {
+          console.info("[OBD] Poslední adaptér není dostupný – vyžadováno ruční připojení.");
         }
       } catch (e) {
         console.warn("[OBD] auto-connect failed", e);
@@ -596,7 +609,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     }, 1500);
 
     return () => window.clearTimeout(timer);
-  }, [upsertSession]);
+  }, [authUserId, upsertSession]);
+
 
   useEffect(() => {
     const handler = () => {
