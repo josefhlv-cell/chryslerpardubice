@@ -2865,6 +2865,7 @@ export type Database = {
           created_at: string
           dev_mode: boolean
           discovery: boolean
+          dpf: boolean
           dtc_clear: boolean
           dtc_read: boolean
           flash: boolean
@@ -2884,6 +2885,7 @@ export type Database = {
           created_at?: string
           dev_mode?: boolean
           discovery?: boolean
+          dpf?: boolean
           dtc_clear?: boolean
           dtc_read?: boolean
           flash?: boolean
@@ -2903,6 +2905,7 @@ export type Database = {
           created_at?: string
           dev_mode?: boolean
           discovery?: boolean
+          dpf?: boolean
           dtc_clear?: boolean
           dtc_read?: boolean
           flash?: boolean
