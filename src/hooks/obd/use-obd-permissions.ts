@@ -89,6 +89,7 @@ export function useObdPermissions(): { permissions: ObdPermissions; isAdmin: boo
           live_data: perm.live_data ?? true,
           dtc_read: perm.dtc_read ?? true,
           dtc_clear: perm.dtc_clear ?? false,
+          dpf: (perm as any).dpf ?? false,
           can_bus: perm.can_bus ?? false,
           uds: perm.uds ?? false,
           coding: perm.coding ?? false,
