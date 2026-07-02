@@ -16,6 +16,7 @@ import { bleManager, BLEDeviceInfo, BLEConnectionState } from "@/lib/obd/ble-man
 import { elm327 } from "@/lib/obd/elm327-engine";
 import { dtcEngine, type DTCCode } from "@/lib/obd/dtc-engine";
 import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
+import { readDpfSnapshot, type DpfSnapshot } from "@/lib/obd/dpf-engine";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
