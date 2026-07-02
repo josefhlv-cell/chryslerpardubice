@@ -24,6 +24,7 @@ import { toast } from "@/hooks/use-toast";
 import { DEFAULT_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import AdminObdPermissions from "@/components/admin/AdminObdPermissions";
+import { DpfCard } from "@/components/obd/DpfCard";
 
 interface CustomerRow {
   user_id: string;
