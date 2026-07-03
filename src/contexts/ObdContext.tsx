@@ -29,8 +29,18 @@ export type ObdLiveData = {
   engineLoad: number;
   voltage: number;
   boostPressure: number;
+  oilTemp: number;
+  fuelLevel: number;
+  fuelRate: number;
   dpf?: DpfSnapshot;
 };
+
+/**
+ * Časová razítka posledních úspěšně přečtených PIDů.
+ * Chybějící klíč = data nejsou dostupná / vozidlo PID nepodporuje.
+ * NIKDY nezobrazovat 0 jako reálnou hodnotu, pokud klíč chybí!
+ */
+export type ObdLiveAvailability = Partial<Record<keyof ObdLiveData, number>>;
 
 export type ObdDtc = DTCCode;
 
@@ -56,6 +66,9 @@ const EMPTY_LIVE: ObdLiveData = {
   engineLoad: 0,
   voltage: 0,
   boostPressure: 0,
+  oilTemp: 0,
+  fuelLevel: 0,
+  fuelRate: 0,
 };
 
 const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
@@ -68,6 +81,9 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "010A": "fuelPressure",
   "010B": "boostPressure",
   "0142": "voltage",
+  "015C": "oilTemp",
+  "012F": "fuelLevel",
+  "015E": "fuelRate",
 };
 
 const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
