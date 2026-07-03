@@ -110,6 +110,45 @@ ${record.catalog_source === "mopar" ? "→ Objednat přes Mopar katalog" : ""}
 
 Poznámka zákazníka: ${record.customer_note || "—"}
       `.trim();
+    } else if (type === "service_booking") {
+      subject = `Nová rezervace servisu: ${record.vehicle_brand || ""} ${record.vehicle_model || ""}`.trim();
+      body = `
+Nová rezervace servisu:
+
+Zákazník: ${record.customer_name || "—"}
+E-mail: ${record.customer_email || "—"}
+Telefon: ${record.customer_phone || "—"}
+Vozidlo: ${record.vehicle_brand || "—"} ${record.vehicle_model || ""} ${record.vehicle_year || ""}
+Služba: ${record.service_type || "—"}
+Preferovaný termín: ${record.preferred_date || "—"}
+Poznámka: ${record.note || "—"}
+Stav: ${record.status || "pending"}
+ID: ${record.id || "—"}
+      `.trim();
+    } else if (type === "tow_request") {
+      subject = `Žádost o odtah: ${record.vehicle_info || ""}`.trim();
+      body = `
+Nová žádost o odtah:
+
+Vozidlo: ${record.vehicle_info || "—"}
+Problém: ${record.problem_type || "—"}
+Počet osob: ${record.passengers || "—"}
+Telefon: ${record.phone || "—"}
+Poloha: ${record.location_text || `${record.latitude ?? "?"}, ${record.longitude ?? "?"}`}
+Stav: ${record.status || "new"}
+ID: ${record.id || "—"}
+      `.trim();
+    } else if (type === "fault_report") {
+      subject = `Nové hlášení závady: ${record.vehicle_brand || ""} ${record.vehicle_model || ""}`.trim();
+      body = `
+Nové hlášení závady:
+
+Zákazník: ${record.customer_name || "—"}
+Vozidlo: ${record.vehicle_brand || "—"} ${record.vehicle_model || ""}
+Popis: ${record.description || "—"}
+Stav: ${record.status || "new"}
+ID: ${record.id || "—"}
+      `.trim();
     } else {
       // Generic notification
       subject = record.title || "Nová notifikace";
@@ -124,10 +163,10 @@ Poznámka zákazníka: ${record.customer_note || "—"}
     }));
     await supabase.from("notifications").insert(notifRows);
 
-    // === E-mailové upozornění na chrysler@obchod.cz ===
+    // === E-mailové upozornění na obchod@chrysler.cz ===
     // Pokud je nastaven RESEND_API_KEY, pošleme e-mail. Jinak jen zalogujeme.
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-    const RECIPIENT = "chrysler@obchod.cz";
+    const RECIPIENT = "obchod@chrysler.cz";
     if (RESEND_API_KEY) {
       try {
         const r = await fetch("https://api.resend.com/emails", {

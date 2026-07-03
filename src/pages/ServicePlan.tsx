@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ const DEFAULT_PLANS = [
 const ServicePlan = () => {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { addItem } = useCart();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [plans, setPlans] = useState<ServicePlanItem[]>([]);
@@ -233,13 +235,44 @@ const ServicePlan = () => {
                         <p className="text-xs font-medium">{part.name}</p>
                         <p className="text-[10px] text-muted-foreground">OEM: {part.oem_number} · {part.price_with_vat > 0 ? `${part.price_with_vat.toLocaleString("cs")} Kč` : "Na dotaz"}</p>
                       </div>
-                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => navigate("/catalog")}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7"
+                        onClick={() => {
+                          addItem({
+                            id: `srvpart-${part.oem_number}`,
+                            name: part.name || plan.service_name,
+                            oem: part.oem_number,
+                            price: part.price_with_vat || 0,
+                            type: "new",
+                            catalog_source: "service_plan",
+                          });
+                          toast({
+                            title: "Přidáno do košíku",
+                            description: `${part.name || plan.service_name} — pokračujte v pokladně.`,
+                          });
+                          navigate("/cart");
+                        }}
+                      >
                         <ShoppingCart className="w-3 h-3 mr-1" />Objednat
                       </Button>
                     </div>
                   )}
                   {status.urgent && (
-                    <Button size="sm" variant="hero" className="w-full mt-2 text-xs" onClick={() => navigate("/service")}>
+                    <Button
+                      size="sm"
+                      variant="hero"
+                      className="w-full mt-2 text-xs"
+                      onClick={() => {
+                        // Předvyplnění služby v /service (rezervace servisu s potvrzením údajů)
+                        const params = new URLSearchParams({
+                          service: plan.service_name,
+                          vehicle: selectedVehicle,
+                        });
+                        navigate(`/service?${params.toString()}`);
+                      }}
+                    >
                       <Wrench className="w-3.5 h-3.5 mr-1" />Objednat servis
                     </Button>
                   )}

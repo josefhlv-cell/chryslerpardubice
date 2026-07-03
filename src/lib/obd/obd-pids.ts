@@ -122,11 +122,41 @@ export const PIDS: Record<string, PIDDefinition> = {
     formula: (b) => b[0] - 40,
     category: 'engine',
   },
+  '015C': {
+    pid: '015C',
+    name: 'Engine Oil Temperature',
+    shortName: 'OILT',
+    unit: '°C',
+    min: -40,
+    max: 210,
+    formula: (b) => b[0] - 40,
+    category: 'engine',
+  },
+  '012F': {
+    pid: '012F',
+    name: 'Fuel Tank Level',
+    shortName: 'FUEL%',
+    unit: '%',
+    min: 0,
+    max: 100,
+    formula: (b) => (b[0] * 100) / 255,
+    category: 'fuel',
+  },
+  '015E': {
+    pid: '015E',
+    name: 'Engine Fuel Rate',
+    shortName: 'FRATE',
+    unit: 'L/h',
+    min: 0,
+    max: 3212.75,
+    formula: (b) => ((b[0] * 256) + b[1]) * 0.05,
+    category: 'fuel',
+  },
 };
 
 // Pořadí pro polling: rychlé/důležité hodnoty první (RPM, rychlost, plyn),
 // pomalejší (teploty, palivo, napětí) v druhém kole.
-export const LIVE_PIDS = ['010C', '010D', '0111', '0104', '0105', '010F', '010A', '010B', '0142'];
+export const LIVE_PIDS = ['010C', '010D', '0111', '0104', '0105', '010F', '010A', '010B', '0142', '015C', '012F', '015E'];
 
 export function parsePIDResponse(pid: string, rawHex: string): number | null {
   const def = PIDS[pid];

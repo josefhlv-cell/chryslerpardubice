@@ -29,8 +29,18 @@ export type ObdLiveData = {
   engineLoad: number;
   voltage: number;
   boostPressure: number;
+  oilTemp: number;
+  fuelLevel: number;
+  fuelRate: number;
   dpf?: DpfSnapshot;
 };
+
+/**
+ * Časová razítka posledních úspěšně přečtených PIDů.
+ * Chybějící klíč = data nejsou dostupná / vozidlo PID nepodporuje.
+ * NIKDY nezobrazovat 0 jako reálnou hodnotu, pokud klíč chybí!
+ */
+export type ObdLiveAvailability = Partial<Record<keyof ObdLiveData, number>>;
 
 export type ObdDtc = DTCCode;
 
@@ -56,6 +66,9 @@ const EMPTY_LIVE: ObdLiveData = {
   engineLoad: 0,
   voltage: 0,
   boostPressure: 0,
+  oilTemp: 0,
+  fuelLevel: 0,
+  fuelRate: 0,
 };
 
 const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
@@ -68,6 +81,9 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "010A": "fuelPressure",
   "010B": "boostPressure",
   "0142": "voltage",
+  "015C": "oilTemp",
+  "012F": "fuelLevel",
+  "015E": "fuelRate",
 };
 
 const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
@@ -101,6 +117,7 @@ export type ObdContextValue = {
   connecting: boolean;
   device: BLEDeviceInfo | null;
   liveData: ObdLiveData;
+  liveAvailability: ObdLiveAvailability;
   dtcs: ObdDtc[];
   logs: string[];
   connectionState: BLEConnectionState;
@@ -122,6 +139,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [device, setDevice] = useState<BLEDeviceInfo | null>(null);
   const [liveData, setLiveData] = useState<ObdLiveData>(EMPTY_LIVE);
+  const [liveAvailability, setLiveAvailability] = useState<ObdLiveAvailability>({});
   const [dtcs, setDtcs] = useState<ObdDtc[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [connectionState, setConnectionState] = useState<BLEConnectionState>("disconnected");
@@ -129,6 +147,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
   const connectedRef = useRef(false);
   const liveDataRef = useRef<ObdLiveData>(EMPTY_LIVE);
+  const liveAvailabilityRef = useRef<ObdLiveAvailability>({});
   const dtcsRef = useRef<ObdDtc[]>([]);
   const permissionsRef = useRef<ObdPermissions>(DEFAULT_OBD_PERMISSIONS);
   const isAdminRef = useRef(false);
@@ -144,6 +163,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { connectedRef.current = connected; }, [connected]);
   useEffect(() => { liveDataRef.current = liveData; }, [liveData]);
+  useEffect(() => { liveAvailabilityRef.current = liveAvailability; }, [liveAvailability]);
   useEffect(() => { dtcsRef.current = dtcs; }, [dtcs]);
 
   const addLog = useCallback((message: string) => {
@@ -285,6 +305,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     isPollingRef.current = true;
     try {
       let next: ObdLiveData = { ...liveDataRef.current };
+      const availabilityUpdates: ObdLiveAvailability = {};
       for (const pid of LIVE_PIDS) {
         if (cancelledRef.current) break;
         try {
@@ -297,6 +318,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
           if (!key) continue;
           if (pid === "010B") value = Math.max(0, (value - 101.3) / 100);
           next = { ...next, [key]: value };
+          availabilityUpdates[key] = Date.now();
         } catch {
           // PID failures are normal on many adapters; keep the previous value.
         }
@@ -304,6 +326,11 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
       setLiveData(next);
       liveDataRef.current = next;
+      if (Object.keys(availabilityUpdates).length > 0) {
+        const merged = { ...liveAvailabilityRef.current, ...availabilityUpdates };
+        liveAvailabilityRef.current = merged;
+        setLiveAvailability(merged);
+      }
 
       // DPF čtení jen pokud má oprávnění a jen občas (každý 5. cyklus)
       if ((isAdminRef.current || permissionsRef.current.dpf) && forceUpsert) {
@@ -563,6 +590,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(AUTO_KEY);
     setLiveData(EMPTY_LIVE);
     liveDataRef.current = EMPTY_LIVE;
+    setLiveAvailability({});
+    liveAvailabilityRef.current = {};
     setDtcs([]);
     dtcsRef.current = [];
     setDevice(null);
@@ -571,6 +600,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
   const resetLive = useCallback(() => {
     setLiveData(EMPTY_LIVE);
     liveDataRef.current = EMPTY_LIVE;
+    setLiveAvailability({});
+    liveAvailabilityRef.current = {};
   }, []);
 
   // Auto-connect (jen když má zákazník OBD povolené od admina, nebo je admin)
@@ -632,6 +663,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     connecting,
     device,
     liveData,
+    liveAvailability,
     dtcs,
     logs,
     connectionState,

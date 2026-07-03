@@ -99,6 +99,35 @@ Deno.serve(async (req) => {
       console.error("insert error:", insErr);
     }
 
+    // === E-mail připomínka na obchod@chrysler.cz (drzý, profesionální tón) ===
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    const RECIPIENT = "obchod@chrysler.cz";
+    if (RESEND_API_KEY && (ordersCount > 0 || bookingsCount > 0)) {
+      const emailBody = `${message}
+
+Tyto věci pořád čekají na vyřízení. Zákazníci už pravděpodobně čekají, tak je prosím dnes posuňte dál.
+
+Přihlaste se do administrace: https://chryslerpardubice.site/admin`;
+      try {
+        const r = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: "Chrysler Pardubice <onboarding@resend.dev>",
+            to: [RECIPIENT],
+            subject: title,
+            text: emailBody,
+          }),
+        });
+        if (!r.ok) console.error("digest resend failed:", await r.text());
+      } catch (e) {
+        console.error("digest resend exception:", e);
+      }
+    }
+
     return new Response(
       JSON.stringify({ ok: true, notified: toInsert.length, orders: ordersCount, bookings: bookingsCount }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
