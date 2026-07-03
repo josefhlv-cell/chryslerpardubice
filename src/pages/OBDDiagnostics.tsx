@@ -32,6 +32,9 @@ const GaugeCircle = ({
   unit,
   color,
   icon: Icon,
+  available = true,
+  unavailableLabel = "Nedostupné",
+  decimals = 0,
 }: {
   value: number;
   max: number;
@@ -39,10 +42,14 @@ const GaugeCircle = ({
   unit: string;
   color: string;
   icon: any;
+  available?: boolean;
+  unavailableLabel?: string;
+  decimals?: number;
 }) => {
-  const percentage = Math.min((value / max) * 100, 100);
+  const percentage = available ? Math.min((value / max) * 100, 100) : 0;
   const circumference = 2 * Math.PI * 40;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const strokeColor = available ? color : "hsl(0 0% 25%)";
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -61,22 +68,33 @@ const GaugeCircle = ({
             cy="48"
             r="40"
             fill="none"
-            stroke={color}
+            stroke={strokeColor}
             strokeWidth="5"
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
             className="transition-all duration-500 ease-out"
-            style={{ filter: `drop-shadow(0 0 6px ${color}40)` }}
+            style={{ filter: available ? `drop-shadow(0 0 6px ${color}40)` : undefined }}
           />
         </svg>
 
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <Icon className="w-3.5 h-3.5 mb-0.5" style={{ color }} />
-          <span className="font-display font-bold text-lg leading-none">
-            {Math.round(value)}
-          </span>
-          <span className="text-[9px] text-muted-foreground">{unit}</span>
+          <Icon
+            className="w-3.5 h-3.5 mb-0.5"
+            style={{ color: available ? color : "hsl(0 0% 45%)" }}
+          />
+          {available ? (
+            <>
+              <span className="font-display font-bold text-lg leading-none">
+                {decimals > 0 ? value.toFixed(decimals) : Math.round(value)}
+              </span>
+              <span className="text-[9px] text-muted-foreground">{unit}</span>
+            </>
+          ) : (
+            <span className="text-[8px] text-muted-foreground text-center leading-tight px-1">
+              {unavailableLabel}
+            </span>
+          )}
         </div>
       </div>
 
