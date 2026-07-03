@@ -188,6 +188,7 @@ const OBDDiagnostics = () => {
     connecting,
     device,
     liveData,
+    liveAvailability,
     dtcs,
     connect,
     disconnect,
