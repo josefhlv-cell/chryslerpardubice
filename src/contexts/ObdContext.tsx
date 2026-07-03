@@ -117,6 +117,7 @@ export type ObdContextValue = {
   connecting: boolean;
   device: BLEDeviceInfo | null;
   liveData: ObdLiveData;
+  liveAvailability: ObdLiveAvailability;
   dtcs: ObdDtc[];
   logs: string[];
   connectionState: BLEConnectionState;
