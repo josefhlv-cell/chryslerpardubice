@@ -217,7 +217,7 @@ workflows:
         script: |
           set -e
           cd ios/App
-          agvtool new-version -all "${BUILD_NUMBER:-34}"
+          agvtool new-version -all "${BUILD_NUMBER:-34 }"
 
       - name: Build signed IPA
         script: |
