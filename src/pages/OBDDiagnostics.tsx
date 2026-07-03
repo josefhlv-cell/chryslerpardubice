@@ -368,27 +368,8 @@ const OBDDiagnostics = () => {
                   Živé hodnoty
                 </h3>
 
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <GaugeCircle
-                    value={liveData.rpm}
-                    max={7000}
-                    label="Otáčky"
-                    unit="RPM"
-                    color="hsl(347, 77%, 50%)"
-                    icon={Gauge}
-                  />
-                  <GaugeCircle
-                    value={liveData.coolantTemp}
-                    max={120}
-                    label="Chladič"
-                    unit="°C"
-                    color={
-                      liveData.coolantTemp > 100
-                        ? "hsl(347, 77%, 50%)"
-                        : "hsl(200, 80%, 50%)"
-                    }
-                    icon={Thermometer}
-                  />
+                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-3">
+                  {/* 1. Rychlost */}
                   <GaugeCircle
                     value={liveData.speed}
                     max={220}
@@ -396,47 +377,91 @@ const OBDDiagnostics = () => {
                     unit="km/h"
                     color="hsl(142, 71%, 45%)"
                     icon={Gauge}
+                    available={liveAvailability.speed !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
+                  {/* 2. Otáčky */}
                   <GaugeCircle
-                    value={liveData.throttle}
-                    max={100}
-                    label="Plyn"
-                    unit="%"
-                    color="hsl(38, 92%, 50%)"
-                    icon={Zap}
+                    value={liveData.rpm}
+                    max={7000}
+                    label="Otáčky"
+                    unit="RPM"
+                    color="hsl(347, 77%, 50%)"
+                    icon={Gauge}
+                    available={liveAvailability.rpm !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
+                  {/* 3. Výkon — bez reálného torque PID nelze spočítat, ukážeme jako Nepodporováno */}
                   <GaugeCircle
-                    value={liveData.engineLoad}
-                    max={100}
-                    label="Zatížení"
-                    unit="%"
+                    value={0}
+                    max={300}
+                    label="Výkon"
+                    unit="kW"
                     color="hsl(280, 70%, 55%)"
                     icon={Activity}
+                    available={false}
+                    unavailableLabel="Nepodporováno"
                   />
+                  {/* 4. Teplota vody */}
                   <GaugeCircle
-                    value={liveData.voltage}
-                    max={15}
-                    label="Napětí"
-                    unit="V"
-                    color="hsl(50, 90%, 50%)"
-                    icon={Zap}
+                    value={liveData.coolantTemp}
+                    max={120}
+                    label="Teplota vody"
+                    unit="°C"
+                    color={
+                      liveData.coolantTemp > 100
+                        ? "hsl(347, 77%, 50%)"
+                        : "hsl(200, 80%, 50%)"
+                    }
+                    icon={Thermometer}
+                    available={liveAvailability.coolantTemp !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
+                  {/* 5. Teplota oleje v motoru */}
                   <GaugeCircle
-                    value={liveData.fuelPressure}
-                    max={70}
-                    label="Palivo"
-                    unit="kPa"
-                    color="hsl(20, 90%, 50%)"
-                    icon={Fuel}
+                    value={liveData.oilTemp}
+                    max={150}
+                    label="Teplota oleje motor"
+                    unit="°C"
+                    color="hsl(30, 85%, 55%)"
+                    icon={Thermometer}
+                    available={liveAvailability.oilTemp !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
+                  {/* 6. Teplota oleje v převodovce — mimo standardní OBD-II, Nepodporováno */}
+                  <GaugeCircle
+                    value={0}
+                    max={150}
+                    label="Teplota oleje převod."
+                    unit="°C"
+                    color="hsl(30, 60%, 50%)"
+                    icon={Thermometer}
+                    available={false}
+                    unavailableLabel="Nepodporováno"
+                  />
+                  {/* 7. Teplota sání */}
                   <GaugeCircle
                     value={liveData.intakeTemp}
-                    max={70}
-                    label="Sání"
+                    max={80}
+                    label="Teplota sání"
                     unit="°C"
                     color="hsl(180, 60%, 50%)"
                     icon={Wind}
+                    available={liveAvailability.intakeTemp !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
+                  {/* 8. Tlak oleje — mimo standardní OBD-II */}
+                  <GaugeCircle
+                    value={0}
+                    max={6}
+                    label="Tlak oleje"
+                    unit="bar"
+                    color="hsl(20, 90%, 50%)"
+                    icon={Fuel}
+                    available={false}
+                    unavailableLabel="Nepodporováno"
+                  />
+                  {/* 9. Turbo (boost) */}
                   <GaugeCircle
                     value={liveData.boostPressure}
                     max={2.5}
@@ -444,9 +469,48 @@ const OBDDiagnostics = () => {
                     unit="bar"
                     color="hsl(340, 80%, 55%)"
                     icon={Wind}
+                    available={liveAvailability.boostPressure !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={2}
+                  />
+                  {/* 10. Napětí */}
+                  <GaugeCircle
+                    value={liveData.voltage}
+                    max={15}
+                    label="Napětí"
+                    unit="V"
+                    color="hsl(50, 90%, 50%)"
+                    icon={Zap}
+                    available={liveAvailability.voltage !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
+                  />
+                  {/* 11. Spotřeba průměrná — bez tripu neumíme spočítat, ukazujeme fuelRate pokud je */}
+                  <GaugeCircle
+                    value={liveData.fuelRate}
+                    max={30}
+                    label="Spotřeba"
+                    unit="L/h"
+                    color="hsl(200, 70%, 55%)"
+                    icon={Fuel}
+                    available={liveAvailability.fuelRate !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
+                  />
+                  {/* 12. Dojezd / Palivo */}
+                  <GaugeCircle
+                    value={liveData.fuelLevel}
+                    max={100}
+                    label="Palivo"
+                    unit="%"
+                    color="hsl(38, 92%, 50%)"
+                    icon={Fuel}
+                    available={liveAvailability.fuelLevel !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
                 </div>
               </div>
+
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <LiveGraph
