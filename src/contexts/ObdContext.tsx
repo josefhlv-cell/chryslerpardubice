@@ -663,6 +663,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     connecting,
     device,
     liveData,
+    liveAvailability,
     dtcs,
     logs,
     connectionState,
