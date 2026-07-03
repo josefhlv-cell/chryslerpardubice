@@ -57,6 +57,7 @@ const DEFAULT_PLANS = [
 const ServicePlan = () => {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { addItem } = useCart();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState("");
   const [plans, setPlans] = useState<ServicePlanItem[]>([]);
