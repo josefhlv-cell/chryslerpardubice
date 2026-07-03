@@ -99,7 +99,6 @@ workflows:
         script: |
           set -e
           npx cap sync ios
-
       - name: Patch iOS Push Entitlements
         script: |
           set -e
@@ -130,6 +129,7 @@ workflows:
           echo "Entitlements file:"
           cat ios/App/App/App.entitlements
 
+      
       - name: Patch iOS Info.plist permissions
         script: |
           set -e
