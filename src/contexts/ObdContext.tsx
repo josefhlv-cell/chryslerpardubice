@@ -138,6 +138,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
   const [connecting, setConnecting] = useState(false);
   const [device, setDevice] = useState<BLEDeviceInfo | null>(null);
   const [liveData, setLiveData] = useState<ObdLiveData>(EMPTY_LIVE);
+  const [liveAvailability, setLiveAvailability] = useState<ObdLiveAvailability>({});
   const [dtcs, setDtcs] = useState<ObdDtc[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [connectionState, setConnectionState] = useState<BLEConnectionState>("disconnected");
@@ -145,6 +146,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
   const connectedRef = useRef(false);
   const liveDataRef = useRef<ObdLiveData>(EMPTY_LIVE);
+  const liveAvailabilityRef = useRef<ObdLiveAvailability>({});
   const dtcsRef = useRef<ObdDtc[]>([]);
   const permissionsRef = useRef<ObdPermissions>(DEFAULT_OBD_PERMISSIONS);
   const isAdminRef = useRef(false);
@@ -160,6 +162,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { connectedRef.current = connected; }, [connected]);
   useEffect(() => { liveDataRef.current = liveData; }, [liveData]);
+  useEffect(() => { liveAvailabilityRef.current = liveAvailability; }, [liveAvailability]);
   useEffect(() => { dtcsRef.current = dtcs; }, [dtcs]);
 
   const addLog = useCallback((message: string) => {
