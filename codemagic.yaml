@@ -84,7 +84,7 @@ workflows:
         script: |
           npm run build
 
-      - name: Add iOS platform if missing SPM
+          - name: Add iOS platform if missing SPM
         script: |
           set -e
           if [ ! -d "ios/App/App.xcodeproj" ]; then
@@ -97,7 +97,38 @@ workflows:
 
       - name: Sync Capacitor iOS
         script: |
+          set -e
           npx cap sync ios
+
+      - name: Patch iOS Push Entitlements
+        script: |
+          set -e
+
+          echo "Creating App.entitlements with APNs production environment..."
+
+          printf '%s\n' \
+          '<?xml version="1.0" encoding="UTF-8"?>' \
+          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+          '<plist version="1.0">' \
+          '<dict>' \
+          '    <key>aps-environment</key>' \
+          '    <string>production</string>' \
+          '</dict>' \
+          '</plist>' \
+          > ios/App/App/App.entitlements
+
+          echo "Patching Xcode project to use App.entitlements..."
+
+          sed -i '' 's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' ios/App/App.xcodeproj/project.pbxproj || true
+
+          if ! grep -q "CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj; then
+            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
+                    CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+            ' ios/App/App.xcodeproj/project.pbxproj
+          fi
+
+          echo "Entitlements file:"
+          cat ios/App/App/App.entitlements
 
       - name: Patch iOS Info.plist permissions
         script: |
