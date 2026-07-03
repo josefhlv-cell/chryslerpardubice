@@ -55,7 +55,6 @@ workflows:
       - android/app/build/outputs/bundle/release/app-release.aab
       - android/app/build/outputs/**/mapping.txt
       - android/app/build/reports/**/*
-
   ios-testflight-workflow:
     name: iOS TestFlight Build signed
     max_build_duration: 90
@@ -82,9 +81,10 @@ workflows:
 
       - name: Build web assets Vite
         script: |
+          set -e
           npm run build
 
-          - name: Add iOS platform if missing SPM
+      - name: Add iOS platform if missing SPM
         script: |
           set -e
           if [ ! -d "ios/App/App.xcodeproj" ]; then
@@ -99,6 +99,12 @@ workflows:
         script: |
           set -e
           npx cap sync ios
+
+      - name: Force iOS Bundle ID
+        script: |
+          set -e
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = CHDP.OBD.CHRYSL.VLINK;/g' ios/App/App.xcodeproj/project.pbxproj
+
       - name: Patch iOS Push Entitlements
         script: |
           set -e
@@ -129,7 +135,6 @@ workflows:
           echo "Entitlements file:"
           cat ios/App/App/App.entitlements
 
-      
       - name: Patch iOS Info.plist permissions
         script: |
           set -e
@@ -147,19 +152,20 @@ workflows:
           /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
 
+          /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription 'Aplikace používá polohu pro servisní služby, diagnostiku a bezpečnost účtu.'" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Aplikace používá polohu pro servisní služby, diagnostiku a bezpečnost účtu.'" "$PLIST"
+
           /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string bluetooth-central" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:1 string remote-notification" "$PLIST"
 
           echo "Info.plist patched successfully"
           plutil -p "$PLIST"
 
-      - name: Force iOS Bundle ID
-        script: |
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = CHDP.OBD.CHRYSL.VLINK;/g' ios/App/App.xcodeproj/project.pbxproj
-
       - name: Set up code signing
         script: |
+          set -e
           keychain initialize
           app-store-connect fetch-signing-files CHDP.OBD.CHRYSL.VLINK --type IOS_APP_STORE --create
           keychain add-certificates
@@ -167,6 +173,7 @@ workflows:
 
       - name: Increment iOS build number
         script: |
+          set -e
           cd ios/App
           agvtool new-version -all 34
 
@@ -187,3 +194,4 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+  
