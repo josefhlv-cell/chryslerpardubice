@@ -304,6 +304,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     isPollingRef.current = true;
     try {
       let next: ObdLiveData = { ...liveDataRef.current };
+      const availabilityUpdates: ObdLiveAvailability = {};
       for (const pid of LIVE_PIDS) {
         if (cancelledRef.current) break;
         try {
@@ -316,6 +317,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
           if (!key) continue;
           if (pid === "010B") value = Math.max(0, (value - 101.3) / 100);
           next = { ...next, [key]: value };
+          availabilityUpdates[key] = Date.now();
         } catch {
           // PID failures are normal on many adapters; keep the previous value.
         }
@@ -323,6 +325,11 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
 
       setLiveData(next);
       liveDataRef.current = next;
+      if (Object.keys(availabilityUpdates).length > 0) {
+        const merged = { ...liveAvailabilityRef.current, ...availabilityUpdates };
+        liveAvailabilityRef.current = merged;
+        setLiveAvailability(merged);
+      }
 
       // DPF čtení jen pokud má oprávnění a jen občas (každý 5. cyklus)
       if ((isAdminRef.current || permissionsRef.current.dpf) && forceUpsert) {
