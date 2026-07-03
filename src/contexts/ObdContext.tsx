@@ -590,6 +590,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(AUTO_KEY);
     setLiveData(EMPTY_LIVE);
     liveDataRef.current = EMPTY_LIVE;
+    setLiveAvailability({});
+    liveAvailabilityRef.current = {};
     setDtcs([]);
     dtcsRef.current = [];
     setDevice(null);
@@ -598,6 +600,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
   const resetLive = useCallback(() => {
     setLiveData(EMPTY_LIVE);
     liveDataRef.current = EMPTY_LIVE;
+    setLiveAvailability({});
+    liveAvailabilityRef.current = {};
   }, []);
 
   // Auto-connect (jen když má zákazník OBD povolené od admina, nebo je admin)
