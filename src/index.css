@@ -208,6 +208,17 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
+  /* Odsazení pro obsah nad spodní navigační lištou (60px + safe area).
+     Použij místo pb-20 na všech stránkách, které se zobrazují se spodní lištou. */
+  .pb-nav {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 16px) + 12px);
+  }
+  @media (min-width: 1024px) {
+    .pb-nav {
+      padding-bottom: 16px;
+    }
+  }
+
   /* ---- Glow effects ---- */
   .shimmer {
     background: linear-gradient(90deg, transparent, hsl(32, 70%, 50% / 0.04), transparent);
