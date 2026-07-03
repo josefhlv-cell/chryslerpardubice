@@ -182,7 +182,6 @@ workflows:
         script: |
           set -e
           keychain initialize
-          app-store-connect fetch-signing-files CHDP.OBD.CHRYSL.VLINK --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles
 
@@ -218,7 +217,7 @@ workflows:
         script: |
           set -e
           cd ios/App
-          agvtool new-version -all 34
+          agvtool new-version -all "${BUILD_NUMBER:-34}"
 
       - name: Build signed IPA
         script: |
