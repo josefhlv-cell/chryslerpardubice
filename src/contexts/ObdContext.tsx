@@ -10,6 +10,8 @@ import {
   useRef,
   useState,
   useCallback,
+  type MutableRefObject,
+  type ReactNode,
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { bleManager, BLEDeviceInfo, BLEConnectionState } from "@/lib/obd/ble-manager";
@@ -17,6 +19,11 @@ import { elm327 } from "@/lib/obd/elm327-engine";
 import { dtcEngine, type DTCCode } from "@/lib/obd/dtc-engine";
 import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
 import { readDpfSnapshot, type DpfSnapshot } from "@/lib/obd/dpf-engine";
+import {
+  CHRYSLER_CUSTOM_PIDS,
+  testChryslerCustomPid,
+  type ChryslerCustomPidDefinition,
+} from "@/lib/obd/chrysler-custom-pids";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
@@ -30,6 +37,8 @@ export type ObdLiveData = {
   voltage: number;
   boostPressure: number;
   oilTemp: number;
+  transmissionOilTemp: number;
+  oilPressure: number;
   fuelLevel: number;
   fuelRate: number;
   maf: number;
@@ -69,10 +78,11 @@ const EMPTY_LIVE: ObdLiveData = {
   voltage: 0,
   boostPressure: 0,
   oilTemp: 0,
+  transmissionOilTemp: 0,
+  oilPressure: 0,
   fuelLevel: 0,
   fuelRate: 0,
   maf: 0,
-
 };
 
 const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
@@ -89,7 +99,6 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "012F": "fuelLevel",
   "015E": "fuelRate",
   "0110": "maf",
-
 };
 
 const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
@@ -140,7 +149,7 @@ export type ObdContextValue = {
 
 const ObdContext = createContext<ObdContextValue | null>(null);
 
-export function ObdProvider({ children }: { children: React.ReactNode }) {
+export function ObdProvider({ children }: { children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [device, setDevice] = useState<BLEDeviceInfo | null>(null);
@@ -166,6 +175,17 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
   const isPollingRef = useRef(false);
   const isCheckingRemoteCommandsRef = useRef(false);
   const processingCommandIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Custom Chrysler/Mopar PID cache:
+   * null = ještě netestováno
+   * false = nepodporováno a dál netestovat při každém cyklu
+   * true + selected ref = funguje a čte se rovnou stejný PID
+   */
+  const transmissionOilTempSupportedRef = useRef<boolean | null>(null);
+  const oilPressureSupportedRef = useRef<boolean | null>(null);
+  const selectedTransmissionOilTempPidRef = useRef<ChryslerCustomPidDefinition | null>(null);
+  const selectedOilPressurePidRef = useRef<ChryslerCustomPidDefinition | null>(null);
 
   useEffect(() => { connectedRef.current = connected; }, [connected]);
   useEffect(() => { liveDataRef.current = liveData; }, [liveData]);
@@ -254,6 +274,11 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
         if (st === "disconnected" || st === "error") {
           elm327.reset();
           setDevice(null);
+
+          transmissionOilTempSupportedRef.current = null;
+          oilPressureSupportedRef.current = null;
+          selectedTransmissionOilTempPidRef.current = null;
+          selectedOilPressurePidRef.current = null;
         }
       }
       if (event.type === "debug") addLog(String(event.payload));
@@ -297,6 +322,89 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
       .eq("user_id", uid);
   }, []);
 
+  const readSelectedCustomPid = useCallback(async (
+    selectedRef: MutableRefObject<ChryslerCustomPidDefinition | null>,
+    supportedRef: MutableRefObject<boolean | null>,
+    key: "transmissionOilTemp" | "oilPressure",
+  ): Promise<number | null> => {
+    if (supportedRef.current === false) return null;
+
+    if (selectedRef.current) {
+      const result = await testChryslerCustomPid(selectedRef.current);
+      if (result.supported && result.value !== null) {
+        supportedRef.current = true;
+        return result.value;
+      }
+
+      supportedRef.current = false;
+      selectedRef.current = null;
+      return null;
+    }
+
+    const candidates = CHRYSLER_CUSTOM_PIDS.filter((pid) => pid.key === key);
+
+    for (const candidate of candidates) {
+      if (cancelledRef.current) break;
+
+      const result = await testChryslerCustomPid(candidate);
+
+      if (result.supported && result.value !== null) {
+        selectedRef.current = candidate;
+        supportedRef.current = true;
+        addLog(`[OBD CUSTOM PID] ${candidate.label}: ${result.value}${result.unit} (${candidate.header}/${candidate.command})`);
+        return result.value;
+      }
+    }
+
+    supportedRef.current = false;
+    addLog(`[OBD CUSTOM PID] ${key}: Nepodporováno`);
+    return null;
+  }, [addLog]);
+
+  const readChryslerCustomLiveValues = useCallback(async (): Promise<{
+    transmissionOilTemp: number | null;
+    oilPressure: number | null;
+    availability: ObdLiveAvailability;
+  }> => {
+    const availability: ObdLiveAvailability = {};
+    let transmissionOilTemp: number | null = null;
+    let oilPressure: number | null = null;
+
+    try {
+      transmissionOilTemp = await readSelectedCustomPid(
+        selectedTransmissionOilTempPidRef,
+        transmissionOilTempSupportedRef,
+        "transmissionOilTemp",
+      );
+
+      if (transmissionOilTemp !== null) {
+        availability.transmissionOilTemp = Date.now();
+      }
+    } catch (e) {
+      console.warn("[OBD CUSTOM PID] transmissionOilTemp failed", e);
+    }
+
+    try {
+      oilPressure = await readSelectedCustomPid(
+        selectedOilPressurePidRef,
+        oilPressureSupportedRef,
+        "oilPressure",
+      );
+
+      if (oilPressure !== null) {
+        availability.oilPressure = Date.now();
+      }
+    } catch (e) {
+      console.warn("[OBD CUSTOM PID] oilPressure failed", e);
+    }
+
+    return {
+      transmissionOilTemp,
+      oilPressure,
+      availability,
+    };
+  }, [readSelectedCustomPid]);
+
   const pollLiveDataOnce = useCallback(async (forceUpsert = false): Promise<ObdLiveData> => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (isPollingRef.current) {
@@ -311,7 +419,8 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     isPollingRef.current = true;
     try {
       let next: ObdLiveData = { ...liveDataRef.current };
-      const availabilityUpdates: ObdLiveAvailability = {};
+      let availabilityUpdates: ObdLiveAvailability = {};
+
       for (const pid of LIVE_PIDS) {
         if (cancelledRef.current) break;
         try {
@@ -328,6 +437,27 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
         } catch {
           // PID failures are normal on many adapters; keep the previous value.
         }
+      }
+
+      /**
+       * Chrysler/Mopar custom PIDy:
+       * - transmissionOilTemp: zkouší TCM kandidáty 7E1/7E2
+       * - oilPressure: zkouší ECM kandidáty 7E0
+       * Pokud žádný PID neodpoví validně, availability klíč se nenastaví,
+       * takže UI má zobrazit „Nepodporováno“ / „Nedostupné“ podle své logiky.
+       */
+      if (!cancelledRef.current) {
+        const custom = await readChryslerCustomLiveValues();
+
+        if (custom.transmissionOilTemp !== null) {
+          next = { ...next, transmissionOilTemp: custom.transmissionOilTemp };
+        }
+
+        if (custom.oilPressure !== null) {
+          next = { ...next, oilPressure: custom.oilPressure };
+        }
+
+        availabilityUpdates = { ...availabilityUpdates, ...custom.availability };
       }
 
       setLiveData(next);
@@ -355,7 +485,7 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     } finally {
       isPollingRef.current = false;
     }
-  }, [upsertSession]);
+  }, [readChryslerCustomLiveValues, upsertSession]);
 
   const readDtcs = useCallback(async (): Promise<ObdDtc[]> => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
@@ -593,6 +723,12 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.warn("[OBD] disconnect warning", e);
     }
+
+    transmissionOilTempSupportedRef.current = null;
+    oilPressureSupportedRef.current = null;
+    selectedTransmissionOilTempPidRef.current = null;
+    selectedOilPressurePidRef.current = null;
+
     localStorage.removeItem(AUTO_KEY);
     setLiveData(EMPTY_LIVE);
     liveDataRef.current = EMPTY_LIVE;
@@ -604,6 +740,11 @@ export function ObdProvider({ children }: { children: React.ReactNode }) {
   }, [closeSession]);
 
   const resetLive = useCallback(() => {
+    transmissionOilTempSupportedRef.current = null;
+    oilPressureSupportedRef.current = null;
+    selectedTransmissionOilTempPidRef.current = null;
+    selectedOilPressurePidRef.current = null;
+
     setLiveData(EMPTY_LIVE);
     liveDataRef.current = EMPTY_LIVE;
     setLiveAvailability({});
