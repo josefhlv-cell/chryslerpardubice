@@ -260,9 +260,15 @@ workflows:
         script: |
           set -e
           cd ios/App
-          IOS_BUILD_NUMBER=$(( ${BUILD_NUMBER:-1} + 100 ))
-          echo "Setting iOS build number to $IOS_BUILD_NUMBER"
+
+          IOS_BUILD_NUMBER="$(date +%Y%m%d%H%M)"
+          echo "Setting unique iOS build number to $IOS_BUILD_NUMBER"
+
           agvtool new-version -all "$IOS_BUILD_NUMBER"
+
+          echo "Current Info.plist versions:"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" App/Info.plist || true
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" App/Info.plist || true
 
       - name: Build signed IPA
         script: |
