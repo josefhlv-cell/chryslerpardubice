@@ -386,26 +386,14 @@ const AdminChdpDiag = () => {
                 ) : !session?.dtcs?.length ? (
                   <p className="text-xs text-muted-foreground">Žádné aktivní chybové kódy.</p>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {session.dtcs.map((d: any, i: number) => {
                       const code = typeof d === "string" ? d : d.code;
-                      const info = resolveDTCInfo(code);
-                      const sev =
-                        info.severity === "critical" || info.severity === "high"
-                          ? "text-destructive border-destructive/40"
-                          : info.severity === "medium"
-                          ? "text-amber-500 border-amber-500/40"
-                          : "text-muted-foreground";
-                      return (
-                        <div key={i} className={`rounded border p-2 text-[11px] flex items-start gap-2 ${sev}`}>
-                          <Badge variant="outline" className="font-mono">{code}</Badge>
-                          <span className="flex-1">{info.description}</span>
-                          <span className="uppercase text-[9px] opacity-70">{info.severity}</span>
-                        </div>
-                      );
+                      return <DtcItem key={`${code}-${i}`} code={code} compact />;
                     })}
                   </div>
                 )}
+
               </CardContent>
             </Card>
 
