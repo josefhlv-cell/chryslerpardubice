@@ -71,6 +71,8 @@ const EMPTY_LIVE: ObdLiveData = {
   oilTemp: 0,
   fuelLevel: 0,
   fuelRate: 0,
+  maf: 0,
+
 };
 
 const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
@@ -86,6 +88,8 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "015C": "oilTemp",
   "012F": "fuelLevel",
   "015E": "fuelRate",
+  "0110": "maf",
+
 };
 
 const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
