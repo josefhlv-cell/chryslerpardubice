@@ -78,6 +78,23 @@ function invalidByte(b: number): boolean {
 }
 
 export const CHRYSLER_CUSTOM_PIDS: ChryslerCustomPidDefinition[] = [
+  // A0) Chrysler Mode 22 PID 1302 – teplota ATF (byte 0 = raw, °C = raw - 40)
+  {
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (Mode 22 – 1302)",
+    header: "7E1",
+    command: "221302",
+    responsePrefix: "621302",
+    unit: "°C",
+    min: -20,
+    max: 180,
+    decoder: (bytes) => {
+      if (bytes.length < 1) return null;
+      const raw = bytes[0];
+      if (invalidByte(raw)) return null;
+      return round1(raw - 40);
+    },
+  },
   // A) Chrysler TCM 21 30 data record – byte 12 (index 9 v payload) obsahuje ATF temp
   {
     key: "transmissionOilTemp",
