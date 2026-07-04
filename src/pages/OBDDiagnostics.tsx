@@ -393,17 +393,20 @@ const OBDDiagnostics = () => {
                     available={liveAvailability.rpm !== undefined}
                     unavailableLabel="Nedostupné"
                   />
-                  {/* 3. Výkon — bez reálného torque PID nelze spočítat, ukážeme jako Nepodporováno */}
+                  {/* 3. Výkon — odhad z MAF (g/s); bez MAF PID = Nedostupné.
+                      Vzorec: P[kW] ≈ MAF * 0.897 (14.7 AFR, 44 MJ/kg, ~30 % účinnost).
+                      Používá se pouze reálná hodnota MAF z ECU. */}
                   <GaugeCircle
-                    value={0}
+                    value={liveAvailability.maf !== undefined ? liveData.maf * 0.897 : 0}
                     max={300}
-                    label="Výkon"
+                    label="Výkon (odhad)"
                     unit="kW"
                     color="hsl(280, 70%, 55%)"
                     icon={Activity}
-                    available={false}
-                    unavailableLabel="Nepodporováno"
+                    available={liveAvailability.maf !== undefined && liveData.maf > 0}
+                    unavailableLabel="Nedostupné"
                   />
+
                   {/* 4. Teplota vody */}
                   <GaugeCircle
                     value={liveData.coolantTemp}
