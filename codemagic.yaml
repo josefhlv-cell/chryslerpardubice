@@ -146,10 +146,8 @@ workflows:
               }
           '''
 
-          marker = "\\n}\\n"
-
           if "capacitorDidRegisterForRemoteNotifications" not in text:
-              idx = text.rfind(marker)
+              idx = text.rfind("}")
               if idx == -1:
                   raise SystemExit("Cannot find final class closing brace in AppDelegate.swift")
               text = text[:idx] + insert + text[idx:]
