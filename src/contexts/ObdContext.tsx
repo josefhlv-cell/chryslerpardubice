@@ -126,6 +126,14 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
   dpf: "dpf",
   dpf_status: "dpf",
   dpf_regen: "dpf",
+  read_vin: "live_data",
+  vin: "live_data",
+  vehicle_info: "live_data",
+  dtc_pending: "dtc_read",
+  pending_dtc: "dtc_read",
+  dtc_permanent: "dtc_read",
+  permanent_dtc: "dtc_read",
+  freeze_frame: "dtc_read",
 };
 
 const AUTO_KEY = "obd_auto_connect";
