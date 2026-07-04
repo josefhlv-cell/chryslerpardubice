@@ -366,6 +366,8 @@ const OBDDiagnostics = () => {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
+              <VehicleInfoCard info={vehicleInfo} />
+
               <div className="luxury-card p-4">
                 <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-primary" />
