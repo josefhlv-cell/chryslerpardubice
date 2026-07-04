@@ -691,7 +691,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     } finally {
       processingCommandIdsRef.current.delete(command.id);
     }
-  }, [addLog, clearDtcs, pollLiveDataOnce, readDtcs, sendCommand, updateRemoteCommand]);
+  }, [addLog, clearDtcs, pollLiveDataOnce, readDtcs, sendCommand, updateRemoteCommand, upsertSession, reloadVehicleInfo]);
 
   const checkRemoteCommands = useCallback(async () => {
     const uid = userIdRef.current;
