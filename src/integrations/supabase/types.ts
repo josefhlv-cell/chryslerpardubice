@@ -2920,6 +2920,63 @@ export type Database = {
         }
         Relationships: []
       }
+      obd_pid_cache: {
+        Row: {
+          command: string | null
+          confidence: string | null
+          created_at: string
+          decoder_id: string | null
+          header: string | null
+          id: string
+          key: string
+          last_raw_response: string | null
+          last_valid_value: number | null
+          response_prefix: string | null
+          source: string | null
+          unit: string | null
+          updated_at: string
+          user_id: string
+          vehicle_profile: string | null
+          vin: string | null
+        }
+        Insert: {
+          command?: string | null
+          confidence?: string | null
+          created_at?: string
+          decoder_id?: string | null
+          header?: string | null
+          id?: string
+          key: string
+          last_raw_response?: string | null
+          last_valid_value?: number | null
+          response_prefix?: string | null
+          source?: string | null
+          unit?: string | null
+          updated_at?: string
+          user_id: string
+          vehicle_profile?: string | null
+          vin?: string | null
+        }
+        Update: {
+          command?: string | null
+          confidence?: string | null
+          created_at?: string
+          decoder_id?: string | null
+          header?: string | null
+          id?: string
+          key?: string
+          last_raw_response?: string | null
+          last_valid_value?: number | null
+          response_prefix?: string | null
+          source?: string | null
+          unit?: string | null
+          updated_at?: string
+          user_id?: string
+          vehicle_profile?: string | null
+          vin?: string | null
+        }
+        Relationships: []
+      }
       obd_remote_commands: {
         Row: {
           command_payload: Json

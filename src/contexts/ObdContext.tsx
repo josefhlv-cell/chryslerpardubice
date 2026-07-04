@@ -17,13 +17,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { bleManager, BLEDeviceInfo, BLEConnectionState } from "@/lib/obd/ble-manager";
 import { elm327 } from "@/lib/obd/elm327-engine";
 import { dtcEngine, type DTCCode } from "@/lib/obd/dtc-engine";
-import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
+import { parsePIDResponse } from "@/lib/obd/obd-pids";
+import { FAST_PIDS, SLOW_PIDS } from "@/lib/obd/pid-speed-groups";
 import { readDpfSnapshot, type DpfSnapshot } from "@/lib/obd/dpf-engine";
 import {
   CHRYSLER_CUSTOM_PIDS,
   testChryslerCustomPid,
   type ChryslerCustomPidDefinition,
 } from "@/lib/obd/chrysler-custom-pids";
+import { readVinFromEcu, type DecodedVin } from "@/lib/obd/vin-decoder";
+import { resolveProfileFromBrand, type VehiclePidProfile } from "@/lib/obd/pid-profile-registry";
+import { isPidOnCooldown, markPidFailed, markPidSuccess, resetPidCache } from "@/lib/obd/unsupported-pid-cache";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
@@ -127,6 +131,12 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
 const AUTO_KEY = "obd_auto_connect";
 const DEVICE_KEY = "last_obd_device_id";
 
+export type ObdVehicleInfo = {
+  vin: DecodedVin | null;
+  profile: VehiclePidProfile;
+  loadedAt: number | null;
+};
+
 export type ObdContextValue = {
   connected: boolean;
   connecting: boolean;
@@ -136,6 +146,7 @@ export type ObdContextValue = {
   dtcs: ObdDtc[];
   logs: string[];
   connectionState: BLEConnectionState;
+  vehicleInfo: ObdVehicleInfo;
   connect: () => Promise<void>;
   connectToDevice: (deviceId: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
@@ -145,6 +156,7 @@ export type ObdContextValue = {
   refreshLiveData: () => Promise<ObdLiveData>;
   resetLive: () => void;
   sendCommand: (command: string) => Promise<string>;
+  reloadVehicleInfo: () => Promise<ObdVehicleInfo>;
 };
 
 const ObdContext = createContext<ObdContextValue | null>(null);
@@ -159,6 +171,18 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<string[]>([]);
   const [connectionState, setConnectionState] = useState<BLEConnectionState>("disconnected");
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [vehicleInfo, setVehicleInfo] = useState<ObdVehicleInfo>({
+    vin: null,
+    profile: resolveProfileFromBrand(),
+    loadedAt: null,
+  });
+  const vehicleInfoRef = useRef<ObdVehicleInfo>({
+    vin: null,
+    profile: resolveProfileFromBrand(),
+    loadedAt: null,
+  });
+  const customPidLoopIntervalRef = useRef<number | null>(null);
+  const slowLoopIntervalRef = useRef<number | null>(null);
 
   const connectedRef = useRef(false);
   const liveDataRef = useRef<ObdLiveData>(EMPTY_LIVE);
@@ -294,12 +318,29 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     const uid = userIdRef.current;
     if (!uid) return;
 
+    const vinfo = vehicleInfoRef.current;
+    const enrichedPayload = {
+      ...(payload as any),
+      vehicleProfile: vinfo.vin
+        ? {
+            vin: vinfo.vin.vin,
+            brand: vinfo.vin.brand,
+            year: vinfo.vin.year,
+            protocolGroup: vinfo.vin.protocolGroup,
+            profileId: vinfo.profile.id,
+            profileLabel: vinfo.profile.label,
+            confidence: vinfo.vin.confidence,
+            source: vinfo.vin.source,
+          }
+        : { profileId: vinfo.profile.id, profileLabel: vinfo.profile.label },
+    };
+
     const session = {
       user_id: uid,
       is_active: true,
       last_seen: new Date().toISOString(),
       ended_at: null,
-      payload: payload as any,
+      payload: enrichedPayload as any,
       dtcs: dtcList as any,
     };
 
@@ -405,6 +446,47 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     };
   }, [readSelectedCustomPid]);
 
+  /**
+   * Přečte jednu skupinu PIDů (fast/slow) postupně, ale s okamžitou UI aktualizací
+   * po každém přečteném PIDu, aby UI nečekalo na dokončení celé skupiny.
+   * Nepodporované PIDy jsou v cooldown cache a přeskakují se.
+   */
+  const pollPidGroup = useCallback(async (
+    pids: readonly string[],
+    priority: "high" | "normal" | "low",
+  ) => {
+    for (const pid of pids) {
+      if (cancelledRef.current) break;
+      if (isPidOnCooldown(pid)) continue;
+      try {
+        const raw = await elm327.sendCommand(pid, priority);
+        if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
+          markPidFailed(pid);
+          continue;
+        }
+        let value = parsePIDResponse(pid, raw);
+        if (value === null || Number.isNaN(value)) {
+          markPidFailed(pid);
+          continue;
+        }
+        const key = PID_TO_KEY[pid];
+        if (!key) continue;
+        if (pid === "010B") value = Math.max(0, (value - 101.3) / 100);
+
+        markPidSuccess(pid);
+        const nextData = { ...liveDataRef.current, [key]: value };
+        liveDataRef.current = nextData;
+        setLiveData(nextData);
+
+        const nextAvail = { ...liveAvailabilityRef.current, [key]: Date.now() };
+        liveAvailabilityRef.current = nextAvail;
+        setLiveAvailability(nextAvail);
+      } catch {
+        markPidFailed(pid);
+      }
+    }
+  }, []);
+
   const pollLiveDataOnce = useCallback(async (forceUpsert = false): Promise<ObdLiveData> => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (isPollingRef.current) {
@@ -418,70 +500,18 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
     isPollingRef.current = true;
     try {
-      let next: ObdLiveData = { ...liveDataRef.current };
-      let availabilityUpdates: ObdLiveAvailability = {};
+      // FAST skupina – přednostně, high priority
+      await pollPidGroup(FAST_PIDS, "high");
+      if (cancelledRef.current) return liveDataRef.current;
 
-      for (const pid of LIVE_PIDS) {
-        if (cancelledRef.current) break;
-        try {
-          const raw = await elm327.sendCommand(pid, "low");
-          if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) continue;
-          let value = parsePIDResponse(pid, raw);
-          if (value === null || Number.isNaN(value)) continue;
-
-          const key = PID_TO_KEY[pid];
-          if (!key) continue;
-          if (pid === "010B") value = Math.max(0, (value - 101.3) / 100);
-          next = { ...next, [key]: value };
-          availabilityUpdates[key] = Date.now();
-        } catch {
-          // PID failures are normal on many adapters; keep the previous value.
-        }
+      // SLOW skupina jen při forceUpsert (heartbeat/ruční refresh) – jinak ji řeší samostatný slow loop
+      if (forceUpsert) {
+        await pollPidGroup(SLOW_PIDS, "low");
       }
 
-      /**
-       * Chrysler/Mopar custom PIDy:
-       * - transmissionOilTemp: zkouší TCM kandidáty 7E1/7E2
-       * - oilPressure: zkouší ECM kandidáty 7E0
-       * Pokud žádný PID neodpoví validně, availability klíč se nenastaví,
-       * takže UI má zobrazit „Nepodporováno“ / „Nedostupné“ podle své logiky.
-       */
-      if (!cancelledRef.current) {
-        const custom = await readChryslerCustomLiveValues();
-
-        if (custom.transmissionOilTemp !== null) {
-          next = { ...next, transmissionOilTemp: custom.transmissionOilTemp };
-        }
-
-        if (custom.oilPressure !== null) {
-          next = { ...next, oilPressure: custom.oilPressure };
-        }
-
-        availabilityUpdates = { ...availabilityUpdates, ...custom.availability };
-      }
-
-      setLiveData(next);
-      liveDataRef.current = next;
-      if (Object.keys(availabilityUpdates).length > 0) {
-        const merged = { ...liveAvailabilityRef.current, ...availabilityUpdates };
-        liveAvailabilityRef.current = merged;
-        setLiveAvailability(merged);
-      }
-
-      // DPF čtení jen pokud má oprávnění a jen občas (každý 5. cyklus)
-      if ((isAdminRef.current || permissionsRef.current.dpf) && forceUpsert) {
-        try {
-          const dpf = await readDpfSnapshot();
-          next = { ...next, dpf };
-          setLiveData(next);
-          liveDataRef.current = next;
-        } catch (e) {
-          console.warn("[OBD] DPF read failed", e);
-        }
-      }
-
-      await upsertSession(next, dtcsRef.current, forceUpsert);
-      return next;
+      // DPF/custom NIKDY v tomto rychlém cyklu, aby to nezdržovalo FAST PIDy.
+      await upsertSession(liveDataRef.current, dtcsRef.current, forceUpsert);
+      return liveDataRef.current;
     } finally {
       isPollingRef.current = false;
     }
@@ -639,19 +669,116 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     }
   }, [executeRemoteCommand]);
 
+  const reloadVehicleInfo = useCallback(async (): Promise<ObdVehicleInfo> => {
+    if (!connectedRef.current) return vehicleInfoRef.current;
+    const vin = await readVinFromEcu();
+    const profile = resolveProfileFromBrand(vin?.brand, vin?.protocolGroup);
+    const next: ObdVehicleInfo = { vin, profile, loadedAt: Date.now() };
+    vehicleInfoRef.current = next;
+    setVehicleInfo(next);
+    console.log("[VEHICLE RESOLVER] profile=", profile.id, "brand=", vin?.brand);
+
+    // Načíst případný funkční PID z cache
+    const uid = userIdRef.current;
+    if (uid && vin?.vin) {
+      try {
+        const { data } = await supabase
+          .from("obd_pid_cache" as any)
+          .select("*")
+          .eq("user_id", uid)
+          .eq("vin", vin.vin)
+          .eq("key", "transmissionOilTemp")
+          .maybeSingle();
+        if (data) {
+          const candidate = CHRYSLER_CUSTOM_PIDS.find(
+            (p) => p.header === (data as any).header && p.command === (data as any).command,
+          );
+          if (candidate) {
+            selectedTransmissionOilTempPidRef.current = candidate;
+            transmissionOilTempSupportedRef.current = true;
+            console.log("[PID CACHE] restored", candidate.label);
+          }
+        }
+      } catch (e) {
+        console.warn("[PID CACHE] load failed", e);
+      }
+    }
+
+    return next;
+  }, []);
+
   useEffect(() => {
     if (!connected) {
       cancelledRef.current = true;
       if (pollIntervalRef.current) { window.clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
       if (heartbeatIntervalRef.current) { window.clearInterval(heartbeatIntervalRef.current); heartbeatIntervalRef.current = null; }
+      if (slowLoopIntervalRef.current) { window.clearInterval(slowLoopIntervalRef.current); slowLoopIntervalRef.current = null; }
+      if (customPidLoopIntervalRef.current) { window.clearInterval(customPidLoopIntervalRef.current); customPidLoopIntervalRef.current = null; }
       return;
     }
 
     cancelledRef.current = false;
-    pollLiveDataOnce(true).catch(() => undefined);
+
+    // Načíst VIN / profil hned po připojení (jen jednou)
+    reloadVehicleInfo().catch(() => undefined);
+
+    // FAST loop – RPM/rychlost/plyn/MAP/MAF/load: často
+    pollLiveDataOnce(false).catch(() => undefined);
     pollIntervalRef.current = window.setInterval(() => {
-      pollLiveDataOnce(false).catch(() => undefined);
-    }, 1500);
+      if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
+    }, 600);
+
+    // SLOW loop – teploty/napětí/palivo: pomalu
+    slowLoopIntervalRef.current = window.setInterval(() => {
+      if (isPollingRef.current) return;
+      pollPidGroup(SLOW_PIDS, "low").catch(() => undefined);
+    }, 4000);
+
+    // CUSTOM loop – Chrysler transmission oil temp: jen když profil povolí
+    customPidLoopIntervalRef.current = window.setInterval(() => {
+      const prof = vehicleInfoRef.current.profile;
+      if (!prof.allowChryslerCustomPids) return;
+      if (isPollingRef.current) return;
+      readChryslerCustomLiveValues().then((custom) => {
+        const updates: Partial<ObdLiveData> = {};
+        const avail: ObdLiveAvailability = { ...liveAvailabilityRef.current };
+        if (custom.transmissionOilTemp !== null) {
+          updates.transmissionOilTemp = custom.transmissionOilTemp;
+          avail.transmissionOilTemp = Date.now();
+        }
+        if (custom.oilPressure !== null) {
+          updates.oilPressure = custom.oilPressure;
+          avail.oilPressure = Date.now();
+        }
+        if (Object.keys(updates).length) {
+          const merged = { ...liveDataRef.current, ...updates };
+          liveDataRef.current = merged;
+          setLiveData(merged);
+          liveAvailabilityRef.current = avail;
+          setLiveAvailability(avail);
+
+          // Uložit funkční PID do cache (jen při první úspěšné hodnotě)
+          const vin = vehicleInfoRef.current.vin?.vin;
+          const uid = userIdRef.current;
+          const selected = selectedTransmissionOilTempPidRef.current;
+          if (vin && uid && selected && custom.transmissionOilTemp !== null) {
+            supabase.from("obd_pid_cache" as any).upsert({
+              user_id: uid,
+              vin,
+              vehicle_profile: vehicleInfoRef.current.profile.id,
+              key: "transmissionOilTemp",
+              header: selected.header,
+              command: selected.command,
+              response_prefix: selected.responsePrefix,
+              unit: selected.unit,
+              last_valid_value: custom.transmissionOilTemp,
+              confidence: "high",
+              source: "obd_discovery",
+            } as any, { onConflict: "user_id,vin,key" as any }).then(() => undefined);
+          }
+        }
+      }).catch(() => undefined);
+    }, 10000);
 
     heartbeatIntervalRef.current = window.setInterval(() => {
       upsertSession(liveDataRef.current, dtcsRef.current, true);
@@ -661,8 +788,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       cancelledRef.current = true;
       if (pollIntervalRef.current) { window.clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
       if (heartbeatIntervalRef.current) { window.clearInterval(heartbeatIntervalRef.current); heartbeatIntervalRef.current = null; }
+      if (slowLoopIntervalRef.current) { window.clearInterval(slowLoopIntervalRef.current); slowLoopIntervalRef.current = null; }
+      if (customPidLoopIntervalRef.current) { window.clearInterval(customPidLoopIntervalRef.current); customPidLoopIntervalRef.current = null; }
     };
-  }, [connected, pollLiveDataOnce, upsertSession]);
+  }, [connected, pollLiveDataOnce, upsertSession, pollPidGroup, readChryslerCustomLiveValues, reloadVehicleInfo]);
 
   useEffect(() => {
     if (!authUserId) return;
@@ -737,6 +866,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     setDtcs([]);
     dtcsRef.current = [];
     setDevice(null);
+    resetPidCache();
+    const emptyInfo: ObdVehicleInfo = { vin: null, profile: resolveProfileFromBrand(), loadedAt: null };
+    vehicleInfoRef.current = emptyInfo;
+    setVehicleInfo(emptyInfo);
   }, [closeSession]);
 
   const resetLive = useCallback(() => {
@@ -814,6 +947,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     dtcs,
     logs,
     connectionState,
+    vehicleInfo,
     connect,
     connectToDevice,
     disconnect,
@@ -823,6 +957,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     refreshLiveData: () => pollLiveDataOnce(true),
     resetLive,
     sendCommand,
+    reloadVehicleInfo,
   };
 
   return <ObdContext.Provider value={value}>{children}</ObdContext.Provider>;

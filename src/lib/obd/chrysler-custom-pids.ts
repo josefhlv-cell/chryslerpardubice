@@ -1,14 +1,20 @@
-import { elm327 } from '@/lib/obd/elm327-engine';
+/**
+ * Chrysler / Mopar 62TE custom PID kandidáti.
+ * VŽDY validujeme reálnou odpovědí – nikdy nevracet fake hodnotu.
+ *
+ * Odmítnout:
+ * - odpověď 7F… (negative response)
+ * - NO DATA / UNABLE / ERROR / STOPPED / SEARCHING / ?
+ * - příliš krátká odpověď
+ * - byte 0x00 nebo 0xFF (invalidní)
+ * - dekódovaná hodnota mimo reálný rozsah -20…180 °C pro teplotu převodovky
+ * - odpověď 613000 nesmí být brána jako validní teplota
+ */
+import { elm327 } from "@/lib/obd/elm327-engine";
 
-export type CustomPidStatus =
-  | 'supported'
-  | 'unsupported'
-  | 'invalid'
-  | 'error';
+export type CustomPidStatus = "supported" | "unsupported" | "invalid" | "error";
 
-export type ChryslerCustomPidKey =
-  | 'transmissionOilTemp'
-  | 'oilPressure';
+export type ChryslerCustomPidKey = "transmissionOilTemp" | "oilPressure";
 
 export type ChryslerCustomPidResult = {
   key: ChryslerCustomPidKey;
@@ -36,148 +42,153 @@ export type ChryslerCustomPidDefinition = {
 };
 
 function cleanHex(raw: string): string {
-  return raw.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+  return raw.replace(/[^0-9A-Fa-f]/g, "").toUpperCase();
+}
+
+function isBadResponse(raw: string): boolean {
+  if (!raw) return true;
+  if (/NO\s*DATA|UNABLE|ERROR|STOPPED|SEARCHING|\?/i.test(raw)) return true;
+  const clean = cleanHex(raw);
+  // Negative response 7F <service> <NRC>
+  if (/(^|[^0-9A-F])7F[0-9A-F]{4}/.test(clean)) return true;
+  return false;
 }
 
 function extractBytes(raw: string, responsePrefix: string): number[] | null {
   const clean = cleanHex(raw);
   const prefix = responsePrefix.toUpperCase();
   const index = clean.indexOf(prefix);
-
   if (index < 0) return null;
-
   const payload = clean.slice(index + prefix.length);
   const bytes: number[] = [];
-
   for (let i = 0; i + 1 < payload.length; i += 2) {
-    const byte = parseInt(payload.slice(i, i + 2), 16);
-    if (Number.isNaN(byte)) return null;
-    bytes.push(byte);
+    const b = parseInt(payload.slice(i, i + 2), 16);
+    if (Number.isNaN(b)) return null;
+    bytes.push(b);
   }
-
   return bytes;
 }
 
-function isBadResponse(raw: string): boolean {
-  return /NO\s*DATA|UNABLE|ERROR|STOPPED|SEARCHING|\?/i.test(raw || '');
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
 }
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
+function invalidByte(b: number): boolean {
+  return b === 0x00 || b === 0xff;
 }
 
 export const CHRYSLER_CUSTOM_PIDS: ChryslerCustomPidDefinition[] = [
+  // A) Chrysler TCM 21 30 data record – byte 12 (index 9 v payload) obsahuje ATF temp
   {
-    key: 'transmissionOilTemp',
-    label: 'Teplota oleje pÅevodovky',
-    header: '7E1',
-    command: '221940',
-    responsePrefix: '621940',
-    unit: 'Â°C',
-    min: -40,
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (62TE / 21 30)",
+    header: "7E1",
+    command: "2130",
+    responsePrefix: "6130",
+    unit: "°C",
+    min: -20,
+    max: 180,
+    decoder: (bytes) => {
+      // Krátká odpověď typu 613000 = neplatné (viz specifikace uživatele)
+      if (bytes.length < 10) return null;
+      const raw = bytes[9];
+      if (invalidByte(raw)) return null;
+      return round1(raw - 40);
+    },
+  },
+  // B) ScanGauge / XGauge 22 91 10 – bytes[0..1], F = raw / 64, C = (F-32)*5/9
+  {
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (XGauge 22 91 10)",
+    header: "7E1",
+    command: "229110",
+    responsePrefix: "629110",
+    unit: "°C",
+    min: -20,
+    max: 180,
+    decoder: (bytes) => {
+      if (bytes.length < 2) return null;
+      const raw = bytes[0] * 256 + bytes[1];
+      if (raw === 0x0000 || raw === 0xffff) return null;
+      const f = raw / 64;
+      return round1(((f - 32) * 5) / 9);
+    },
+  },
+  // C) Totéž přes PCM header
+  {
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (PCM 22 91 10)",
+    header: "7E0",
+    command: "229110",
+    responsePrefix: "629110",
+    unit: "°C",
+    min: -20,
+    max: 180,
+    decoder: (bytes) => {
+      if (bytes.length < 2) return null;
+      const raw = bytes[0] * 256 + bytes[1];
+      if (raw === 0x0000 || raw === 0xffff) return null;
+      const f = raw / 64;
+      return round1(((f - 32) * 5) / 9);
+    },
+  },
+  // D–I) Mode 22 kandidáti (méně pravděpodobní, ale vyzkoušené)
+  {
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (22 19 40)",
+    header: "7E1",
+    command: "221940",
+    responsePrefix: "621940",
+    unit: "°C",
+    min: -20,
     max: 180,
     decoder: (bytes) => {
       if (bytes.length >= 2) {
         const raw = bytes[0] * 256 + bytes[1];
+        if (raw === 0x0000 || raw === 0xffff) return null;
         return round1(raw / 10 - 40);
       }
-
       if (bytes.length >= 1) {
+        if (invalidByte(bytes[0])) return null;
         return round1(bytes[0] - 40);
       }
-
       return null;
     },
   },
   {
-    key: 'transmissionOilTemp',
-    label: 'Teplota oleje pÅevodovky',
-    header: '7E1',
-    command: '2130',
-    responsePrefix: '6130',
-    unit: 'Â°C',
-    min: -40,
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (22 F4 0C)",
+    header: "7E1",
+    command: "22F40C",
+    responsePrefix: "62F40C",
+    unit: "°C",
+    min: -20,
     max: 180,
     decoder: (bytes) => {
-      if (bytes.length < 1) return null;
+      if (bytes.length < 1 || invalidByte(bytes[0])) return null;
       return round1(bytes[0] - 40);
     },
   },
+  // Tlak oleje – experimentální; validace ponechává na rozsahu 0–1000 kPa
   {
-    key: 'transmissionOilTemp',
-    label: 'Teplota oleje pÅevodovky',
-    header: '7E2',
-    command: '221940',
-    responsePrefix: '621940',
-    unit: 'Â°C',
-    min: -40,
-    max: 180,
+    key: "oilPressure",
+    label: "Tlak oleje (22 11 5C)",
+    header: "7E0",
+    command: "22115C",
+    responsePrefix: "62115C",
+    unit: "kPa",
+    min: 10,
+    max: 1000,
     decoder: (bytes) => {
       if (bytes.length >= 2) {
         const raw = bytes[0] * 256 + bytes[1];
-        return round1(raw / 10 - 40);
+        if (raw === 0x0000 || raw === 0xffff) return null;
+        return round1(raw);
       }
-
       if (bytes.length >= 1) {
-        return round1(bytes[0] - 40);
-      }
-
-      return null;
-    },
-  },
-  {
-    key: 'transmissionOilTemp',
-    label: 'Teplota oleje pÅevodovky',
-    header: '7E1',
-    command: '22F40C',
-    responsePrefix: '62F40C',
-    unit: 'Â°C',
-    min: -40,
-    max: 180,
-    decoder: (bytes) => {
-      if (bytes.length < 1) return null;
-      return round1(bytes[0] - 40);
-    },
-  },
-  {
-    key: 'oilPressure',
-    label: 'Tlak oleje',
-    header: '7E0',
-    command: '22115C',
-    responsePrefix: '62115C',
-    unit: 'kPa',
-    min: 0,
-    max: 1000,
-    decoder: (bytes) => {
-      if (bytes.length >= 2) {
-        return round1(bytes[0] * 256 + bytes[1]);
-      }
-
-      if (bytes.length >= 1) {
+        if (invalidByte(bytes[0])) return null;
         return round1(bytes[0]);
       }
-
-      return null;
-    },
-  },
-  {
-    key: 'oilPressure',
-    label: 'Tlak oleje',
-    header: '7E0',
-    command: '22115D',
-    responsePrefix: '62115D',
-    unit: 'kPa',
-    min: 0,
-    max: 1000,
-    decoder: (bytes) => {
-      if (bytes.length >= 2) {
-        return round1(bytes[0] * 256 + bytes[1]);
-      }
-
-      if (bytes.length >= 1) {
-        return round1(bytes[0]);
-      }
-
       return null;
     },
   },
@@ -188,78 +199,77 @@ export async function testChryslerCustomPid(
 ): Promise<ChryslerCustomPidResult> {
   try {
     console.log(
-      `[OBD CUSTOM PID] testing ${definition.key} header=${definition.header} command=${definition.command}`,
+      `[PID DISCOVERY] testing key=${definition.key} header=${definition.header} command=${definition.command}`,
     );
 
-    await elm327.sendCommand(`ATSH${definition.header}`, 'high');
+    await elm327.sendCommand(`ATSH${definition.header}`, "low");
+    const raw = await elm327.sendCommand(definition.command, "low");
 
-    const raw = await elm327.sendCommand(definition.command, 'high');
+    console.log(`[PID DISCOVERY] raw=${raw}`);
 
-    console.log(`[OBD CUSTOM PID] raw response=${raw}`);
-
-    if (!raw || isBadResponse(raw)) {
+    if (isBadResponse(raw)) {
+      console.log(`[PID DISCOVERY] rejected reason=bad_response`);
       return {
         key: definition.key,
         label: definition.label,
         supported: false,
-        status: 'unsupported',
+        status: "unsupported",
         value: null,
         unit: definition.unit,
         raw,
         header: definition.header,
         command: definition.command,
-        reason: 'PID neodpovÄdÄl nebo nenÃ­ podporovanÃ½.',
+        reason: "Odpověď 7F/NO DATA/ERROR – PID není podporovaný.",
       };
     }
 
     const bytes = extractBytes(raw, definition.responsePrefix);
-
     if (!bytes) {
       return {
         key: definition.key,
         label: definition.label,
         supported: false,
-        status: 'invalid',
+        status: "invalid",
         value: null,
         unit: definition.unit,
         raw,
         header: definition.header,
         command: definition.command,
-        reason: 'OdpovÄÄ nemÃ¡ oÄekÃ¡vanÃ½ prefix.',
+        reason: "Odpověď nemá očekávaný prefix.",
       };
     }
 
     const value = definition.decoder(bytes);
-
     if (
       value === null ||
       Number.isNaN(value) ||
       value < definition.min ||
       value > definition.max
     ) {
+      console.log(`[PID DISCOVERY] rejected reason=out_of_range value=${value}`);
       return {
         key: definition.key,
         label: definition.label,
         supported: false,
-        status: 'invalid',
+        status: "invalid",
         value: null,
         unit: definition.unit,
         raw,
         header: definition.header,
         command: definition.command,
-        reason: 'Hodnota je mimo reÃ¡lnÃ½ rozsah.',
+        reason: "Hodnota mimo reálný rozsah nebo krátká odpověď.",
       };
     }
 
     console.log(
-      `[OBD CUSTOM PID] selected=${definition.key} value=${value}${definition.unit}`,
+      `[PID DISCOVERY] selected key=${definition.key} header=${definition.header} command=${definition.command} value=${value}${definition.unit}`,
     );
 
     return {
       key: definition.key,
       label: definition.label,
       supported: true,
-      status: 'supported',
+      status: "supported",
       value,
       unit: definition.unit,
       raw,
@@ -271,19 +281,19 @@ export async function testChryslerCustomPid(
       key: definition.key,
       label: definition.label,
       supported: false,
-      status: 'error',
+      status: "error",
       value: null,
       unit: definition.unit,
-      raw: '',
+      raw: "",
       header: definition.header,
       command: definition.command,
-      reason: error instanceof Error ? error.message : 'NeznÃ¡mÃ¡ chyba.',
+      reason: error instanceof Error ? error.message : "Neznámá chyba.",
     };
   } finally {
     try {
-      await elm327.sendCommand('ATSH7DF', 'low');
+      await elm327.sendCommand("ATSH7DF", "low");
     } catch {
-      // Header reset error ignorujeme.
+      /* header reset ignore */
     }
   }
 }
