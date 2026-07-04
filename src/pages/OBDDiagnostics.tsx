@@ -25,6 +25,7 @@ import { useObdPermissions } from "@/hooks/obd/use-obd-permissions";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import { DpfCard } from "@/components/obd/DpfCard";
 import { DtcItem } from "@/components/obd/DtcItem";
+import { VehicleInfoCard } from "@/components/obd/VehicleInfoCard";
 
 
 const GaugeCircle = ({
@@ -196,6 +197,7 @@ const OBDDiagnostics = () => {
     disconnect,
     readDtcs,
     clearDtcs,
+    vehicleInfo,
   } = useObd();
 
   const { permissions, loading: permsLoading } = useObdPermissions();
