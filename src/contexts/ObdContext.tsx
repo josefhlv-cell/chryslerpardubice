@@ -131,6 +131,12 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
 const AUTO_KEY = "obd_auto_connect";
 const DEVICE_KEY = "last_obd_device_id";
 
+export type ObdVehicleInfo = {
+  vin: DecodedVin | null;
+  profile: VehiclePidProfile;
+  loadedAt: number | null;
+};
+
 export type ObdContextValue = {
   connected: boolean;
   connecting: boolean;
@@ -140,6 +146,7 @@ export type ObdContextValue = {
   dtcs: ObdDtc[];
   logs: string[];
   connectionState: BLEConnectionState;
+  vehicleInfo: ObdVehicleInfo;
   connect: () => Promise<void>;
   connectToDevice: (deviceId: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
@@ -149,6 +156,7 @@ export type ObdContextValue = {
   refreshLiveData: () => Promise<ObdLiveData>;
   resetLive: () => void;
   sendCommand: (command: string) => Promise<string>;
+  reloadVehicleInfo: () => Promise<ObdVehicleInfo>;
 };
 
 const ObdContext = createContext<ObdContextValue | null>(null);
