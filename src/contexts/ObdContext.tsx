@@ -849,6 +849,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     setDtcs([]);
     dtcsRef.current = [];
     setDevice(null);
+    resetPidCache();
+    const emptyInfo: ObdVehicleInfo = { vin: null, profile: resolveProfileFromBrand(), loadedAt: null };
+    vehicleInfoRef.current = emptyInfo;
+    setVehicleInfo(emptyInfo);
   }, [closeSession]);
 
   const resetLive = useCallback(() => {
