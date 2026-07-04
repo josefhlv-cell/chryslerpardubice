@@ -429,6 +429,47 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     };
   }, [readSelectedCustomPid]);
 
+  /**
+   * Přečte jednu skupinu PIDů (fast/slow) postupně, ale s okamžitou UI aktualizací
+   * po každém přečteném PIDu, aby UI nečekalo na dokončení celé skupiny.
+   * Nepodporované PIDy jsou v cooldown cache a přeskakují se.
+   */
+  const pollPidGroup = useCallback(async (
+    pids: readonly string[],
+    priority: "high" | "normal" | "low",
+  ) => {
+    for (const pid of pids) {
+      if (cancelledRef.current) break;
+      if (isPidOnCooldown(pid)) continue;
+      try {
+        const raw = await elm327.sendCommand(pid, priority);
+        if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
+          markPidFailed(pid);
+          continue;
+        }
+        let value = parsePIDResponse(pid, raw);
+        if (value === null || Number.isNaN(value)) {
+          markPidFailed(pid);
+          continue;
+        }
+        const key = PID_TO_KEY[pid];
+        if (!key) continue;
+        if (pid === "010B") value = Math.max(0, (value - 101.3) / 100);
+
+        markPidSuccess(pid);
+        const nextData = { ...liveDataRef.current, [key]: value };
+        liveDataRef.current = nextData;
+        setLiveData(nextData);
+
+        const nextAvail = { ...liveAvailabilityRef.current, [key]: Date.now() };
+        liveAvailabilityRef.current = nextAvail;
+        setLiveAvailability(nextAvail);
+      } catch {
+        markPidFailed(pid);
+      }
+    }
+  }, []);
+
   const pollLiveDataOnce = useCallback(async (forceUpsert = false): Promise<ObdLiveData> => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (isPollingRef.current) {
@@ -442,70 +483,18 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
     isPollingRef.current = true;
     try {
-      let next: ObdLiveData = { ...liveDataRef.current };
-      let availabilityUpdates: ObdLiveAvailability = {};
+      // FAST skupina – přednostně, high priority
+      await pollPidGroup(FAST_PIDS, "high");
+      if (cancelledRef.current) return liveDataRef.current;
 
-      for (const pid of LIVE_PIDS) {
-        if (cancelledRef.current) break;
-        try {
-          const raw = await elm327.sendCommand(pid, "low");
-          if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) continue;
-          let value = parsePIDResponse(pid, raw);
-          if (value === null || Number.isNaN(value)) continue;
-
-          const key = PID_TO_KEY[pid];
-          if (!key) continue;
-          if (pid === "010B") value = Math.max(0, (value - 101.3) / 100);
-          next = { ...next, [key]: value };
-          availabilityUpdates[key] = Date.now();
-        } catch {
-          // PID failures are normal on many adapters; keep the previous value.
-        }
+      // SLOW skupina jen při forceUpsert (heartbeat/ruční refresh) – jinak ji řeší samostatný slow loop
+      if (forceUpsert) {
+        await pollPidGroup(SLOW_PIDS, "low");
       }
 
-      /**
-       * Chrysler/Mopar custom PIDy:
-       * - transmissionOilTemp: zkouší TCM kandidáty 7E1/7E2
-       * - oilPressure: zkouší ECM kandidáty 7E0
-       * Pokud žádný PID neodpoví validně, availability klíč se nenastaví,
-       * takže UI má zobrazit „Nepodporováno“ / „Nedostupné“ podle své logiky.
-       */
-      if (!cancelledRef.current) {
-        const custom = await readChryslerCustomLiveValues();
-
-        if (custom.transmissionOilTemp !== null) {
-          next = { ...next, transmissionOilTemp: custom.transmissionOilTemp };
-        }
-
-        if (custom.oilPressure !== null) {
-          next = { ...next, oilPressure: custom.oilPressure };
-        }
-
-        availabilityUpdates = { ...availabilityUpdates, ...custom.availability };
-      }
-
-      setLiveData(next);
-      liveDataRef.current = next;
-      if (Object.keys(availabilityUpdates).length > 0) {
-        const merged = { ...liveAvailabilityRef.current, ...availabilityUpdates };
-        liveAvailabilityRef.current = merged;
-        setLiveAvailability(merged);
-      }
-
-      // DPF čtení jen pokud má oprávnění a jen občas (každý 5. cyklus)
-      if ((isAdminRef.current || permissionsRef.current.dpf) && forceUpsert) {
-        try {
-          const dpf = await readDpfSnapshot();
-          next = { ...next, dpf };
-          setLiveData(next);
-          liveDataRef.current = next;
-        } catch (e) {
-          console.warn("[OBD] DPF read failed", e);
-        }
-      }
-
-      await upsertSession(next, dtcsRef.current, forceUpsert);
-      return next;
+      // DPF/custom NIKDY v tomto rychlém cyklu, aby to nezdržovalo FAST PIDy.
+      await upsertSession(liveDataRef.current, dtcsRef.current, forceUpsert);
+      return liveDataRef.current;
     } finally {
       isPollingRef.current = false;
     }
