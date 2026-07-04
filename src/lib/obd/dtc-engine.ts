@@ -218,7 +218,79 @@ class DTCEngine {
     }
   }
 
-  parseDTCResponse(raw: string): string[] {
+  /**
+   * Mode 07 – čekající (pending) chyby.
+   * Vrací [] pokud odpověď je NO DATA / ERROR / STOPPED (nikdy nevrací fake „žádné chyby").
+   */
+  async scanPendingDTCs(): Promise<DTCCode[]> {
+    const raw = await elm327.sendCommand('07', 'high').catch(() => '');
+    const codes = this.parseGenericDtcResponse(raw, '47').map(code => this.enrichCode(code, true));
+    return codes;
+  }
+
+  /**
+   * Mode 0A – trvalé emisní chyby.
+   */
+  async scanPermanentDTCs(): Promise<DTCCode[]> {
+    const raw = await elm327.sendCommand('0A', 'high').catch(() => '');
+    const codes = this.parseGenericDtcResponse(raw, '4A').map(code => this.enrichCode(code, false));
+    return codes;
+  }
+
+  /**
+   * Mode 02 – Freeze Frame. Vrací raw response pro admin UI a dekódovaný objekt.
+   * Neztratí celý freeze frame kvůli jednomu neúspěšnému PID.
+   */
+  async readFreezeFrame(): Promise<{ supported: boolean; raw: Record<string, string>; decoded: Record<string, number>; }> {
+    const pids: Array<{ cmd: string; key: string; formula: (b: number[]) => number }> = [
+      { cmd: '020C00', key: 'rpm', formula: (b) => (b[0] * 256 + b[1]) / 4 },
+      { cmd: '020D00', key: 'speed', formula: (b) => b[0] },
+      { cmd: '020500', key: 'coolantTemp', formula: (b) => b[0] - 40 },
+      { cmd: '024200', key: 'voltage', formula: (b) => (b[0] * 256 + b[1]) / 1000 },
+      { cmd: '022F00', key: 'fuelLevel', formula: (b) => (b[0] * 100) / 255 },
+      { cmd: '020B00', key: 'map', formula: (b) => b[0] },
+      { cmd: '021000', key: 'maf', formula: (b) => (b[0] * 256 + b[1]) / 100 },
+    ];
+
+    const raw: Record<string, string> = {};
+    const decoded: Record<string, number> = {};
+    let anyOk = false;
+
+    for (const p of pids) {
+      try {
+        const response = await elm327.sendCommand(p.cmd, 'normal');
+        raw[p.key] = response;
+        if (!response || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(response)) continue;
+
+        const pidHex = p.cmd.slice(2, 4).toUpperCase();
+        const marker = `42${pidHex}`;
+        const clean = response.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+        const idx = clean.indexOf(marker);
+        if (idx < 0) continue;
+        // za marker následuje frame number (1 byte) + data
+        const data = clean.slice(idx + marker.length + 2);
+        const bytes: number[] = [];
+        for (let i = 0; i + 1 < data.length; i += 2) {
+          bytes.push(parseInt(data.slice(i, i + 2), 16));
+        }
+        if (!bytes.length) continue;
+        const value = p.formula(bytes);
+        if (Number.isFinite(value)) {
+          decoded[p.key] = value;
+          anyOk = true;
+        }
+      } catch {
+        /* skip individual PID */
+      }
+    }
+
+    return { supported: anyOk, raw, decoded };
+  }
+
+  /**
+   * Sdílený parser pro Mode 03/07/0A.
+   */
+  parseGenericDtcResponse(raw: string, marker: string): string[] {
     if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|SEARCHING|\?/i.test(raw)) return [];
 
     const found = new Set<string>();
@@ -227,10 +299,10 @@ class DTCEngine {
 
     for (const line of candidates) {
       const clean = line.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
-      const marker = clean.indexOf('43');
-      if (marker < 0) continue;
+      const idx = clean.indexOf(marker.toUpperCase());
+      if (idx < 0) continue;
 
-      const data = clean.slice(marker + 2);
+      const data = clean.slice(idx + marker.length);
       for (let i = 0; i + 3 < data.length; i += 4) {
         const pair = data.slice(i, i + 4);
         if (pair === '0000') continue;
@@ -242,6 +314,10 @@ class DTCEngine {
     }
 
     return [...found];
+  }
+
+  parseDTCResponse(raw: string): string[] {
+    return this.parseGenericDtcResponse(raw, '43');
   }
 
   parseDTCCode(raw: number[]): string {
