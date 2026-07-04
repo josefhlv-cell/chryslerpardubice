@@ -318,12 +318,29 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     const uid = userIdRef.current;
     if (!uid) return;
 
+    const vinfo = vehicleInfoRef.current;
+    const enrichedPayload = {
+      ...(payload as any),
+      vehicleProfile: vinfo.vin
+        ? {
+            vin: vinfo.vin.vin,
+            brand: vinfo.vin.brand,
+            year: vinfo.vin.year,
+            protocolGroup: vinfo.vin.protocolGroup,
+            profileId: vinfo.profile.id,
+            profileLabel: vinfo.profile.label,
+            confidence: vinfo.vin.confidence,
+            source: vinfo.vin.source,
+          }
+        : { profileId: vinfo.profile.id, profileLabel: vinfo.profile.label },
+    };
+
     const session = {
       user_id: uid,
       is_active: true,
       last_seen: new Date().toISOString(),
       ended_at: null,
-      payload: payload as any,
+      payload: enrichedPayload as any,
       dtcs: dtcList as any,
     };
 
