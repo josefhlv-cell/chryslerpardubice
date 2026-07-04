@@ -229,6 +229,49 @@ workflows:
             --project App.xcodeproj \
             --scheme App
 
+      - name: Verify built IPA APNs entitlement
+        script: |
+          set -e
+
+          IPA_PATH="$(ls ios/App/build/ios/ipa/*.ipa | head -1)"
+          echo "IPA: $IPA_PATH"
+
+          TMP_DIR="$(mktemp -d)"
+          unzip -q "$IPA_PATH" -d "$TMP_DIR"
+
+          APP_PATH="$(find "$TMP_DIR/Payload" -name "*.app" -type d | head -1)"
+          echo "APP: $APP_PATH"
+
+          echo "Embedded provisioning profile:"
+          security cms -D -i "$APP_PATH/embedded.mobileprovision" > "$TMP_DIR/profile.plist"
+
+          /usr/libexec/PlistBuddy -c "Print :Name" "$TMP_DIR/profile.plist" || true
+          /usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$TMP_DIR/profile.plist" || true
+          /usr/libexec/PlistBuddy -c "Print :Entitlements:aps-environment" "$TMP_DIR/profile.plist" || {
+            echo "ERROR: aps-environment missing in embedded provisioning profile"
+            exit 1
+          }
+
+          echo "Signed app entitlements:"
+          codesign -d --entitlements :- "$APP_PATH" > "$TMP_DIR/entitlements.plist" 2>/dev/null || {
+            echo "ERROR: Cannot read signed entitlements"
+            exit 1
+          }
+
+          cat "$TMP_DIR/entitlements.plist"
+
+          grep -q "aps-environment" "$TMP_DIR/entitlements.plist" || {
+            echo "ERROR: aps-environment missing in signed app"
+            exit 1
+          }
+
+          grep -q "production" "$TMP_DIR/entitlements.plist" || {
+            echo "ERROR: aps-environment is not production"
+            exit 1
+          }
+
+          echo "APNs entitlement OK"
+
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
