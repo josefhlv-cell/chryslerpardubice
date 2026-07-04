@@ -926,6 +926,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     dtcs,
     logs,
     connectionState,
+    vehicleInfo,
     connect,
     connectToDevice,
     disconnect,
@@ -935,6 +936,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     refreshLiveData: () => pollLiveDataOnce(true),
     resetLive,
     sendCommand,
+    reloadVehicleInfo,
   };
 
   return <ObdContext.Provider value={value}>{children}</ObdContext.Provider>;
