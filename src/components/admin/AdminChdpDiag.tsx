@@ -25,6 +25,8 @@ import { DEFAULT_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-ob
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import AdminObdPermissions from "@/components/admin/AdminObdPermissions";
 import { DpfCard } from "@/components/obd/DpfCard";
+import { DtcItem } from "@/components/obd/DtcItem";
+
 
 interface CustomerRow {
   user_id: string;
