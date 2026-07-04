@@ -5,6 +5,7 @@ import { elm327 } from '@/lib/obd/elm327-engine';
 import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
 import { dtcCache } from '@/lib/obd/offline-cache';
 import { lookupGenericDTC } from '@/lib/obd/dtc-database';
+import { lookupChryslerOemDtc } from '@/lib/obd/chrysler-dtc-oem';
 
 export type DTCSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type DTCSystem = 'powertrain' | 'body' | 'chassis' | 'network';
@@ -13,6 +14,11 @@ export type DTCCode = {
   code: string;
   system: DTCSystem;
   description: string;
+  descriptionEn?: string;
+  category?: string;
+  firstCheck?: string;
+  moparNote?: string;
+  source?: string;
   severity: DTCSeverity;
   possibleCause: string;
   relatedSignals: string[];
@@ -38,39 +44,101 @@ export type DTCState = {
   lastScan: number | null;
 };
 
-const DTC_DATABASE: Record<string, { desc: string; severity: DTCSeverity; cause: string; signals: string[] }> = {};
+const DTC_DATABASE: Record<string, { desc: string; severity: DTCSeverity; cause: string; signals: string[]; action?: string }> = {};
 for (const dtc of CHRYSLER_DATABASE.dtcCodes) {
   DTC_DATABASE[dtc.code] = {
     desc: dtc.description,
     severity: dtc.severity,
     cause: dtc.possibleCause,
     signals: dtc.relatedSensors,
+    action: (dtc as any).recommendedAction,
   };
 }
 
+export type ResolvedDTCInfo = {
+  description: string;
+  descriptionEn?: string;
+  severity: DTCSeverity;
+  cause: string;
+  signals: string[];
+  category?: string;
+  firstCheck?: string;
+  moparNote?: string;
+  source?: string;
+};
+
 /**
- * Resolve DTC description/severity/cause from a layered database:
- *   1. Chrysler-specific DB (highest priority)
- *   2. Generic OBD-II P-code DB (P0100-P0599)
- *   3. Fallback "Neznámý kód"
+ * Vyhledání DTC informací s vrstvenou prioritou:
+ *   1. Chrysler/Mopar OEM databáze z přílohy (chrysler-dtc-database.json) — nejvyšší
+ *   2. Chrysler-specifická databáze v projektu (chrysler-database.ts)
+ *   3. Generická OBD-II databáze
+ *   4. Fallback „Neznámý kód"
  */
-export function resolveDTCInfo(code: string): { description: string; severity: DTCSeverity; cause: string; signals: string[] } {
-  const upper = code.toUpperCase();
+export function resolveDTCInfo(code: string): ResolvedDTCInfo {
+  const upper = (code || '').toUpperCase();
+  const oem = lookupChryslerOemDtc(upper);
   const chrysler = DTC_DATABASE[upper];
-  if (chrysler) {
-    return { description: chrysler.desc, severity: chrysler.severity, cause: chrysler.cause, signals: chrysler.signals };
-  }
   const generic = lookupGenericDTC(upper);
+
+  if (oem) {
+    return {
+      description: oem.description,
+      descriptionEn: generic?.descEn || chrysler?.desc,
+      severity: (chrysler?.severity || generic?.severity || guessSeverity(upper)),
+      cause: oem.possibleCause || chrysler?.cause || generic?.cause || '—',
+      signals: chrysler?.signals || [],
+      category: categoryFromCode(upper),
+      firstCheck: oem.firstCheck || chrysler?.action || '',
+      moparNote: chrysler?.action && chrysler.action !== oem.firstCheck ? chrysler.action : undefined,
+      source: 'Chrysler/Mopar',
+    };
+  }
+  if (chrysler) {
+    return {
+      description: chrysler.desc,
+      descriptionEn: generic?.descEn,
+      severity: chrysler.severity,
+      cause: chrysler.cause,
+      signals: chrysler.signals,
+      category: categoryFromCode(upper),
+      firstCheck: chrysler.action,
+      source: 'Chrysler',
+    };
+  }
   if (generic) {
-    return { description: generic.desc, severity: generic.severity, cause: generic.cause, signals: [] };
+    return {
+      description: generic.desc,
+      descriptionEn: generic.descEn,
+      severity: generic.severity,
+      cause: generic.cause,
+      signals: [],
+      category: categoryFromCode(upper),
+      source: 'OBD-II',
+    };
   }
   return {
     description: `Neznámý kód ${upper}`,
-    severity: upper.startsWith('P03') ? 'high' : 'medium',
-    cause: 'Kód není v lokální databázi — vyžaduje kontrolu servisním manuálem.',
+    severity: guessSeverity(upper),
+    cause: 'Kód není v lokální databázi — doporučena kontrola u autorizovaného servisu.',
     signals: [],
+    category: categoryFromCode(upper),
+    source: 'unknown',
   };
 }
+
+function guessSeverity(code: string): DTCSeverity {
+  return code.startsWith('P03') ? 'high' : 'medium';
+}
+
+function categoryFromCode(code: string): string {
+  const p = code[0];
+  if (p === 'P') return 'Motor / hnací ústrojí';
+  if (p === 'B') return 'Karoserie';
+  if (p === 'C') return 'Podvozek';
+  if (p === 'U') return 'Síť / komunikace';
+  return '—';
+}
+
 
 class DTCEngine {
   private state: DTCState = {
