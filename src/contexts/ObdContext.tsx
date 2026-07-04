@@ -171,6 +171,18 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   const [logs, setLogs] = useState<string[]>([]);
   const [connectionState, setConnectionState] = useState<BLEConnectionState>("disconnected");
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [vehicleInfo, setVehicleInfo] = useState<ObdVehicleInfo>({
+    vin: null,
+    profile: resolveProfileFromBrand(),
+    loadedAt: null,
+  });
+  const vehicleInfoRef = useRef<ObdVehicleInfo>({
+    vin: null,
+    profile: resolveProfileFromBrand(),
+    loadedAt: null,
+  });
+  const customPidLoopIntervalRef = useRef<number | null>(null);
+  const slowLoopIntervalRef = useRef<number | null>(null);
 
   const connectedRef = useRef(false);
   const liveDataRef = useRef<ObdLiveData>(EMPTY_LIVE);
