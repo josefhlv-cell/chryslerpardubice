@@ -17,13 +17,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { bleManager, BLEDeviceInfo, BLEConnectionState } from "@/lib/obd/ble-manager";
 import { elm327 } from "@/lib/obd/elm327-engine";
 import { dtcEngine, type DTCCode } from "@/lib/obd/dtc-engine";
-import { LIVE_PIDS, parsePIDResponse } from "@/lib/obd/obd-pids";
+import { parsePIDResponse } from "@/lib/obd/obd-pids";
+import { FAST_PIDS, SLOW_PIDS } from "@/lib/obd/pid-speed-groups";
 import { readDpfSnapshot, type DpfSnapshot } from "@/lib/obd/dpf-engine";
 import {
   CHRYSLER_CUSTOM_PIDS,
   testChryslerCustomPid,
   type ChryslerCustomPidDefinition,
 } from "@/lib/obd/chrysler-custom-pids";
+import { readVinFromEcu, type DecodedVin } from "@/lib/obd/vin-decoder";
+import { resolveProfileFromBrand, type VehiclePidProfile } from "@/lib/obd/pid-profile-registry";
+import { isPidOnCooldown, markPidFailed, markPidSuccess, resetPidCache } from "@/lib/obd/unsupported-pid-cache";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
