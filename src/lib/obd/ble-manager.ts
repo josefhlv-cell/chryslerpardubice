@@ -629,6 +629,9 @@ private async performConnect(deviceId: string): Promise<boolean> {
       throw new Error('BLE profile not ready');
     }
 
+    // Vyčistit buffer PŘED zápisem, aby další příkaz nezachytil stale data
+    this.responseBuffer = '';
+
     await this.writeToProfile(
       this.connectedDevice.deviceId,
       this.activeProfile,
