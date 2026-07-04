@@ -26,6 +26,7 @@ import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import AdminObdPermissions from "@/components/admin/AdminObdPermissions";
 import { DpfCard } from "@/components/obd/DpfCard";
 import { DtcItem } from "@/components/obd/DtcItem";
+import AdminVehiclePanel from "@/components/admin/AdminVehiclePanel";
 
 
 interface CustomerRow {
