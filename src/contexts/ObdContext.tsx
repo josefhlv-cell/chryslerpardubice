@@ -32,8 +32,10 @@ export type ObdLiveData = {
   oilTemp: number;
   fuelLevel: number;
   fuelRate: number;
+  maf: number;
   dpf?: DpfSnapshot;
 };
+
 
 /**
  * Časová razítka posledních úspěšně přečtených PIDů.
