@@ -652,19 +652,116 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     }
   }, [executeRemoteCommand]);
 
+  const reloadVehicleInfo = useCallback(async (): Promise<ObdVehicleInfo> => {
+    if (!connectedRef.current) return vehicleInfoRef.current;
+    const vin = await readVinFromEcu();
+    const profile = resolveProfileFromBrand(vin?.brand, vin?.protocolGroup);
+    const next: ObdVehicleInfo = { vin, profile, loadedAt: Date.now() };
+    vehicleInfoRef.current = next;
+    setVehicleInfo(next);
+    console.log("[VEHICLE RESOLVER] profile=", profile.id, "brand=", vin?.brand);
+
+    // Načíst případný funkční PID z cache
+    const uid = userIdRef.current;
+    if (uid && vin?.vin) {
+      try {
+        const { data } = await supabase
+          .from("obd_pid_cache" as any)
+          .select("*")
+          .eq("user_id", uid)
+          .eq("vin", vin.vin)
+          .eq("key", "transmissionOilTemp")
+          .maybeSingle();
+        if (data) {
+          const candidate = CHRYSLER_CUSTOM_PIDS.find(
+            (p) => p.header === (data as any).header && p.command === (data as any).command,
+          );
+          if (candidate) {
+            selectedTransmissionOilTempPidRef.current = candidate;
+            transmissionOilTempSupportedRef.current = true;
+            console.log("[PID CACHE] restored", candidate.label);
+          }
+        }
+      } catch (e) {
+        console.warn("[PID CACHE] load failed", e);
+      }
+    }
+
+    return next;
+  }, []);
+
   useEffect(() => {
     if (!connected) {
       cancelledRef.current = true;
       if (pollIntervalRef.current) { window.clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
       if (heartbeatIntervalRef.current) { window.clearInterval(heartbeatIntervalRef.current); heartbeatIntervalRef.current = null; }
+      if (slowLoopIntervalRef.current) { window.clearInterval(slowLoopIntervalRef.current); slowLoopIntervalRef.current = null; }
+      if (customPidLoopIntervalRef.current) { window.clearInterval(customPidLoopIntervalRef.current); customPidLoopIntervalRef.current = null; }
       return;
     }
 
     cancelledRef.current = false;
-    pollLiveDataOnce(true).catch(() => undefined);
+
+    // Načíst VIN / profil hned po připojení (jen jednou)
+    reloadVehicleInfo().catch(() => undefined);
+
+    // FAST loop – RPM/rychlost/plyn/MAP/MAF/load: často
+    pollLiveDataOnce(false).catch(() => undefined);
     pollIntervalRef.current = window.setInterval(() => {
-      pollLiveDataOnce(false).catch(() => undefined);
-    }, 1500);
+      if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
+    }, 600);
+
+    // SLOW loop – teploty/napětí/palivo: pomalu
+    slowLoopIntervalRef.current = window.setInterval(() => {
+      if (isPollingRef.current) return;
+      pollPidGroup(SLOW_PIDS, "low").catch(() => undefined);
+    }, 4000);
+
+    // CUSTOM loop – Chrysler transmission oil temp: jen když profil povolí
+    customPidLoopIntervalRef.current = window.setInterval(() => {
+      const prof = vehicleInfoRef.current.profile;
+      if (!prof.allowChryslerCustomPids) return;
+      if (isPollingRef.current) return;
+      readChryslerCustomLiveValues().then((custom) => {
+        const updates: Partial<ObdLiveData> = {};
+        const avail: ObdLiveAvailability = { ...liveAvailabilityRef.current };
+        if (custom.transmissionOilTemp !== null) {
+          updates.transmissionOilTemp = custom.transmissionOilTemp;
+          avail.transmissionOilTemp = Date.now();
+        }
+        if (custom.oilPressure !== null) {
+          updates.oilPressure = custom.oilPressure;
+          avail.oilPressure = Date.now();
+        }
+        if (Object.keys(updates).length) {
+          const merged = { ...liveDataRef.current, ...updates };
+          liveDataRef.current = merged;
+          setLiveData(merged);
+          liveAvailabilityRef.current = avail;
+          setLiveAvailability(avail);
+
+          // Uložit funkční PID do cache (jen při první úspěšné hodnotě)
+          const vin = vehicleInfoRef.current.vin?.vin;
+          const uid = userIdRef.current;
+          const selected = selectedTransmissionOilTempPidRef.current;
+          if (vin && uid && selected && custom.transmissionOilTemp !== null) {
+            supabase.from("obd_pid_cache" as any).upsert({
+              user_id: uid,
+              vin,
+              vehicle_profile: vehicleInfoRef.current.profile.id,
+              key: "transmissionOilTemp",
+              header: selected.header,
+              command: selected.command,
+              response_prefix: selected.responsePrefix,
+              unit: selected.unit,
+              last_valid_value: custom.transmissionOilTemp,
+              confidence: "high",
+              source: "obd_discovery",
+            } as any, { onConflict: "user_id,vin,key" as any }).then(() => undefined);
+          }
+        }
+      }).catch(() => undefined);
+    }, 10000);
 
     heartbeatIntervalRef.current = window.setInterval(() => {
       upsertSession(liveDataRef.current, dtcsRef.current, true);
@@ -674,8 +771,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       cancelledRef.current = true;
       if (pollIntervalRef.current) { window.clearInterval(pollIntervalRef.current); pollIntervalRef.current = null; }
       if (heartbeatIntervalRef.current) { window.clearInterval(heartbeatIntervalRef.current); heartbeatIntervalRef.current = null; }
+      if (slowLoopIntervalRef.current) { window.clearInterval(slowLoopIntervalRef.current); slowLoopIntervalRef.current = null; }
+      if (customPidLoopIntervalRef.current) { window.clearInterval(customPidLoopIntervalRef.current); customPidLoopIntervalRef.current = null; }
     };
-  }, [connected, pollLiveDataOnce, upsertSession]);
+  }, [connected, pollLiveDataOnce, upsertSession, pollPidGroup, readChryslerCustomLiveValues, reloadVehicleInfo]);
 
   useEffect(() => {
     if (!authUserId) return;
