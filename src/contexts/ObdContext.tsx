@@ -126,6 +126,14 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
   dpf: "dpf",
   dpf_status: "dpf",
   dpf_regen: "dpf",
+  read_vin: "live_data",
+  vin: "live_data",
+  vehicle_info: "live_data",
+  dtc_pending: "dtc_read",
+  pending_dtc: "dtc_read",
+  dtc_permanent: "dtc_read",
+  permanent_dtc: "dtc_read",
+  freeze_frame: "dtc_read",
 };
 
 const AUTO_KEY = "obd_auto_connect";
@@ -617,6 +625,50 @@ export function ObdProvider({ children }: { children: ReactNode }) {
           }
           break;
         }
+        case "read_vin":
+        case "vin":
+        case "vehicle_info": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const info = await reloadVehicleInfo();
+          result = info.vin
+            ? {
+                vin: info.vin.vin,
+                brand: info.vin.brand,
+                year: info.vin.year,
+                profile: info.profile.id,
+                profileLabel: info.profile.label,
+                confidence: info.vin.confidence,
+              }
+            : {
+                vin: null,
+                profile: info.profile.id,
+                profileLabel: info.profile.label,
+                note: "VIN se nepodařilo načíst přes OBD (0902). Základní diagnostika běží.",
+              };
+          break;
+        }
+        case "dtc_pending":
+        case "pending_dtc": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const codes = await dtcEngine.scanPendingDTCs();
+          result = { codes, count: codes.length, mode: "07" };
+          break;
+        }
+        case "dtc_permanent":
+        case "permanent_dtc": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const codes = await dtcEngine.scanPermanentDTCs();
+          result = { codes, count: codes.length, mode: "0A" };
+          break;
+        }
+        case "freeze_frame": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const ff = await dtcEngine.readFreezeFrame();
+          result = ff.supported
+            ? { freezeFrame: ff.decoded, raw: ff.raw }
+            : { freezeFrame: null, note: "Freeze Frame není pro toto vozidlo dostupný." };
+          break;
+        }
         default:
           throw new Error(`Nepodporovaný vzdálený příkaz: ${type}`);
       }
@@ -639,7 +691,8 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     } finally {
       processingCommandIdsRef.current.delete(command.id);
     }
-  }, [addLog, clearDtcs, pollLiveDataOnce, readDtcs, sendCommand, updateRemoteCommand]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addLog, clearDtcs, pollLiveDataOnce, readDtcs, sendCommand, updateRemoteCommand, upsertSession]);
 
   const checkRemoteCommands = useCallback(async () => {
     const uid = userIdRef.current;
