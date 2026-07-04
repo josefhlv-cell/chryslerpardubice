@@ -24,6 +24,8 @@ import { useObd } from "@/contexts/ObdContext";
 import { useObdPermissions } from "@/hooks/obd/use-obd-permissions";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import { DpfCard } from "@/components/obd/DpfCard";
+import { DtcItem } from "@/components/obd/DtcItem";
+
 
 const GaugeCircle = ({
   value,
