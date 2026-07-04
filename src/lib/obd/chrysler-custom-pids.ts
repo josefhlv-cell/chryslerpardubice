@@ -186,7 +186,25 @@ export const CHRYSLER_CUSTOM_PIDS: ChryslerCustomPidDefinition[] = [
       return round1(bytes[0] - 40);
     },
   },
-  // Tlak oleje – experimentální; validace ponechává na rozsahu 0–1000 kPa
+  // Tlak motorového oleje – Chrysler Mode 22 PID 1101 (raw / 100 = bar)
+  {
+    key: "oilPressure",
+    label: "Tlak oleje (Mode 22 – 1101)",
+    header: "7E0",
+    command: "221101",
+    responsePrefix: "621101",
+    unit: "bar",
+    min: 0.2,
+    max: 10,
+    decoder: (bytes) => {
+      if (bytes.length < 1) return null;
+      const raw = bytes[0];
+      if (invalidByte(raw)) return null;
+      const bar = raw / 100;
+      return round1(bar);
+    },
+  },
+  // Tlak oleje – kandidát 22115C
   {
     key: "oilPressure",
     label: "Tlak oleje (22 11 5C)",
