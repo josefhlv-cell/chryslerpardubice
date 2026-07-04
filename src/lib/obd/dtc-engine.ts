@@ -265,6 +265,11 @@ class DTCEngine {
       code,
       system,
       description: info.description,
+      descriptionEn: info.descriptionEn,
+      category: info.category,
+      firstCheck: info.firstCheck,
+      moparNote: info.moparNote,
+      source: info.source,
       severity: info.severity,
       possibleCause: info.cause,
       relatedSignals: info.signals,
@@ -275,6 +280,7 @@ class DTCEngine {
       lastSeen: Date.now(),
     };
   }
+
 
   getCriticalCodes(): DTCCode[] {
     return this.state.activeCodes.filter(c => c.severity === 'critical' || c.severity === 'high');
