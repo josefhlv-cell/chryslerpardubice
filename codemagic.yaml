@@ -115,6 +115,51 @@ workflows:
           set -e
           npx cap sync ios
 
+      - name: Patch iOS AppDelegate for APNs callbacks
+        script: |
+          set -e
+
+          APP_DELEGATE="ios/App/App/AppDelegate.swift"
+
+          echo "Patching $APP_DELEGATE for Capacitor Push Notifications callbacks..."
+
+          if grep -q "capacitorDidRegisterForRemoteNotifications" "$APP_DELEGATE"; then
+            echo "APNs callbacks already present"
+            cat "$APP_DELEGATE"
+            exit 0
+          fi
+
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("ios/App/App/AppDelegate.swift")
+          text = path.read_text()
+
+          insert = '''
+              
+              func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+                  NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+              }
+
+              func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+                  NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+              }
+          '''
+
+          marker = "\\n}\\n"
+
+          if "capacitorDidRegisterForRemoteNotifications" not in text:
+              idx = text.rfind(marker)
+              if idx == -1:
+                  raise SystemExit("Cannot find final class closing brace in AppDelegate.swift")
+              text = text[:idx] + insert + text[idx:]
+
+          path.write_text(text)
+          PY
+
+          echo "Patched AppDelegate.swift:"
+          cat "$APP_DELEGATE"
+
       - name: Force iOS Bundle ID
         script: |
           set -e
