@@ -347,6 +347,16 @@ const AdminChdpDiag = () => {
               </CardContent>
             </Card>
 
+            {/* Rozpoznané vozidlo + PID cache + Discovery + Funkce + Adaptér + AI */}
+            <AdminVehiclePanel
+              userId={active.user_id}
+              vin={activeVehicle?.vin || session?.vin || session?.payload?.vehicleProfile?.vin || null}
+              sessionPayload={session?.payload}
+              isLive={live}
+              onSendCommand={(t, p) => sendCmd(t, p || {})}
+            />
+
+
             {/* Live hodnoty */}
             <Card>
               <CardContent className="p-4 space-y-2">
