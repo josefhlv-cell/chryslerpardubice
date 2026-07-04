@@ -25,6 +25,7 @@ import { useObdPermissions } from "@/hooks/obd/use-obd-permissions";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import { DpfCard } from "@/components/obd/DpfCard";
 import { DtcItem } from "@/components/obd/DtcItem";
+import { VehicleInfoCard } from "@/components/obd/VehicleInfoCard";
 
 
 const GaugeCircle = ({
@@ -196,6 +197,7 @@ const OBDDiagnostics = () => {
     disconnect,
     readDtcs,
     clearDtcs,
+    vehicleInfo,
   } = useObd();
 
   const { permissions, loading: permsLoading } = useObdPermissions();
@@ -364,6 +366,8 @@ const OBDDiagnostics = () => {
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
+              <VehicleInfoCard info={vehicleInfo} />
+
               <div className="luxury-card p-4">
                 <h3 className="font-display font-semibold text-sm mb-4 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-primary" />

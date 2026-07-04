@@ -26,6 +26,7 @@ import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import AdminObdPermissions from "@/components/admin/AdminObdPermissions";
 import { DpfCard } from "@/components/obd/DpfCard";
 import { DtcItem } from "@/components/obd/DtcItem";
+import AdminVehiclePanel from "@/components/admin/AdminVehiclePanel";
 
 
 interface CustomerRow {
@@ -345,6 +346,16 @@ const AdminChdpDiag = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Rozpoznané vozidlo + PID cache + Discovery + Funkce + Adaptér + AI */}
+            <AdminVehiclePanel
+              userId={active.user_id}
+              vin={activeVehicle?.vin || session?.vin || session?.payload?.vehicleProfile?.vin || null}
+              sessionPayload={session?.payload}
+              isLive={live}
+              onSendCommand={(t, p) => sendCmd(t, p || {})}
+            />
+
 
             {/* Live hodnoty */}
             <Card>
