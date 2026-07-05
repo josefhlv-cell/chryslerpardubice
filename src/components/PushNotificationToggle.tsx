@@ -203,6 +203,12 @@ const PushNotificationToggle = () => {
             {tokens.length > 0 ? "Aktualizovat toto zařízení" : "Zapnout notifikace"}
           </Button>
           {tokens.length > 0 && (
+            <Button size="sm" variant="outline" className="w-full" onClick={testPush}>
+              🔔 Otestovat push notifikaci
+            </Button>
+          )}
+
+          {tokens.length > 0 && (
             <div className="space-y-1 pt-1">
               <p className="text-xs font-medium">Vaše zařízení ({tokens.length}):</p>
               {tokens.map((t) => (
