@@ -170,13 +170,21 @@ Otevřít chat: ${record.link || "/admin?tab=support-chat"}
     }
 
 
-    // Create in-app notifications for all admins
-    const notifRows = adminIds.map((uid: string) => ({
-      user_id: uid,
-      title: subject,
-      message: body.substring(0, 500),
-    }));
-    await supabase.from("notifications").insert(notifRows);
+    // Create in-app notifications for all admins.
+    // Support chat, orders, bookings, tow a fault už řeší DB triggery s dedupe_key —
+    // nevkládáme podruhé, aby admin nedostal dvě zvonky.
+    const typesHandledByDbTrigger = new Set([
+      "support_message","order","service_booking","tow_request","fault_report",
+    ]);
+    if (!typesHandledByDbTrigger.has(type)) {
+      const notifRows = adminIds.map((uid: string) => ({
+        user_id: uid,
+        title: subject,
+        message: body.substring(0, 500),
+      }));
+      await supabase.from("notifications").insert(notifRows);
+    }
+
 
     // === E-mailové upozornění na obchod@chrysler.cz ===
     // Pokud je nastaven RESEND_API_KEY, pošleme e-mail. Jinak jen zalogujeme.
