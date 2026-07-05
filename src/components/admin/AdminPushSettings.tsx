@@ -141,12 +141,46 @@ const AdminPushSettings = () => {
     }
   };
 
+  const runAdminSelfTest = async () => {
+    if (!user) return;
+    try {
+      const { error } = await supabase.from("notifications").insert({
+        user_id: user.id,
+        title: "🔔 Test admin upozornění",
+        message: "Pokud tuto zprávu vidíš v zvonku, v-app notifikace fungují. Pokud dorazil push i email, celá pipeline běží.",
+        link: "/admin",
+        event_type: "admin_self_test",
+        dedupe_key: "admin-selftest:" + Date.now(),
+      });
+      if (error) throw error;
+      const { data: fnRes } = await supabase.functions.invoke("notify-admin", {
+        body: { type: "generic", record: { title: "🔔 Test emailu na obchod@chrysler.cz", message: "Testovací email z admin panelu." } },
+      });
+      toast({ title: "Test odeslán", description: "Zkontroluj zvonek, push a e-mail obchod@chrysler.cz. " + (fnRes ? "" : "") });
+    } catch (e: any) {
+      toast({ title: "Test selhal", description: e.message, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-3 max-w-2xl">
       <h2 className="text-lg font-semibold flex items-center gap-2">
         <Bell className="w-5 h-5 text-primary" />
         Push notifikace pro adminy
       </h2>
+
+      <Card>
+        <CardContent className="p-4 flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={runAdminSelfTest}>
+            <Bell className="w-4 h-4 mr-1" /> Otestovat admin upozornění (zvonek + push + email)
+          </Button>
+          <Button size="sm" variant="ghost" onClick={fetchData}>
+            <RefreshCw className="w-4 h-4 mr-1" /> Obnovit stav
+          </Button>
+        </CardContent>
+      </Card>
+
+
 
       <Card>
         <CardContent className="p-4 space-y-3">
