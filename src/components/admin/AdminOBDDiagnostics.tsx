@@ -52,6 +52,7 @@ const SecurityFlashView = lazy(() => import("@/components/obd/SecurityFlashView"
 const TrendChartsView = lazy(() => import("@/components/obd/TrendChartsView").then(m => ({ default: m.TrendChartsView })));
 const DevModeView = lazy(() => import("@/components/obd/DevModeView").then(m => ({ default: m.DevModeView })));
 const SettingsView = lazy(() => import("@/components/obd/SettingsView").then(m => ({ default: m.SettingsView })));
+const AdminStellantisOEM = lazy(() => import("@/components/admin/AdminStellantisOEM"));
 
 type Tab =
   | "dashboard"
