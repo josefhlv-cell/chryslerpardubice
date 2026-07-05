@@ -389,6 +389,12 @@ const AdminOBDDiagnostics = () => {
                 <SettingsView commandDelay={commandDelay} onDelayChange={setCommandDelay} />
               </Suspense>
             )}
+
+            {activeTab === "oem" && (
+              <Suspense fallback={<Fallback />}>
+                <AdminStellantisOEM />
+              </Suspense>
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
