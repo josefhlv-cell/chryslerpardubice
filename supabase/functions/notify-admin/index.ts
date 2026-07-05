@@ -149,11 +149,26 @@ Popis: ${record.description || "—"}
 Stav: ${record.status || "new"}
 ID: ${record.id || "—"}
       `.trim();
+    } else if (type === "support_message") {
+      subject = `💬 Nová zpráva v live chatu od ${record.customer_name || "zákazníka"}`;
+      body = `
+Nová zpráva v live chatu:
+
+Zákazník: ${record.customer_name || "—"}
+E-mail: ${record.customer_email || "—"}
+Čas: ${record.created_at || new Date().toISOString()}
+
+Zpráva:
+${record.message || "—"}
+
+Otevřít chat: ${record.link || "/admin?tab=support-chat"}
+      `.trim();
     } else {
       // Generic notification
       subject = record.title || "Nová notifikace";
       body = record.message || "";
     }
+
 
     // Create in-app notifications for all admins
     const notifRows = adminIds.map((uid: string) => ({
