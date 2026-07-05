@@ -72,6 +72,7 @@ type Tab =
   | "trends"
   | "vehicle3d"
   | "reverse"
+  | "oem"
   | "settings";
 
 const TABS: { id: Tab; icon: typeof Gauge; label: string; group: string }[] = [
