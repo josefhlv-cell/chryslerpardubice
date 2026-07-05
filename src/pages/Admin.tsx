@@ -133,6 +133,7 @@ const Admin = () => {
     "fault-reports": "vehicles-faults",
     users: "users-360",
     tow: "admin-tow",
+    "support-chat": "support-chat",
   };
   const resolveSection = (raw: string | null) => (raw && (TAB_ALIAS[raw] || raw)) || "";
 
