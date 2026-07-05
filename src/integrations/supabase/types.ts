@@ -4281,6 +4281,80 @@ export type Database = {
           },
         ]
       }
+      support_conversations: {
+        Row: {
+          closed: boolean
+          created_at: string
+          id: string
+          last_message_at: string
+          last_message_preview: string | null
+          unread_admin_count: number
+          unread_customer_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          closed?: boolean
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          last_message_preview?: string | null
+          unread_admin_count?: number
+          unread_customer_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          closed?: boolean
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          last_message_preview?: string | null
+          unread_admin_count?: number
+          unread_customer_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      support_messages: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          is_from_admin: boolean
+          message: string
+          read_at: string | null
+          sender_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          is_from_admin?: boolean
+          message: string
+          read_at?: string | null
+          sender_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          is_from_admin?: boolean
+          message?: string
+          read_at?: string | null
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "support_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tow_requests: {
         Row: {
           accuracy: number | null
