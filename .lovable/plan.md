@@ -1,118 +1,114 @@
-# Plán: Audit katalogu + Admin User 360
+# Plán: OBD refactor podle Delphi-OBD (read-only)
 
-Rozděleno do dvou nezávislých bloků. Provedu v jednom průchodu, bez dalších otázek.
+Cíl je přebudovat vnitřní architekturu OBD stacku podle vrstev z Delphi-OBD, ale zůstat v TS/React/Capacitor a nesahat na stávající BLE spojení, live polling ani UI kontrakty. Práce je rozsáhlá, proto ji rozdělím do jasných kroků a všechno pojede přes stávající `ble-manager.ts` + `elm327-engine.ts` (žádný druhý BLE engine).
 
----
+## Rozsah — co se udělá
 
-## BLOK A — Katalog 1:1 s J+M (backend + data + UI)
+### 1) Vrstvy (nové soubory, žádné duplikace BLE)
+```text
+src/lib/obd/
+  adapter/
+    elm-queue.ts          # jediná centrální command queue nad elm327-engine
+    elm-init.ts           # ATH1 debug profil + ATH0 simple profil
+    elm-errors.ts         # NO DATA, CAN ERROR, BUFFER FULL, ? → typed status
+  protocol/
+    response-cleaner.ts   # echo, prompt >, ATH1/ATH0, SEARCHING…
+    isotp-parser.ts       # SF/FF/CF + ELM "0:/1:/2:" multi-line
+    uds-parser.ts         # 62 / 7F XX YY, response_pending 0x78
+  services/
+    service03.ts          # stored DTC
+    service07.ts          # pending DTC
+    service09.ts          # VIN
+    service0a.ts          # permanent DTC
+    dtc-decoder.ts        # 2B → P/C/B/U + kód (společné)
+    full-dtc-scan.ts      # 03+07+0A dohromady s summary
+  oem/
+    OemRegistry.ts
+    OemExtension.ts       # interface pro OEM profil
+    stellantis.ts         # WMI, sessionPlan, basicDids, engineLiveDids
+    stellantis-proxi.ts   # jen lokální buffer, computeChecksum() throws
+  dtc/
+    catalogs/
+      iso-15031.ts
+      stellantis.ts
+```
+`ble-manager.ts`, `elm327-engine.ts`, `isotp-transport.ts` (starý) zůstávají; nové vrstvy je používají skrz `elm-queue.ts`. Starý `isotp-transport.ts` bude označen jako legacy a postupně nahrazen novým `protocol/isotp-parser.ts` (aby jsme nerozbili existující volání, ponechá se re-export).
 
-### A1. Strom kategorií 1:1 s J+M
-- Nová edge funkce `jm-tree-rebuild-from-nextis`:
-  - Pro každý vůz v `nextis_vehicles` (83) s validním `external_id` (K-type) zavolá Nextis `categories?ktype=...`.
-  - Uloží do `catalog_categories` hierarchii **gen_art_name → subkategorie** přesně jak vrací API (žádný plochý seznam, žádné mapování).
-  - Duplicitní názvy rozlišuje pozicí (`Žárovka (světlomet)`, `Žárovka (směrovka)` – z `gen_art_position`/`assembly_group`).
-  - Počty dílů (`part_count`) bere z `articles?ktype=&genericArticleId=`.
-- Doplnění chybějících K-type přes existující `catalog-auto-maintenance` (ktypeLimit 83).
-- Spuštěno jednorázově + pg_cron nightly 02:00.
+### 2) Command queue (jedna, centrální)
+`elm-queue.ts` obalí `elm327.sendCommand`:
+- FIFO, žádné paralelní writy
+- per-command timeout + retry pro init
+- stavy: `disconnected | connecting | initializing | ready | polling | busy | error`
+- `pauseLivePolling()` / `resumeLivePolling()` volají do `useLiveData`/orchestrator přes malý event bus
+- před DTC/OEM/raw scanem: pauza pollingu → clear buffer → init check → scan → resume
+- admin raw příkazy jdou přes stejnou queue (žádný přímý BLE write)
 
-### A2. OEM díly (kitoem_parts, ~68 901)
-Migrace + edge `oem-enrichment-backfill` (batchovaně, 500/run, EdgeRuntime.waitUntil):
-- **Fotka** chybí → `UPDATE kitoem_parts SET image_url = jm.image FROM jm_part_v2 jm WHERE normalize_oem(oem)=normalize_oem(jm.oem_number)`; fallback `parts_new.image_url`.
-- **Popis** chybí → analogicky z `jm_part_v2.name`/`parts_new.description`.
-- **Technické parametry** chybí → z `jm_part_v2.raw->'technical_params'` (s brand-sanity guardem už existujícím v jm-proxy).
-- **Brand** chybí → z `catalog_vehicle_compatibility.brand`.
-- **Název obsahuje J+M brand** (FEBI/TOPRAN/...) → strip regexem, `manufacturer = null`.
-- **Duplicitní OEM** → merge dle `normalize_oem`, ponechat nejúplnější řádek.
+### 3) ELM init profily
+- **Debug (ATH1)**: `ATD ATE0 ATL1 ATS0 ATH1 ATSP0 0100` — pro DTC, VIN, UDS, OEM
+- **Simple (ATH0)**: `ATD ATE0 ATL0 ATS0 ATH0 ATSP0 0100` — pro customer live polling
+- Přepínání profilu je stavové v queue, po OEM/DTC scanu se vrátí předchozí
 
-### A3. J+M díly (jm_part_v2, ~3 673)
-- Foto chybí → enrich z `api_cache.jm_part_detail` (klíč = oem+brand).
-- Parametry chybí → znovu spustit `jm-tech-params-backfill-cron` (existuje).
-- **Marže overrride** v `jm-proxy` final price calc:
-  - `price_without_vat ≤ 4000` → +70 %
-  - `price_without_vat > 4000` → +40 %
-  - validace + audit log do `api_cache` typu `margin_audit`.
+### 4) ELM chyby → typed status
+`elm-errors.ts` mapuje řetězce (`NO DATA`, `CAN ERROR`, `BUS INIT`, `?`, `BUFFER FULL`, `STOPPED`, `SEARCHING…`, `UNABLE TO CONNECT`, timeout) na:
+`no_data | unsupported | adapter_error | bus_error | timeout | invalid_response | error`.
+Nikdy → 0/OK.
 
-### A4. UI katalog (`src/pages/Catalog.tsx` + `CatalogListing.tsx`)
-- Sort: ORIGINÁL s cenou → ORIGINÁL bez ceny ("Na dotaz") → NÁHRADA s marží.
-- Strip J+M brandu v zobrazeném názvu OEM (klient-side safety net).
-- Každá karta: image fallback `/placeholder.svg`; cena ≤ 0 → "Na dotaz" (amber badge).
-- Detail dílu (`PartDetailDialog`): galerie (image + alternativy), tabulka tech. parametrů, OE čísla, popis, sekce alternativ (J+M).
-- Lazy preload detailu na hover → cíl < 3s.
+### 5) DTC 03/07/0A + full scan
+Společný `dtc-decoder.ts` (2 bajty, P/C/B/U, dedupe, ignoruj 0000). Každá služba vrací strukturu `{ service, label, status, raw, cleaned, codes, warnings }`. `full-dtc-scan.ts` skládá summary + `isCompleteBasicObdScan`.
 
-### A5. DB integrita
-- Migrace: unikátní index `kitoem_parts(normalize_oem(oem))`, NOT NULL guard na `nextis_vehicles.external_id` (warning, nemažu).
-- Doplnit `year_from/year_to/power_kw/fuel` z Nextis `vehicle?ktype=` (součást `jm-tree-rebuild-from-nextis`).
-- Prewarm `api_cache.jm_parts_for_engine` pro všech 83 vozů přes existující `catalog-auto-maintenance`.
+### 6) ISO-TP parser
+Nový `isotp-parser.ts` podporuje SF (0x), FF (1x) + CF (2x), ELM multi-line `0:/1:/2:`, wrap sekvence 15→0, DTC služby přeskočí byte s počtem. Zachovává raw i cleaned payload.
 
-### A6. Finální report
-Edge `catalog-audit-report` spočítá metriky před/po a uloží do `api_cache` typu `catalog_audit_report`. UI tlačítko v `/admin/catalog` „Spustit audit" + zobrazení reportu (tabulka metrik).
+### 7) UDS parser
+`uds-parser.ts` čte pozitivní `62 XX YY` i negativní `7F SID NRC` (0x11/0x12/0x31/0x33/0x78). Jeden failed DID nezastaví scan.
 
----
+### 8) Stellantis / FCA
+`stellantis.ts`:
+- WMI: 1C3/1C4/1C6/2C3/2C4/3C3/3C4/3C6/1D4/1D7/2D4/2D8/3D4/1J4/1J8/1RR/ZFA/ZFB/ZFC/9BD/ZAR/ZAM/VF3/VF7/W0L/VXR
+- `getSessionPlan()` → `10 03` + volitelný probe `22 F1 98` (7F 22 31 = non-fatal)
+- `getBasicDids()`: F190, F198, F199, F1A8, F187, F188, 1A02, 1B01, 1B02, 1B03
+- `getEngineLiveDids()`: 1B04, 4005, 4007, 4009, 400B, 4019, 4026, 4048, 404A, 404B
+- `decodeDid()` pro F190 (VIN ASCII), F199 (BCD YYMMDD), 1A02 (24-bit km), 1B01 (%), 1B02 (32-bit s), 1B03 (mV/1000 V), F187/F188/F1A8 (ASCII/HEX fallback). Engine DID bez ověřeného vzorce → raw + warning „dekódování neověřené".
+- `scanStellantisBasicInfo()` + `scanStellantisEngineLive()` — sekvence: pauza polling → ATH1 → 0100 → 10 03 → volitelný F198 → čtení DID → resume.
 
-## BLOK B — Admin User 360
+### 9) Proxi / zápisy (zakázáno)
+`stellantis-proxi.ts` obsahuje jen lokální buffer helpers; `computeChecksum()` throwuje `"Stellantis Proxi CRC algorithm is not available. Proxi writing is disabled."`. Žádné 2E/27/31 write/34/36/37/3D, žádné UI tlačítko pro zápis.
 
-### B1. Seznam uživatelů `/admin/users`
-- Tabulka: jméno, email, telefon, # objednávek, suma útraty (CZK), # vozidel, status, akce.
-- Server-side stránkování (25/50/100), fulltext (jméno/email/telefon/IČO), filtry (status, account_type, role).
-- Hromadné akce (už rozpracované) — ponechat.
+### 10) DTC katalogy
+`iso-15031.ts` (obecné P0/P1…) + `stellantis.ts` (OEM specifické). P0403 a P001D naplněny přesně podle zadání (cz popis, příčiny, řešení). Parser dtc-decoder jen dekóduje kód, katalog přidá popis a příčiny.
 
-### B2. Detail `/admin/users/:id` — záložky
-1. **Profil** — osobní + firemní údaje, slevy, loyalty, role.
-2. **Vozidla** — `user_vehicles` (VIN, SPZ, foto).
-3. **Objednávky** — všechny `orders` (díly), proklik na detail.
-4. **Servis** — `service_orders` + `service_bookings`.
-5. **OBD** — poslední session, DTC.
-6. **Notifikace** — `notifications` (sent/read).
-7. **Historie** — viz B3.
+### 11) Admin UI
+Do stávající admin OBD sekce přidat panel „Stellantis / FCA / Chrysler OEM" s tlačítky přesně dle bodu 16 zadání. Každý výsledek: command / raw / cleaned / status / positive marker / payload / decoded / warnings.
 
-### B3. Historie (kompletní timeline)
-- View `user_activity_timeline` UNION:
-  - registrace (profiles.created_at)
-  - vozidla (user_vehicles)
-  - objednávky (orders)
-  - servis (service_orders, service_bookings)
-  - OBD sessions
-  - fault_reports
-  - notifications
-- Řazeno DESC, ikona + barva podle typu, každý řádek `Link` na detail.
+### 12) Remote commands
+Do stávajícího `admin_remote_commands` (nebo ekvivalentu) přidat typy z bodu 17. Handler v customer aplikaci je pouští přes `elm-queue.ts`.
 
-### B4. Detail objednávky `/admin/orders/:id`
-- Karta zákazníka (proklik na user 360), vozidlo (proklik), položky (název, OEM, množství, jedn. cena, sleva, DPH, mezisoučet), zdroj (`catalog_source` badge: SKLAD/J+M/CSV), stav + historie statusů, akce (změnit stav, dispatch J+M, stornovat, vytisknout fakturu).
+### 13) Customer UI
+Beze změny UX, jen doplnit hlášky:
+- nekompletní OEM scan → „Rozšířená Stellantis/FCA diagnostika…"
+- unsupported DID → „Tato jednotka tento údaj neposkytla."
+- invalid raw → „Hodnota nebyla platně načtena."
+Nikdy nefabrikovaná 0.
 
-### B5. Notifikace adminovi při nové objednávce
-- Trigger `trg_notify_admins_new_order` + `trg_email_admins_new_order` **už existují** (viz db-functions). Ověřím, že jsou attached na `orders` AFTER INSERT; pokud ne, migrace doplní.
-- Push notifikace přes existující `trg_send_push_on_notification` (řetězí se z `notifications` insertu) — funguje automaticky.
+### 14) Testy
+`src/test/obd/*.test.ts` (vitest) — sanity vektory ze zadání (P0403, ISO-TP VIN sestavení, `7F 22 31` non-fatal, `62 1B 03 30 39` = 12.345 V atd.).
 
----
+### 15) Build gate
+Na konci: `tsgo` typecheck + `vite build`. Až obojí projde, píše se report.
 
-## Technické detaily
+## Co se **nedotkne**
+- `ble-manager.ts` (žádný druhý BLE engine)
+- `elm327-engine.ts` (jen se obalí queue)
+- stávající live polling API v `useLiveData`
+- stávající VIN Mode 09 tok (nový service09 jen doplní strukturovaný výstup, starý zůstává)
+- stávající DTC UI kontrakty (nový výstup je supersetem – přidává `raw/cleaned/status/warnings`)
+- žádný Node SerialPort, žádný nový EventEmitter, žádné `NodeJS.Timeout`
 
-**Nové edge funkce:**
-- `jm-tree-rebuild-from-nextis`
-- `oem-enrichment-backfill`
-- `catalog-audit-report`
+## Report po dokončení
+Přesně 15 bodů z bodu 23 zadání (přidané soubory, upravené soubory, queue, init, ISO-TP, UDS, DTC, Stellantis, DIDy, admin tlačítka, remote commands, potvrzení: 1 BLE engine, žádné zápisy, TS build ok, Vite build ok).
 
-**Nové DB objekty:**
-- View `user_activity_timeline`
-- Unikátní index na normalizovaném OEM
-- Migrace pro attach triggers (idempotentní)
+## Rizika
+- Rozsah je velký; půjdu po vrstvách zdola nahoru (adapter → protocol → services → oem → UI) a po každé vrstvě spouštím typecheck, aby se regrese chytila brzy.
+- Pokud narazím na kolizi se stávajícím `isotp-transport.ts` / `dtc-engine.ts`, nechám staré API funkční přes tenký adaptér a nové vrstvy pojedou paralelně – žádné rozbití existujících volajících.
 
-**Nové frontend soubory:**
-- `src/pages/admin/AdminUsers.tsx` (refaktor existující)
-- `src/pages/admin/AdminUserDetail.tsx` (refaktor `AdminUser360.tsx`)
-- `src/pages/admin/AdminOrderDetail.tsx`
-- `src/components/admin/UserTimeline.tsx`
-- `src/components/catalog/PartDetailDialog.tsx` (rozšíření)
-
-**Routing:**
-- `/admin/users` (list), `/admin/users/:id` (detail), `/admin/orders/:id`
-
-**Pořadí provedení:**
-1. Migrace (index, view, trigger attach)
-2. Edge funkce (deploy)
-3. Backfilly (jednorázové spuštění)
-4. Frontend (Admin Users 360 + Catalog UI)
-5. Audit report endpoint + UI tlačítko
-6. Verifikace buildem a kontrolní query na metriky
-
-Po dokončení doručím tabulku metrik před/po a seznam zbylých warningů (např. vozy bez K-type, které Nextis nedohledá).
+Potvrď plán a začnu implementovat vrstvu po vrstvě; pak přijde jeden souhrnný report.

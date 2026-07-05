@@ -1,0 +1,47 @@
+/**
+ * ELM327 init profily podle Delphi-OBD:
+ *   - DEBUG (ATH1 + ATL1) — pro DTC, UDS, VIN, OEM parsery (potřebují hlavičky ECU a řádky pro ISO-TP)
+ *   - SIMPLE (ATH0 + ATL0) — pro zákaznický live polling (kratší odpovědi)
+ */
+import { elm327 } from "@/lib/obd/elm327-engine";
+
+export type ElmProfile = "debug" | "simple";
+
+const PROFILES: Record<ElmProfile, string[]> = {
+  debug: ["ATD", "ATE0", "ATL1", "ATS0", "ATH1", "ATSP0", "0100"],
+  simple: ["ATD", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0", "0100"],
+};
+
+let currentProfile: ElmProfile | null = null;
+
+export function getActiveElmProfile(): ElmProfile | null {
+  return currentProfile;
+}
+
+/** Přepne profil (pokud už je aktivní, nedělá nic). Vrací true při úspěchu. */
+export async function applyElmProfile(profile: ElmProfile, force = false): Promise<boolean> {
+  if (!force && currentProfile === profile) return true;
+  for (const cmd of PROFILES[profile]) {
+    try {
+      await elm327.sendCommand(cmd, "high");
+    } catch (e) {
+      // Init je best-effort — 1 selhaný AT nezastaví celý profil.
+      console.warn(`[elm-init] ${profile} step '${cmd}' failed:`, e);
+    }
+  }
+  currentProfile = profile;
+  return true;
+}
+
+/** Krátký přepínač: proveď akci v požadovaném profilu, pak se vrať do předchozího. */
+export async function withElmProfile<T>(profile: ElmProfile, fn: () => Promise<T>): Promise<T> {
+  const previous = currentProfile;
+  await applyElmProfile(profile);
+  try {
+    return await fn();
+  } finally {
+    if (previous && previous !== profile) {
+      await applyElmProfile(previous, true).catch(() => undefined);
+    }
+  }
+}
