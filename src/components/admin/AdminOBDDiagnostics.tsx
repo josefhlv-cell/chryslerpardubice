@@ -15,6 +15,7 @@ import {
   Car,
   TrendingUp,
   Shield,
+  ShieldCheck,
   Layers,
   Search,
   Settings2,
