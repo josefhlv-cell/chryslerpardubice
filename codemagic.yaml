@@ -241,12 +241,17 @@ workflows:
           set -e
 
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
+          PROFILE_NAME="CHDP Garage App Store app.lovable PUSH"
 
-          echo "Forcing manual signing settings..."
+          echo "Forcing manual signing settings with profile: $PROFILE_NAME"
 
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
 
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+
+          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER =/d' "$PBXPROJ" || true
+          sed -i '' '/PROVISIONING_PROFILE =/d' "$PBXPROJ" || true
 
           if grep -q "DEVELOPMENT_TEAM = " "$PBXPROJ"; then
             sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = 7353KNVBCK;/g' "$PBXPROJ"
@@ -265,6 +270,10 @@ workflows:
           fi
 
           sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]*;/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";/g' "$PBXPROJ" || true
+
+          sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER =/a\\
+                  PROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_NAME\";
+          " "$PBXPROJ"
 
           echo "Manual signing settings after patch:"
           grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" "$PBXPROJ" || true
