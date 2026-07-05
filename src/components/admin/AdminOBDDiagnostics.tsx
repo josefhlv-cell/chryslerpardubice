@@ -81,6 +81,7 @@ const TABS: { id: Tab; icon: typeof Gauge; label: string; group: string }[] = [
   { id: "vehicle3d", icon: Car, label: "3D", group: "vizualizace" },
   { id: "trends", icon: TrendingUp, label: "Trendy", group: "vizualizace" },
   { id: "dtc", icon: Wrench, label: "DTC", group: "diagnostika" },
+  { id: "oem", icon: ShieldCheck, label: "Stellantis/FCA", group: "diagnostika" },
   { id: "smart", icon: Brain, label: "AI", group: "diagnostika" },
   { id: "coding", icon: Settings2, label: "Kódování", group: "diagnostika" },
   { id: "orchestrator", icon: Layers, label: "Auto", group: "diagnostika" },
