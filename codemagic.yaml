@@ -71,18 +71,15 @@ workflows:
     integrations:
       app_store_connect: "Garáž CHDP"
 
-
     environment:
       xcode: latest
       node: 22
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.lovable.c6d932101224420590deeec3ccc6923f
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: app.lovable.c6d932101224420590deeec3ccc6923f
+        certificates:
+          - CHDP_DIST_PUSH
         provisioning_profiles:
           - CHDP_GARAGE_APPLOVABLE_PROFILE
+
     scripts:
       - name: Install npm dependencies clean
         script: |
