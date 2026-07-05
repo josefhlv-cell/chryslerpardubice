@@ -166,6 +166,21 @@ const PushNotificationToggle = () => {
     toast({ title: "Zařízení odebráno" });
   };
 
+  const testPush = async () => {
+    if (!user) return;
+    const { error } = await supabase.from("notifications").insert({
+      user_id: user.id,
+      title: "🔔 Test push notifikace",
+      message: "Pokud tohle vidíš v systémovém oznámení, push funguje.",
+      link: "/notifications",
+      event_type: "push_self_test",
+      dedupe_key: "push-selftest:" + Date.now(),
+    });
+    if (error) toast({ title: "Test selhal", description: error.message, variant: "destructive" });
+    else toast({ title: "Test odeslán", description: "Zvonek + push by měly dorazit během vteřin." });
+  };
+
+
   // ────── NATIVE (APK / iOS build) ──────
   if (isNative) {
     return (
@@ -187,6 +202,12 @@ const PushNotificationToggle = () => {
             {registering ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
             {tokens.length > 0 ? "Aktualizovat toto zařízení" : "Zapnout notifikace"}
           </Button>
+          {tokens.length > 0 && (
+            <Button size="sm" variant="outline" className="w-full" onClick={testPush}>
+              🔔 Otestovat push notifikaci
+            </Button>
+          )}
+
           {tokens.length > 0 && (
             <div className="space-y-1 pt-1">
               <p className="text-xs font-medium">Vaše zařízení ({tokens.length}):</p>
