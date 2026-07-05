@@ -15,6 +15,7 @@ import {
   Car,
   TrendingUp,
   Shield,
+  ShieldCheck,
   Layers,
   Search,
   Settings2,
@@ -52,6 +53,7 @@ const SecurityFlashView = lazy(() => import("@/components/obd/SecurityFlashView"
 const TrendChartsView = lazy(() => import("@/components/obd/TrendChartsView").then(m => ({ default: m.TrendChartsView })));
 const DevModeView = lazy(() => import("@/components/obd/DevModeView").then(m => ({ default: m.DevModeView })));
 const SettingsView = lazy(() => import("@/components/obd/SettingsView").then(m => ({ default: m.SettingsView })));
+const AdminStellantisOEM = lazy(() => import("@/components/admin/AdminStellantisOEM"));
 
 type Tab =
   | "dashboard"
@@ -71,6 +73,7 @@ type Tab =
   | "trends"
   | "vehicle3d"
   | "reverse"
+  | "oem"
   | "settings";
 
 const TABS: { id: Tab; icon: typeof Gauge; label: string; group: string }[] = [
@@ -79,6 +82,7 @@ const TABS: { id: Tab; icon: typeof Gauge; label: string; group: string }[] = [
   { id: "vehicle3d", icon: Car, label: "3D", group: "vizualizace" },
   { id: "trends", icon: TrendingUp, label: "Trendy", group: "vizualizace" },
   { id: "dtc", icon: Wrench, label: "DTC", group: "diagnostika" },
+  { id: "oem", icon: ShieldCheck, label: "Stellantis/FCA", group: "diagnostika" },
   { id: "smart", icon: Brain, label: "AI", group: "diagnostika" },
   { id: "coding", icon: Settings2, label: "Kódování", group: "diagnostika" },
   { id: "orchestrator", icon: Layers, label: "Auto", group: "diagnostika" },
@@ -383,6 +387,12 @@ const AdminOBDDiagnostics = () => {
             {activeTab === "settings" && (
               <Suspense fallback={<Fallback />}>
                 <SettingsView commandDelay={commandDelay} onDelayChange={setCommandDelay} />
+              </Suspense>
+            )}
+
+            {activeTab === "oem" && (
+              <Suspense fallback={<Fallback />}>
+                <AdminStellantisOEM />
               </Suspense>
             )}
           </motion.div>
