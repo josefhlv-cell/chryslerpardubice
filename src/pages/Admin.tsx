@@ -75,6 +75,7 @@ const AdminCustomerActivity = lazy(() => import("@/components/admin/AdminCustome
 const AdminNotifications = lazy(() => import("@/components/admin/AdminNotifications"));
 const AdminNotificationToggle = lazy(() => import("@/components/admin/AdminNotificationToggle"));
 const AdminFeatureSettings = lazy(() => import("@/components/admin/AdminFeatureSettings"));
+const AdminSupportChat = lazy(() => import("@/components/admin/AdminSupportChat"));
 const AdminActivityLog = lazy(() => import("@/components/admin/AdminActivityLog"));
 const AdminBackups = lazy(() => import("@/components/admin/AdminBackups"));
 const AdminDashboardStats = lazy(() => import("@/components/admin/AdminDashboardStats"));
@@ -132,6 +133,7 @@ const Admin = () => {
     "fault-reports": "vehicles-faults",
     users: "users-360",
     tow: "admin-tow",
+    "support-chat": "support-chat",
   };
   const resolveSection = (raw: string | null) => (raw && (TAB_ALIAS[raw] || raw)) || "";
 
@@ -354,6 +356,7 @@ const Admin = () => {
       key: "system", label: "Systém", icon: Settings2, children: [
         { key: "sys-features", label: "Feature flags" },
         { key: "sys-notifications", label: "Notifikace", icon: Bell },
+        { key: "support-chat", label: "Live chat", icon: Bell },
         ...(isEnabled("push_notifications") ? [{ key: "sys-push", label: "Push (zákazníci)" }] : []),
         { key: "sys-activity", label: "Aktivita" },
         { key: "sys-audit", label: "Audit log", icon: History },
@@ -581,6 +584,7 @@ const Admin = () => {
       case "system":
       case "sys-features": return <Suspense fallback={<Loader />}><AdminFeatureSettings /></Suspense>;
       case "sys-notifications": return <Suspense fallback={<Loader />}><AdminNotifications /></Suspense>;
+      case "support-chat": return <Suspense fallback={<Loader />}><AdminSupportChat /></Suspense>;
       case "sys-push": return <Suspense fallback={<Loader />}><AdminNotificationToggle /></Suspense>;
       case "sys-activity": return <Suspense fallback={<Loader />}><AdminActivityLog /></Suspense>;
       case "sys-audit": return <Suspense fallback={<Loader />}><AdminAuditLog /></Suspense>;

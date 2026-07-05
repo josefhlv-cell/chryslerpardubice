@@ -55,6 +55,7 @@ const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
 const MyTowRequests = lazy(() => import("./pages/MyTowRequests"));
 import ProfileGate from "@/components/ProfileGate";
 import PushDeepLink from "@/components/PushDeepLink";
+const SupportChatWidget = lazy(() => import("@/components/support/SupportChatWidget"));
 
 const BOT_RE = /Lighthouse|PageSpeed|PTST|Googlebot|Chrome-Lighthouse/i;
 const isBot = typeof navigator !== "undefined" && BOT_RE.test(navigator.userAgent);
@@ -138,6 +139,7 @@ const App = () => (
                 </div>
               </div>
               <BottomNav />
+              <Suspense fallback={null}><SupportChatWidget /></Suspense>
             </BrowserRouter>
           </TooltipProvider>
          </ObdProvider>
