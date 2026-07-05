@@ -163,7 +163,12 @@ workflows:
       - name: Force iOS Bundle ID
         script: |
           set -e
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' ios/App/App.xcodeproj/project.pbxproj
+          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
+
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
+
+          echo "Bundle ID after patch:"
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" || true
 
       - name: Patch iOS Push Entitlements
         script: |
@@ -184,12 +189,14 @@ workflows:
 
           echo "Patching Xcode project to use App.entitlements..."
 
-          sed -i '' 's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' ios/App/App.xcodeproj/project.pbxproj || true
+          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
 
-          if ! grep -q "CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj; then
+          sed -i '' 's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PBXPROJ" || true
+
+          if ! grep -q "CODE_SIGN_ENTITLEMENTS" "$PBXPROJ"; then
             sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
                     CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
-            ' ios/App/App.xcodeproj/project.pbxproj
+            ' "$PBXPROJ"
           fi
 
           echo "Entitlements file:"
@@ -230,6 +237,61 @@ workflows:
           keychain add-certificates
           xcode-project use-profiles
 
+      - name: Force Xcode manual signing profile
+        script: |
+          set -e
+
+          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
+
+          echo "Forcing manual signing for iOS target..."
+
+          # Bundle ID
+          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
+
+          # Manual signing
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+
+          # Team ID
+          if grep -q "DEVELOPMENT_TEAM = " "$PBXPROJ"; then
+            sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = 7353KNVBCK;/g' "$PBXPROJ"
+          else
+            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
+                    DEVELOPMENT_TEAM = 7353KNVBCK;
+            ' "$PBXPROJ"
+          fi
+
+          # Code signing identity
+          if grep -q "CODE_SIGN_IDENTITY = " "$PBXPROJ"; then
+            sed -i '' 's/CODE_SIGN_IDENTITY = [^;]*;/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
+          else
+            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
+                    CODE_SIGN_IDENTITY = "Apple Distribution";
+            ' "$PBXPROJ"
+          fi
+
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]*;/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";/g' "$PBXPROJ" || true
+
+          # Provisioning profile SPECIFIER = Apple Developer profile NAME, not Codemagic reference
+          if grep -q "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ"; then
+            sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/PROVISIONING_PROFILE_SPECIFIER = "CHDP Garage App Store app.lovable";/g' "$PBXPROJ"
+          else
+            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
+                    PROVISIONING_PROFILE_SPECIFIER = "CHDP Garage App Store app.lovable";
+            ' "$PBXPROJ"
+          fi
+
+          # Entitlements
+          if grep -q "CODE_SIGN_ENTITLEMENTS" "$PBXPROJ"; then
+            sed -i '' 's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PBXPROJ"
+          else
+            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
+                    CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
+            ' "$PBXPROJ"
+          fi
+
+          echo "Signing settings after patch:"
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE_SPECIFIER\|CODE_SIGN_ENTITLEMENTS" "$PBXPROJ" || true
+
       - name: Verify iOS signing and entitlements
         script: |
           set -e
@@ -237,8 +299,8 @@ workflows:
           echo "Checking Bundle ID..."
           grep -n "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj || true
 
-          echo "Checking CODE_SIGN_ENTITLEMENTS..."
-          grep -n "CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj || true
+          echo "Checking signing settings..."
+          grep -n "CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE_SPECIFIER\|CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj || true
 
           echo "Checking App.entitlements..."
           cat ios/App/App/App.entitlements
