@@ -163,6 +163,7 @@ workflows:
       - name: Force iOS Bundle ID
         script: |
           set -e
+
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
 
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
@@ -186,8 +187,6 @@ workflows:
           '</dict>' \
           '</plist>' \
           > ios/App/App/App.entitlements
-
-          echo "Patching Xcode project to use App.entitlements..."
 
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
 
@@ -237,56 +236,17 @@ workflows:
           keychain add-certificates
           xcode-project use-profiles
 
-      - name: Auto-detect and force exact provisioning profile
+      - name: Force Xcode manual signing settings
         script: |
           set -e
 
-          BUNDLE_ID="app.lovable.c6d932101224420590deeec3ccc6923f"
-          TEAM_ID="7353KNVBCK"
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
 
-          echo "Searching installed provisioning profiles for bundle: $BUNDLE_ID"
-
-          PROFILE_NAME=""
-          PROFILE_UUID=""
-
-          for profile in "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision; do
-            [ -f "$profile" ] || continue
-
-            TMP_PLIST="$(mktemp)"
-            security cms -D -i "$profile" > "$TMP_PLIST" 2>/dev/null || true
-
-            NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$TMP_PLIST" 2>/dev/null || true)
-            UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$TMP_PLIST" 2>/dev/null || true)
-            APP_ID=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$TMP_PLIST" 2>/dev/null || true)
-            APS=$(/usr/libexec/PlistBuddy -c "Print :Entitlements:aps-environment" "$TMP_PLIST" 2>/dev/null || true)
-
-            echo "Profile: $NAME"
-            echo "UUID: $UUID"
-            echo "App ID: $APP_ID"
-            echo "APS: $APS"
-            echo "---"
-
-            if echo "$APP_ID" | grep -q "$TEAM_ID.$BUNDLE_ID" && [ "$APS" = "production" ]; then
-              PROFILE_NAME="$NAME"
-              PROFILE_UUID="$UUID"
-              break
-            fi
-          done
-
-          if [ -z "$PROFILE_NAME" ]; then
-            echo "ERROR: No App Store provisioning profile with production APNs found for $BUNDLE_ID"
-            exit 1
-          fi
-
-          echo "Using provisioning profile:"
-          echo "Name: $PROFILE_NAME"
-          echo "UUID: $PROFILE_UUID"
+          echo "Forcing manual signing settings..."
 
           sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
 
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
-          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
 
           if grep -q "DEVELOPMENT_TEAM = " "$PBXPROJ"; then
             sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = 7353KNVBCK;/g' "$PBXPROJ"
@@ -306,32 +266,8 @@ workflows:
 
           sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]*;/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";/g' "$PBXPROJ" || true
 
-          if grep -q "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ"; then
-            sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/PROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_NAME\";/g" "$PBXPROJ"
-          else
-            sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER =/a\\
-                    PROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_NAME\";
-            " "$PBXPROJ"
-          fi
-
-          if grep -q "PROVISIONING_PROFILE =" "$PBXPROJ"; then
-            sed -i '' "s/PROVISIONING_PROFILE = [^;]*;/PROVISIONING_PROFILE = $PROFILE_UUID;/g" "$PBXPROJ"
-          else
-            sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER =/a\\
-                    PROVISIONING_PROFILE = $PROFILE_UUID;
-            " "$PBXPROJ"
-          fi
-
-          if grep -q "CODE_SIGN_ENTITLEMENTS" "$PBXPROJ"; then
-            sed -i '' 's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PBXPROJ"
-          else
-            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
-                    CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
-            ' "$PBXPROJ"
-          fi
-
-          echo "Final signing settings:"
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE_SPECIFIER\|PROVISIONING_PROFILE =\|CODE_SIGN_ENTITLEMENTS" "$PBXPROJ" || true
+          echo "Manual signing settings after patch:"
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" "$PBXPROJ" || true
 
       - name: Verify iOS signing and entitlements
         script: |
@@ -341,7 +277,7 @@ workflows:
           grep -n "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj || true
 
           echo "Checking signing settings..."
-          grep -n "CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE_SPECIFIER\|PROVISIONING_PROFILE =\|CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj || true
+          grep -n "CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj || true
 
           echo "Checking App.entitlements..."
           cat ios/App/App/App.entitlements
@@ -385,7 +321,7 @@ workflows:
           mkdir -p /tmp/xcodebuild_logs
 
           echo "Current signing settings before archive:"
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE_SPECIFIER\|PROVISIONING_PROFILE =" App.xcodeproj/project.pbxproj || true
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" App.xcodeproj/project.pbxproj || true
 
           echo "Available provisioning profiles:"
           ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" || true
