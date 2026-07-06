@@ -437,16 +437,16 @@ const OBDDiagnostics = () => {
                     available={liveAvailability.oilTemp !== undefined}
                     unavailableLabel="Nedostupné"
                   />
-                  {/* 6. Teplota oleje v převodovce — mimo standardní OBD-II, Nepodporováno */}
+                  {/* 6. Teplota oleje v převodovce — zobrazí se jen po reálné odpovědi ECU */}
                   <GaugeCircle
-                    value={0}
+                    value={liveData.transmissionOilTemp}
                     max={150}
                     label="Teplota oleje převod."
                     unit="°C"
                     color="hsl(30, 60%, 50%)"
                     icon={Thermometer}
-                    available={false}
-                    unavailableLabel="Nepodporováno"
+                    available={liveAvailability.transmissionOilTemp !== undefined}
+                    unavailableLabel="Nedostupné"
                   />
                   {/* 7. Teplota sání */}
                   <GaugeCircle
@@ -459,16 +459,17 @@ const OBDDiagnostics = () => {
                     available={liveAvailability.intakeTemp !== undefined}
                     unavailableLabel="Nedostupné"
                   />
-                  {/* 8. Tlak oleje — mimo standardní OBD-II */}
+                  {/* 8. Tlak oleje — zobrazí se jen po reálné odpovědi ECU */}
                   <GaugeCircle
-                    value={0}
+                    value={liveData.oilPressure}
                     max={6}
                     label="Tlak oleje"
                     unit="bar"
                     color="hsl(20, 90%, 50%)"
                     icon={Fuel}
-                    available={false}
-                    unavailableLabel="Nepodporováno"
+                    available={liveAvailability.oilPressure !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
                   />
                   {/* 9. Turbo (boost) */}
                   <GaugeCircle
