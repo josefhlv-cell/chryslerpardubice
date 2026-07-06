@@ -669,6 +669,73 @@ export function ObdProvider({ children }: { children: ReactNode }) {
             : { freezeFrame: null, note: "Freeze Frame není pro toto vozidlo dostupný." };
           break;
         }
+        case "full_dtc_scan": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const mod = await import("@/lib/obd/services/full-dtc-scan");
+          const scan = await mod.runFullDtcScan();
+          result = { scan };
+          break;
+        }
+        case "raw_uds": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const rawCmd = String(command.command_payload?.command || "").trim();
+          if (!rawCmd) throw new Error("Chybí command_payload.command (hex bajty).");
+          const [{ elmQueue }, { parseUds }, { cleanElmResponse }] = await Promise.all([
+            import("@/lib/obd/adapter/elm-queue"),
+            import("@/lib/obd/protocol/uds-parser"),
+            import("@/lib/obd/protocol/response-cleaner"),
+          ]);
+          const bytes = rawCmd.replace(/\s+/g, "").match(/.{1,2}/g)?.map((h) => parseInt(h, 16)) || [];
+          if (bytes.length === 0) throw new Error("Neplatný hex příkaz.");
+          const timeoutMs = Number(command.command_payload?.timeoutMs) || 5000;
+          const res = await elmQueue.send(rawCmd, { timeoutMs });
+          const cleaned = cleanElmResponse(res.raw, rawCmd);
+          const uds = parseUds(res.raw, bytes[0], bytes.slice(1));
+          result = {
+            command: rawCmd,
+            raw: res.raw,
+            cleaned,
+            status: uds.status,
+            payload: uds.payload.map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" "),
+            positiveMarker: uds.positiveMarker,
+            warnings: uds.warnings,
+          };
+          break;
+        }
+        case "stellantis_session": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const { startExtendedSession } = await import("@/lib/obd/oem/stellantis");
+          const session = await startExtendedSession();
+          result = { session };
+          break;
+        }
+        case "stellantis_did": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const did = String(command.command_payload?.did || "").replace(/\s+/g, "").toUpperCase();
+          if (!/^[0-9A-F]{4}$/.test(did)) throw new Error("Neplatný DID (očekává se 4-hex, např. F190).");
+          const { readStellantisDid } = await import("@/lib/obd/oem/stellantis");
+          const label = String(command.command_payload?.label || did);
+          const cmd = `22 ${did.substring(0, 2)} ${did.substring(2, 4)}`;
+          const didRes = await readStellantisDid({ did, cmd, label, category: "basic" });
+          result = { did: didRes };
+          break;
+        }
+        case "stellantis_basic":
+        case "stellantis_basic_scan": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const { stellantisProfile } = await import("@/lib/obd/oem/stellantis");
+          const scan = await stellantisProfile.scanBasicInfo();
+          result = { scan };
+          break;
+        }
+        case "stellantis_engine_live":
+        case "stellantis_engine_scan": {
+          if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+          const { stellantisProfile } = await import("@/lib/obd/oem/stellantis");
+          const scan = await stellantisProfile.scanEngineLive();
+          result = { scan };
+          break;
+        }
         default:
           throw new Error(`Nepodporovaný vzdálený příkaz: ${type}`);
       }
