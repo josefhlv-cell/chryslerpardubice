@@ -3,6 +3,7 @@
 // Uses @capacitor-community/bluetooth-le on native, simulates on web
 
 import { BleClient, ScanResult } from '@capacitor-community/bluetooth-le';
+import { logObdDebugEvent, resetObdDebugThrottle } from '@/lib/obd/debug/obd-debug-logger';
 
 export type BLEDeviceInfo = {
   deviceId: string;
