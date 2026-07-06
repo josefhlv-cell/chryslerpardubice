@@ -22,10 +22,12 @@ const INIT_SEQUENCE = [
   { command: "ATE0", description: "Echo off" },
   { command: "ATL0", description: "Linefeeds off" },
   { command: "ATS0", description: "Spaces off" },
-  { command: "ATH0", description: "Headers off" },
+  { command: "ATH0", description: "Headers off (customer polling)" },
   { command: "ATSP0", description: "Auto protocol" },
-  { command: "ATST64", description: "Timeout 400ms" },
-  { command: "010C", description: "RPM test" },
+  { command: "ATAT1", description: "Adaptive timing 1" },
+  { command: "ATST32", description: "ELM timeout 200ms" },
+  { command: "ATCFC1", description: "CAN flow control auto" },
+  { command: "0100", description: "Protocol handshake" },
 ];
 const ERROR_PATTERNS = [
   "UNABLE TO CONNECT",
