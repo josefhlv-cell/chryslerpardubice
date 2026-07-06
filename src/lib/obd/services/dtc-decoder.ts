@@ -13,7 +13,7 @@ export type DtcLetter = "P" | "C" | "B" | "U";
 export type DecodedDtc = {
   code: string;         // "P0403"
   letter: DtcLetter;
-  raw: string;          // "01 04 03"
+  raw: string;          // "01 04" nebo UDS "04 20 07 6A"
 };
 
 const LETTERS: DtcLetter[] = ["P", "C", "B", "U"];
@@ -60,4 +60,29 @@ export function decodeDtcPayload(payload: number[]): {
     }
   }
   return { codes, warnings };
+}
+
+/**
+ * UDS Service 19 DTC = 3 bajty kódu + 1 bajt statusu.
+ * Formát NENÍ stejný jako SAE Mode 03 dvoubajtový DTC. Pokud se UDS payload
+ * dekóduje přes decodeDtcPair(), vznikají falešné kódy a TCM/ABS chyby se
+ * v UI ztrácí. Delphi pro UDS drží tříbajtovou hodnotu a status zvlášť.
+ */
+export function decodeUdsDtcRecord(dtcHigh: number, dtcMid: number, dtcLow: number, status?: number): DecodedDtc | null {
+  if (dtcHigh === 0 && dtcMid === 0 && dtcLow === 0) return null;
+
+  const letter = LETTERS[(dtcHigh >> 6) & 0x03];
+  const firstDigit = (dtcHigh >> 4) & 0x03;
+  const secondDigit = dtcHigh & 0x0f;
+  const thirdDigit = (dtcMid >> 4) & 0x0f;
+  const fourthDigit = dtcMid & 0x0f;
+  const failureType = dtcLow.toString(16).padStart(2, "0").toUpperCase();
+  const code = `${letter}${firstDigit.toString(16).toUpperCase()}${secondDigit.toString(16).toUpperCase()}${thirdDigit.toString(16).toUpperCase()}${fourthDigit.toString(16).toUpperCase()}-${failureType}`;
+  const rawBytes = [dtcHigh, dtcMid, dtcLow, status].filter((b): b is number => typeof b === "number");
+
+  return {
+    code,
+    letter,
+    raw: rawBytes.map((b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" "),
+  };
 }
