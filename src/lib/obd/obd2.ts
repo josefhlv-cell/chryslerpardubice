@@ -12,6 +12,13 @@
 import { elmQueue } from "./adapter/elm-queue";
 import { applyElmProfile, withElmProfile } from "./adapter/elm-init";
 import { runFullDtcScan } from "./services/full-dtc-scan";
+import {
+  runMultiEcuDtcScan,
+  STELLANTIS_PRIMARY_ECUS,
+  type EcuTarget,
+  type EcuDtcResult,
+  type MultiEcuDtcScan,
+} from "./services/multi-ecu-dtc-scan";
 import { readStoredDtcs, readPendingDtcs, readPermanentDtcs } from "./services/dtc-services";
 import { readVinMode09 } from "./services/service09";
 import {
@@ -39,6 +46,8 @@ export const obd2 = {
 
   // DTC
   runFullDtcScan,
+  runMultiEcuDtcScan,
+  stellantisPrimaryEcus: STELLANTIS_PRIMARY_ECUS,
   readStoredDtcs,
   readPendingDtcs,
   readPermanentDtcs,
@@ -69,5 +78,6 @@ export const obd2 = {
 
 export type { DtcResult, DtcService, DtcLabel } from "./services/dtc-services";
 export type { FullDtcScan } from "./services/full-dtc-scan";
+export type { EcuTarget, EcuDtcResult, MultiEcuDtcScan };
 export type { DidResult, StellantisBasicScan, StellantisEngineLiveScan, SessionResult } from "./oem/stellantis";
 export type { ElmStatus } from "./adapter/elm-errors";

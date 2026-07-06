@@ -18,6 +18,7 @@ import {
   type DidResult,
   type DtcResult,
   type FullDtcScan,
+  type MultiEcuDtcScan,
   type StellantisBasicScan,
   type StellantisEngineLiveScan,
   type SessionResult,
@@ -29,6 +30,7 @@ type AnyResult =
   | { kind: "did"; data: DidResult }
   | { kind: "dtc"; data: DtcResult }
   | { kind: "full-dtc"; data: FullDtcScan }
+  | { kind: "multi-dtc"; data: MultiEcuDtcScan }
   | { kind: "basic"; data: StellantisBasicScan }
   | { kind: "engine-live"; data: StellantisEngineLiveScan }
   | { kind: "raw"; data: { command: string; raw: string; status: ElmStatus } }
@@ -177,11 +179,20 @@ const AdminStellantisOEM = () => {
             {btn("dtc-03", "Raw DTC 03", async () => ({ kind: "dtc", data: await obd2.readStoredDtcs() }))}
             {btn("dtc-07", "Raw DTC 07", async () => ({ kind: "dtc", data: await obd2.readPendingDtcs() }))}
             {btn("dtc-0a", "Raw DTC 0A", async () => ({ kind: "dtc", data: await obd2.readPermanentDtcs() }))}
-            {btn("dtc-full", "Full DTC scan", async () => ({
+            {btn("dtc-full", "Full DTC scan (03+07+0A)", async () => ({
               kind: "full-dtc",
               data: await obd2.runFullDtcScan(),
             }))}
+            {btn("dtc-multi", "Multi-ECU DTC scan (všechny jednotky)", async () => ({
+              kind: "multi-dtc",
+              data: await obd2.runMultiEcuDtcScan(),
+            }))}
           </div>
+          <p className="text-[10px] text-muted-foreground pt-1">
+            Multi-ECU scan projde postupně motor, převodovku, ABS, SRS, BCM, cluster, gateway,
+            ADAS a další jednotky Stellantis/FCA (Chrysler, Dodge, Jeep, RAM, Fiat, Lancia, Alfa).
+            Vyžaduje ELM327 s podporou 11-bit CAN.
+          </p>
         </CardContent>
       </Card>
 
@@ -217,21 +228,35 @@ const AdminStellantisOEM = () => {
             Stellantis engine live DID (read-only)
           </p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {readDidBtn("RPM 4000", "4000")}
+            {readDidBtn("Torque 4001", "4001")}
+            {readDidBtn("Coolant 4004", "4004")}
             {readDidBtn("Coolant 1B04", "1B04")}
             {readDidBtn("Oil temp 4005", "4005")}
             {readDidBtn("Oil pressure 4007", "4007")}
             {readDidBtn("MAF 4009", "4009")}
             {readDidBtn("Boost 400B", "400B")}
+            {readDidBtn("Lambda 400E", "400E")}
+            {readDidBtn("Fuel rail 4014", "4014")}
+            {readDidBtn("Ign advance 4017", "4017")}
             {readDidBtn("EGR pos 4019", "4019")}
             {readDidBtn("Battery 4026", "4026")}
+            {readDidBtn("Evap purge 402E", "402E")}
             {readDidBtn("DPF soot 4048", "4048")}
+            {readDidBtn("DPF regen count 4049", "4049")}
             {readDidBtn("DPF dist regen 404A", "404A")}
             {readDidBtn("DPF active regen 404B", "404B")}
-            {btn("scan-engine", "Stellantis engine live scan", async () => ({
+            {readDidBtn("DEF/AdBlue 404C", "404C")}
+            {btn("scan-engine", "Stellantis engine + DPF scan", async () => ({
               kind: "engine-live",
               data: await obd2.stellantis.scanEngineLive(),
             }))}
           </div>
+          <p className="text-[10px] text-muted-foreground pt-1">
+            DPF DIDs (4048/4049/404A/404B/404C) čtou zanesení sazí, počet regenerací,
+            vzdálenost od poslední regenerace, stav aktivní regenerace a hladinu AdBlue.
+            Fungují pro dieselové motory Stellantis/FCA/Fiat/Lancia/Alfa (ZFA/ZFB/ZFC VIN).
+          </p>
         </CardContent>
       </Card>
 
@@ -348,6 +373,30 @@ function ResultCard({ r }: { r: AnyResult }) {
           <DtcRow r={r.data.stored} />
           <DtcRow r={r.data.pending} />
           <DtcRow r={r.data.permanent} />
+        </>
+      )}
+      {r.kind === "multi-dtc" && (
+        <>
+          <div className="font-semibold">Multi-ECU DTC scan</div>
+          <div className="text-muted-foreground">
+            Prošlo {r.data.totalEcusProbed} jednotek · odpovědělo {r.data.ecusResponding} · s chybami{" "}
+            {r.data.ecusWithCodes} · celkem {r.data.totalCodes} DTC
+          </div>
+          {r.data.results.map((er) => (
+            <div key={er.ecu.address} className="border-t border-border/50 pt-1 mt-1">
+              <div className="flex justify-between">
+                <span className="font-mono">
+                  {er.ecu.address} · {er.ecu.commonName}
+                </span>
+                <StatusBadge status={er.status} />
+              </div>
+              {er.codes.length > 0 && (
+                <div className="text-xs">
+                  {er.codes.map((c) => c.code).join(", ")}
+                </div>
+              )}
+            </div>
+          ))}
         </>
       )}
       {r.kind === "basic" && (
