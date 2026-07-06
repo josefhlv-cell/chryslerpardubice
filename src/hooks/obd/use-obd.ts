@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { bleManager, BLEConnectionState, BLEDeviceInfo } from '@/lib/obd/ble-manager';
 import { elm327, ELMState, InitStep } from '@/lib/obd/elm327-engine';
 import { LIVE_PIDS, parsePIDResponse } from '@/lib/obd/obd-pids';
+import { elmQueue } from '@/lib/obd/adapter/elm-queue';
+import { isPidOnCooldown, markPidFailed, markPidSuccess } from '@/lib/obd/unsupported-pid-cache';
 
 export function useBLE() {
   const [connectionState, setConnectionState] = useState<BLEConnectionState>('disconnected');
@@ -148,12 +150,19 @@ export function useLiveData(active: boolean) {
       try {
       for (const pid of LIVE_PIDS) {
         if (cancelled) return;
+        if (elmQueue.isPollingPaused() || isPidOnCooldown(pid)) continue;
 
         try {
-          const response = await elm327.sendCommand(pid);
+          const res = await elmQueue.send(pid, { timeoutMs: 900, commandType: 'live_poll_command' });
+          if (res.status !== 'ok') {
+            markPidFailed(pid);
+            continue;
+          }
+          const response = res.raw;
           const value = parsePIDResponse(pid, response);
 
           if (value !== null) {
+            markPidSuccess(pid);
             setData((prev) => {
               const next = {
                 ...prev,
@@ -164,8 +173,11 @@ export function useLiveData(active: boolean) {
 
               return next;
             });
+          } else {
+            markPidFailed(pid);
           }
         } catch {
+          markPidFailed(pid);
           // Skip failed reads
         }
       }
