@@ -13,7 +13,7 @@ import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { detectElmError, type ElmStatus } from "@/lib/obd/adapter/elm-errors";
 import { cleanElmResponse } from "@/lib/obd/protocol/response-cleaner";
 import { parseIsoTp } from "@/lib/obd/protocol/isotp-parser";
-import { decodeDtcPayload, decodeDtcPair, type DecodedDtc } from "./dtc-decoder";
+import { decodeDtcPayload, decodeUdsDtcRecord, type DecodedDtc } from "./dtc-decoder";
 
 export type EcuTarget = {
   address: string;   // 11-bit request ID, např. "7E0"
@@ -72,6 +72,12 @@ export const STELLANTIS_QUICK_ECUS: EcuTarget[] = STELLANTIS_PRIMARY_ECUS.filter
   ["7E0", "7E1", "7E2", "760", "731", "793", "7A2", "652"].includes(ecu.address),
 );
 
+const UDS_DTC_COMMANDS = [
+  { command: "1902FF", marker: 0x02, label: "all/status-mask" },
+  { command: "19020F", marker: 0x02, label: "active/status-mask" },
+  { command: "1906FF", marker: 0x06, label: "extended/status-mask" },
+];
+
 async function readDtcFromEcu(ecu: EcuTarget): Promise<EcuDtcResult> {
   const warnings: string[] = [];
   const reqHex = parseInt(ecu.address, 16);
@@ -84,80 +90,108 @@ async function readDtcFromEcu(ecu: EcuTarget): Promise<EcuDtcResult> {
   await elmQueue.send(`ATFCSH${ecu.address}`, { timeoutMs: 550, commandType: "full_dtc_scan" }).catch(() => undefined);
   await elmQueue.send(`ATCRA${respHex}`, { timeoutMs: 550, commandType: "full_dtc_scan" });
 
-  // Mode 03 (stored DTC). Timeout 2200ms je dost pro CAN request+odpověď
-  // s ATST64; když ECU nereaguje, dostaneme rychle "no_data".
+  // Mode 03 (stored DTC). U powertrain ECU bývá podporovaný přímo. U TCM/ABS/BCM
+  // často vrátí NO DATA, ale to NEZNAMENÁ „bez chyb" — jen nepodporuje SAE 03.
+  // Proto po no_data/invalid zkusíme read-only UDS Service 19.
   let res = await elmQueue.send("03", { timeoutMs: 1600, commandType: "raw_dtc_03" });
   const cleaned = cleanElmResponse(res.raw, "03");
 
   // "adapter_error" (STOPPED / BUFFER FULL) znamená, že adaptér ještě
   // nebyl klidný; UDS fallback by ho jen zahltil. Nech ho dýchat a hlas
   // no_data — další ECU se probou samostatně.
-  if (res.status === "adapter_error" || res.status === "no_data" || res.status === "timeout") {
+  if (res.status === "adapter_error" || res.status === "timeout") {
     return { ecu, status: res.status, codes: [], raw: res.raw, warnings };
+  }
+
+  if (res.status === "no_data") {
+    warnings.push("Mode 03 unsupported/no data — trying UDS Service 19.");
+    return readUdsDtcFallback(ecu, warnings, res.raw);
   }
 
   if (res.status !== "ok") {
     // Karosářské / gateway jednotky často nepodporují OBD Mode 03, ale podporují
     // UDS Service 19 ReadDTCInformation. Zkusíme read-only fallback 19 02 FF.
-    res = await elmQueue.send("1902FF", { timeoutMs: 1800, commandType: "full_dtc_scan" });
-    return decodeUds19Result(ecu, res.raw, res.status, warnings);
+    return readUdsDtcFallback(ecu, warnings, res.raw);
   }
   const elmErr = detectElmError(cleaned);
   if (elmErr) {
-    if (elmErr === "no_data" || elmErr === "timeout" || elmErr === "adapter_error") {
+    if (elmErr === "timeout" || elmErr === "adapter_error") {
       return { ecu, status: elmErr, codes: [], raw: res.raw, warnings };
     }
-    res = await elmQueue.send("1902FF", { timeoutMs: 1800, commandType: "full_dtc_scan" });
-    return decodeUds19Result(ecu, res.raw, res.status, warnings);
+    warnings.push(`Mode 03 returned ${elmErr} — trying UDS Service 19.`);
+    return readUdsDtcFallback(ecu, warnings, res.raw);
   }
 
   const msg = parseIsoTp(cleaned);
   warnings.push(...msg.warnings);
   const bytes = msg.payload;
   if (bytes.length === 0 || bytes[0] !== 0x43) {
-    return {
-      ecu,
-      status: "invalid_response",
-      codes: [],
-      raw: res.raw,
-      warnings: [...warnings, "Missing positive marker 0x43"],
-    };
+    warnings.push("Missing positive marker 0x43 — trying UDS Service 19.");
+    return readUdsDtcFallback(ecu, warnings, res.raw);
   }
   const decoded = decodeDtcPayload(bytes.slice(1));
   warnings.push(...decoded.warnings);
   return { ecu, status: "ok", codes: decoded.codes, raw: res.raw, warnings };
 }
 
+async function readUdsDtcFallback(
+  ecu: EcuTarget,
+  warnings: string[],
+  previousRaw = "",
+): Promise<EcuDtcResult> {
+  const raws: string[] = previousRaw ? [`03: ${previousRaw}`] : [];
+  let lastStatus: ElmStatus = "no_data";
+
+  for (const item of UDS_DTC_COMMANDS) {
+    const res = await elmQueue.send(item.command, { timeoutMs: 1800, commandType: "raw_uds" });
+    raws.push(`${item.command}: ${res.raw}`);
+    lastStatus = res.status;
+
+    const decoded = decodeUds19Result(ecu, item.command, item.marker, res.raw, res.status, warnings);
+    if (decoded.status === "ok") return { ...decoded, raw: raws.join("\n") };
+    if (decoded.status === "adapter_error" || decoded.status === "timeout") return { ...decoded, raw: raws.join("\n") };
+  }
+
+  return { ecu, status: lastStatus, codes: [], raw: raws.join("\n"), warnings };
+}
+
 function decodeUds19Result(
   ecu: EcuTarget,
+  command: string,
+  subFunction: number,
   raw: string,
   status: ElmStatus,
   baseWarnings: string[],
 ): EcuDtcResult {
   const warnings = [...baseWarnings];
   if (status !== "ok") return { ecu, status, codes: [], raw, warnings };
-  const cleaned = cleanElmResponse(raw, "1902FF");
+  const cleaned = cleanElmResponse(raw, command);
   const elmErr = detectElmError(cleaned);
   if (elmErr) return { ecu, status: elmErr, codes: [], raw, warnings };
   const msg = parseIsoTp(cleaned);
   warnings.push(...msg.warnings);
   const bytes = msg.payload;
-  if (bytes.length < 3 || bytes[0] !== 0x59 || bytes[1] !== 0x02) {
-    return { ecu, status: "invalid_response", codes: [], raw, warnings: [...warnings, "Missing UDS 59 02 marker"] };
+  if (bytes.length < 3 || bytes[0] !== 0x59 || bytes[1] !== subFunction) {
+    return { ecu, status: "invalid_response", codes: [], raw, warnings: [...warnings, `Missing UDS 59 ${subFunction.toString(16).padStart(2, "0").toUpperCase()} marker`] };
   }
 
-  // 59 02 <availabilityMask> [DTC_H DTC_M DTC_L status]...
-  const data = bytes.slice(3);
+  // 59 02/06 <availabilityMask> [DTC_H DTC_M DTC_L status]...
+  let data = bytes.slice(3);
+  // Některé ELM/ECU odpovědi vloží DTC status availability mask, některé ne.
+  // Zarovnáme na 4b rekordy tak, aby se nepřeskočil první DTC.
+  if (data.length % 4 !== 0 && bytes.length > 2 && bytes.slice(2).length % 4 === 0) {
+    data = bytes.slice(2);
+    warnings.push("UDS Service 19 response without availability mask — adjusted record offset.");
+  }
   const codes: DecodedDtc[] = [];
   const seen = new Set<string>();
   for (let i = 0; i + 3 < data.length; i += 4) {
-    const dec = decodeDtcPair(data[i], data[i + 1]);
+    const dec = decodeUdsDtcRecord(data[i], data[i + 1], data[i + 2], data[i + 3]);
     if (!dec) continue;
-    const failureType = data[i + 2].toString(16).padStart(2, "0").toUpperCase();
-    const code = `${dec.code}-${failureType}`;
+    const code = dec.code;
     if (seen.has(code)) continue;
     seen.add(code);
-    codes.push({ ...dec, code, raw: `${dec.raw} ${failureType}` });
+    codes.push(dec);
   }
   return { ecu, status: "ok", codes, raw, warnings };
 }
