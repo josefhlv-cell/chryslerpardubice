@@ -70,27 +70,34 @@ export const STELLANTIS_PRIMARY_ECUS: EcuTarget[] = [
 
 async function readDtcFromEcu(ecu: EcuTarget): Promise<EcuDtcResult> {
   const warnings: string[] = [];
-  // Nastav request header a odpovědní filtr přesně na tuto ECU
-  // Response ID = request + 8 pro 11-bit CAN (7E0 → 7E8)
   const reqHex = parseInt(ecu.address, 16);
   const respHex = (reqHex + 8).toString(16).toUpperCase().padStart(3, "0");
 
-  await elmQueue.send(`ATSH${ecu.address}`, { timeoutMs: 1500 });
-  await elmQueue.send(`ATFCSH${ecu.address}`, { timeoutMs: 1500 }).catch(() => undefined);
-  await elmQueue.send(`ATCRA${respHex}`, { timeoutMs: 1500 });
+  await elmQueue.send(`ATSH${ecu.address}`, { timeoutMs: 800 });
+  await elmQueue.send(`ATFCSH${ecu.address}`, { timeoutMs: 800 }).catch(() => undefined);
+  await elmQueue.send(`ATCRA${respHex}`, { timeoutMs: 800 });
 
-  let res = await elmQueue.send("03", { timeoutMs: 3500 });
+  // Mode 03 (stored DTC). Timeout 2200ms je dost pro CAN request+odpověď
+  // s ATST64; když ECU nereaguje, dostaneme rychle "no_data".
+  let res = await elmQueue.send("03", { timeoutMs: 2200 });
   const cleaned = cleanElmResponse(res.raw, "03");
+
+  // "adapter_error" (STOPPED / BUFFER FULL) znamená, že adaptér ještě
+  // nebyl klidný; UDS fallback by ho jen zahltil. Nech ho dýchat a hlas
+  // no_data — další ECU se probou samostatně.
+  if (res.status === "adapter_error") {
+    return { ecu, status: res.status, codes: [], raw: res.raw, warnings };
+  }
 
   if (res.status !== "ok") {
     // Karosářské / gateway jednotky často nepodporují OBD Mode 03, ale podporují
     // UDS Service 19 ReadDTCInformation. Zkusíme read-only fallback 19 02 FF.
-    res = await elmQueue.send("1902FF", { timeoutMs: 4500 });
+    res = await elmQueue.send("1902FF", { timeoutMs: 2500 });
     return decodeUds19Result(ecu, res.raw, res.status, warnings);
   }
   const elmErr = detectElmError(cleaned);
   if (elmErr) {
-    res = await elmQueue.send("1902FF", { timeoutMs: 4500 });
+    res = await elmQueue.send("1902FF", { timeoutMs: 2500 });
     return decodeUds19Result(ecu, res.raw, res.status, warnings);
   }
 
