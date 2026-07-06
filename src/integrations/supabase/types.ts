@@ -2782,6 +2782,69 @@ export type Database = {
         }
         Relationships: []
       }
+      obd_debug_logs: {
+        Row: {
+          adapter_id: string | null
+          adapter_name: string | null
+          cleaned_response: string | null
+          command: string | null
+          command_type: string | null
+          connection_state: string | null
+          created_at: string
+          duration_ms: number | null
+          elm_profile: string | null
+          error: string | null
+          id: string
+          metadata: Json | null
+          polling_paused: boolean | null
+          raw_response: string | null
+          status: string | null
+          user_id: string | null
+          vehicle_id: string | null
+          warnings: Json | null
+        }
+        Insert: {
+          adapter_id?: string | null
+          adapter_name?: string | null
+          cleaned_response?: string | null
+          command?: string | null
+          command_type?: string | null
+          connection_state?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          elm_profile?: string | null
+          error?: string | null
+          id?: string
+          metadata?: Json | null
+          polling_paused?: boolean | null
+          raw_response?: string | null
+          status?: string | null
+          user_id?: string | null
+          vehicle_id?: string | null
+          warnings?: Json | null
+        }
+        Update: {
+          adapter_id?: string | null
+          adapter_name?: string | null
+          cleaned_response?: string | null
+          command?: string | null
+          command_type?: string | null
+          connection_state?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          elm_profile?: string | null
+          error?: string | null
+          id?: string
+          metadata?: Json | null
+          polling_paused?: boolean | null
+          raw_response?: string | null
+          status?: string | null
+          user_id?: string | null
+          vehicle_id?: string | null
+          warnings?: Json | null
+        }
+        Relationships: []
+      }
       obd_live_consents: {
         Row: {
           created_at: string
