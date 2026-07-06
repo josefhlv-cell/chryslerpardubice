@@ -145,49 +145,55 @@ function decodeUds19Result(
   return { ecu, status: "ok", codes, raw, warnings };
 }
 
+export async function runMultiEcuDtcScanUnlocked(
+  ecus: EcuTarget[] = STELLANTIS_PRIMARY_ECUS,
+): Promise<MultiEcuDtcScan> {
+  await elmQueue.applyProfile("debug");
+  const startedAt = new Date().toISOString();
+  const results: EcuDtcResult[] = [];
+
+  for (const ecu of ecus) {
+    try {
+      results.push(await readDtcFromEcu(ecu));
+    } catch (e) {
+      results.push({
+        ecu,
+        status: "error",
+        codes: [],
+        raw: String((e as Error)?.message ?? e),
+        warnings: [],
+      });
+    }
+  }
+
+  // reset filtrů, aby další scan / polling nezůstal navázaný na poslední ECU
+  try {
+    await elmQueue.send("ATAR", { timeoutMs: 1000 });
+    await elmQueue.send("ATSH7DF", { timeoutMs: 1000 });
+    await elmQueue.send("ATFCSH7E0", { timeoutMs: 1000 });
+  } catch {
+    /* ignore */
+  }
+
+  const responding = results.filter((r) => r.status === "ok").length;
+  const withCodes = results.filter((r) => r.status === "ok" && r.codes.length > 0).length;
+  const totalCodes = results.reduce((sum, r) => sum + r.codes.length, 0);
+
+  return {
+    totalEcusProbed: results.length,
+    ecusResponding: responding,
+    ecusWithCodes: withCodes,
+    totalCodes,
+    results,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  };
+}
+
 export async function runMultiEcuDtcScan(
   ecus: EcuTarget[] = STELLANTIS_PRIMARY_ECUS,
 ): Promise<MultiEcuDtcScan> {
   return elmQueue.runExclusive(async () => {
-    await elmQueue.applyProfile("debug");
-    const startedAt = new Date().toISOString();
-    const results: EcuDtcResult[] = [];
-
-    for (const ecu of ecus) {
-      try {
-        results.push(await readDtcFromEcu(ecu));
-      } catch (e) {
-        results.push({
-          ecu,
-          status: "error",
-          codes: [],
-          raw: String((e as Error)?.message ?? e),
-          warnings: [],
-        });
-      }
-    }
-
-    // reset filtrů, aby další scan / polling nezůstal navázaný na poslední ECU
-    try {
-      await elmQueue.send("ATAR", { timeoutMs: 1000 });
-      await elmQueue.send("ATSH7DF", { timeoutMs: 1000 });
-      await elmQueue.send("ATFCSH7E0", { timeoutMs: 1000 });
-    } catch {
-      /* ignore */
-    }
-
-    const responding = results.filter((r) => r.status === "ok").length;
-    const withCodes = results.filter((r) => r.status === "ok" && r.codes.length > 0).length;
-    const totalCodes = results.reduce((sum, r) => sum + r.codes.length, 0);
-
-    return {
-      totalEcusProbed: results.length,
-      ecusResponding: responding,
-      ecusWithCodes: withCodes,
-      totalCodes,
-      results,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-    };
+    return runMultiEcuDtcScanUnlocked(ecus);
   });
 }

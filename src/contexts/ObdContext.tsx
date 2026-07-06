@@ -115,6 +115,7 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
   refresh_live: "live_data",
   live_refresh: "live_data",
   custom_command: "terminal",
+  custom_at: "terminal",
   terminal: "terminal",
   can_bus: "can_bus",
   uds: "uds",
@@ -566,6 +567,37 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       for (const c of pending) map.set(c.code, c);
       for (const c of stored) map.set(c.code, c);
       for (const c of permanent) map.set(c.code, c);
+      try {
+        const { runMultiEcuDtcScanUnlocked } = await import("@/lib/obd/services/multi-ecu-dtc-scan");
+        const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
+        const multi = await runMultiEcuDtcScanUnlocked();
+        for (const ecuResult of multi.results) {
+          for (const d of ecuResult.codes) {
+            const baseCode = d.code.split("-")[0];
+            const info = resolveDTCInfo(baseCode);
+            map.set(d.code, {
+              code: d.code,
+              system: baseCode[0] === "P" ? "powertrain" : baseCode[0] === "B" ? "body" : baseCode[0] === "C" ? "chassis" : "network",
+              description: `${info.description} · ${ecuResult.ecu.commonName}`,
+              descriptionEn: info.descriptionEn,
+              category: info.category,
+              firstCheck: info.firstCheck,
+              moparNote: info.moparNote,
+              source: `${info.source || "OBD"} / ${ecuResult.ecu.name}`,
+              severity: info.severity,
+              possibleCause: info.cause,
+              relatedSignals: info.signals,
+              isActive: true,
+              isPending: false,
+              occurenceCount: 1,
+              firstSeen: Date.now(),
+              lastSeen: Date.now(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[OBD DTC] multi-ECU scan failed:", e);
+      }
       const codes = [...map.values()];
 
       // Vrátit ELM zpět do rychlého polling módu
@@ -647,10 +679,19 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         case "refresh_live":
         case "live_refresh": {
           const data = await pollLiveDataOnce(true);
-          result = { liveData: data };
+          let dpf: DpfSnapshot | undefined;
+          try {
+            dpf = await readDpfSnapshot();
+            const next = { ...liveDataRef.current, dpf };
+            setLiveData(next);
+            liveDataRef.current = next;
+            await upsertSession(next, dtcsRef.current, true);
+          } catch { /* refresh live nesmí spadnout kvůli DPF */ }
+          result = { liveData: liveDataRef.current, dpf };
           break;
         }
         case "custom_command":
+        case "custom_at":
         case "terminal": {
           const rawCommand = String(command.command_payload?.command || "").trim();
           if (!rawCommand) throw new Error("Chybí command_payload.command.");

@@ -118,9 +118,9 @@ export function AdminVehiclePanel({ userId, vin, sessionPayload, isLive, onSendC
       read_vin: { type: "read_vin" },
       read_dtc: { type: "read_dtc" },
       read_live: { type: "refresh_live" },
-      read_voltage: { type: "custom_at", payload: { command: "ATRV" } },
-      pid_discovery: { type: "custom_at", payload: { command: "0100" } },
-      trans_oil_temp: { type: "custom_at", payload: { command: "2130" } },
+      read_voltage: { type: "custom_command", payload: { command: "ATRV" } },
+      pid_discovery: { type: "refresh_live" },
+      trans_oil_temp: { type: "refresh_live" },
       dpf_data: { type: "dpf_status" },
       export_log: { type: "__local_export__" },
       clear_dtc: { type: "clear_dtc" },
@@ -339,7 +339,7 @@ export function AdminVehiclePanel({ userId, vin, sessionPayload, isLive, onSendC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onSendCommand("custom_at", { command: "0100" })}
+              onClick={() => onSendCommand("refresh_live")}
               disabled={!isLive}
             >
               <Play className="w-3.5 h-3.5 mr-1" /> Spustit PID discovery
@@ -347,7 +347,7 @@ export function AdminVehiclePanel({ userId, vin, sessionPayload, isLive, onSendC
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onSendCommand("custom_at", { command: "2130" })}
+              onClick={() => onSendCommand("refresh_live")}
               disabled={!isLive || !profile.allowChryslerCustomPids}
             >
               <Play className="w-3.5 h-3.5 mr-1" /> Discovery teploty převodovky
