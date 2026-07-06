@@ -4,6 +4,7 @@
  *   - SIMPLE (ATH0 + ATL0) — pro zákaznický live polling (kratší odpovědi)
  */
 import { elm327 } from "@/lib/obd/elm327-engine";
+import { logObdDebugEvent } from "@/lib/obd/debug/obd-debug-logger";
 
 export type ElmProfile = "debug" | "simple";
 
