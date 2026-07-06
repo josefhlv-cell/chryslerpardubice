@@ -284,6 +284,7 @@ const Admin = () => {
   // === Strom navigace ===
   const tree: AdminTreeNode[] = [
     { key: "overview", label: "Přehled", icon: LayoutDashboard },
+    { key: "archive", label: "Vyřízené", icon: Archive },
     {
       key: "catalog", label: "Katalog (J+M)", icon: Package, children: [
         { key: "catalog-overview", label: "Přehled", icon: LayoutDashboard },
