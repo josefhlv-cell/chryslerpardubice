@@ -385,7 +385,7 @@ export async function testChryslerCustomPid(
     };
   } finally {
     try {
-      await elm327.sendCommand("ATSH7DF", "low");
+      await elmQueue.send("ATSH7DF", { timeoutMs: 650, commandType: "stellantis_did" });
     } catch {
       /* header reset ignore */
     }
