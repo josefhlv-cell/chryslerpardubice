@@ -58,12 +58,12 @@ describe("ISO-TP parser", () => {
       [
         "0: 49 02 01 31 43 34 52",
         "1: 4A 42 47 31 32 33 34",
-        "2: 35 36 37 38 39 30 31",
+        "2: 35 36 37 38 39 30",
       ].join("\n"),
     );
     expect(m.payload.slice(0, 3)).toEqual([0x49, 0x02, 0x01]);
     const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
-    expect(ascii).toBe("1C4RJBG12345678901");
+    expect(ascii).toBe("1C4RJBG1234567890");
   });
 });
 
