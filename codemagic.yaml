@@ -209,6 +209,11 @@ workflows:
 
           echo "Patching $PLIST"
 
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'CHDP Garage'" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'CHDP Garage'" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleName 'CHDP Garage'" "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Add :CFBundleName string 'CHDP Garage'" "$PLIST"
+
           /usr/libexec/PlistBuddy -c "Set :NSBluetoothAlwaysUsageDescription 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru ve vozidle.'" "$PLIST" 2>/dev/null || \
           /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru ve vozidle.'" "$PLIST"
 
