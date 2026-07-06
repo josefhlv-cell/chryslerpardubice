@@ -12,6 +12,13 @@
 import { elmQueue } from "./adapter/elm-queue";
 import { applyElmProfile, withElmProfile } from "./adapter/elm-init";
 import { runFullDtcScan } from "./services/full-dtc-scan";
+import {
+  runMultiEcuDtcScan,
+  STELLANTIS_PRIMARY_ECUS,
+  type EcuTarget,
+  type EcuDtcResult,
+  type MultiEcuDtcScan,
+} from "./services/multi-ecu-dtc-scan";
 import { readStoredDtcs, readPendingDtcs, readPermanentDtcs } from "./services/dtc-services";
 import { readVinMode09 } from "./services/service09";
 import {
