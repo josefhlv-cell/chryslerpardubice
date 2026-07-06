@@ -761,9 +761,13 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         }
         case "full_dtc_scan": {
           if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
-          const mod = await import("@/lib/obd/services/full-dtc-scan");
-          const scan = await mod.runFullDtcScan();
-          result = { scan };
+          const [{ runFullDtcScan }, { runMultiEcuDtcScan }] = await Promise.all([
+            import("@/lib/obd/services/full-dtc-scan"),
+            import("@/lib/obd/services/multi-ecu-dtc-scan"),
+          ]);
+          const scan = await runFullDtcScan();
+          const multiEcu = await runMultiEcuDtcScan();
+          result = { scan, multiEcu };
           break;
         }
         case "raw_uds": {

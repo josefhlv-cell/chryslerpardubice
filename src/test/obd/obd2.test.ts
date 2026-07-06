@@ -14,10 +14,10 @@ describe("DTC decoder", () => {
     const d = decodeDtcPair(0x01, 0x04);
     expect(d?.letter).toBe("P");
   });
-  it("payload s počtem DTC (1, 04 03) → P0403", () => {
-    const { codes } = decodeDtcPayload([0x01, 0x04, 0x03]);
+  it("payload Mode 03 bez count bytu: 01 33 → P0133", () => {
+    const { codes } = decodeDtcPayload([0x01, 0x33]);
     expect(codes).toHaveLength(1);
-    expect(codes[0].code).toBe("P0403");
+    expect(codes[0].code).toBe("P0133");
   });
   it("ignoruje 00 00 padding", () => {
     const { codes } = decodeDtcPayload([0x00, 0x00, 0x04, 0x03]);

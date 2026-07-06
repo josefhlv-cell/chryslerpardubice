@@ -29,6 +29,7 @@ export type DpfSnapshot = {
   exhaustTempAfterDpf?: number;
   regenActive?: boolean;
   regenStatus?: string;
+  regenCount?: number;
   kmSinceLastRegen?: number;
   timeSinceLastRegen?: number;
   lastUpdated: string;
@@ -137,7 +138,7 @@ async function readDpfSnapshotUnlocked(): Promise<DpfSnapshot> {
     regenFinal?.label ??
     (heuristicActive ? "Pravděpodobná regenerace (heuristika)" : undefined);
 
-  const confidence: DpfSnapshot["confidence"] = regen
+  const confidence: DpfSnapshot["confidence"] = regenFinal
     ? "high"
     : stellantis.supported
       ? "high"
@@ -156,8 +157,8 @@ async function readDpfSnapshotUnlocked(): Promise<DpfSnapshot> {
     exhaustTempAfterDpf: egtOut,
     regenActive,
     regenStatus,
+    regenCount: stellantis.regenCount,
     kmSinceLastRegen: stellantis.kmSinceLastRegen,
-    timeSinceLastRegen: stellantis.regenCount,
     lastUpdated: new Date().toISOString(),
     confidence,
   };
