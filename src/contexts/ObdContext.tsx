@@ -36,6 +36,7 @@ export type ObdLiveData = {
   rpm: number;
   coolantTemp: number;
   intakeTemp: number;
+  ambientTemp: number;
   speed: number;
   throttle: number;
   fuelPressure: number;
@@ -48,6 +49,14 @@ export type ObdLiveData = {
   fuelLevel: number;
   fuelRate: number;
   maf: number;
+  stftBank1: number;
+  ltftBank1: number;
+  timingAdvance: number;
+  runtimeSinceStart: number;
+  distanceWithMil: number;
+  barometricPressure: number;
+  absoluteLoad: number;
+  relativeThrottle: number;
   dpf?: DpfSnapshot;
 };
 
@@ -77,6 +86,7 @@ const EMPTY_LIVE: ObdLiveData = {
   rpm: 0,
   coolantTemp: 0,
   intakeTemp: 0,
+  ambientTemp: 0,
   speed: 0,
   throttle: 0,
   fuelPressure: 0,
@@ -89,6 +99,14 @@ const EMPTY_LIVE: ObdLiveData = {
   fuelLevel: 0,
   fuelRate: 0,
   maf: 0,
+  stftBank1: 0,
+  ltftBank1: 0,
+  timingAdvance: 0,
+  runtimeSinceStart: 0,
+  distanceWithMil: 0,
+  barometricPressure: 0,
+  absoluteLoad: 0,
+  relativeThrottle: 0,
 };
 
 const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
@@ -98,6 +116,7 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "0111": "throttle",
   "0104": "engineLoad",
   "010F": "intakeTemp",
+  "0146": "ambientTemp",
   "010A": "fuelPressure",
   "010B": "boostPressure",
   "0142": "voltage",
@@ -105,6 +124,14 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "012F": "fuelLevel",
   "015E": "fuelRate",
   "0110": "maf",
+  "0106": "stftBank1",
+  "0107": "ltftBank1",
+  "010E": "timingAdvance",
+  "011F": "runtimeSinceStart",
+  "0121": "distanceWithMil",
+  "0133": "barometricPressure",
+  "0143": "absoluteLoad",
+  "0145": "relativeThrottle",
 };
 
 const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
@@ -576,10 +603,11 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       for (const c of pending) map.set(c.code, c);
       for (const c of stored) map.set(c.code, c);
       for (const c of permanent) map.set(c.code, c);
-      try {
+
+      const addMultiEcuCodes = async (ecus?: import("@/lib/obd/services/multi-ecu-dtc-scan").EcuTarget[]) => {
         const { runMultiEcuDtcScanUnlocked, STELLANTIS_QUICK_ECUS } = await import("@/lib/obd/services/multi-ecu-dtc-scan");
         const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
-        const multi = await runMultiEcuDtcScanUnlocked(STELLANTIS_QUICK_ECUS);
+        const multi = await runMultiEcuDtcScanUnlocked(ecus ?? STELLANTIS_QUICK_ECUS);
         for (const ecuResult of multi.results) {
           for (const d of ecuResult.codes) {
             const baseCode = d.code.split("-")[0];
@@ -604,6 +632,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
             });
           }
         }
+      };
+
+      try {
+        await addMultiEcuCodes();
       } catch (e) {
         console.warn("[OBD DTC] multi-ECU scan failed:", e);
       }

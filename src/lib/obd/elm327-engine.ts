@@ -35,6 +35,7 @@ const ERROR_PATTERNS = [
   "BUS INIT",
   "CAN ERROR",
   "BUFFER FULL",
+  "STOPPED",
   "ERROR",
 ];
 const SIMULATED_RESPONSES: Record<string, string> = {
@@ -197,7 +198,7 @@ class ELM327Engine {
       const item = this.queue.shift()!;
       this.setState("busy");
       try {
-        const response = await this.sendRaw(item.command, item.responseTimeoutMs);
+        const response = await this.sendRaw(item.command, item.responseTimeoutMs ?? 2000);
         if (this.isHardError(response)) {
           if (item.retries < 1) {
             item.retries++;

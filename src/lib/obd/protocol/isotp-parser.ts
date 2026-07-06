@@ -64,13 +64,34 @@ function parseFrame(line: string): IsoTpFrame | null {
     return { pci: 0, payload: bytes, raw: trimmed, indexed: true };
   }
 
-  // Volitelná ECU hlavička (7E8 …)
+  // Volitelná ECU hlavička (7E8 …).
+  // Reálné ELM/vLinker logy často chodí kompaktně bez mezer:
+  //   7E81014490201314138
+  //   7E82147534834503338
+  // Původní parser poznal hlavičku jen ve tvaru "7E8 10 ..." a kompaktní
+  // multi-frame odpověď pak dekódoval jako payload začínající 7E 81 ...,
+  // takže VIN/DTC parser nenašel marker 49/43/47. Delphi parsuje nejdřív CAN
+  // ID a až potom PCI byte — proto podporujeme obě varianty.
   let ecu: string | undefined;
   let dataPart = trimmed;
   const hdr = ECU_HEADER_RE.exec(trimmed);
   if (hdr) {
     ecu = hdr[1].toUpperCase();
     dataPart = trimmed.substring(hdr[0].length).trim();
+  } else {
+    const compact = trimmed.replace(/\s+/g, "").toUpperCase();
+    if (/^[0-9A-F]+$/.test(compact) && compact.length >= 5 && compact.length % 2 === 1) {
+      const maybeHeader = compact.slice(0, 3);
+      const maybeData = compact.slice(3);
+      const firstDataByte = parseInt(maybeData.slice(0, 2), 16);
+      const pciNibble = (firstDataByte >> 4) & 0x0f;
+      // 11-bit CAN response ID + ISO-TP PCI. Headerless OBD odpovědi (410C...)
+      // mají sudý počet znaků, takže sem nespadnou.
+      if (!Number.isNaN(firstDataByte) && pciNibble <= 3) {
+        ecu = maybeHeader;
+        dataPart = maybeData;
+      }
+    }
   }
 
   const bytes = hexLineToBytes(dataPart);

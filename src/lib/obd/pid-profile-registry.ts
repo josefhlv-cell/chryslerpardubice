@@ -29,7 +29,7 @@ export const PID_PROFILES: Record<VehiclePidProfileId, VehiclePidProfile> = {
   chrysler_can_2011_2016: {
     id: "chrysler_can_2011_2016",
     label: "Chrysler CAN 2011–2016",
-    brands: ["Chrysler", "Dodge", "Jeep", "RAM"],
+    brands: ["Chrysler", "Dodge", "Jeep", "RAM", "Lancia"],
     allowChryslerCustomPids: true,
     notes: "Chrysler CAN, Mode 22 DIDs, TCM 7E1.",
   },
@@ -70,7 +70,7 @@ export function resolveProfileFromBrand(
   if (pg === "vag_can") return PID_PROFILES.vag_can;
 
   const b = (brand || "").toLowerCase();
-  if (["chrysler", "dodge", "jeep", "ram"].includes(b)) {
+  if (["chrysler", "dodge", "jeep", "ram", "lancia"].includes(b)) {
     return PID_PROFILES.chrysler_can_2011_2016;
   }
   if (["škoda", "skoda", "volkswagen", "audi", "seat", "porsche"].includes(b)) {

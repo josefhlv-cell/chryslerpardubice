@@ -26,6 +26,7 @@ const PROFILES: Record<ElmProfile, string[]> = {
     "ATFCSM1",      // Použij naši FC frame
   ],
   simple: [
+    "ATAR",         // zrušit CAN receive filtr po DTC/UDS scanu (ATCRA7E9 apod.)
     "ATE0", "ATL0", "ATS0", "ATH0",
     "ATAT1",
     "ATST32",       // HW timeout 200ms — rychlé PID
@@ -36,6 +37,10 @@ let currentProfile: ElmProfile | null = null;
 
 export function getActiveElmProfile(): ElmProfile | null {
   return currentProfile;
+}
+
+export function resetActiveElmProfile(): void {
+  currentProfile = null;
 }
 
 /** Přepne profil (pokud už je aktivní, nedělá nic). Vrací true při úspěchu. */
@@ -53,7 +58,9 @@ export async function applyElmProfile(profile: ElmProfile, force = false): Promi
       console.warn(`[elm-init] ${profile} step '${cmd}' failed:`, e);
     }
   }
-  currentProfile = profile;
+  // Když některý AT krok selže, necacheovat profil jako spolehlivý.
+  // Další VIN/DTC/live cesta ho pak raději aplikuje znovu místo práce v hybridním stavu.
+  currentProfile = errors.length ? null : profile;
   logObdDebugEvent({
     commandType: profile === "debug" ? "elm_init_debug_ath1" : "elm_init_simple_ath0",
     command: PROFILES[profile].join(" | "),

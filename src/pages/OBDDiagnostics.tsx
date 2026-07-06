@@ -459,6 +459,16 @@ const OBDDiagnostics = () => {
                     available={liveAvailability.intakeTemp !== undefined}
                     unavailableLabel="Nedostupné"
                   />
+                  <GaugeCircle
+                    value={liveData.ambientTemp}
+                    max={80}
+                    label="Venkovní teplota"
+                    unit="°C"
+                    color="hsl(190, 75%, 50%)"
+                    icon={Thermometer}
+                    available={liveAvailability.ambientTemp !== undefined}
+                    unavailableLabel="Nedostupné"
+                  />
                   {/* 8. Tlak oleje — zobrazí se jen po reálné odpovědi ECU */}
                   <GaugeCircle
                     value={liveData.oilPressure}
@@ -516,6 +526,90 @@ const OBDDiagnostics = () => {
                     color="hsl(38, 92%, 50%)"
                     icon={Fuel}
                     available={liveAvailability.fuelLevel !== undefined}
+                    unavailableLabel="Nedostupné"
+                  />
+                  <GaugeCircle
+                    value={liveData.stftBank1}
+                    max={25}
+                    label="STFT B1"
+                    unit="%"
+                    color="hsl(190, 70%, 50%)"
+                    icon={Activity}
+                    available={liveAvailability.stftBank1 !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
+                  />
+                  <GaugeCircle
+                    value={liveData.ltftBank1}
+                    max={25}
+                    label="LTFT B1"
+                    unit="%"
+                    color="hsl(160, 70%, 45%)"
+                    icon={Activity}
+                    available={liveAvailability.ltftBank1 !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
+                  />
+                  <GaugeCircle
+                    value={liveData.timingAdvance}
+                    max={60}
+                    label="Předstih"
+                    unit="°"
+                    color="hsl(45, 90%, 50%)"
+                    icon={Zap}
+                    available={liveAvailability.timingAdvance !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
+                  />
+                  <GaugeCircle
+                    value={liveData.runtimeSinceStart / 60}
+                    max={120}
+                    label="Běh motoru"
+                    unit="min"
+                    color="hsl(210, 75%, 55%)"
+                    icon={Gauge}
+                    available={liveAvailability.runtimeSinceStart !== undefined}
+                    unavailableLabel="Nedostupné"
+                    decimals={1}
+                  />
+                  <GaugeCircle
+                    value={liveData.distanceWithMil}
+                    max={1000}
+                    label="Km s MIL"
+                    unit="km"
+                    color="hsl(347, 77%, 50%)"
+                    icon={AlertTriangle}
+                    available={liveAvailability.distanceWithMil !== undefined}
+                    unavailableLabel="Nedostupné"
+                  />
+                  <GaugeCircle
+                    value={liveData.barometricPressure}
+                    max={120}
+                    label="Baro tlak"
+                    unit="kPa"
+                    color="hsl(200, 75%, 55%)"
+                    icon={Wind}
+                    available={liveAvailability.barometricPressure !== undefined}
+                    unavailableLabel="Nedostupné"
+                  />
+                  <GaugeCircle
+                    value={liveData.absoluteLoad}
+                    max={150}
+                    label="Absolutní zátěž"
+                    unit="%"
+                    color="hsl(28, 85%, 55%)"
+                    icon={Activity}
+                    available={liveAvailability.absoluteLoad !== undefined}
+                    unavailableLabel="Nedostupné"
+                  />
+                  <GaugeCircle
+                    value={liveData.relativeThrottle}
+                    max={100}
+                    label="Rel. klapka"
+                    unit="%"
+                    color="hsl(142, 71%, 45%)"
+                    icon={Gauge}
+                    available={liveAvailability.relativeThrottle !== undefined}
                     unavailableLabel="Nedostupné"
                   />
                 </div>
@@ -596,11 +690,19 @@ const OBDDiagnostics = () => {
                 ) : (
                   <div className="space-y-1.5">
                     {dtcs.map((dtc) => (
-                      <DtcItem
+                        <DtcItem
                         key={dtc.code}
                         code={dtc.code}
                         system={dtc.system}
                         isPending={dtc.isPending}
+                          description={dtc.description}
+                          descriptionEn={dtc.descriptionEn}
+                          category={dtc.category}
+                          severity={dtc.severity}
+                          possibleCause={dtc.possibleCause}
+                          firstCheck={dtc.firstCheck}
+                          moparNote={dtc.moparNote}
+                          source={dtc.source}
                       />
                     ))}
                   </div>

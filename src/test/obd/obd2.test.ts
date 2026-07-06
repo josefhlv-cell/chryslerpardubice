@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { decodeDtcPair, decodeDtcPayload } from "@/lib/obd/services/dtc-decoder";
+import { decodeDtcPair, decodeDtcPayload, decodeUdsDtcRecord } from "@/lib/obd/services/dtc-decoder";
 import { parseIsoTp } from "@/lib/obd/protocol/isotp-parser";
 import { parseUds } from "@/lib/obd/protocol/uds-parser";
 import { detectElmError } from "@/lib/obd/adapter/elm-errors";
+import { decodeVin } from "@/lib/obd/vin-decoder";
 
 describe("DTC decoder", () => {
   it("dekóduje P0403 ze 01 04 03", () => {
@@ -18,6 +19,14 @@ describe("DTC decoder", () => {
     const { codes } = decodeDtcPayload([0x01, 0x33]);
     expect(codes).toHaveLength(1);
     expect(codes[0].code).toBe("P0133");
+  });
+  it("payload Mode 03 s count bytem z FCA multi-frame: 03 04 20 04 06 07 6A", () => {
+    const { codes } = decodeDtcPayload([0x03, 0x04, 0x20, 0x04, 0x06, 0x07, 0x6a]);
+    expect(codes.map((c) => c.code)).toEqual(["P0420", "P0406", "P076A"]);
+  });
+  it("UDS Service 19 tříbajtový DTC drží failure type", () => {
+    const d = decodeUdsDtcRecord(0x04, 0x20, 0x07, 0x2f);
+    expect(d?.code).toBe("P0420-07");
   });
   it("ignoruje 00 00 padding", () => {
     const { codes } = decodeDtcPayload([0x00, 0x00, 0x04, 0x03]);
@@ -53,6 +62,22 @@ describe("ISO-TP parser", () => {
     const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
     expect(ascii).toBe("1C4RJBG12345678");
   });
+  it("složí kompaktní ELM CAN multi-frame VIN bez mezer za hlavičkou", () => {
+    const m = parseIsoTp(
+      [
+        "7E81014490201314138",
+        "7E82147534834503338",
+        "7E82242313439333738",
+      ].join("\n"),
+    );
+    expect(m.payload.slice(0, 3)).toEqual([0x49, 0x02, 0x01]);
+    const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
+    expect(ascii).toBe("1A8GSH4P38B149378");
+  });
+  it("složí kompaktní ELM CAN multi-frame DTC odpověď", () => {
+    const m = parseIsoTp("7E81008430304200406\n7E821076A4834503338");
+    expect(m.payload.slice(0, 7)).toEqual([0x43, 0x03, 0x04, 0x20, 0x04, 0x06, 0x07]);
+  });
   it("složí ELM indexované VIN řádky bez PCI", () => {
     const m = parseIsoTp(
       [
@@ -87,5 +112,14 @@ describe("UDS parser", () => {
     expect(uds.status).toBe("ok");
     const v = ((uds.payload[0] << 8) | uds.payload[1]) / 1000;
     expect(v).toBeCloseTo(12.345, 3);
+  });
+});
+
+describe("VIN decoder", () => {
+  it("rozpozná Chrysler WMI 1A8 z reálného debug logu", () => {
+    const vin = decodeVin("1A8GSH4P38B149378");
+    expect(vin.brand).toBe("Chrysler");
+    expect(vin.protocolGroup).toBe("chrysler_can_2011_2016");
+    expect(vin.confidence).toBe("high");
   });
 });
