@@ -471,6 +471,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   ) => {
     for (const pid of pids) {
       if (cancelledRef.current) break;
+      if (elmQueue.isPollingPaused()) break;
       if (isPidOnCooldown(pid)) continue;
       try {
         const raw = await elm327.sendCommand(pid, priority);
@@ -503,6 +504,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
   const pollLiveDataOnce = useCallback(async (forceUpsert = false): Promise<ObdLiveData> => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+    if (elmQueue.isPollingPaused()) {
+      await upsertSession(liveDataRef.current, dtcsRef.current, forceUpsert);
+      return liveDataRef.current;
+    }
     if (isPollingRef.current) {
       await upsertSession(liveDataRef.current, dtcsRef.current, forceUpsert);
       return liveDataRef.current;
@@ -633,7 +638,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   const sendCommand = useCallback(async (command: string) => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (!isAdminRef.current && !permissionsRef.current.terminal) throw new Error("Terminál není povolen.");
-    return elm327.sendCommand(command, "high");
+    return elmQueue.runExclusive(() => elm327.sendCommand(command, "high"));
   }, []);
 
   const updateRemoteCommand = useCallback(async (id: string, patch: Record<string, unknown>) => {
@@ -960,13 +965,14 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       // FAST loop – RPM/rychlost/plyn/MAP/MAF/load
       pollLiveDataOnce(false).catch(() => undefined);
       pollIntervalRef.current = window.setInterval(() => {
-        if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
+        if (!isPollingRef.current && !elmQueue.isPollingPaused()) pollLiveDataOnce(false).catch(() => undefined);
       }, 600);
     })();
 
     // SLOW loop – teploty/napětí/palivo: pomalu
     slowLoopIntervalRef.current = window.setInterval(() => {
       if (isPollingRef.current) return;
+      if (elmQueue.isPollingPaused()) return;
       pollPidGroup(SLOW_PIDS, "low").catch(() => undefined);
     }, 4000);
 
@@ -975,6 +981,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       const prof = vehicleInfoRef.current.profile;
       if (!prof.allowChryslerCustomPids) return;
       if (isPollingRef.current) return;
+      if (elmQueue.isPollingPaused()) return;
       readChryslerCustomLiveValues().then((custom) => {
         const updates: Partial<ObdLiveData> = {};
         const avail: ObdLiveAvailability = { ...liveAvailabilityRef.current };
