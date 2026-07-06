@@ -886,6 +886,17 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     // Načíst VIN / profil hned po připojení (jen jednou)
     reloadVehicleInfo().catch(() => undefined);
 
+    // Preflight: zjistit, které Mode 01 PIDy vozidlo vůbec podporuje.
+    // Nepodporované rovnou dostanou cooldown, aby polling nemarnil timeout na každý.
+    scanPidSupportMask()
+      .then((mask) => {
+        console.log(
+          `[OBD SUPPORT MASK] supported=${mask.supported.size}, unsupported=${mask.unsupported.length}`,
+          [...mask.supported],
+        );
+      })
+      .catch((e) => console.warn("[OBD SUPPORT MASK] failed", e));
+
     // FAST loop – RPM/rychlost/plyn/MAP/MAF/load: často
     pollLiveDataOnce(false).catch(() => undefined);
     pollIntervalRef.current = window.setInterval(() => {
