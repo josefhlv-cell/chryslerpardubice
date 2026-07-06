@@ -62,7 +62,9 @@ class ELM327Engine {
   private state: ELMState = "idle";
   private queue: QueuedCommand[] = [];
   private processing = false;
-  private commandDelay = 160;
+  // 40ms mezi příkazy je bezpečné pro vLinker/ELM327 v2.x a v praxi 3× rychlejší
+  // než původních 160ms — motoristické PIDy tak dosahují 8–10 Hz místo 2 Hz.
+  private commandDelay = 40;
   private initSteps: InitStep[] = [];
   private stateListeners: ((state: ELMState) => void)[] = [];
   private initListeners: ((steps: InitStep[]) => void)[] = [];
@@ -81,7 +83,7 @@ class ELM327Engine {
     return [...this.initSteps];
   }
   setCommandDelay(ms: number) {
-    this.commandDelay = Math.max(100, Math.min(300, ms));
+    this.commandDelay = Math.max(25, Math.min(300, ms));
   }
   onStateChange(listener: (state: ELMState) => void): () => void {
     this.stateListeners.push(listener);
