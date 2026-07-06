@@ -48,6 +48,14 @@ export type ObdLiveData = {
   fuelLevel: number;
   fuelRate: number;
   maf: number;
+  stftBank1: number;
+  ltftBank1: number;
+  timingAdvance: number;
+  runtimeSinceStart: number;
+  distanceWithMil: number;
+  barometricPressure: number;
+  absoluteLoad: number;
+  relativeThrottle: number;
   dpf?: DpfSnapshot;
 };
 
@@ -89,6 +97,14 @@ const EMPTY_LIVE: ObdLiveData = {
   fuelLevel: 0,
   fuelRate: 0,
   maf: 0,
+  stftBank1: 0,
+  ltftBank1: 0,
+  timingAdvance: 0,
+  runtimeSinceStart: 0,
+  distanceWithMil: 0,
+  barometricPressure: 0,
+  absoluteLoad: 0,
+  relativeThrottle: 0,
 };
 
 const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
@@ -105,6 +121,14 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "012F": "fuelLevel",
   "015E": "fuelRate",
   "0110": "maf",
+  "0106": "stftBank1",
+  "0107": "ltftBank1",
+  "010E": "timingAdvance",
+  "011F": "runtimeSinceStart",
+  "0121": "distanceWithMil",
+  "0133": "barometricPressure",
+  "0143": "absoluteLoad",
+  "0145": "relativeThrottle",
 };
 
 const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
