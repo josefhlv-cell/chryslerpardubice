@@ -105,22 +105,42 @@ class ElmCommandQueue {
 
   /* ------------------ command execution ------------------ */
 
-  async send(command: string, opts: { timeoutMs?: number } = {}): Promise<ElmResult> {
+  async send(command: string, opts: { timeoutMs?: number; commandType?: string } = {}): Promise<ElmResult> {
     const timeoutMs = opts.timeoutMs ?? 4000;
+    const startedAt = Date.now();
     let raw = "";
     let timedOut = false;
+    let thrown: unknown = null;
     try {
       raw = await this.withTimeout(elm327.sendCommand(command, "normal"), timeoutMs);
     } catch (e: any) {
+      thrown = e;
       const msg = String(e?.message || e || "").toUpperCase();
       if (msg.includes("TIMEOUT")) timedOut = true;
       raw = msg;
     }
     const errStatus = detectElmError(raw);
+    const finalStatus: ElmStatus | "ok" = timedOut ? "timeout" : errStatus ?? "ok";
+    const durationMs = Date.now() - startedAt;
+
+    // Fire-and-forget log — nikdy nezpozdí další příkaz
+    const isLive = opts.commandType === "live_poll_command";
+    logObdDebugEvent({
+      commandType: (opts.commandType as never) ?? (timedOut ? "elm_timeout" : errStatus ? "elm_error" : "elm_command"),
+      command,
+      rawResponse: raw,
+      status: finalStatus,
+      error: thrown ? String((thrown as Error).message ?? thrown) : (errStatus ?? null),
+      durationMs,
+      elmProfile: getActiveElmProfile(),
+      pollingPaused: this.isPollingPaused(),
+      metadata: isLive ? { live: true } : null,
+    });
+
     return {
       command,
       raw,
-      status: timedOut ? "timeout" : errStatus ?? "ok",
+      status: finalStatus,
       timedOut,
     };
   }
