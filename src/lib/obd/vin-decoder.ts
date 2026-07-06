@@ -1,9 +1,15 @@
 /**
- * VIN reader (Mode 09 PID 02) + WMI/brand decoder.
+ * VIN reader (Mode 09 PID 02 + UDS 22 F190 fallback) + WMI/brand decoder.
  * Používá se pro rozpoznání vozidla po připojení OBD.
  * NIKDY negeneruje fake údaje – neznámé pole = undefined.
+ *
+ * Načítání VIN jde přes `service09.readVinMode09()`, který:
+ *   - běží v `elmQueue.runExclusive` (auto pauza polling)
+ *   - přepne ELM do `debug` profilu (ATH1 + FCSH/FCSD/FCSM CAN flow control)
+ *   - správně sestaví multi-frame ISO-TP odpověď 49 02 01 <17 ASCII>
+ *   - fallback na UDS 22 F190 (Service 22 DID F190) pro moderní Stellantis
  */
-import { elm327 } from "@/lib/obd/elm327-engine";
+import { readVinMode09 } from "@/lib/obd/services/service09";
 
 export type DecodedVin = {
   vin: string;
