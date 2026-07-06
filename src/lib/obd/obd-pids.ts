@@ -162,11 +162,45 @@ export const PIDS: Record<string, PIDDefinition> = {
     formula: (b) => ((b[0] * 256) + b[1]) / 100,
     category: 'engine',
   },
+  // Doplněné standardní Mode 01 PIDy (Delphi-OBD parita).
+  // Pokud je vozidlo nepodporuje, support-mask je hned označí jako unsupported.
+  '0106': { pid: '0106', name: 'Short Term Fuel Trim B1', shortName: 'STFT1', unit: '%',
+    min: -100, max: 99.2, formula: (b) => (b[0] - 128) * 100 / 128, category: 'fuel' },
+  '0107': { pid: '0107', name: 'Long Term Fuel Trim B1', shortName: 'LTFT1', unit: '%',
+    min: -100, max: 99.2, formula: (b) => (b[0] - 128) * 100 / 128, category: 'fuel' },
+  '010E': { pid: '010E', name: 'Timing Advance', shortName: 'TIM', unit: '°',
+    min: -64, max: 63.5, formula: (b) => b[0] / 2 - 64, category: 'engine' },
+  '011F': { pid: '011F', name: 'Run Time Since Start', shortName: 'RUNT', unit: 's',
+    min: 0, max: 65535, formula: (b) => b[0] * 256 + b[1], category: 'engine' },
+  '0121': { pid: '0121', name: 'Distance With MIL On', shortName: 'DMIL', unit: 'km',
+    min: 0, max: 65535, formula: (b) => b[0] * 256 + b[1], category: 'emissions' },
+  '0133': { pid: '0133', name: 'Barometric Pressure', shortName: 'BARO', unit: 'kPa',
+    min: 0, max: 255, formula: (b) => b[0], category: 'engine' },
+  '0143': { pid: '0143', name: 'Absolute Load', shortName: 'ABSL', unit: '%',
+    min: 0, max: 25700, formula: (b) => (b[0] * 256 + b[1]) * 100 / 255, category: 'engine' },
+  '0145': { pid: '0145', name: 'Relative Throttle', shortName: 'RTPS', unit: '%',
+    min: 0, max: 100, formula: (b) => (b[0] * 100) / 255, category: 'engine' },
+  '015B': { pid: '015B', name: 'Hybrid Battery SOC', shortName: 'HYB%', unit: '%',
+    min: 0, max: 100, formula: (b) => (b[0] * 100) / 255, category: 'electrical' },
+  '0161': { pid: '0161', name: 'Driver Demand Torque', shortName: 'DTRQ', unit: '%',
+    min: -125, max: 130, formula: (b) => b[0] - 125, category: 'engine' },
+  '0163': { pid: '0163', name: 'Actual Engine Torque', shortName: 'ATRQ', unit: '%',
+    min: -125, max: 130, formula: (b) => b[0] - 125, category: 'engine' },
+  '0166': { pid: '0166', name: 'Engine Reference Torque', shortName: 'RTRQ', unit: 'Nm',
+    min: 0, max: 65535, formula: (b) => b[0] * 256 + b[1], category: 'engine' },
+  '0167': { pid: '0167', name: 'Coolant Temp 2', shortName: 'CLT2', unit: '°C',
+    min: -40, max: 215, formula: (b) => (b[1] ?? b[0]) - 40, category: 'engine' },
 };
 
 // Pořadí pro polling: rychlé/důležité hodnoty první (RPM, rychlost, plyn),
 // pomalejší (teploty, palivo, napětí) v druhém kole.
-export const LIVE_PIDS = ['010C', '010D', '0111', '0104', '0105', '010F', '010A', '010B', '0142', '015C', '012F', '015E', '0110'];
+export const LIVE_PIDS = [
+  '010C', '010D', '0111', '0104', '0105', '010F', '010A', '010B',
+  '0142', '015C', '012F', '015E', '0110',
+  // Doplněné standardní PIDy (Delphi-OBD parita) — SLOW skupina, pro naftové/hybridní/moderní vozy
+  '0106', '0107', '010E', '011F', '0121', '0133', '0143', '0145', '015B',
+  '0161', '0163', '0166', '0167',
+];
 
 
 export function parsePIDResponse(pid: string, rawHex: string): number | null {
