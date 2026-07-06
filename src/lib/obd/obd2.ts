@@ -78,5 +78,6 @@ export const obd2 = {
 
 export type { DtcResult, DtcService, DtcLabel } from "./services/dtc-services";
 export type { FullDtcScan } from "./services/full-dtc-scan";
+export type { EcuTarget, EcuDtcResult, MultiEcuDtcScan };
 export type { DidResult, StellantisBasicScan, StellantisEngineLiveScan, SessionResult } from "./oem/stellantis";
 export type { ElmStatus } from "./adapter/elm-errors";
