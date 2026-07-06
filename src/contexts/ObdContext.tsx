@@ -894,25 +894,36 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
     cancelledRef.current = false;
 
-    // Načíst VIN / profil hned po připojení (jen jednou)
-    reloadVehicleInfo().catch(() => undefined);
+    // Preflight + polling start bootstrap. Musí proběhnout sekvenčně:
+    //   1) VIN + profil (aby polling loop mohl rovnou použít správný profil)
+    //   2) support-mask (aby první polling cyklus nepumpoval nepodporované PIDy)
+    //   3) start polling intervalů
+    // Pokud kterýkoli krok selže, polling stejně nastartuje — degraded, ale funkční.
+    (async () => {
+      try {
+        await reloadVehicleInfo();
+      } catch (e) {
+        console.warn("[OBD BOOT] reloadVehicleInfo failed", e);
+      }
+      if (cancelledRef.current) return;
 
-    // Preflight: zjistit, které Mode 01 PIDy vozidlo vůbec podporuje.
-    // Nepodporované rovnou dostanou cooldown, aby polling nemarnil timeout na každý.
-    scanPidSupportMask()
-      .then((mask) => {
+      try {
+        const mask = await scanPidSupportMask();
         console.log(
           `[OBD SUPPORT MASK] supported=${mask.supported.size}, unsupported=${mask.unsupported.length}`,
           [...mask.supported],
         );
-      })
-      .catch((e) => console.warn("[OBD SUPPORT MASK] failed", e));
+      } catch (e) {
+        console.warn("[OBD SUPPORT MASK] failed", e);
+      }
+      if (cancelledRef.current) return;
 
-    // FAST loop – RPM/rychlost/plyn/MAP/MAF/load: často
-    pollLiveDataOnce(false).catch(() => undefined);
-    pollIntervalRef.current = window.setInterval(() => {
-      if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
-    }, 600);
+      // FAST loop – RPM/rychlost/plyn/MAP/MAF/load
+      pollLiveDataOnce(false).catch(() => undefined);
+      pollIntervalRef.current = window.setInterval(() => {
+        if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
+      }, 600);
+    })();
 
     // SLOW loop – teploty/napětí/palivo: pomalu
     slowLoopIntervalRef.current = window.setInterval(() => {
