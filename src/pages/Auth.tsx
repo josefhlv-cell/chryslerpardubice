@@ -250,6 +250,31 @@ const Auth = () => {
               </svg>
               Pokračovat přes Google
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-11 gap-3 text-sm font-medium bg-black text-white hover:bg-black/90 hover:text-white border-black"
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const { error } = await lovable.auth.signInWithOAuth("apple", {
+                    redirect_uri: window.location.origin,
+                  });
+                  if (error) throw error;
+                } catch (err: any) {
+                  toast.error(err.message || "Chyba při přihlášení přes Apple");
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              aria-label="Sign in with Apple"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M16.365 1.43c0 1.14-.42 2.22-1.24 3.02-.82.8-2.13 1.42-3.21 1.33-.13-1.11.42-2.27 1.19-3.02.85-.83 2.28-1.44 3.26-1.33zM20.5 17.28c-.56 1.24-.83 1.79-1.55 2.88-1 1.53-2.4 3.44-4.14 3.45-1.55.02-1.95-1.01-4.05-1-2.1.01-2.54 1.02-4.09 1-1.74-.01-3.07-1.73-4.07-3.26C-.19 16.86-.5 11.68 1.53 8.9c1.44-1.98 3.72-3.14 5.86-3.14 2.18 0 3.55 1.19 5.35 1.19 1.75 0 2.81-1.2 5.33-1.2 1.9 0 3.92 1.04 5.36 2.83-4.71 2.58-3.95 9.32 1.07 8.7z"/>
+              </svg>
+              Sign in with Apple
+            </Button>
           </div>
         )}
 
