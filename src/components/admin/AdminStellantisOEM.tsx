@@ -177,11 +177,20 @@ const AdminStellantisOEM = () => {
             {btn("dtc-03", "Raw DTC 03", async () => ({ kind: "dtc", data: await obd2.readStoredDtcs() }))}
             {btn("dtc-07", "Raw DTC 07", async () => ({ kind: "dtc", data: await obd2.readPendingDtcs() }))}
             {btn("dtc-0a", "Raw DTC 0A", async () => ({ kind: "dtc", data: await obd2.readPermanentDtcs() }))}
-            {btn("dtc-full", "Full DTC scan", async () => ({
+            {btn("dtc-full", "Full DTC scan (03+07+0A)", async () => ({
               kind: "full-dtc",
               data: await obd2.runFullDtcScan(),
             }))}
+            {btn("dtc-multi", "Multi-ECU DTC scan (všechny jednotky)", async () => ({
+              kind: "multi-dtc",
+              data: await obd2.runMultiEcuDtcScan(),
+            }))}
           </div>
+          <p className="text-[10px] text-muted-foreground pt-1">
+            Multi-ECU scan projde postupně motor, převodovku, ABS, SRS, BCM, cluster, gateway,
+            ADAS a další jednotky Stellantis/FCA (Chrysler, Dodge, Jeep, RAM, Fiat, Lancia, Alfa).
+            Vyžaduje ELM327 s podporou 11-bit CAN.
+          </p>
         </CardContent>
       </Card>
 
