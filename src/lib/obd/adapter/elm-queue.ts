@@ -112,7 +112,7 @@ class ElmCommandQueue {
     let timedOut = false;
     let thrown: unknown = null;
     try {
-      raw = await this.withTimeout(elm327.sendCommand(command, "normal"), timeoutMs);
+      raw = await this.withTimeout(elm327.sendCommand(command, "normal", timeoutMs), timeoutMs + 250);
     } catch (e: any) {
       thrown = e;
       const msg = String(e?.message || e || "").toUpperCase();
@@ -143,7 +143,7 @@ class ElmCommandQueue {
     // a ELM vrátí "STOPPED" → řetěz chyb. 120ms je bezpečné minimum
     // podle Delphi-OBD (OBD.Connection.Async.pas → InterCmdDelayOnFault).
     if (timedOut || finalStatus === "no_data" || finalStatus === "adapter_error") {
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, finalStatus === "adapter_error" || timedOut ? 260 : 80));
     }
 
     return {

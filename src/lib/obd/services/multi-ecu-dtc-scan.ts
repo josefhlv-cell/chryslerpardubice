@@ -68,36 +68,46 @@ export const STELLANTIS_PRIMARY_ECUS: EcuTarget[] = [
   { address: "714", name: "tpms", commonName: "TPMS" },
 ];
 
+export const STELLANTIS_QUICK_ECUS: EcuTarget[] = STELLANTIS_PRIMARY_ECUS.filter((ecu) =>
+  ["7E0", "7E1", "7E2", "760", "731", "793", "7A2", "652"].includes(ecu.address),
+);
+
 async function readDtcFromEcu(ecu: EcuTarget): Promise<EcuDtcResult> {
   const warnings: string[] = [];
   const reqHex = parseInt(ecu.address, 16);
   const respHex = (reqHex + 8).toString(16).toUpperCase().padStart(3, "0");
 
-  await elmQueue.send(`ATSH${ecu.address}`, { timeoutMs: 800 });
-  await elmQueue.send(`ATFCSH${ecu.address}`, { timeoutMs: 800 }).catch(() => undefined);
-  await elmQueue.send(`ATCRA${respHex}`, { timeoutMs: 800 });
+  const setHeader = await elmQueue.send(`ATSH${ecu.address}`, { timeoutMs: 550, commandType: "full_dtc_scan" });
+  if (setHeader.status === "adapter_error") {
+    return { ecu, status: setHeader.status, codes: [], raw: setHeader.raw, warnings };
+  }
+  await elmQueue.send(`ATFCSH${ecu.address}`, { timeoutMs: 550, commandType: "full_dtc_scan" }).catch(() => undefined);
+  await elmQueue.send(`ATCRA${respHex}`, { timeoutMs: 550, commandType: "full_dtc_scan" });
 
   // Mode 03 (stored DTC). Timeout 2200ms je dost pro CAN request+odpověď
   // s ATST64; když ECU nereaguje, dostaneme rychle "no_data".
-  let res = await elmQueue.send("03", { timeoutMs: 2200 });
+  let res = await elmQueue.send("03", { timeoutMs: 1600, commandType: "raw_dtc_03" });
   const cleaned = cleanElmResponse(res.raw, "03");
 
   // "adapter_error" (STOPPED / BUFFER FULL) znamená, že adaptér ještě
   // nebyl klidný; UDS fallback by ho jen zahltil. Nech ho dýchat a hlas
   // no_data — další ECU se probou samostatně.
-  if (res.status === "adapter_error") {
+  if (res.status === "adapter_error" || res.status === "no_data" || res.status === "timeout") {
     return { ecu, status: res.status, codes: [], raw: res.raw, warnings };
   }
 
   if (res.status !== "ok") {
     // Karosářské / gateway jednotky často nepodporují OBD Mode 03, ale podporují
     // UDS Service 19 ReadDTCInformation. Zkusíme read-only fallback 19 02 FF.
-    res = await elmQueue.send("1902FF", { timeoutMs: 2500 });
+    res = await elmQueue.send("1902FF", { timeoutMs: 1800, commandType: "full_dtc_scan" });
     return decodeUds19Result(ecu, res.raw, res.status, warnings);
   }
   const elmErr = detectElmError(cleaned);
   if (elmErr) {
-    res = await elmQueue.send("1902FF", { timeoutMs: 2500 });
+    if (elmErr === "no_data" || elmErr === "timeout" || elmErr === "adapter_error") {
+      return { ecu, status: elmErr, codes: [], raw: res.raw, warnings };
+    }
+    res = await elmQueue.send("1902FF", { timeoutMs: 1800, commandType: "full_dtc_scan" });
     return decodeUds19Result(ecu, res.raw, res.status, warnings);
   }
 
@@ -155,7 +165,8 @@ function decodeUds19Result(
 export async function runMultiEcuDtcScanUnlocked(
   ecus: EcuTarget[] = STELLANTIS_PRIMARY_ECUS,
 ): Promise<MultiEcuDtcScan> {
-  await elmQueue.applyProfile("debug");
+  await elmQueue.applyProfile("debug", true);
+  await elmQueue.send("ATST32", { timeoutMs: 550, commandType: "full_dtc_scan" }).catch(() => undefined);
   const startedAt = new Date().toISOString();
   const results: EcuDtcResult[] = [];
 
@@ -175,9 +186,9 @@ export async function runMultiEcuDtcScanUnlocked(
 
   // reset filtrů, aby další scan / polling nezůstal navázaný na poslední ECU
   try {
-    await elmQueue.send("ATAR", { timeoutMs: 1000 });
-    await elmQueue.send("ATSH7DF", { timeoutMs: 1000 });
-    await elmQueue.send("ATFCSH7E0", { timeoutMs: 1000 });
+    await elmQueue.send("ATAR", { timeoutMs: 650, commandType: "full_dtc_scan" });
+    await elmQueue.send("ATSH7DF", { timeoutMs: 650, commandType: "full_dtc_scan" });
+    await elmQueue.send("ATFCSH7E0", { timeoutMs: 650, commandType: "full_dtc_scan" });
   } catch {
     /* ignore */
   }

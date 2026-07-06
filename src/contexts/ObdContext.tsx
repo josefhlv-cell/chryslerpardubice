@@ -474,8 +474,12 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       if (elmQueue.isPollingPaused()) break;
       if (isPidOnCooldown(pid)) continue;
       try {
-        const raw = await elm327.sendCommand(pid, priority);
-        if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
+        const res = await elmQueue.send(pid, {
+          timeoutMs: priority === "high" ? 850 : 1050,
+          commandType: "live_poll_command",
+        });
+        const raw = res.raw;
+        if (res.status !== "ok" || !raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
           markPidFailed(pid);
           continue;
         }
@@ -545,7 +549,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     // profil zaručí, že multi-frame ISO-TP odpovědi mají hlavičky pro parser.
     // Po dokončení se profil vrátí na 'simple' (ATH0) pro rychlé PID polling.
     return elmQueue.runExclusive(async () => {
-      await elmQueue.applyProfile("debug");
+      await elmQueue.applyProfile("debug", true);
       let stored: ObdDtc[] = [];
       let pending: ObdDtc[] = [];
       let permanent: ObdDtc[] = [];
@@ -573,9 +577,9 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       for (const c of stored) map.set(c.code, c);
       for (const c of permanent) map.set(c.code, c);
       try {
-        const { runMultiEcuDtcScanUnlocked } = await import("@/lib/obd/services/multi-ecu-dtc-scan");
+        const { runMultiEcuDtcScanUnlocked, STELLANTIS_QUICK_ECUS } = await import("@/lib/obd/services/multi-ecu-dtc-scan");
         const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
-        const multi = await runMultiEcuDtcScanUnlocked();
+        const multi = await runMultiEcuDtcScanUnlocked(STELLANTIS_QUICK_ECUS);
         for (const ecuResult of multi.results) {
           for (const d of ecuResult.codes) {
             const baseCode = d.code.split("-")[0];
@@ -684,15 +688,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         case "refresh_live":
         case "live_refresh": {
           const data = await pollLiveDataOnce(true);
-          let dpf: DpfSnapshot | undefined;
-          try {
-            dpf = await readDpfSnapshot();
-            const next = { ...liveDataRef.current, dpf };
-            setLiveData(next);
-            liveDataRef.current = next;
-            await upsertSession(next, dtcsRef.current, true);
-          } catch { /* refresh live nesmí spadnout kvůli DPF */ }
-          result = { liveData: liveDataRef.current, dpf };
+          result = { liveData: data };
           break;
         }
         case "custom_command":
@@ -766,12 +762,12 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         }
         case "full_dtc_scan": {
           if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
-          const [{ runFullDtcScan }, { runMultiEcuDtcScan }] = await Promise.all([
+          const [{ runFullDtcScan }, { runMultiEcuDtcScan, STELLANTIS_QUICK_ECUS }] = await Promise.all([
             import("@/lib/obd/services/full-dtc-scan"),
             import("@/lib/obd/services/multi-ecu-dtc-scan"),
           ]);
           const scan = await runFullDtcScan();
-          const multiEcu = await runMultiEcuDtcScan();
+          const multiEcu = await runMultiEcuDtcScan(STELLANTIS_QUICK_ECUS);
           result = { scan, multiEcu };
           break;
         }

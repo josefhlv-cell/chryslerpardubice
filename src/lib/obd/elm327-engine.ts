@@ -5,6 +5,7 @@ export type CommandPriority = "high" | "normal" | "low";
 export type QueuedCommand = {
   command: string;
   priority: CommandPriority;
+  responseTimeoutMs?: number;
   resolve: (value: string) => void;
   reject: (reason: any) => void;
   timestamp: number;
@@ -159,7 +160,7 @@ class ELM327Engine {
     this.setState("error");
     return false;
   }
-  private async sendRaw(command: string): Promise<string> {
+  private async sendRaw(command: string, responseTimeoutMs = 3500): Promise<string> {
     const cleanCommand = command.trim().replace(/\r/g, "");
     if (!this.isNative) {
       await this.delay(80);
@@ -167,14 +168,18 @@ class ELM327Engine {
       return SIMULATED_RESPONSES[key] || "";
     }
     await bleManager.write(cleanCommand);
-    const response = await bleManager.readResponse(3500);
+    const response = await bleManager.readResponse(responseTimeoutMs);
     return this.parseResponse(response);
   }
-  async sendCommand(command: string, priority: CommandPriority = "normal"): Promise<string> {
+  async sendCommand(command: string, priority: CommandPriority = "normal", responseTimeoutMs?: number): Promise<string> {
+    if (this.initializingPromise) {
+      await this.initializingPromise.catch(() => undefined);
+    }
     return new Promise((resolve, reject) => {
       const item: QueuedCommand = {
         command,
         priority,
+        responseTimeoutMs,
         resolve,
         reject,
         timestamp: Date.now(),
@@ -192,7 +197,7 @@ class ELM327Engine {
       const item = this.queue.shift()!;
       this.setState("busy");
       try {
-        const response = await this.sendRaw(item.command);
+        const response = await this.sendRaw(item.command, item.responseTimeoutMs);
         if (this.isHardError(response)) {
           if (item.retries < 1) {
             item.retries++;

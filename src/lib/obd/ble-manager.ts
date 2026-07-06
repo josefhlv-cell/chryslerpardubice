@@ -382,12 +382,6 @@ private async performConnect(deviceId: string): Promise<boolean> {
     this.reconnectAttempts = 0;
     this.setState('connected');
 
-    try {
-      await this.initializeELM327();
-    } catch (initError) {
-      this.warn('[BLE] ELM327 INIT FAILED, KEEPING CONNECTION', initError);
-    }
-
     return true;
   } catch (e) {
     this.warn('[BLE] CONNECT ERROR', e);
@@ -557,30 +551,6 @@ private async performConnect(deviceId: string): Promise<boolean> {
         profile.writeUuid,
         dataView
       );
-    }
-  }
-
-  private async initializeELM327(): Promise<void> {
-    const commands = ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATSP0'];
-
-    for (const command of commands) {
-      try {
-        this.responseBuffer = '';
-        this.debug('[BLE] INIT CMD', command);
-
-        await this.write(command);
-
-        const response = await this.readResponse(
-          command === 'ATZ' || command === 'ATSP0' ? 3000 : 2000
-        );
-
-        this.debug('[BLE] INIT RESPONSE', {
-          command,
-          response,
-        });
-      } catch (err) {
-        this.warn(`[BLE] OBD INIT COMMAND FAILED ${command}`, err);
-      }
     }
   }
 

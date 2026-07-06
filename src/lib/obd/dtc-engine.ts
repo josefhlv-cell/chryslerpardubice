@@ -2,6 +2,7 @@
 // Supports OBD Mode 03/04 and keeps a local session history.
 
 import { elm327 } from '@/lib/obd/elm327-engine';
+import { elmQueue } from '@/lib/obd/adapter/elm-queue';
 import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
 import { dtcCache } from '@/lib/obd/offline-cache';
 import { lookupGenericDTC } from '@/lib/obd/dtc-database';
@@ -170,7 +171,8 @@ class DTCEngine {
     this.emit();
 
     try {
-      const raw = await elm327.sendCommand('03', 'high');
+      const res = await elmQueue.send('03', { timeoutMs: 2600, commandType: 'raw_dtc_03' });
+      const raw = res.raw;
       const codes = this.parseDTCResponse(raw).map(code => this.enrichCode(code, false));
 
       this.state.activeCodes = codes;
@@ -226,7 +228,8 @@ class DTCEngine {
    * Vrací [] pokud odpověď je NO DATA / ERROR / STOPPED (nikdy nevrací fake „žádné chyby").
    */
   async scanPendingDTCs(): Promise<DTCCode[]> {
-    const raw = await elm327.sendCommand('07', 'high').catch(() => '');
+    const res = await elmQueue.send('07', { timeoutMs: 2200, commandType: 'raw_dtc_07' }).catch(() => null);
+    const raw = res?.raw ?? '';
     const codes = this.parseGenericDtcResponse(raw, '47').map(code => this.enrichCode(code, true));
     return codes;
   }
@@ -235,7 +238,8 @@ class DTCEngine {
    * Mode 0A – trvalé emisní chyby.
    */
   async scanPermanentDTCs(): Promise<DTCCode[]> {
-    const raw = await elm327.sendCommand('0A', 'high').catch(() => '');
+    const res = await elmQueue.send('0A', { timeoutMs: 2200, commandType: 'raw_dtc_0a' }).catch(() => null);
+    const raw = res?.raw ?? '';
     const codes = this.parseGenericDtcResponse(raw, '4A').map(code => this.enrichCode(code, false));
     return codes;
   }

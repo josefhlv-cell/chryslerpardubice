@@ -35,7 +35,10 @@ const CFG: Record<DtcService, { label: DtcLabel; command: string; marker: number
 async function runDtcService(service: DtcService): Promise<DtcResult> {
   const cfg = CFG[service];
   const warnings: string[] = [];
-  const res = await elmQueue.send(cfg.command, { timeoutMs: 5000 });
+  const res = await elmQueue.send(cfg.command, {
+    timeoutMs: service === "03" ? 2600 : 2200,
+    commandType: service === "03" ? "raw_dtc_03" : service === "07" ? "raw_dtc_07" : "raw_dtc_0a",
+  });
   const cleaned = cleanElmResponse(res.raw, cfg.command);
 
   if (res.status !== "ok") {
