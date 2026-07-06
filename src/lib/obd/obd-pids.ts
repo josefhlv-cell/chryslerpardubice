@@ -196,7 +196,7 @@ export const PIDS: Record<string, PIDDefinition> = {
 // pomalejší (teploty, palivo, napětí) v druhém kole.
 export const LIVE_PIDS = [
   '010C', '010D', '0111', '0104', '0105', '010F', '010A', '010B',
-  '0142', '015C', '012F', '015E', '0110',
+  '0142', '0146', '015C', '012F', '015E', '0110',
   // Doplněné standardní PIDy (Delphi-OBD parita) — SLOW skupina, pro naftové/hybridní/moderní vozy
   '0106', '0107', '010E', '011F', '0121', '0133', '0143', '0145', '015B',
   '0161', '0163', '0166', '0167',
