@@ -46,6 +46,8 @@ export const obd2 = {
 
   // DTC
   runFullDtcScan,
+  runMultiEcuDtcScan,
+  stellantisPrimaryEcus: STELLANTIS_PRIMARY_ECUS,
   readStoredDtcs,
   readPendingDtcs,
   readPermanentDtcs,
