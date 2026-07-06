@@ -19,6 +19,7 @@ import {
   CloudOff, Loader2, Trash2, FileSpreadsheet, Brain, Archive,
 } from "lucide-react";
 import { CollapsibleAdminSection } from "@/components/admin/common/CollapsibleAdminSection";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
 import { useArchive } from "@/hooks/useArchive";
 import { sourceLabel } from "@/api/partsAPI";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
