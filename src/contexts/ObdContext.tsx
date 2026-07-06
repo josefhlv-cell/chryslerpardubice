@@ -28,6 +28,7 @@ import {
 import { readVinFromEcu, type DecodedVin } from "@/lib/obd/vin-decoder";
 import { resolveProfileFromBrand, type VehiclePidProfile } from "@/lib/obd/pid-profile-registry";
 import { isPidOnCooldown, markPidFailed, markPidSuccess, resetPidCache } from "@/lib/obd/unsupported-pid-cache";
+import { scanPidSupportMask } from "@/lib/obd/pid-support-mask";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
