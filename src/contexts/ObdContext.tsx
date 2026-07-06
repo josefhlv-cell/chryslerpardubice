@@ -538,7 +538,41 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (!isAdminRef.current && !permissionsRef.current.dtc_read) throw new Error("Čtení DTC není povoleno.");
 
-    const codes = await dtcEngine.scanDTCs();
+    // Souběžně čti Mode 03 (stored), 07 (pending) a 0A (permanent) — jako Delphi-OBD.
+    // Selhání jednotlivé služby nezhodí celé čtení, ale hard error z Mode 03 propadne,
+    // aby uživatel viděl skutečnou chybu (BUS INIT, UNABLE TO CONNECT, …).
+    let stored: ObdDtc[] = [];
+    let storedError: unknown = null;
+    try {
+      stored = await dtcEngine.scanDTCs();
+    } catch (e) {
+      storedError = e;
+      console.warn("[OBD DTC] Mode 03 failed:", e);
+    }
+
+    const [pending, permanent] = await Promise.all([
+      dtcEngine.scanPendingDTCs().catch((e) => {
+        console.warn("[OBD DTC] Mode 07 failed:", e);
+        return [] as ObdDtc[];
+      }),
+      dtcEngine.scanPermanentDTCs().catch((e) => {
+        console.warn("[OBD DTC] Mode 0A failed:", e);
+        return [] as ObdDtc[];
+      }),
+    ]);
+
+    // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
+    const map = new Map<string, ObdDtc>();
+    for (const c of pending) map.set(c.code, c);
+    for (const c of stored) map.set(c.code, c);
+    for (const c of permanent) map.set(c.code, c);
+    const codes = [...map.values()];
+
+    // Pokud Mode 03 selhalo hard errorem a nic jiného nepřišlo, vyhoď to nahoru — UI zobrazí chybu.
+    if (storedError && codes.length === 0) {
+      throw storedError instanceof Error ? storedError : new Error(String(storedError));
+    }
+
     setDtcs(codes);
     dtcsRef.current = codes;
     await upsertSession(liveDataRef.current, codes, true);
