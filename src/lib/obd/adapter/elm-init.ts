@@ -7,9 +7,26 @@ import { elm327 } from "@/lib/obd/elm327-engine";
 
 export type ElmProfile = "debug" | "simple";
 
+// DEBUG profil — plná ISO-TP podpora:
+//   ATH1 (hlavičky), ATL1 (řádky), ATST FA (HW timeout 1000ms — VIN/DTC
+//   multi-frame potřebují >400ms), ATFCSH/ATFCSD/ATFCSM (explicitní CAN
+//   flow control 30 00 00 — bez toho levné ELM klony ztrácí Consecutive
+//   Frames a VIN/DTC odpovědi jsou zkrácené).
+// SIMPLE profil — rychlé PID polling (ATH0, ATL0, kratší HW timeout).
 const PROFILES: Record<ElmProfile, string[]> = {
-  debug: ["ATD", "ATE0", "ATL1", "ATS0", "ATH1", "ATSP0", "0100"],
-  simple: ["ATD", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0", "0100"],
+  debug: [
+    "ATD", "ATE0", "ATL1", "ATS0", "ATH1", "ATSP0",
+    "ATSTFA",       // HW timeout 1000ms pro multi-frame
+    "ATFCSH7E0",    // Flow-control response header = engine ECU
+    "ATFCSD300000", // FC frame: ContinueToSend, BS=0, STmin=0
+    "ATFCSM1",      // Použij naši FC frame
+    "0100",
+  ],
+  simple: [
+    "ATD", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0",
+    "ATST32",       // HW timeout 200ms — rychlé PID
+    "0100",
+  ],
 };
 
 let currentProfile: ElmProfile | null = null;
