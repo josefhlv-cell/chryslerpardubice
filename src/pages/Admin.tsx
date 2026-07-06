@@ -203,9 +203,9 @@ const Admin = () => {
     setLoading(true);
     const [profilesRes, ordersRes, bookingsRes, inquiriesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("account_type", "business").order("created_at", { ascending: false }),
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
-      supabase.from("service_bookings").select("*").order("created_at", { ascending: false }),
-      supabase.from("vehicle_inquiries").select("*").order("created_at", { ascending: false }),
+      (supabase.from("orders") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
+      (supabase.from("service_bookings") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
+      (supabase.from("vehicle_inquiries") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
     ]);
     setPendingProfiles((profilesRes.data as Profile[]) || []);
     const rawOrders = (ordersRes.data as OrderRow[]) || [];
