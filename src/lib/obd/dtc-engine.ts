@@ -292,20 +292,44 @@ class DTCEngine {
 
   /**
    * Sdílený parser pro Mode 03/07/0A.
+   *
+   * Postup (podle Delphi-OBD):
+   *   1) cleanElmResponse — echo/prompt/SEARCHING pryč
+   *   2) parseIsoTp — složí single/multi-frame CAN payload (přeskočí PCI + hlavičky)
+   *   3) najde pozitivní marker (43/47/4A), přeskočí 1 byte s počtem DTC
+   *   4) decodeDtcPayload — páry bajtů → kódy, přeskočí 00 00
+   *
+   * Fallback: pokud ISO-TP nic nedá (ISO-9141/KWP2000), použije se legacy hex-scan
+   * — nově ale správně přeskakuje počet DTC po markeru.
    */
   parseGenericDtcResponse(raw: string, marker: string): string[] {
     if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|SEARCHING|\?/i.test(raw)) return [];
 
-    const found = new Set<string>();
-    const lines = raw.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
-    const candidates = lines.length ? lines : [raw];
+    const markerByte = parseInt(marker, 16);
+    const cmd = marker === '43' ? '03' : marker === '47' ? '07' : marker === '4A' ? '0A' : '';
+    const cleaned = cleanElmResponse(raw, cmd);
 
-    for (const line of candidates) {
+    // 1) Primární cesta — ISO-TP
+    try {
+      const msg = parseIsoTp(cleaned);
+      const payload = msg.payload;
+      if (payload.length > 0 && payload[0] === markerByte) {
+        const decoded = decodeDtcPayload(payload.slice(1));
+        if (decoded.codes.length > 0) return decoded.codes.map((c) => c.code);
+      }
+    } catch (e) {
+      console.warn('[DTC] ISO-TP parse failed, fallback to legacy:', e);
+    }
+
+    // 2) Legacy fallback pro non-CAN protokoly
+    const found = new Set<string>();
+    const lines = cleaned.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+    for (const line of (lines.length ? lines : [cleaned])) {
       const clean = line.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
       const idx = clean.indexOf(marker.toUpperCase());
       if (idx < 0) continue;
-
-      const data = clean.slice(idx + marker.length);
+      // Marker (2 znaky) + count byte (2 znaky) → přeskoč
+      const data = clean.slice(idx + marker.length + 2);
       for (let i = 0; i + 3 < data.length; i += 4) {
         const pair = data.slice(i, i + 4);
         if (pair === '0000') continue;
@@ -315,7 +339,6 @@ class DTCEngine {
         if (code !== 'Unknown') found.add(code);
       }
     }
-
     return [...found];
   }
 
