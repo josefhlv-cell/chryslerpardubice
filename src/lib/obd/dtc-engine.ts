@@ -6,6 +6,9 @@ import { CHRYSLER_DATABASE } from '@/lib/obd/chrysler-database';
 import { dtcCache } from '@/lib/obd/offline-cache';
 import { lookupGenericDTC } from '@/lib/obd/dtc-database';
 import { lookupChryslerOemDtc } from '@/lib/obd/chrysler-dtc-oem';
+import { cleanElmResponse } from '@/lib/obd/protocol/response-cleaner';
+import { parseIsoTp } from '@/lib/obd/protocol/isotp-parser';
+import { decodeDtcPayload } from '@/lib/obd/services/dtc-decoder';
 
 export type DTCSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type DTCSystem = 'powertrain' | 'body' | 'chassis' | 'network';
