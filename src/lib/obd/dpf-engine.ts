@@ -17,6 +17,8 @@
  */
 
 import { elm327 } from "@/lib/obd/elm327-engine";
+import { elmQueue } from "@/lib/obd/adapter/elm-queue";
+import { parseUds } from "@/lib/obd/protocol/uds-parser";
 
 export type DpfSnapshot = {
   supported: boolean;
@@ -94,6 +96,10 @@ function parseRegen(raw: string): { active: boolean; label: string } | undefined
 }
 
 export async function readDpfSnapshot(): Promise<DpfSnapshot> {
+  return elmQueue.runExclusive(async () => readDpfSnapshotUnlocked());
+}
+
+async function readDpfSnapshotUnlocked(): Promise<DpfSnapshot> {
   const results: Record<string, string> = {};
   let anySupported = false;
 
@@ -113,19 +119,28 @@ export async function readDpfSnapshot(): Promise<DpfSnapshot> {
   const egtOut = !isNoData(results.dpfOut) ? parseEgt(results.dpfOut) : undefined;
   const regen = !isNoData(results.regenStatus) ? parseRegen(results.regenStatus) : undefined;
 
+  const stellantis = await readStellantisDpfDids();
+
   // Combined heuristic regen detection
+  const sootFinal = validPercent(stellantis.sootLoad) ?? soot;
+  const dpFinal = stellantis.differentialPressure ?? dp;
+  const regenFinal = stellantis.regenActive !== undefined
+    ? { active: stellantis.regenActive, label: stellantis.regenActive ? "Regenerace aktivní" : "Regenerace neaktivní" }
+    : regen;
   const heuristicActive =
-    (soot !== undefined && soot > 60) ||
-    (dp !== undefined && dp > 3) ||
+    (sootFinal !== undefined && sootFinal > 60) ||
+    (dpFinal !== undefined && dpFinal > 3) ||
     (egtOut !== undefined && egtOut > 500);
 
-  const regenActive = regen?.active ?? (heuristicActive || undefined);
+  const regenActive = regenFinal?.active ?? (heuristicActive || undefined);
   const regenStatus =
-    regen?.label ??
+    regenFinal?.label ??
     (heuristicActive ? "Pravděpodobná regenerace (heuristika)" : undefined);
 
   const confidence: DpfSnapshot["confidence"] = regen
     ? "high"
+    : stellantis.supported
+      ? "high"
     : heuristicActive
       ? "medium"
       : anySupported
@@ -133,14 +148,89 @@ export async function readDpfSnapshot(): Promise<DpfSnapshot> {
         : "low";
 
   return {
-    supported: anySupported,
-    sootLoad: soot,
-    differentialPressure: dp,
+    supported: anySupported || stellantis.supported,
+    sootLoad: sootFinal,
+    ashLoad: stellantis.ashLoad,
+    differentialPressure: dpFinal,
     exhaustTempBeforeDpf: egtIn,
     exhaustTempAfterDpf: egtOut,
     regenActive,
     regenStatus,
+    kmSinceLastRegen: stellantis.kmSinceLastRegen,
+    timeSinceLastRegen: stellantis.regenCount,
     lastUpdated: new Date().toISOString(),
     confidence,
   };
+}
+
+function validPercent(value: number | undefined): number | undefined {
+  return value !== undefined && Number.isFinite(value) && value >= 0 && value <= 100 ? value : undefined;
+}
+
+function u16(bytes: number[]): number | undefined {
+  if (bytes.length < 2) return undefined;
+  return (bytes[0] << 8) | bytes[1];
+}
+
+async function readUdsDid(header: string, did: string): Promise<number[] | undefined> {
+  await elmQueue.send(`ATSH${header}`, { timeoutMs: 1200 });
+  await elmQueue.send(`ATFCSH${header}`, { timeoutMs: 1200 }).catch(() => undefined);
+  const cmd = `22${did}`;
+  const res = await elmQueue.send(cmd, { timeoutMs: 4500 });
+  const uds = parseUds(res.raw, 0x22, [parseInt(did.slice(0, 2), 16), parseInt(did.slice(2, 4), 16)]);
+  return uds.status === "ok" ? uds.payload : undefined;
+}
+
+async function readStellantisDpfDids(): Promise<{
+  supported: boolean;
+  sootLoad?: number;
+  ashLoad?: number;
+  differentialPressure?: number;
+  regenCount?: number;
+  kmSinceLastRegen?: number;
+  regenActive?: boolean;
+}> {
+  const out: {
+    supported: boolean;
+    sootLoad?: number;
+    ashLoad?: number;
+    differentialPressure?: number;
+    regenCount?: number;
+    kmSinceLastRegen?: number;
+    regenActive?: boolean;
+  } = { supported: false };
+
+  try {
+    await elmQueue.applyProfile("debug");
+    const headers = ["7E0", "7E1"];
+    for (const header of headers) {
+      const soot = await readUdsDid(header, "4048").catch(() => undefined);
+      if (soot?.length) {
+        out.supported = true;
+        // Delphi/Stellantis DPF soot DID: u většiny Fiat/FCA dieselů 1 byte = %.
+        out.sootLoad = validPercent(soot[0]) ?? validPercent((u16(soot) ?? 0) / 10);
+      }
+      const regenCount = await readUdsDid(header, "4049").catch(() => undefined);
+      if (regenCount?.length) {
+        out.supported = true;
+        out.regenCount = u16(regenCount) ?? regenCount[0];
+      }
+      const dist = await readUdsDid(header, "404A").catch(() => undefined);
+      if (dist?.length) {
+        out.supported = true;
+        out.kmSinceLastRegen = u16(dist) ?? dist[0];
+      }
+      const active = await readUdsDid(header, "404B").catch(() => undefined);
+      if (active?.length) {
+        out.supported = true;
+        out.regenActive = active.some((b) => b !== 0);
+      }
+      if (out.supported) break;
+    }
+  } finally {
+    await elmQueue.send("ATSH7DF", { timeoutMs: 1000 }).catch(() => undefined);
+    await elmQueue.send("ATFCSH7E0", { timeoutMs: 1000 }).catch(() => undefined);
+    await elmQueue.applyProfile("simple").catch(() => undefined);
+  }
+  return out;
 }

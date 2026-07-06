@@ -2,10 +2,10 @@
  * DTC dekódér — 2 bajty → 1 kód (např. "P0403").
  * Podle Delphi-OBD Service03/07/0A. Sdíleno mezi všemi třemi službami.
  *
- * Vstup: payload UDS/OBD služby (bez PCI, bez pozitivního markeru).
- * Pro službu 03/07/0A může payload začínat bytem s počtem DTC (dle vozidla).
- * Detekujeme to heuristikou: pokud první byte == floor((zbytek)/2), pravděpodobně
- * jde o počet DTC → přeskočíme ho.
+ * Vstup: payload OBD služby 03/07/0A bez PCI a bez pozitivního markeru 43/47/4A.
+ * DŮLEŽITÉ: SAE/J1979 Mode 03/07/0A po markeru NEMÁ samostatný byte s počtem DTC.
+ * První dva bajty jsou rovnou první DTC. Původní heuristika „přeskočit první byte,
+ * když vypadá jako počet“ uměla z reálného P0133 vyrobit nesmyslné P3300/P3004.
  */
 
 export type DtcLetter = "P" | "C" | "B" | "U";
@@ -46,20 +46,6 @@ export function decodeDtcPayload(payload: number[]): {
 } {
   const warnings: string[] = [];
   let data = payload.slice();
-
-  // Heuristika: pokud první byte určuje počet a odpovídá délce, přeskočíme ho.
-  if (data.length >= 1) {
-    const declaredCount = data[0];
-    const remaining = data.length - 1;
-    if (
-      declaredCount > 0 &&
-      declaredCount <= 40 &&
-      remaining >= declaredCount * 2 &&
-      remaining < (declaredCount + 1) * 2
-    ) {
-      data = data.slice(1);
-    }
-  }
 
   // Sudý počet bytů; zbytek ignorujeme jako padding.
   if (data.length % 2 !== 0) data = data.slice(0, data.length - 1);
