@@ -3,9 +3,10 @@
  * Podle Delphi-OBD Service03/07/0A. Sdíleno mezi všemi třemi službami.
  *
  * Vstup: payload OBD služby 03/07/0A bez PCI a bez pozitivního markeru 43/47/4A.
- * DŮLEŽITÉ: SAE/J1979 Mode 03/07/0A po markeru NEMÁ samostatný byte s počtem DTC.
- * První dva bajty jsou rovnou první DTC. Původní heuristika „přeskočit první byte,
- * když vypadá jako počet“ uměla z reálného P0133 vyrobit nesmyslné P3300/P3004.
+ * DŮLEŽITÉ: většina SAE/J1979 Mode 03/07/0A odpovědí po markeru NEMÁ samostatný
+ * byte s počtem DTC (43 01 33 = P0133). Některé FCA/ELM multi-frame odpovědi ale
+ * count byte vrací (43 03 04 20 04 06 07 6A = 3 kódy P0420/P0406/P076A).
+ * Proto count přeskočíme jen tehdy, když délka přesně sedí na N dvoubajtových kódů.
  */
 
 export type DtcLetter = "P" | "C" | "B" | "U";
@@ -46,6 +47,18 @@ export function decodeDtcPayload(payload: number[]): {
 } {
   const warnings: string[] = [];
   let data = payload.slice();
+
+  const maybeCount = data[0] ?? 0;
+  if (
+    data.length >= 3 &&
+    maybeCount > 0 &&
+    maybeCount <= 0x10 &&
+    data.length - 1 >= maybeCount * 2 &&
+    ((data.length - 1 === maybeCount * 2) || data.slice(1 + maybeCount * 2).every((b) => b === 0x00))
+  ) {
+    warnings.push(`Detected DTC count byte (${maybeCount}) before code pairs.`);
+    data = data.slice(1, 1 + maybeCount * 2);
+  }
 
   // Sudý počet bytů; zbytek ignorujeme jako padding.
   if (data.length % 2 !== 0) data = data.slice(0, data.length - 1);
