@@ -540,49 +540,55 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (!isAdminRef.current && !permissionsRef.current.dtc_read) throw new Error("Čtení DTC není povoleno.");
 
-    // Souběžně čti Mode 03 (stored), 07 (pending) a 0A (permanent) — jako Delphi-OBD.
-    // Selhání jednotlivé služby nezhodí celé čtení, ale hard error z Mode 03 propadne,
-    // aby uživatel viděl skutečnou chybu (BUS INIT, UNABLE TO CONNECT, …).
-    // Sekvenční čtení Mode 03 → 07 → 0A (jako Delphi-OBD / Torque).
-    // Paralelní volání ELM327 přes 'high' prioritu prohazovalo pořadí a některé
-    // ECU pak vracely NO DATA na 07/0A. Sekvenčně to odpovídá reálným diag toolům.
-    let stored: ObdDtc[] = [];
-    let pending: ObdDtc[] = [];
-    let permanent: ObdDtc[] = [];
-    let storedError: unknown = null;
-    try {
-      stored = await dtcEngine.scanDTCs();
-    } catch (e) {
-      storedError = e;
-      console.warn("[OBD DTC] Mode 03 failed:", e);
-    }
-    try {
-      pending = await dtcEngine.scanPendingDTCs();
-    } catch (e) {
-      console.warn("[OBD DTC] Mode 07 failed:", e);
-    }
-    try {
-      permanent = await dtcEngine.scanPermanentDTCs();
-    } catch (e) {
-      console.warn("[OBD DTC] Mode 0A failed:", e);
-    }
+    // Sekvenční Mode 03 → 07 → 0A (jako Delphi-OBD / Torque). Vše uvnitř
+    // elmQueue.runExclusive() — live polling se automaticky pauzne a ATH1
+    // profil zaručí, že multi-frame ISO-TP odpovědi mají hlavičky pro parser.
+    // Po dokončení se profil vrátí na 'simple' (ATH0) pro rychlé PID polling.
+    return elmQueue.runExclusive(async () => {
+      await elmQueue.applyProfile("debug");
+      let stored: ObdDtc[] = [];
+      let pending: ObdDtc[] = [];
+      let permanent: ObdDtc[] = [];
+      let storedError: unknown = null;
+      try {
+        stored = await dtcEngine.scanDTCs();
+      } catch (e) {
+        storedError = e;
+        console.warn("[OBD DTC] Mode 03 failed:", e);
+      }
+      try {
+        pending = await dtcEngine.scanPendingDTCs();
+      } catch (e) {
+        console.warn("[OBD DTC] Mode 07 failed:", e);
+      }
+      try {
+        permanent = await dtcEngine.scanPermanentDTCs();
+      } catch (e) {
+        console.warn("[OBD DTC] Mode 0A failed:", e);
+      }
 
-    // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
-    const map = new Map<string, ObdDtc>();
-    for (const c of pending) map.set(c.code, c);
-    for (const c of stored) map.set(c.code, c);
-    for (const c of permanent) map.set(c.code, c);
-    const codes = [...map.values()];
+      // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
+      const map = new Map<string, ObdDtc>();
+      for (const c of pending) map.set(c.code, c);
+      for (const c of stored) map.set(c.code, c);
+      for (const c of permanent) map.set(c.code, c);
+      const codes = [...map.values()];
 
-    // Pokud Mode 03 selhalo hard errorem a nic jiného nepřišlo, vyhoď to nahoru — UI zobrazí chybu.
-    if (storedError && codes.length === 0) {
-      throw storedError instanceof Error ? storedError : new Error(String(storedError));
-    }
+      // Vrátit ELM zpět do rychlého polling módu
+      try {
+        await elmQueue.applyProfile("simple");
+      } catch { /* ignore */ }
 
-    setDtcs(codes);
-    dtcsRef.current = codes;
-    await upsertSession(liveDataRef.current, codes, true);
-    return codes;
+      // Pokud Mode 03 selhalo hard errorem a nic jiného nepřišlo, vyhoď to nahoru
+      if (storedError && codes.length === 0) {
+        throw storedError instanceof Error ? storedError : new Error(String(storedError));
+      }
+
+      setDtcs(codes);
+      dtcsRef.current = codes;
+      await upsertSession(liveDataRef.current, codes, true);
+      return codes;
+    });
   }, [upsertSession]);
 
   const clearDtcs = useCallback(async (): Promise<boolean> => {
