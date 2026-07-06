@@ -435,23 +435,33 @@ const Admin = () => {
         return (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">Rezervace servisu</h2>
-            {bookings.length === 0 && <p className="text-sm text-muted-foreground">Žádné rezervace</p>}
-            {bookings.map((b) => (
-              <Card key={b.id} className="cursor-pointer hover:border-primary/40" onClick={() => openBookingEdit(b)}>
-                <CardContent className="p-4 flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-sm">{b.service_type}</p>
-                    <p className="text-xs text-primary">{b.profile_name || "—"} · {b.profile_email || b.profile_phone || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{b.vehicle_brand || "—"} {b.vehicle_model || ""}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
-                    {b.final_price && <p className="text-sm font-semibold mt-1">{b.final_price.toLocaleString("cs")} Kč</p>}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            <CollapsibleAdminSection
+              title="Aktivní rezervace"
+              count={bookings.length}
+              icon={<Calendar className="h-4 w-4" />}
+              description="Rozbal pro seznam. Vyřízené archivuj do sekce Vyřízené."
+            >
+              {bookings.length === 0 && <p className="text-sm text-muted-foreground">Žádné rezervace</p>}
+              {bookings.map((b) => (
+                <Card key={b.id} className="cursor-pointer hover:border-primary/40" onClick={() => openBookingEdit(b)}>
+                  <CardContent className="p-4 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm">{b.service_type}</p>
+                      <p className="text-xs text-primary">{b.profile_name || "—"} · {b.profile_email || b.profile_phone || "—"}</p>
+                      <p className="text-xs text-muted-foreground">{b.vehicle_brand || "—"} {b.vehicle_model || ""}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                      <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
+                      {b.final_price && <p className="text-sm font-semibold">{b.final_price.toLocaleString("cs")} Kč</p>}
+                      {(b.status === "completed" || b.status === "cancelled") && (
+                        <ArchiveInlineButton table="service_bookings" id={b.id} onDone={fetchAll} />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </CollapsibleAdminSection>
           </div>
         );
       case "service-orders": return <Suspense fallback={<Loader />}><AdminServiceOrders /></Suspense>;
