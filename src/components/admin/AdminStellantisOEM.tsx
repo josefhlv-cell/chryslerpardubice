@@ -228,21 +228,35 @@ const AdminStellantisOEM = () => {
             Stellantis engine live DID (read-only)
           </p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {readDidBtn("RPM 4000", "4000")}
+            {readDidBtn("Torque 4001", "4001")}
+            {readDidBtn("Coolant 4004", "4004")}
             {readDidBtn("Coolant 1B04", "1B04")}
             {readDidBtn("Oil temp 4005", "4005")}
             {readDidBtn("Oil pressure 4007", "4007")}
             {readDidBtn("MAF 4009", "4009")}
             {readDidBtn("Boost 400B", "400B")}
+            {readDidBtn("Lambda 400E", "400E")}
+            {readDidBtn("Fuel rail 4014", "4014")}
+            {readDidBtn("Ign advance 4017", "4017")}
             {readDidBtn("EGR pos 4019", "4019")}
             {readDidBtn("Battery 4026", "4026")}
+            {readDidBtn("Evap purge 402E", "402E")}
             {readDidBtn("DPF soot 4048", "4048")}
+            {readDidBtn("DPF regen count 4049", "4049")}
             {readDidBtn("DPF dist regen 404A", "404A")}
             {readDidBtn("DPF active regen 404B", "404B")}
-            {btn("scan-engine", "Stellantis engine live scan", async () => ({
+            {readDidBtn("DEF/AdBlue 404C", "404C")}
+            {btn("scan-engine", "Stellantis engine + DPF scan", async () => ({
               kind: "engine-live",
               data: await obd2.stellantis.scanEngineLive(),
             }))}
           </div>
+          <p className="text-[10px] text-muted-foreground pt-1">
+            DPF DIDs (4048/4049/404A/404B/404C) čtou zanesení sazí, počet regenerací,
+            vzdálenost od poslední regenerace, stav aktivní regenerace a hladinu AdBlue.
+            Fungují pro dieselové motory Stellantis/FCA/Fiat/Lancia/Alfa (ZFA/ZFB/ZFC VIN).
+          </p>
         </CardContent>
       </Card>
 
