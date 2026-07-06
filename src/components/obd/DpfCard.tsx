@@ -113,6 +113,7 @@ export function DpfCard({ dpf, admin, onRequestSnapshot, requestPending, request
         <Tile icon={Thermometer} label="EGT před DPF" value={fmt(dpf.exhaustTempBeforeDpf, 0, "°C")} />
         <Tile icon={Thermometer} label="EGT za DPF" value={fmt(dpf.exhaustTempAfterDpf, 0, "°C")} />
         <Tile icon={Clock} label="Km od regenerace" value={dpf.kmSinceLastRegen !== undefined ? `${dpf.kmSinceLastRegen} km` : "—"} />
+        <Tile icon={Activity} label="Počet regenerací" value={dpf.regenCount !== undefined ? `${dpf.regenCount}` : "—"} />
         <Tile icon={Clock} label="Čas od regenerace" value={dpf.timeSinceLastRegen !== undefined ? `${dpf.timeSinceLastRegen} min` : "—"} />
         <Tile icon={Activity} label="Stav regenerace" value={dpf.regenStatus || (dpf.regenActive ? "Aktivní" : "Neaktivní")} />
         <Tile icon={Info} label="Spolehlivost" value={confidenceLabel(dpf.confidence)} />

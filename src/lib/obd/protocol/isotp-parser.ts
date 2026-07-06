@@ -23,6 +23,7 @@ export type IsoTpFrame = {
   totalLength?: number;       // pro FF
   payload: number[];          // datové bajty tohoto framu (bez PCI)
   raw: string;
+  indexed?: boolean;          // ELM "0:" / "1:" řádky bez ISO-TP PCI
 };
 
 export type IsoTpMessage = {
@@ -54,9 +55,13 @@ function parseFrame(line: string): IsoTpFrame | null {
     }
     if (nibble === 0) {
       const len = bytes[0] & 0x0f;
-      return { pci: 0, payload: bytes.slice(1, 1 + len), raw: trimmed };
+      return { pci: 0, payload: bytes.slice(1, 1 + len), raw: trimmed, indexed: true };
     }
-    return null;
+    // Některé ELM adaptéry vrací multi-line odpověď jako:
+    //   0: 49 02 01 31 43 ...
+    //   1: 52 4A ...
+    // bez PCI bytu. Nezahazovat — poskládáme řádky níže.
+    return { pci: 0, payload: bytes, raw: trimmed, indexed: true };
   }
 
   // Volitelná ECU hlavička (7E8 …)
@@ -119,6 +124,14 @@ export function parseIsoTp(cleaned: string): IsoTpMessage {
 
   const sf = primary.find((f) => f.pci === 0);
   if (sf && !primary.some((f) => f.pci === 1)) {
+    if (primary.some((f) => f.indexed) && primary.length > 1) {
+      return {
+        ecu: primaryEcu,
+        payload: primary.filter((f) => f.pci === 0).flatMap((f) => f.payload),
+        frames: primary,
+        warnings,
+      };
+    }
     return { ecu: primaryEcu, payload: sf.payload, frames: primary, warnings };
   }
 

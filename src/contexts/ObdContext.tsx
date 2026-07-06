@@ -115,6 +115,7 @@ const COMMAND_PERMISSION: Record<string, keyof ObdPermissions> = {
   refresh_live: "live_data",
   live_refresh: "live_data",
   custom_command: "terminal",
+  custom_at: "terminal",
   terminal: "terminal",
   can_bus: "can_bus",
   uds: "uds",
@@ -470,6 +471,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   ) => {
     for (const pid of pids) {
       if (cancelledRef.current) break;
+      if (elmQueue.isPollingPaused()) break;
       if (isPidOnCooldown(pid)) continue;
       try {
         const raw = await elm327.sendCommand(pid, priority);
@@ -502,6 +504,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
   const pollLiveDataOnce = useCallback(async (forceUpsert = false): Promise<ObdLiveData> => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
+    if (elmQueue.isPollingPaused()) {
+      await upsertSession(liveDataRef.current, dtcsRef.current, forceUpsert);
+      return liveDataRef.current;
+    }
     if (isPollingRef.current) {
       await upsertSession(liveDataRef.current, dtcsRef.current, forceUpsert);
       return liveDataRef.current;
@@ -566,6 +572,37 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       for (const c of pending) map.set(c.code, c);
       for (const c of stored) map.set(c.code, c);
       for (const c of permanent) map.set(c.code, c);
+      try {
+        const { runMultiEcuDtcScanUnlocked } = await import("@/lib/obd/services/multi-ecu-dtc-scan");
+        const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
+        const multi = await runMultiEcuDtcScanUnlocked();
+        for (const ecuResult of multi.results) {
+          for (const d of ecuResult.codes) {
+            const baseCode = d.code.split("-")[0];
+            const info = resolveDTCInfo(baseCode);
+            map.set(d.code, {
+              code: d.code,
+              system: baseCode[0] === "P" ? "powertrain" : baseCode[0] === "B" ? "body" : baseCode[0] === "C" ? "chassis" : "network",
+              description: `${info.description} · ${ecuResult.ecu.commonName}`,
+              descriptionEn: info.descriptionEn,
+              category: info.category,
+              firstCheck: info.firstCheck,
+              moparNote: info.moparNote,
+              source: `${info.source || "OBD"} / ${ecuResult.ecu.name}`,
+              severity: info.severity,
+              possibleCause: info.cause,
+              relatedSignals: info.signals,
+              isActive: true,
+              isPending: false,
+              occurenceCount: 1,
+              firstSeen: Date.now(),
+              lastSeen: Date.now(),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[OBD DTC] multi-ECU scan failed:", e);
+      }
       const codes = [...map.values()];
 
       // Vrátit ELM zpět do rychlého polling módu
@@ -601,7 +638,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   const sendCommand = useCallback(async (command: string) => {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (!isAdminRef.current && !permissionsRef.current.terminal) throw new Error("Terminál není povolen.");
-    return elm327.sendCommand(command, "high");
+    return elmQueue.runExclusive(() => elm327.sendCommand(command, "high"));
   }, []);
 
   const updateRemoteCommand = useCallback(async (id: string, patch: Record<string, unknown>) => {
@@ -647,10 +684,19 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         case "refresh_live":
         case "live_refresh": {
           const data = await pollLiveDataOnce(true);
-          result = { liveData: data };
+          let dpf: DpfSnapshot | undefined;
+          try {
+            dpf = await readDpfSnapshot();
+            const next = { ...liveDataRef.current, dpf };
+            setLiveData(next);
+            liveDataRef.current = next;
+            await upsertSession(next, dtcsRef.current, true);
+          } catch { /* refresh live nesmí spadnout kvůli DPF */ }
+          result = { liveData: liveDataRef.current, dpf };
           break;
         }
         case "custom_command":
+        case "custom_at":
         case "terminal": {
           const rawCommand = String(command.command_payload?.command || "").trim();
           if (!rawCommand) throw new Error("Chybí command_payload.command.");
@@ -720,9 +766,13 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         }
         case "full_dtc_scan": {
           if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
-          const mod = await import("@/lib/obd/services/full-dtc-scan");
-          const scan = await mod.runFullDtcScan();
-          result = { scan };
+          const [{ runFullDtcScan }, { runMultiEcuDtcScan }] = await Promise.all([
+            import("@/lib/obd/services/full-dtc-scan"),
+            import("@/lib/obd/services/multi-ecu-dtc-scan"),
+          ]);
+          const scan = await runFullDtcScan();
+          const multiEcu = await runMultiEcuDtcScan();
+          result = { scan, multiEcu };
           break;
         }
         case "raw_uds": {
@@ -915,13 +965,14 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       // FAST loop – RPM/rychlost/plyn/MAP/MAF/load
       pollLiveDataOnce(false).catch(() => undefined);
       pollIntervalRef.current = window.setInterval(() => {
-        if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
+        if (!isPollingRef.current && !elmQueue.isPollingPaused()) pollLiveDataOnce(false).catch(() => undefined);
       }, 600);
     })();
 
     // SLOW loop – teploty/napětí/palivo: pomalu
     slowLoopIntervalRef.current = window.setInterval(() => {
       if (isPollingRef.current) return;
+      if (elmQueue.isPollingPaused()) return;
       pollPidGroup(SLOW_PIDS, "low").catch(() => undefined);
     }, 4000);
 
@@ -930,6 +981,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       const prof = vehicleInfoRef.current.profile;
       if (!prof.allowChryslerCustomPids) return;
       if (isPollingRef.current) return;
+      if (elmQueue.isPollingPaused()) return;
       readChryslerCustomLiveValues().then((custom) => {
         const updates: Partial<ObdLiveData> = {};
         const avail: ObdLiveAvailability = { ...liveAvailabilityRef.current };

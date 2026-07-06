@@ -244,6 +244,7 @@ const AdminRemoteOBD = () => {
 
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("read_dtc")} disabled={!isLive(selected)}><ListChecks className="w-3.5 h-3.5 mr-1" /> Číst DTC</Button>
+              <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("full_dtc_scan")} disabled={!isLive(selected)}><ListChecks className="w-3.5 h-3.5 mr-1" /> Všechny ECU</Button>
               <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("clear_dtc")} disabled={!isLive(selected)}><Trash2 className="w-3.5 h-3.5 mr-1" /> Mazat DTC</Button>
               <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("refresh_live")} disabled={!isLive(selected)}><RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh</Button>
             </div>

@@ -45,13 +45,13 @@ async function tryMode09(): Promise<VinReadResult | null> {
   };
 }
 
-async function tryUdsF190(): Promise<VinReadResult | null> {
-  // Nastavit request přímo na engine ECU (7E0) — na 7DF někdy F190 nedorazí
-  await elmQueue.send("ATSH7E0", { timeoutMs: 1500 });
-  const res = await elmQueue.send("22F190", { timeoutMs: 5000 });
+async function tryUdsF190AtHeader(header: string): Promise<VinReadResult | null> {
+  // VIN může být u Stellantis/FCA/Fiat v ECM, TCM, gateway/BSI. Zkoušíme více
+  // read-only adres; pro multi-frame nastavíme i flow-control header na stejný request ID.
+  await elmQueue.send(`ATSH${header}`, { timeoutMs: 1500 });
+  await elmQueue.send(`ATFCSH${header}`, { timeoutMs: 1500 });
+  const res = await elmQueue.send("22F190", { timeoutMs: 6500 });
   const cleaned = cleanElmResponse(res.raw, "22F190");
-  // Reset zpět na broadcast, aby další polling nebyl vázán na 7E0
-  try { await elmQueue.send("ATSH7DF", { timeoutMs: 1200 }); } catch { /* ignore */ }
   if (res.status !== "ok") return null;
   const msg = parseIsoTp(cleaned);
   const bytes = msg.payload;
@@ -67,6 +67,21 @@ async function tryUdsF190(): Promise<VinReadResult | null> {
     warnings: msg.warnings,
     source: "uds_f190",
   };
+}
+
+async function tryUdsF190(): Promise<VinReadResult | null> {
+  const headers = ["7E0", "7E1", "7E2", "793", "738", "7A2", "652"];
+  try {
+    for (const header of headers) {
+      const result = await tryUdsF190AtHeader(header);
+      if (result) return result;
+    }
+    return null;
+  } finally {
+    // Reset zpět na broadcast, aby další polling nebyl vázán na poslední ECU.
+    try { await elmQueue.send("ATSH7DF", { timeoutMs: 1200 }); } catch { /* ignore */ }
+    try { await elmQueue.send("ATFCSH7E0", { timeoutMs: 1200 }); } catch { /* ignore */ }
+  }
 }
 
 export async function readVinMode09(): Promise<VinReadResult> {

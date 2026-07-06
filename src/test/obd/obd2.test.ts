@@ -14,10 +14,10 @@ describe("DTC decoder", () => {
     const d = decodeDtcPair(0x01, 0x04);
     expect(d?.letter).toBe("P");
   });
-  it("payload s počtem DTC (1, 04 03) → P0403", () => {
-    const { codes } = decodeDtcPayload([0x01, 0x04, 0x03]);
+  it("payload Mode 03 bez count bytu: 01 33 → P0133", () => {
+    const { codes } = decodeDtcPayload([0x01, 0x33]);
     expect(codes).toHaveLength(1);
-    expect(codes[0].code).toBe("P0403");
+    expect(codes[0].code).toBe("P0133");
   });
   it("ignoruje 00 00 padding", () => {
     const { codes } = decodeDtcPayload([0x00, 0x00, 0x04, 0x03]);
@@ -52,6 +52,18 @@ describe("ISO-TP parser", () => {
     expect(m.payload[2]).toBe(0x90);
     const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
     expect(ascii).toBe("1C4RJBG12345678");
+  });
+  it("složí ELM indexované VIN řádky bez PCI", () => {
+    const m = parseIsoTp(
+      [
+        "0: 49 02 01 31 43 34 52",
+        "1: 4A 42 47 31 32 33 34",
+        "2: 35 36 37 38 39 30",
+      ].join("\n"),
+    );
+    expect(m.payload.slice(0, 3)).toEqual([0x49, 0x02, 0x01]);
+    const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
+    expect(ascii).toBe("1C4RJBG1234567890");
   });
 });
 

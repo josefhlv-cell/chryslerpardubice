@@ -296,7 +296,7 @@ class DTCEngine {
    * Postup (podle Delphi-OBD):
    *   1) cleanElmResponse — echo/prompt/SEARCHING pryč
    *   2) parseIsoTp — složí single/multi-frame CAN payload (přeskočí PCI + hlavičky)
-   *   3) najde pozitivní marker (43/47/4A), přeskočí 1 byte s počtem DTC
+   *   3) najde pozitivní marker (43/47/4A), za ním jsou rovnou páry DTC bajtů
    *   4) decodeDtcPayload — páry bajtů → kódy, přeskočí 00 00
    *
    * Fallback: pokud ISO-TP nic nedá (ISO-9141/KWP2000), použije se legacy hex-scan
@@ -328,8 +328,8 @@ class DTCEngine {
       const clean = line.replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
       const idx = clean.indexOf(marker.toUpperCase());
       if (idx < 0) continue;
-      // Marker (2 znaky) + count byte (2 znaky) → přeskoč
-      const data = clean.slice(idx + marker.length + 2);
+      // Marker (2 znaky) → za ním jsou rovnou DTC páry. Mode 03/07/0A nemá count byte.
+      const data = clean.slice(idx + marker.length);
       for (let i = 0; i + 3 < data.length; i += 4) {
         const pair = data.slice(i, i + 4);
         if (pair === '0000') continue;

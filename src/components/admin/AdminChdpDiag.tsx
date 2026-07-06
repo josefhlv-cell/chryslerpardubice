@@ -164,19 +164,19 @@ const AdminChdpDiag = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser]);
 
-  // Klient-side timeout pro pending/running příkazy starší než 30 s
+  // Klient-side timeout pro pending/running příkazy starší než 120 s
   useEffect(() => {
     if (!selectedUser) return;
     const iv = window.setInterval(async () => {
       const stuck = commands.filter(
         (c) =>
           (c.status === "pending" || c.status === "running") &&
-          Date.now() - new Date(c.created_at).getTime() > 30_000,
+          Date.now() - new Date(c.created_at).getTime() > 120_000,
       );
       if (stuck.length === 0) return;
       await supabase
         .from("obd_remote_commands")
-        .update({ status: "error", error: "timeout — zákazník neodpověděl do 30 s" } as any)
+        .update({ status: "error", error: "timeout — zákazník neodpověděl do 120 s" } as any)
         .in("id", stuck.map((c) => c.id));
       loadCommands(selectedUser);
     }, 5000);
@@ -440,6 +440,9 @@ const AdminChdpDiag = () => {
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => sendCmd("read_dtc")} disabled={!live}>
                     <ListChecks className="w-3.5 h-3.5 mr-1" /> Číst DTC
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => sendCmd("full_dtc_scan")} disabled={!live}>
+                    <ListChecks className="w-3.5 h-3.5 mr-1" /> Všechny ECU
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => sendCmd("clear_dtc")} disabled={!live || !permissions.dtc_clear}>
                     <Trash2 className="w-3.5 h-3.5 mr-1" /> Mazat DTC

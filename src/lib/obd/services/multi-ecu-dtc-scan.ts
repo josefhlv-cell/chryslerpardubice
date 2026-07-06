@@ -13,7 +13,7 @@ import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { detectElmError, type ElmStatus } from "@/lib/obd/adapter/elm-errors";
 import { cleanElmResponse } from "@/lib/obd/protocol/response-cleaner";
 import { parseIsoTp } from "@/lib/obd/protocol/isotp-parser";
-import { decodeDtcPayload, type DecodedDtc } from "./dtc-decoder";
+import { decodeDtcPayload, decodeDtcPair, type DecodedDtc } from "./dtc-decoder";
 
 export type EcuTarget = {
   address: string;   // 11-bit request ID, např. "7E0"
@@ -76,17 +76,22 @@ async function readDtcFromEcu(ecu: EcuTarget): Promise<EcuDtcResult> {
   const respHex = (reqHex + 8).toString(16).toUpperCase().padStart(3, "0");
 
   await elmQueue.send(`ATSH${ecu.address}`, { timeoutMs: 1500 });
+  await elmQueue.send(`ATFCSH${ecu.address}`, { timeoutMs: 1500 }).catch(() => undefined);
   await elmQueue.send(`ATCRA${respHex}`, { timeoutMs: 1500 });
 
-  const res = await elmQueue.send("03", { timeoutMs: 3500 });
+  let res = await elmQueue.send("03", { timeoutMs: 3500 });
   const cleaned = cleanElmResponse(res.raw, "03");
 
   if (res.status !== "ok") {
-    return { ecu, status: res.status, codes: [], raw: res.raw, warnings };
+    // Karosářské / gateway jednotky často nepodporují OBD Mode 03, ale podporují
+    // UDS Service 19 ReadDTCInformation. Zkusíme read-only fallback 19 02 FF.
+    res = await elmQueue.send("1902FF", { timeoutMs: 4500 });
+    return decodeUds19Result(ecu, res.raw, res.status, warnings);
   }
   const elmErr = detectElmError(cleaned);
   if (elmErr) {
-    return { ecu, status: elmErr, codes: [], raw: res.raw, warnings };
+    res = await elmQueue.send("1902FF", { timeoutMs: 4500 });
+    return decodeUds19Result(ecu, res.raw, res.status, warnings);
   }
 
   const msg = parseIsoTp(cleaned);
@@ -106,48 +111,89 @@ async function readDtcFromEcu(ecu: EcuTarget): Promise<EcuDtcResult> {
   return { ecu, status: "ok", codes: decoded.codes, raw: res.raw, warnings };
 }
 
+function decodeUds19Result(
+  ecu: EcuTarget,
+  raw: string,
+  status: ElmStatus,
+  baseWarnings: string[],
+): EcuDtcResult {
+  const warnings = [...baseWarnings];
+  if (status !== "ok") return { ecu, status, codes: [], raw, warnings };
+  const cleaned = cleanElmResponse(raw, "1902FF");
+  const elmErr = detectElmError(cleaned);
+  if (elmErr) return { ecu, status: elmErr, codes: [], raw, warnings };
+  const msg = parseIsoTp(cleaned);
+  warnings.push(...msg.warnings);
+  const bytes = msg.payload;
+  if (bytes.length < 3 || bytes[0] !== 0x59 || bytes[1] !== 0x02) {
+    return { ecu, status: "invalid_response", codes: [], raw, warnings: [...warnings, "Missing UDS 59 02 marker"] };
+  }
+
+  // 59 02 <availabilityMask> [DTC_H DTC_M DTC_L status]...
+  const data = bytes.slice(3);
+  const codes: DecodedDtc[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i + 3 < data.length; i += 4) {
+    const dec = decodeDtcPair(data[i], data[i + 1]);
+    if (!dec) continue;
+    const failureType = data[i + 2].toString(16).padStart(2, "0").toUpperCase();
+    const code = `${dec.code}-${failureType}`;
+    if (seen.has(code)) continue;
+    seen.add(code);
+    codes.push({ ...dec, code, raw: `${dec.raw} ${failureType}` });
+  }
+  return { ecu, status: "ok", codes, raw, warnings };
+}
+
+export async function runMultiEcuDtcScanUnlocked(
+  ecus: EcuTarget[] = STELLANTIS_PRIMARY_ECUS,
+): Promise<MultiEcuDtcScan> {
+  await elmQueue.applyProfile("debug");
+  const startedAt = new Date().toISOString();
+  const results: EcuDtcResult[] = [];
+
+  for (const ecu of ecus) {
+    try {
+      results.push(await readDtcFromEcu(ecu));
+    } catch (e) {
+      results.push({
+        ecu,
+        status: "error",
+        codes: [],
+        raw: String((e as Error)?.message ?? e),
+        warnings: [],
+      });
+    }
+  }
+
+  // reset filtrů, aby další scan / polling nezůstal navázaný na poslední ECU
+  try {
+    await elmQueue.send("ATAR", { timeoutMs: 1000 });
+    await elmQueue.send("ATSH7DF", { timeoutMs: 1000 });
+    await elmQueue.send("ATFCSH7E0", { timeoutMs: 1000 });
+  } catch {
+    /* ignore */
+  }
+
+  const responding = results.filter((r) => r.status === "ok").length;
+  const withCodes = results.filter((r) => r.status === "ok" && r.codes.length > 0).length;
+  const totalCodes = results.reduce((sum, r) => sum + r.codes.length, 0);
+
+  return {
+    totalEcusProbed: results.length,
+    ecusResponding: responding,
+    ecusWithCodes: withCodes,
+    totalCodes,
+    results,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  };
+}
+
 export async function runMultiEcuDtcScan(
   ecus: EcuTarget[] = STELLANTIS_PRIMARY_ECUS,
 ): Promise<MultiEcuDtcScan> {
   return elmQueue.runExclusive(async () => {
-    await elmQueue.applyProfile("debug");
-    const startedAt = new Date().toISOString();
-    const results: EcuDtcResult[] = [];
-
-    for (const ecu of ecus) {
-      try {
-        results.push(await readDtcFromEcu(ecu));
-      } catch (e) {
-        results.push({
-          ecu,
-          status: "error",
-          codes: [],
-          raw: String((e as Error)?.message ?? e),
-          warnings: [],
-        });
-      }
-    }
-
-    // reset filtrů, aby další scan / polling nezůstal navázaný na poslední ECU
-    try {
-      await elmQueue.send("ATAR", { timeoutMs: 1000 });
-      await elmQueue.send("ATSH7DF", { timeoutMs: 1000 });
-    } catch {
-      /* ignore */
-    }
-
-    const responding = results.filter((r) => r.status === "ok").length;
-    const withCodes = results.filter((r) => r.status === "ok" && r.codes.length > 0).length;
-    const totalCodes = results.reduce((sum, r) => sum + r.codes.length, 0);
-
-    return {
-      totalEcusProbed: results.length,
-      ecusResponding: responding,
-      ecusWithCodes: withCodes,
-      totalCodes,
-      results,
-      startedAt,
-      finishedAt: new Date().toISOString(),
-    };
+    return runMultiEcuDtcScanUnlocked(ecus);
   });
 }
