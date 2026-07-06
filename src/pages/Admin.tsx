@@ -16,8 +16,11 @@ import {
   Bell, History, AlertTriangle, ArrowDownUp, ClipboardList, BarChart3,
   UserCog, Calendar, BookOpen, Star, TrendingUp, Settings2, Database,
   LayoutDashboard, Package, Activity, FileText, ScanLine, Smartphone,
-  CloudOff, Loader2, Trash2, FileSpreadsheet, Brain,
+  CloudOff, Loader2, Trash2, FileSpreadsheet, Brain, Archive,
 } from "lucide-react";
+import { CollapsibleAdminSection } from "@/components/admin/common/CollapsibleAdminSection";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
+import { useArchive } from "@/hooks/useArchive";
 import { sourceLabel } from "@/api/partsAPI";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
@@ -94,6 +97,7 @@ const AdminOfflineQueue = lazy(() => import("@/components/admin/AdminOfflineQueu
 const AdminAuditLog = lazy(() => import("@/components/admin/AdminAuditLog"));
 const AdminOrderDetail = lazy(() => import("@/components/admin/AdminOrderDetail"));
 const AdminTowRequests = lazy(() => import("@/components/admin/AdminTowRequests"));
+const AdminArchive = lazy(() => import("@/components/admin/AdminArchive"));
 
 type Profile = { id: string; user_id: string; full_name: string | null; email: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; status: string; discount_percent: number; created_at: string; };
 type OrderRow = { id: string; user_id: string; part_id: string | null; part_name: string | null; oem_number: string | null; order_type: string; quantity: number; unit_price: number | null; discount_percent: number | null; discounted_price: number | null; price_with_vat: number | null; status: string; admin_note: string | null; customer_note: string | null; catalog_source: string | null; created_at: string; profile_name?: string | null; profile_email?: string | null; };
@@ -200,9 +204,9 @@ const Admin = () => {
     setLoading(true);
     const [profilesRes, ordersRes, bookingsRes, inquiriesRes] = await Promise.all([
       supabase.from("profiles").select("*").eq("account_type", "business").order("created_at", { ascending: false }),
-      supabase.from("orders").select("*").order("created_at", { ascending: false }),
-      supabase.from("service_bookings").select("*").order("created_at", { ascending: false }),
-      supabase.from("vehicle_inquiries").select("*").order("created_at", { ascending: false }),
+      (supabase.from("orders") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
+      (supabase.from("service_bookings") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
+      (supabase.from("vehicle_inquiries") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
     ]);
     setPendingProfiles((profilesRes.data as Profile[]) || []);
     const rawOrders = (ordersRes.data as OrderRow[]) || [];
@@ -281,6 +285,7 @@ const Admin = () => {
   // === Strom navigace ===
   const tree: AdminTreeNode[] = [
     { key: "overview", label: "Přehled", icon: LayoutDashboard },
+    { key: "archive", label: "Vyřízené", icon: Archive },
     {
       key: "catalog", label: "Katalog (J+M)", icon: Package, children: [
         { key: "catalog-overview", label: "Přehled", icon: LayoutDashboard },
@@ -431,23 +436,33 @@ const Admin = () => {
         return (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">Rezervace servisu</h2>
-            {bookings.length === 0 && <p className="text-sm text-muted-foreground">Žádné rezervace</p>}
-            {bookings.map((b) => (
-              <Card key={b.id} className="cursor-pointer hover:border-primary/40" onClick={() => openBookingEdit(b)}>
-                <CardContent className="p-4 flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-sm">{b.service_type}</p>
-                    <p className="text-xs text-primary">{b.profile_name || "—"} · {b.profile_email || b.profile_phone || "—"}</p>
-                    <p className="text-xs text-muted-foreground">{b.vehicle_brand || "—"} {b.vehicle_model || ""}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
-                    {b.final_price && <p className="text-sm font-semibold mt-1">{b.final_price.toLocaleString("cs")} Kč</p>}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            <CollapsibleAdminSection
+              title="Aktivní rezervace"
+              count={bookings.length}
+              icon={<Calendar className="h-4 w-4" />}
+              description="Rozbal pro seznam. Vyřízené archivuj do sekce Vyřízené."
+            >
+              {bookings.length === 0 && <p className="text-sm text-muted-foreground">Žádné rezervace</p>}
+              {bookings.map((b) => (
+                <Card key={b.id} className="cursor-pointer hover:border-primary/40" onClick={() => openBookingEdit(b)}>
+                  <CardContent className="p-4 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm">{b.service_type}</p>
+                      <p className="text-xs text-primary">{b.profile_name || "—"} · {b.profile_email || b.profile_phone || "—"}</p>
+                      <p className="text-xs text-muted-foreground">{b.vehicle_brand || "—"} {b.vehicle_model || ""}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                      <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
+                      {b.final_price && <p className="text-sm font-semibold">{b.final_price.toLocaleString("cs")} Kč</p>}
+                      {(b.status === "completed" || b.status === "cancelled") && (
+                        <ArchiveInlineButton table="service_bookings" id={b.id} onDone={fetchAll} />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </CollapsibleAdminSection>
           </div>
         );
       case "service-orders": return <Suspense fallback={<Loader />}><AdminServiceOrders /></Suspense>;
@@ -475,26 +490,37 @@ const Admin = () => {
                 ))}
               </div>
             </div>
-            {filteredOrders.map((o) => (
-              <Card key={o.id} className="cursor-pointer hover:border-primary/40" onClick={() => openOrderEdit(o)}>
-                <CardContent className="p-4 flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm">{o.part_name || "—"}</p>
-                      <Badge variant="outline" className="text-[10px]">{o.order_type === "new" ? "Nový" : "Použitý"}</Badge>
+            <CollapsibleAdminSection
+              title="Aktivní objednávky"
+              count={filteredOrders.length}
+              icon={<ShoppingCart className="h-4 w-4" />}
+              description="Rozbal pro seznam. Vyřízené archivuj do sekce Vyřízené."
+            >
+              {filteredOrders.length === 0 && <p className="text-sm text-muted-foreground">Žádné objednávky</p>}
+              {filteredOrders.map((o) => (
+                <Card key={o.id} className="cursor-pointer hover:border-primary/40" onClick={() => openOrderEdit(o)}>
+                  <CardContent className="p-4 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm">{o.part_name || "—"}</p>
+                        <Badge variant="outline" className="text-[10px]">{o.order_type === "new" ? "Nový" : "Použitý"}</Badge>
+                      </div>
+                      <p className="text-xs text-primary">{o.profile_name || "—"} · {o.profile_email || "—"}</p>
+                      <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "—"} · {o.quantity}×</p>
+                      {o.catalog_source && <Badge variant="outline" className="text-[10px] mt-0.5">Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}</Badge>}
+                      <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)}</p>
                     </div>
-                    <p className="text-xs text-primary">{o.profile_name || "—"} · {o.profile_email || "—"}</p>
-                    <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "—"} · {o.quantity}×</p>
-                    {o.catalog_source && <Badge variant="outline" className="text-[10px] mt-0.5">Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}</Badge>}
-                    <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
-                    {o.price_with_vat != null && <p className="text-sm font-semibold mt-1">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                      <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
+                      {o.price_with_vat != null && <p className="text-sm font-semibold">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
+                      {["vyrizena","dorucena","zrusena","cancelled","delivered","completed"].includes(o.status) && (
+                        <ArchiveInlineButton table="orders" id={o.id} onDone={fetchAll} />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </CollapsibleAdminSection>
           </div>
         );
 
@@ -593,6 +619,10 @@ const Admin = () => {
       case "sys-audit": return <Suspense fallback={<Loader />}><AdminAuditLog /></Suspense>;
       case "sys-backups": return <Suspense fallback={<Loader />}><AdminBackups /></Suspense>;
       case "sys-stats": return <Suspense fallback={<Loader />}><AdminDashboardStats /></Suspense>;
+
+      // ----- ARCHIVE / VYŘÍZENÉ -----
+      case "archive": return <Suspense fallback={<Loader />}><AdminArchive /></Suspense>;
+
 
       default:
         return <p className="text-muted-foreground">Sekce nenalezena: {section}</p>;
