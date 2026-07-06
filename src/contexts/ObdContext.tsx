@@ -28,6 +28,7 @@ import {
 import { readVinFromEcu, type DecodedVin } from "@/lib/obd/vin-decoder";
 import { resolveProfileFromBrand, type VehiclePidProfile } from "@/lib/obd/pid-profile-registry";
 import { isPidOnCooldown, markPidFailed, markPidSuccess, resetPidCache } from "@/lib/obd/unsupported-pid-cache";
+import { scanPidSupportMask } from "@/lib/obd/pid-support-mask";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
@@ -315,6 +316,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
           elm327.reset();
           setDevice(null);
 
+          resetPidCache();
           transmissionOilTempSupportedRef.current = null;
           oilPressureSupportedRef.current = null;
           selectedTransmissionOilTempPidRef.current = null;
@@ -537,7 +539,41 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (!isAdminRef.current && !permissionsRef.current.dtc_read) throw new Error("Čtení DTC není povoleno.");
 
-    const codes = await dtcEngine.scanDTCs();
+    // Souběžně čti Mode 03 (stored), 07 (pending) a 0A (permanent) — jako Delphi-OBD.
+    // Selhání jednotlivé služby nezhodí celé čtení, ale hard error z Mode 03 propadne,
+    // aby uživatel viděl skutečnou chybu (BUS INIT, UNABLE TO CONNECT, …).
+    let stored: ObdDtc[] = [];
+    let storedError: unknown = null;
+    try {
+      stored = await dtcEngine.scanDTCs();
+    } catch (e) {
+      storedError = e;
+      console.warn("[OBD DTC] Mode 03 failed:", e);
+    }
+
+    const [pending, permanent] = await Promise.all([
+      dtcEngine.scanPendingDTCs().catch((e) => {
+        console.warn("[OBD DTC] Mode 07 failed:", e);
+        return [] as ObdDtc[];
+      }),
+      dtcEngine.scanPermanentDTCs().catch((e) => {
+        console.warn("[OBD DTC] Mode 0A failed:", e);
+        return [] as ObdDtc[];
+      }),
+    ]);
+
+    // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
+    const map = new Map<string, ObdDtc>();
+    for (const c of pending) map.set(c.code, c);
+    for (const c of stored) map.set(c.code, c);
+    for (const c of permanent) map.set(c.code, c);
+    const codes = [...map.values()];
+
+    // Pokud Mode 03 selhalo hard errorem a nic jiného nepřišlo, vyhoď to nahoru — UI zobrazí chybu.
+    if (storedError && codes.length === 0) {
+      throw storedError instanceof Error ? storedError : new Error(String(storedError));
+    }
+
     setDtcs(codes);
     dtcsRef.current = codes;
     await upsertSession(liveDataRef.current, codes, true);
@@ -849,6 +885,17 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
     // Načíst VIN / profil hned po připojení (jen jednou)
     reloadVehicleInfo().catch(() => undefined);
+
+    // Preflight: zjistit, které Mode 01 PIDy vozidlo vůbec podporuje.
+    // Nepodporované rovnou dostanou cooldown, aby polling nemarnil timeout na každý.
+    scanPidSupportMask()
+      .then((mask) => {
+        console.log(
+          `[OBD SUPPORT MASK] supported=${mask.supported.size}, unsupported=${mask.unsupported.length}`,
+          [...mask.supported],
+        );
+      })
+      .catch((e) => console.warn("[OBD SUPPORT MASK] failed", e));
 
     // FAST loop – RPM/rychlost/plyn/MAP/MAF/load: často
     pollLiveDataOnce(false).catch(() => undefined);
