@@ -426,43 +426,37 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     oilPressure: number | null;
     availability: ObdLiveAvailability;
   }> => {
-    const availability: ObdLiveAvailability = {};
-    let transmissionOilTemp: number | null = null;
-    let oilPressure: number | null = null;
+    // Wrap do runExclusive → FAST polling se pauzne, ATSH7E1/7E2 přepnutí neblokují
+    // ostatní PIDy a odpověď 62/61 nemá kolize s live daty z jiné ECU.
+    return elmQueue.runExclusive(async () => {
+      const availability: ObdLiveAvailability = {};
+      let transmissionOilTemp: number | null = null;
+      let oilPressure: number | null = null;
 
-    try {
-      transmissionOilTemp = await readSelectedCustomPid(
-        selectedTransmissionOilTempPidRef,
-        transmissionOilTempSupportedRef,
-        "transmissionOilTemp",
-      );
-
-      if (transmissionOilTemp !== null) {
-        availability.transmissionOilTemp = Date.now();
+      try {
+        transmissionOilTemp = await readSelectedCustomPid(
+          selectedTransmissionOilTempPidRef,
+          transmissionOilTempSupportedRef,
+          "transmissionOilTemp",
+        );
+        if (transmissionOilTemp !== null) availability.transmissionOilTemp = Date.now();
+      } catch (e) {
+        console.warn("[OBD CUSTOM PID] transmissionOilTemp failed", e);
       }
-    } catch (e) {
-      console.warn("[OBD CUSTOM PID] transmissionOilTemp failed", e);
-    }
 
-    try {
-      oilPressure = await readSelectedCustomPid(
-        selectedOilPressurePidRef,
-        oilPressureSupportedRef,
-        "oilPressure",
-      );
-
-      if (oilPressure !== null) {
-        availability.oilPressure = Date.now();
+      try {
+        oilPressure = await readSelectedCustomPid(
+          selectedOilPressurePidRef,
+          oilPressureSupportedRef,
+          "oilPressure",
+        );
+        if (oilPressure !== null) availability.oilPressure = Date.now();
+      } catch (e) {
+        console.warn("[OBD CUSTOM PID] oilPressure failed", e);
       }
-    } catch (e) {
-      console.warn("[OBD CUSTOM PID] oilPressure failed", e);
-    }
 
-    return {
-      transmissionOilTemp,
-      oilPressure,
-      availability,
-    };
+      return { transmissionOilTemp, oilPressure, availability };
+    });
   }, [readSelectedCustomPid]);
 
   /**
