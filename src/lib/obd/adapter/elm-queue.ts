@@ -137,6 +137,15 @@ class ElmCommandQueue {
       metadata: isLive ? { live: true } : null,
     });
 
+    // Kritické: po timeout / no_data / adapter_error (STOPPED, BUFFER FULL)
+    // musí ELM327 stihnout dopsat zbytek odpovědi do BLE bufferu.
+    // Bez této pauzy další příkaz (typicky ATSH) překryje běžící operaci
+    // a ELM vrátí "STOPPED" → řetěz chyb. 120ms je bezpečné minimum
+    // podle Delphi-OBD (OBD.Connection.Async.pas → InterCmdDelayOnFault).
+    if (timedOut || finalStatus === "no_data" || finalStatus === "adapter_error") {
+      await new Promise((r) => setTimeout(r, 120));
+    }
+
     return {
       command,
       raw,

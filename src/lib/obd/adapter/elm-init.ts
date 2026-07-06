@@ -17,7 +17,10 @@ export type ElmProfile = "debug" | "simple";
 const PROFILES: Record<ElmProfile, string[]> = {
   debug: [
     "ATD", "ATE0", "ATL1", "ATS0", "ATH1", "ATSP0",
-    "ATSTFA",       // HW timeout 1000ms pro multi-frame
+    "ATAT1",        // adaptivní časování — kratší, když ECU odpovídá rychle
+    "ATST64",       // HW timeout ~400ms — dost pro CAN multi-frame se STmin=0,
+                    //                     3× kratší než ATSTFA → žádné STOPPED
+                    //                     kaskády při probování ECU/DID.
     "ATFCSH7E0",    // Flow-control response header = engine ECU
     "ATFCSD300000", // FC frame: ContinueToSend, BS=0, STmin=0
     "ATFCSM1",      // Použij naši FC frame
@@ -25,6 +28,7 @@ const PROFILES: Record<ElmProfile, string[]> = {
   ],
   simple: [
     "ATD", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0",
+    "ATAT1",
     "ATST32",       // HW timeout 200ms — rychlé PID
     "0100",
   ],

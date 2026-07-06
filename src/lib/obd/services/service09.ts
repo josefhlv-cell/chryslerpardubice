@@ -87,18 +87,27 @@ async function tryUdsF190(): Promise<VinReadResult | null> {
 export async function readVinMode09(): Promise<VinReadResult> {
   return elmQueue.runExclusive(async () => {
     await elmQueue.applyProfile("debug");
-    const primary = await tryMode09();
-    if (primary) return primary;
-    const fallback = await tryUdsF190();
-    if (fallback) return fallback;
-    // Vrať cokoli aspoň informativního
-    const res = await elmQueue.send("0902", { timeoutMs: 3000 });
-    const cleaned = cleanElmResponse(res.raw, "0902");
-    return {
-      status: "invalid_response",
-      raw: res.raw,
-      cleaned,
-      warnings: ["Ani Mode 09 ani UDS 22 F190 nevrátily platný VIN."],
-    };
+    // VIN je vždy multi-frame (17 znaků + hlavička) → dočasně nastavíme
+    // delší HW timeout (ATSTFA = 1000ms), aby ELM stihl posbírat všechny CF.
+    // Debug profil má nově jen ATST64 (400ms) — bez tohoto zvednutí by
+    // některé pomalejší ECU stihly odeslat jen First Frame.
+    await elmQueue.send("ATSTFA", { timeoutMs: 500 }).catch(() => undefined);
+    try {
+      const primary = await tryMode09();
+      if (primary) return primary;
+      const fallback = await tryUdsF190();
+      if (fallback) return fallback;
+      const res = await elmQueue.send("0902", { timeoutMs: 3000 });
+      const cleaned = cleanElmResponse(res.raw, "0902");
+      return {
+        status: "invalid_response",
+        raw: res.raw,
+        cleaned,
+        warnings: ["Ani Mode 09 ani UDS 22 F190 nevrátily platný VIN."],
+      };
+    } finally {
+      // Vrátit rychlý HW timeout pro následující probe/scan operace.
+      await elmQueue.send("ATST64", { timeoutMs: 500 }).catch(() => undefined);
+    }
   });
 }
