@@ -8,7 +8,7 @@
  *
  * Nikdy nevyhodí — pokud adaptér/ECU neodpoví, jednoduše nic nezmění.
  */
-import { elm327 } from "@/lib/obd/elm327-engine";
+import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { markPidFailed, markPidSuccess } from "@/lib/obd/unsupported-pid-cache";
 
 /**
@@ -73,7 +73,8 @@ export async function scanPidSupportMask(): Promise<PidSupportMask> {
     queried.push(cmd);
     let response = "";
     try {
-      response = await elm327.sendCommand(cmd, "high");
+      const res = await elmQueue.send(cmd, { timeoutMs: 900, commandType: "pid_support_mask" });
+      response = res.raw;
     } catch {
       response = "";
     }
@@ -86,8 +87,10 @@ export async function scanPidSupportMask(): Promise<PidSupportMask> {
       const hex = pid.toString(16).padStart(2, "0").toUpperCase();
       supported.add(`01${hex}`);
     }
-    // 0100 vždy vrací, ale další masky (0120 atd.) jsou v ní zakódované bitem 0x20
-    // — pokud tam nejsou, další query stejně neuškodí, ale je zbytečný.
+    // Další maska existuje jen když je podporovaný PID 20/40/60/80/A0/C0.
+    // Bez této kontroly ELM čeká zbytečně na 0120/0140… a live data se rozjedou pozdě.
+    const nextMarker = base + 0x20;
+    if (!supported.has(`01${nextMarker.toString(16).padStart(2, "0").toUpperCase()}`)) break;
     base += 0x20;
   }
 

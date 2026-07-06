@@ -10,7 +10,7 @@
  * - dekódovaná hodnota mimo reálný rozsah -20…180 °C pro teplotu převodovky
  * - odpověď 613000 nesmí být brána jako validní teplota
  */
-import { elm327 } from "@/lib/obd/elm327-engine";
+import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 
 export type CustomPidStatus = "supported" | "unsupported" | "invalid" | "error";
 
@@ -281,8 +281,23 @@ export async function testChryslerCustomPid(
       `[PID DISCOVERY] testing key=${definition.key} header=${definition.header} command=${definition.command}`,
     );
 
-    await elm327.sendCommand(`ATSH${definition.header}`, "low");
-    const raw = await elm327.sendCommand(definition.command, "low");
+    const header = await elmQueue.send(`ATSH${definition.header}`, { timeoutMs: 650, commandType: "stellantis_did" });
+    if (header.status === "adapter_error") {
+      return {
+        key: definition.key,
+        label: definition.label,
+        supported: false,
+        status: "unsupported",
+        value: null,
+        unit: definition.unit,
+        raw: header.raw,
+        header: definition.header,
+        command: definition.command,
+        reason: "Adaptér nebyl po předchozím dotazu klidný – PID se přeskočil.",
+      };
+    }
+    const res = await elmQueue.send(definition.command, { timeoutMs: 1200, commandType: "stellantis_did" });
+    const raw = res.raw;
 
     console.log(`[PID DISCOVERY] raw=${raw}`);
 
