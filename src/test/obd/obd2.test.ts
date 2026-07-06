@@ -3,6 +3,7 @@ import { decodeDtcPair, decodeDtcPayload, decodeUdsDtcRecord } from "@/lib/obd/s
 import { parseIsoTp } from "@/lib/obd/protocol/isotp-parser";
 import { parseUds } from "@/lib/obd/protocol/uds-parser";
 import { detectElmError } from "@/lib/obd/adapter/elm-errors";
+import { decodeVin } from "@/lib/obd/vin-decoder";
 
 describe("DTC decoder", () => {
   it("dekóduje P0403 ze 01 04 03", () => {
@@ -111,5 +112,14 @@ describe("UDS parser", () => {
     expect(uds.status).toBe("ok");
     const v = ((uds.payload[0] << 8) | uds.payload[1]) / 1000;
     expect(v).toBeCloseTo(12.345, 3);
+  });
+});
+
+describe("VIN decoder", () => {
+  it("rozpozná Chrysler WMI 1A8 z reálného debug logu", () => {
+    const vin = decodeVin("1A8GSH4P38B149378");
+    expect(vin.brand).toBe("Chrysler");
+    expect(vin.protocolGroup).toBe("chrysler_can_2011_2016");
+    expect(vin.confidence).toBe("high");
   });
 });
