@@ -22,10 +22,12 @@ const INIT_SEQUENCE = [
   { command: "ATE0", description: "Echo off" },
   { command: "ATL0", description: "Linefeeds off" },
   { command: "ATS0", description: "Spaces off" },
-  { command: "ATH0", description: "Headers off" },
+  { command: "ATH0", description: "Headers off (customer polling)" },
   { command: "ATSP0", description: "Auto protocol" },
-  { command: "ATST64", description: "Timeout 400ms" },
-  { command: "010C", description: "RPM test" },
+  { command: "ATAT1", description: "Adaptive timing 1" },
+  { command: "ATST32", description: "ELM timeout 200ms" },
+  { command: "ATCFC1", description: "CAN flow control auto" },
+  { command: "0100", description: "Protocol handshake" },
 ];
 const ERROR_PATTERNS = [
   "UNABLE TO CONNECT",
@@ -60,7 +62,9 @@ class ELM327Engine {
   private state: ELMState = "idle";
   private queue: QueuedCommand[] = [];
   private processing = false;
-  private commandDelay = 160;
+  // 40ms mezi příkazy je bezpečné pro vLinker/ELM327 v2.x a v praxi 3× rychlejší
+  // než původních 160ms — motoristické PIDy tak dosahují 8–10 Hz místo 2 Hz.
+  private commandDelay = 40;
   private initSteps: InitStep[] = [];
   private stateListeners: ((state: ELMState) => void)[] = [];
   private initListeners: ((steps: InitStep[]) => void)[] = [];
@@ -79,7 +83,7 @@ class ELM327Engine {
     return [...this.initSteps];
   }
   setCommandDelay(ms: number) {
-    this.commandDelay = Math.max(100, Math.min(300, ms));
+    this.commandDelay = Math.max(25, Math.min(300, ms));
   }
   onStateChange(listener: (state: ELMState) => void): () => void {
     this.stateListeners.push(listener);
@@ -123,7 +127,7 @@ class ELM327Engine {
       status: "pending" as const,
     }));
     this.emitInitProgress();
-    await this.delay(600);
+    await this.delay(300);
     for (let i = 0; i < this.initSteps.length; i++) {
       const command = this.initSteps[i].command;
       this.initSteps[i].status = "running";

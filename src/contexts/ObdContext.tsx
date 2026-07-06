@@ -29,6 +29,7 @@ import { readVinFromEcu, type DecodedVin } from "@/lib/obd/vin-decoder";
 import { resolveProfileFromBrand, type VehiclePidProfile } from "@/lib/obd/pid-profile-registry";
 import { isPidOnCooldown, markPidFailed, markPidSuccess, resetPidCache } from "@/lib/obd/unsupported-pid-cache";
 import { scanPidSupportMask } from "@/lib/obd/pid-support-mask";
+import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { DEFAULT_OBD_PERMISSIONS, FULL_OBD_PERMISSIONS, type ObdPermissions } from "@/hooks/obd/use-obd-permissions";
 
 export type ObdLiveData = {
@@ -425,43 +426,37 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     oilPressure: number | null;
     availability: ObdLiveAvailability;
   }> => {
-    const availability: ObdLiveAvailability = {};
-    let transmissionOilTemp: number | null = null;
-    let oilPressure: number | null = null;
+    // Wrap do runExclusive → FAST polling se pauzne, ATSH7E1/7E2 přepnutí neblokují
+    // ostatní PIDy a odpověď 62/61 nemá kolize s live daty z jiné ECU.
+    return elmQueue.runExclusive(async () => {
+      const availability: ObdLiveAvailability = {};
+      let transmissionOilTemp: number | null = null;
+      let oilPressure: number | null = null;
 
-    try {
-      transmissionOilTemp = await readSelectedCustomPid(
-        selectedTransmissionOilTempPidRef,
-        transmissionOilTempSupportedRef,
-        "transmissionOilTemp",
-      );
-
-      if (transmissionOilTemp !== null) {
-        availability.transmissionOilTemp = Date.now();
+      try {
+        transmissionOilTemp = await readSelectedCustomPid(
+          selectedTransmissionOilTempPidRef,
+          transmissionOilTempSupportedRef,
+          "transmissionOilTemp",
+        );
+        if (transmissionOilTemp !== null) availability.transmissionOilTemp = Date.now();
+      } catch (e) {
+        console.warn("[OBD CUSTOM PID] transmissionOilTemp failed", e);
       }
-    } catch (e) {
-      console.warn("[OBD CUSTOM PID] transmissionOilTemp failed", e);
-    }
 
-    try {
-      oilPressure = await readSelectedCustomPid(
-        selectedOilPressurePidRef,
-        oilPressureSupportedRef,
-        "oilPressure",
-      );
-
-      if (oilPressure !== null) {
-        availability.oilPressure = Date.now();
+      try {
+        oilPressure = await readSelectedCustomPid(
+          selectedOilPressurePidRef,
+          oilPressureSupportedRef,
+          "oilPressure",
+        );
+        if (oilPressure !== null) availability.oilPressure = Date.now();
+      } catch (e) {
+        console.warn("[OBD CUSTOM PID] oilPressure failed", e);
       }
-    } catch (e) {
-      console.warn("[OBD CUSTOM PID] oilPressure failed", e);
-    }
 
-    return {
-      transmissionOilTemp,
-      oilPressure,
-      availability,
-    };
+      return { transmissionOilTemp, oilPressure, availability };
+    });
   }, [readSelectedCustomPid]);
 
   /**
@@ -539,49 +534,55 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     if (!connectedRef.current) throw new Error("OBD adaptér není připojen.");
     if (!isAdminRef.current && !permissionsRef.current.dtc_read) throw new Error("Čtení DTC není povoleno.");
 
-    // Souběžně čti Mode 03 (stored), 07 (pending) a 0A (permanent) — jako Delphi-OBD.
-    // Selhání jednotlivé služby nezhodí celé čtení, ale hard error z Mode 03 propadne,
-    // aby uživatel viděl skutečnou chybu (BUS INIT, UNABLE TO CONNECT, …).
-    // Sekvenční čtení Mode 03 → 07 → 0A (jako Delphi-OBD / Torque).
-    // Paralelní volání ELM327 přes 'high' prioritu prohazovalo pořadí a některé
-    // ECU pak vracely NO DATA na 07/0A. Sekvenčně to odpovídá reálným diag toolům.
-    let stored: ObdDtc[] = [];
-    let pending: ObdDtc[] = [];
-    let permanent: ObdDtc[] = [];
-    let storedError: unknown = null;
-    try {
-      stored = await dtcEngine.scanDTCs();
-    } catch (e) {
-      storedError = e;
-      console.warn("[OBD DTC] Mode 03 failed:", e);
-    }
-    try {
-      pending = await dtcEngine.scanPendingDTCs();
-    } catch (e) {
-      console.warn("[OBD DTC] Mode 07 failed:", e);
-    }
-    try {
-      permanent = await dtcEngine.scanPermanentDTCs();
-    } catch (e) {
-      console.warn("[OBD DTC] Mode 0A failed:", e);
-    }
+    // Sekvenční Mode 03 → 07 → 0A (jako Delphi-OBD / Torque). Vše uvnitř
+    // elmQueue.runExclusive() — live polling se automaticky pauzne a ATH1
+    // profil zaručí, že multi-frame ISO-TP odpovědi mají hlavičky pro parser.
+    // Po dokončení se profil vrátí na 'simple' (ATH0) pro rychlé PID polling.
+    return elmQueue.runExclusive(async () => {
+      await elmQueue.applyProfile("debug");
+      let stored: ObdDtc[] = [];
+      let pending: ObdDtc[] = [];
+      let permanent: ObdDtc[] = [];
+      let storedError: unknown = null;
+      try {
+        stored = await dtcEngine.scanDTCs();
+      } catch (e) {
+        storedError = e;
+        console.warn("[OBD DTC] Mode 03 failed:", e);
+      }
+      try {
+        pending = await dtcEngine.scanPendingDTCs();
+      } catch (e) {
+        console.warn("[OBD DTC] Mode 07 failed:", e);
+      }
+      try {
+        permanent = await dtcEngine.scanPermanentDTCs();
+      } catch (e) {
+        console.warn("[OBD DTC] Mode 0A failed:", e);
+      }
 
-    // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
-    const map = new Map<string, ObdDtc>();
-    for (const c of pending) map.set(c.code, c);
-    for (const c of stored) map.set(c.code, c);
-    for (const c of permanent) map.set(c.code, c);
-    const codes = [...map.values()];
+      // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
+      const map = new Map<string, ObdDtc>();
+      for (const c of pending) map.set(c.code, c);
+      for (const c of stored) map.set(c.code, c);
+      for (const c of permanent) map.set(c.code, c);
+      const codes = [...map.values()];
 
-    // Pokud Mode 03 selhalo hard errorem a nic jiného nepřišlo, vyhoď to nahoru — UI zobrazí chybu.
-    if (storedError && codes.length === 0) {
-      throw storedError instanceof Error ? storedError : new Error(String(storedError));
-    }
+      // Vrátit ELM zpět do rychlého polling módu
+      try {
+        await elmQueue.applyProfile("simple");
+      } catch { /* ignore */ }
 
-    setDtcs(codes);
-    dtcsRef.current = codes;
-    await upsertSession(liveDataRef.current, codes, true);
-    return codes;
+      // Pokud Mode 03 selhalo hard errorem a nic jiného nepřišlo, vyhoď to nahoru
+      if (storedError && codes.length === 0) {
+        throw storedError instanceof Error ? storedError : new Error(String(storedError));
+      }
+
+      setDtcs(codes);
+      dtcsRef.current = codes;
+      await upsertSession(liveDataRef.current, codes, true);
+      return codes;
+    });
   }, [upsertSession]);
 
   const clearDtcs = useCallback(async (): Promise<boolean> => {
@@ -887,25 +888,36 @@ export function ObdProvider({ children }: { children: ReactNode }) {
 
     cancelledRef.current = false;
 
-    // Načíst VIN / profil hned po připojení (jen jednou)
-    reloadVehicleInfo().catch(() => undefined);
+    // Preflight + polling start bootstrap. Musí proběhnout sekvenčně:
+    //   1) VIN + profil (aby polling loop mohl rovnou použít správný profil)
+    //   2) support-mask (aby první polling cyklus nepumpoval nepodporované PIDy)
+    //   3) start polling intervalů
+    // Pokud kterýkoli krok selže, polling stejně nastartuje — degraded, ale funkční.
+    (async () => {
+      try {
+        await reloadVehicleInfo();
+      } catch (e) {
+        console.warn("[OBD BOOT] reloadVehicleInfo failed", e);
+      }
+      if (cancelledRef.current) return;
 
-    // Preflight: zjistit, které Mode 01 PIDy vozidlo vůbec podporuje.
-    // Nepodporované rovnou dostanou cooldown, aby polling nemarnil timeout na každý.
-    scanPidSupportMask()
-      .then((mask) => {
+      try {
+        const mask = await scanPidSupportMask();
         console.log(
           `[OBD SUPPORT MASK] supported=${mask.supported.size}, unsupported=${mask.unsupported.length}`,
           [...mask.supported],
         );
-      })
-      .catch((e) => console.warn("[OBD SUPPORT MASK] failed", e));
+      } catch (e) {
+        console.warn("[OBD SUPPORT MASK] failed", e);
+      }
+      if (cancelledRef.current) return;
 
-    // FAST loop – RPM/rychlost/plyn/MAP/MAF/load: často
-    pollLiveDataOnce(false).catch(() => undefined);
-    pollIntervalRef.current = window.setInterval(() => {
-      if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
-    }, 600);
+      // FAST loop – RPM/rychlost/plyn/MAP/MAF/load
+      pollLiveDataOnce(false).catch(() => undefined);
+      pollIntervalRef.current = window.setInterval(() => {
+        if (!isPollingRef.current) pollLiveDataOnce(false).catch(() => undefined);
+      }, 600);
+    })();
 
     // SLOW loop – teploty/napětí/palivo: pomalu
     slowLoopIntervalRef.current = window.setInterval(() => {
