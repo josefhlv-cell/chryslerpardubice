@@ -603,10 +603,11 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       for (const c of pending) map.set(c.code, c);
       for (const c of stored) map.set(c.code, c);
       for (const c of permanent) map.set(c.code, c);
-      try {
+
+      const addMultiEcuCodes = async (ecus?: import("@/lib/obd/services/multi-ecu-dtc-scan").EcuTarget[]) => {
         const { runMultiEcuDtcScanUnlocked, STELLANTIS_QUICK_ECUS } = await import("@/lib/obd/services/multi-ecu-dtc-scan");
         const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
-        const multi = await runMultiEcuDtcScanUnlocked(STELLANTIS_QUICK_ECUS);
+        const multi = await runMultiEcuDtcScanUnlocked(ecus ?? STELLANTIS_QUICK_ECUS);
         for (const ecuResult of multi.results) {
           for (const d of ecuResult.codes) {
             const baseCode = d.code.split("-")[0];
@@ -631,6 +632,10 @@ export function ObdProvider({ children }: { children: ReactNode }) {
             });
           }
         }
+      };
+
+      try {
+        await addMultiEcuCodes();
       } catch (e) {
         console.warn("[OBD DTC] multi-ECU scan failed:", e);
       }
