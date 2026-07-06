@@ -16,8 +16,10 @@ import {
   Bell, History, AlertTriangle, ArrowDownUp, ClipboardList, BarChart3,
   UserCog, Calendar, BookOpen, Star, TrendingUp, Settings2, Database,
   LayoutDashboard, Package, Activity, FileText, ScanLine, Smartphone,
-  CloudOff, Loader2, Trash2, FileSpreadsheet, Brain,
+  CloudOff, Loader2, Trash2, FileSpreadsheet, Brain, Archive,
 } from "lucide-react";
+import { CollapsibleAdminSection } from "@/components/admin/common/CollapsibleAdminSection";
+import { useArchive } from "@/hooks/useArchive";
 import { sourceLabel } from "@/api/partsAPI";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import AdminShell, { AdminTreeNode } from "@/components/admin/AdminShell";
