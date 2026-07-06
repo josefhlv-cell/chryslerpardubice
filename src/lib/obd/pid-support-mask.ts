@@ -80,7 +80,12 @@ export async function scanPidSupportMask(): Promise<PidSupportMask> {
     }
     raw[cmd] = response;
     if (!response || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(response)) {
-      break; // ECU nevrátila validní masku → dál nemá smysl
+      // Některé Chrysler/Stellantis ECU vrací NO DATA pro 0120, ale přesto
+      // odpoví na 0140/0160 (napětí 0142, baro 0133, load 0143…). Delphi scan
+      // bloky neukončuje tvrdě podle první díry — zkusí další masku a až potom
+      // označí konkrétní PIDy podle výsledků.
+      base += 0x20;
+      continue;
     }
     const bits = parseMask(response, base);
     for (const pid of bits) {
