@@ -6,7 +6,7 @@
  */
 import { LIVE_PIDS } from "@/lib/obd/obd-pids";
 
-export const FAST_PIDS = ["010C", "010D", "0111", "0104", "010B", "0110"] as const;
+export const FAST_PIDS = ["010C", "010D", "0111", "0104", "010B"] as const;
 
 export const SLOW_PIDS = LIVE_PIDS.filter(
   (p) => !FAST_PIDS.includes(p as (typeof FAST_PIDS)[number]),
