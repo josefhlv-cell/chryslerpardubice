@@ -474,8 +474,12 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       if (elmQueue.isPollingPaused()) break;
       if (isPidOnCooldown(pid)) continue;
       try {
-        const raw = await elm327.sendCommand(pid, priority);
-        if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
+        const res = await elmQueue.send(pid, {
+          timeoutMs: priority === "high" ? 850 : 1050,
+          commandType: "live_poll_command",
+        });
+        const raw = res.raw;
+        if (res.status !== "ok" || !raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
           markPidFailed(pid);
           continue;
         }
