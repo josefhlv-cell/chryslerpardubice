@@ -1,6 +1,6 @@
 {
   "appId": "CHDP.OBD.CHRYSL.VLINK",
-  "appName": "Chrysler Pardubice",
+  "appName": "CHDP Garage",
   "webDir": "dist",
   "ios": {
     "contentInset": "automatic",
