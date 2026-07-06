@@ -40,11 +40,43 @@ type Props = {
   isPending?: boolean;
   /** Kompaktní varianta pro admin/list. */
   compact?: boolean;
+  description?: string;
+  descriptionEn?: string;
+  category?: string;
+  severity?: DTCSeverity;
+  possibleCause?: string;
+  firstCheck?: string;
+  moparNote?: string;
+  source?: string;
 };
 
-export function DtcItem({ code, system, isPending, compact }: Props) {
+export function DtcItem({
+  code,
+  system,
+  isPending,
+  compact,
+  description,
+  descriptionEn,
+  category,
+  severity,
+  possibleCause,
+  firstCheck,
+  moparNote,
+  source,
+}: Props) {
   const [open, setOpen] = useState(false);
-  const info = resolveDTCInfo(code);
+  const resolved = resolveDTCInfo(code.split("-")[0]);
+  const info = {
+    ...resolved,
+    description: description || resolved.description,
+    descriptionEn: descriptionEn || resolved.descriptionEn,
+    category: category || resolved.category,
+    severity: severity || resolved.severity,
+    cause: possibleCause || resolved.cause,
+    firstCheck: firstCheck || resolved.firstCheck,
+    moparNote: moparNote || resolved.moparNote,
+    source: source || resolved.source,
+  };
   const sys = system || guessSystem(code);
   const sevCls = severityClass(info.severity);
 
