@@ -127,7 +127,7 @@ class ELM327Engine {
       status: "pending" as const,
     }));
     this.emitInitProgress();
-    await this.delay(600);
+    await this.delay(300);
     for (let i = 0; i < this.initSteps.length; i++) {
       const command = this.initSteps[i].command;
       this.initSteps[i].status = "running";
