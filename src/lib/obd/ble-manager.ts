@@ -158,9 +158,30 @@ class BLEManager {
   }
 
   private setState(state: BLEConnectionState) {
+    const prev = this.state;
     this.state = state;
     this.emit({ type: 'stateChange', payload: state });
     this.debug('[BLE] STATE', state);
+    // Map state transitions to debug log events (fire-and-forget)
+    const map: Record<string, string | null> = {
+      connecting: 'connect_start',
+      connected: 'connect_success',
+      disconnected: prev === 'connected' || prev === 'reconnecting' ? 'disconnect' : null,
+      reconnecting: 'reconnect_start',
+      error: 'connect_error',
+    };
+    const commandType = map[state];
+    if (commandType) {
+      if (state === 'connected') resetObdDebugThrottle();
+      logObdDebugEvent({
+        commandType,
+        connectionState: state,
+        status: state === 'error' ? 'error' : 'info',
+        adapterId: (this as any).deviceId ?? null,
+        adapterName: (this as any).deviceName ?? null,
+        metadata: { previous: prev },
+      });
+    }
   }
 
   private async ensureInitialized(): Promise<void> {
