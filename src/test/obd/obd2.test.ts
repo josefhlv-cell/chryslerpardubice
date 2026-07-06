@@ -53,6 +53,18 @@ describe("ISO-TP parser", () => {
     const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
     expect(ascii).toBe("1C4RJBG12345678");
   });
+  it("složí ELM indexované VIN řádky bez PCI", () => {
+    const m = parseIsoTp(
+      [
+        "0: 49 02 01 31 43 34 52",
+        "1: 4A 42 47 31 32 33 34",
+        "2: 35 36 37 38 39 30 31",
+      ].join("\n"),
+    );
+    expect(m.payload.slice(0, 3)).toEqual([0x49, 0x02, 0x01]);
+    const ascii = String.fromCharCode(...m.payload.slice(3)).replace(/[^A-Z0-9]/gi, "");
+    expect(ascii).toBe("1C4RJBG12345678901");
+  });
 });
 
 describe("UDS parser", () => {
