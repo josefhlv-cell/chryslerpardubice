@@ -16,7 +16,6 @@
  *  - vysoký EGT po DPF (>500 °C) proti EGT před DPF
  */
 
-import { elm327 } from "@/lib/obd/elm327-engine";
 import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { parseUds } from "@/lib/obd/protocol/uds-parser";
 
@@ -103,14 +102,26 @@ export async function readDpfSnapshot(): Promise<DpfSnapshot> {
 async function readDpfSnapshotUnlocked(): Promise<DpfSnapshot> {
   const results: Record<string, string> = {};
   let anySupported = false;
+  let firstProbeFailed = false;
 
   for (const [key, pid] of Object.entries(DPF_PIDS)) {
+    if (firstProbeFailed) {
+      results[key] = "";
+      continue;
+    }
     try {
-      const raw = await elm327.sendCommand(pid, "low");
+      const res = await elmQueue.send(pid, { timeoutMs: 850, commandType: "stellantis_did" });
+      const raw = res.raw;
       results[key] = raw;
       if (!isNoData(raw)) anySupported = true;
+      if (key === "regenStatus" && (res.status === "no_data" || res.status === "timeout" || res.status === "adapter_error" || isNoData(raw))) {
+        // Benzínové vozy / auta bez DPF typicky nevrátí už první DPF PID.
+        // Nepokračovat na další 4 PIDy, jinak ruční DPF dotaz zbytečně čeká.
+        firstProbeFailed = true;
+      }
     } catch {
       results[key] = "";
+      if (key === "regenStatus") firstProbeFailed = true;
     }
   }
 
@@ -227,8 +238,8 @@ async function readStellantisDpfDids(): Promise<{
       break;
     }
   } finally {
-    await elmQueue.send("ATSH7DF", { timeoutMs: 600 }).catch(() => undefined);
-    await elmQueue.send("ATFCSH7E0", { timeoutMs: 600 }).catch(() => undefined);
+    await elmQueue.send("ATSH7DF", { timeoutMs: 600, commandType: "stellantis_did" }).catch(() => undefined);
+    await elmQueue.send("ATFCSH7E0", { timeoutMs: 600, commandType: "stellantis_did" }).catch(() => undefined);
     await elmQueue.applyProfile("simple").catch(() => undefined);
   }
   return out;
