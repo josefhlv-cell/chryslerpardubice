@@ -18,6 +18,7 @@ import {
   type DidResult,
   type DtcResult,
   type FullDtcScan,
+  type MultiEcuDtcScan,
   type StellantisBasicScan,
   type StellantisEngineLiveScan,
   type SessionResult,
@@ -29,6 +30,7 @@ type AnyResult =
   | { kind: "did"; data: DidResult }
   | { kind: "dtc"; data: DtcResult }
   | { kind: "full-dtc"; data: FullDtcScan }
+  | { kind: "multi-dtc"; data: MultiEcuDtcScan }
   | { kind: "basic"; data: StellantisBasicScan }
   | { kind: "engine-live"; data: StellantisEngineLiveScan }
   | { kind: "raw"; data: { command: string; raw: string; status: ElmStatus } }
