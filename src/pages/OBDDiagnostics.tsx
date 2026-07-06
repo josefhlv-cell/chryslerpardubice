@@ -459,6 +459,16 @@ const OBDDiagnostics = () => {
                     available={liveAvailability.intakeTemp !== undefined}
                     unavailableLabel="Nedostupné"
                   />
+                  <GaugeCircle
+                    value={liveData.ambientTemp}
+                    max={80}
+                    label="Venkovní teplota"
+                    unit="°C"
+                    color="hsl(190, 75%, 50%)"
+                    icon={Thermometer}
+                    available={liveAvailability.ambientTemp !== undefined}
+                    unavailableLabel="Nedostupné"
+                  />
                   {/* 8. Tlak oleje — zobrazí se jen po reálné odpovědi ECU */}
                   <GaugeCircle
                     value={liveData.oilPressure}
