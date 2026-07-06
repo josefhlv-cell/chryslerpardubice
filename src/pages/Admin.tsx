@@ -598,6 +598,10 @@ const Admin = () => {
       case "sys-backups": return <Suspense fallback={<Loader />}><AdminBackups /></Suspense>;
       case "sys-stats": return <Suspense fallback={<Loader />}><AdminDashboardStats /></Suspense>;
 
+      // ----- ARCHIVE / VYŘÍZENÉ -----
+      case "archive": return <Suspense fallback={<Loader />}><AdminArchive /></Suspense>;
+
+
       default:
         return <p className="text-muted-foreground">Sekce nenalezena: {section}</p>;
     }
