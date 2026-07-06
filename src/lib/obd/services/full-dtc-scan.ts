@@ -21,7 +21,7 @@ export type FullDtcScan = {
 
 export async function runFullDtcScan(): Promise<FullDtcScan> {
   return elmQueue.runExclusive(async () => {
-    await elmQueue.applyProfile("debug");
+    await elmQueue.applyProfile("debug", true);
     const stored = await readStoredDtcs();
     const pending = await readPendingDtcs();
     const permanent = await readPermanentDtcs();

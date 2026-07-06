@@ -87,7 +87,7 @@ async function tryUdsF190(): Promise<VinReadResult | null> {
 
 export async function readVinMode09(): Promise<VinReadResult> {
   return elmQueue.runExclusive(async () => {
-    await elmQueue.applyProfile("debug");
+    await elmQueue.applyProfile("debug", true);
     // VIN je vždy multi-frame (17 znaků + hlavička) → dočasně nastavíme
     // delší HW timeout (ATSTFA = 1000ms), aby ELM stihl posbírat všechny CF.
     // Debug profil má nově jen ATST64 (400ms) — bez tohoto zvednutí by

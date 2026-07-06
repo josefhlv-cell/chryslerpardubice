@@ -165,7 +165,7 @@ function decodeUds19Result(
 export async function runMultiEcuDtcScanUnlocked(
   ecus: EcuTarget[] = STELLANTIS_PRIMARY_ECUS,
 ): Promise<MultiEcuDtcScan> {
-  await elmQueue.applyProfile("debug");
+  await elmQueue.applyProfile("debug", true);
   await elmQueue.send("ATST32", { timeoutMs: 550, commandType: "full_dtc_scan" }).catch(() => undefined);
   const startedAt = new Date().toISOString();
   const results: EcuDtcResult[] = [];

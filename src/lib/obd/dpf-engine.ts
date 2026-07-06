@@ -217,7 +217,7 @@ async function readStellantisDpfDids(): Promise<{
   } = { supported: false };
 
   try {
-    await elmQueue.applyProfile("debug");
+    await elmQueue.applyProfile("debug", true);
     const headers = ["7E0", "7E1"];
     for (const header of headers) {
       // Probe: pokud první DID neodpoví, vůz nemá Stellantis DPF DIDy

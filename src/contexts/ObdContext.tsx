@@ -549,7 +549,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     // profil zaručí, že multi-frame ISO-TP odpovědi mají hlavičky pro parser.
     // Po dokončení se profil vrátí na 'simple' (ATH0) pro rychlé PID polling.
     return elmQueue.runExclusive(async () => {
-      await elmQueue.applyProfile("debug");
+      await elmQueue.applyProfile("debug", true);
       let stored: ObdDtc[] = [];
       let pending: ObdDtc[] = [];
       let permanent: ObdDtc[] = [];
