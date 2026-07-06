@@ -316,6 +316,7 @@ export function ObdProvider({ children }: { children: ReactNode }) {
           elm327.reset();
           setDevice(null);
 
+          resetPidCache();
           transmissionOilTempSupportedRef.current = null;
           oilPressureSupportedRef.current = null;
           selectedTransmissionOilTempPidRef.current = null;
