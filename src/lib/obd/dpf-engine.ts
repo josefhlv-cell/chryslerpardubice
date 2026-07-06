@@ -173,11 +173,15 @@ function u16(bytes: number[]): number | undefined {
   return (bytes[0] << 8) | bytes[1];
 }
 
-async function readUdsDid(header: string, did: string): Promise<number[] | undefined> {
-  await elmQueue.send(`ATSH${header}`, { timeoutMs: 1200 });
-  await elmQueue.send(`ATFCSH${header}`, { timeoutMs: 1200 }).catch(() => undefined);
+async function readUdsDid(header: string, did: string, timeoutMs = 1500): Promise<number[] | undefined> {
+  const setHdr = await elmQueue.send(`ATSH${header}`, { timeoutMs: 600 });
+  // Pokud ELM ještě dopisuje předchozí odpověď, vrátí STOPPED — přeskoč,
+  // send() sám vloží 120ms settle, další volání pak proběhne čistě.
+  if (setHdr.status === "adapter_error") return undefined;
+  await elmQueue.send(`ATFCSH${header}`, { timeoutMs: 600 }).catch(() => undefined);
   const cmd = `22${did}`;
-  const res = await elmQueue.send(cmd, { timeoutMs: 4500 });
+  const res = await elmQueue.send(cmd, { timeoutMs, commandType: "stellantis_did" });
+  if (res.status !== "ok") return undefined;
   const uds = parseUds(res.raw, 0x22, [parseInt(did.slice(0, 2), 16), parseInt(did.slice(2, 4), 16)]);
   return uds.status === "ok" ? uds.payload : undefined;
 }
@@ -205,33 +209,28 @@ async function readStellantisDpfDids(): Promise<{
     await elmQueue.applyProfile("debug");
     const headers = ["7E0", "7E1"];
     for (const header of headers) {
-      const soot = await readUdsDid(header, "4048").catch(() => undefined);
-      if (soot?.length) {
-        out.supported = true;
-        // Delphi/Stellantis DPF soot DID: u většiny Fiat/FCA dieselů 1 byte = %.
-        out.sootLoad = validPercent(soot[0]) ?? validPercent((u16(soot) ?? 0) / 10);
-      }
-      const regenCount = await readUdsDid(header, "4049").catch(() => undefined);
-      if (regenCount?.length) {
-        out.supported = true;
-        out.regenCount = u16(regenCount) ?? regenCount[0];
-      }
-      const dist = await readUdsDid(header, "404A").catch(() => undefined);
-      if (dist?.length) {
-        out.supported = true;
-        out.kmSinceLastRegen = u16(dist) ?? dist[0];
-      }
-      const active = await readUdsDid(header, "404B").catch(() => undefined);
-      if (active?.length) {
-        out.supported = true;
-        out.regenActive = active.some((b) => b !== 0);
-      }
-      if (out.supported) break;
+      // Probe: pokud první DID neodpoví, vůz nemá Stellantis DPF DIDy
+      // na této adrese — přeskoč zbývající 3 DIDy (jinak 3× 1500ms čekání).
+      const soot = await readUdsDid(header, "4048", 1200);
+      if (!soot?.length) continue;
+      out.supported = true;
+      out.sootLoad = validPercent(soot[0]) ?? validPercent((u16(soot) ?? 0) / 10);
+
+      const regenCount = await readUdsDid(header, "4049", 1200);
+      if (regenCount?.length) out.regenCount = u16(regenCount) ?? regenCount[0];
+
+      const dist = await readUdsDid(header, "404A", 1200);
+      if (dist?.length) out.kmSinceLastRegen = u16(dist) ?? dist[0];
+
+      const active = await readUdsDid(header, "404B", 1200);
+      if (active?.length) out.regenActive = active.some((b) => b !== 0);
+      break;
     }
   } finally {
-    await elmQueue.send("ATSH7DF", { timeoutMs: 1000 }).catch(() => undefined);
-    await elmQueue.send("ATFCSH7E0", { timeoutMs: 1000 }).catch(() => undefined);
+    await elmQueue.send("ATSH7DF", { timeoutMs: 600 }).catch(() => undefined);
+    await elmQueue.send("ATFCSH7E0", { timeoutMs: 600 }).catch(() => undefined);
     await elmQueue.applyProfile("simple").catch(() => undefined);
   }
   return out;
 }
+
