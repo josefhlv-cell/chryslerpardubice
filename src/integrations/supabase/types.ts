@@ -1517,6 +1517,7 @@ export type Database = {
           admin_note: string | null
           ai_analysis: string | null
           ai_risk_level: string | null
+          archived_at: string | null
           created_at: string
           description: string
           id: string
@@ -1536,6 +1537,7 @@ export type Database = {
           admin_note?: string | null
           ai_analysis?: string | null
           ai_risk_level?: string | null
+          archived_at?: string | null
           created_at?: string
           description: string
           id?: string
@@ -1555,6 +1557,7 @@ export type Database = {
           admin_note?: string | null
           ai_analysis?: string | null
           ai_risk_level?: string | null
+          archived_at?: string | null
           created_at?: string
           description?: string
           id?: string
@@ -1693,6 +1696,7 @@ export type Database = {
       }
       jm_orders: {
         Row: {
+          archived_at: string | null
           attempts: number
           created_at: string
           error_message: string | null
@@ -1710,6 +1714,7 @@ export type Database = {
           user_note: string | null
         }
         Insert: {
+          archived_at?: string | null
           attempts?: number
           created_at?: string
           error_message?: string | null
@@ -1727,6 +1732,7 @@ export type Database = {
           user_note?: string | null
         }
         Update: {
+          archived_at?: string | null
           attempts?: number
           created_at?: string
           error_message?: string | null
@@ -2641,6 +2647,7 @@ export type Database = {
       new_part_orders: {
         Row: {
           admin_note: string | null
+          archived_at: string | null
           brand: string
           created_at: string
           discount_amount: number | null
@@ -2659,6 +2666,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          archived_at?: string | null
           brand: string
           created_at?: string
           discount_amount?: number | null
@@ -2677,6 +2685,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          archived_at?: string | null
           brand?: string
           created_at?: string
           discount_amount?: number | null
@@ -3085,6 +3094,7 @@ export type Database = {
       orders: {
         Row: {
           admin_note: string | null
+          archived_at: string | null
           catalog_source: string | null
           created_at: string
           customer_note: string | null
@@ -3104,6 +3114,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          archived_at?: string | null
           catalog_source?: string | null
           created_at?: string
           customer_note?: string | null
@@ -3123,6 +3134,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          archived_at?: string | null
           catalog_source?: string | null
           created_at?: string
           customer_note?: string | null
@@ -3741,6 +3753,7 @@ export type Database = {
       service_bookings: {
         Row: {
           admin_note: string | null
+          archived_at: string | null
           confirmed_date: string | null
           created_at: string
           discount_amount: number | null
@@ -3760,6 +3773,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          archived_at?: string | null
           confirmed_date?: string | null
           created_at?: string
           discount_amount?: number | null
@@ -3779,6 +3793,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          archived_at?: string | null
           confirmed_date?: string | null
           created_at?: string
           discount_amount?: number | null
@@ -4128,6 +4143,7 @@ export type Database = {
       }
       service_orders: {
         Row: {
+          archived_at: string | null
           created_at: string
           customer_approved: boolean | null
           description: string | null
@@ -4148,6 +4164,7 @@ export type Database = {
           vehicle_id: string | null
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           customer_approved?: boolean | null
           description?: string | null
@@ -4168,6 +4185,7 @@ export type Database = {
           vehicle_id?: string | null
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           customer_approved?: boolean | null
           description?: string | null
@@ -4346,6 +4364,7 @@ export type Database = {
       }
       support_conversations: {
         Row: {
+          archived_at: string | null
           closed: boolean
           created_at: string
           id: string
@@ -4357,6 +4376,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          archived_at?: string | null
           closed?: boolean
           created_at?: string
           id?: string
@@ -4368,6 +4388,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          archived_at?: string | null
           closed?: boolean
           created_at?: string
           id?: string
@@ -4422,6 +4443,7 @@ export type Database = {
         Row: {
           accuracy: number | null
           admin_note: string | null
+          archived_at: string | null
           created_at: string
           id: string
           latitude: number | null
@@ -4438,6 +4460,7 @@ export type Database = {
         Insert: {
           accuracy?: number | null
           admin_note?: string | null
+          archived_at?: string | null
           created_at?: string
           id?: string
           latitude?: number | null
@@ -4454,6 +4477,7 @@ export type Database = {
         Update: {
           accuracy?: number | null
           admin_note?: string | null
+          archived_at?: string | null
           created_at?: string
           id?: string
           latitude?: number | null
@@ -4528,6 +4552,7 @@ export type Database = {
           admin_available: boolean | null
           admin_note: string | null
           admin_price: number | null
+          archived_at: string | null
           brand: string
           created_at: string
           id: string
@@ -4543,6 +4568,7 @@ export type Database = {
           admin_available?: boolean | null
           admin_note?: string | null
           admin_price?: number | null
+          archived_at?: string | null
           brand: string
           created_at?: string
           id?: string
@@ -4558,6 +4584,7 @@ export type Database = {
           admin_available?: boolean | null
           admin_note?: string | null
           admin_price?: number | null
+          archived_at?: string | null
           brand?: string
           created_at?: string
           id?: string
@@ -4676,6 +4703,7 @@ export type Database = {
       vehicle_buyback_requests: {
         Row: {
           admin_note: string | null
+          archived_at: string | null
           brand: string
           condition: string
           created_at: string
@@ -4694,6 +4722,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          archived_at?: string | null
           brand: string
           condition: string
           created_at?: string
@@ -4712,6 +4741,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          archived_at?: string | null
           brand?: string
           condition?: string
           created_at?: string
@@ -4790,6 +4820,7 @@ export type Database = {
       vehicle_import_requests: {
         Row: {
           admin_note: string | null
+          archived_at: string | null
           brand: string
           budget_from: number | null
           budget_to: number | null
@@ -4812,6 +4843,7 @@ export type Database = {
         }
         Insert: {
           admin_note?: string | null
+          archived_at?: string | null
           brand: string
           budget_from?: number | null
           budget_to?: number | null
@@ -4834,6 +4866,7 @@ export type Database = {
         }
         Update: {
           admin_note?: string | null
+          archived_at?: string | null
           brand?: string
           budget_from?: number | null
           budget_to?: number | null
@@ -4858,6 +4891,7 @@ export type Database = {
       }
       vehicle_inquiries: {
         Row: {
+          archived_at: string | null
           created_at: string
           email: string | null
           id: string
@@ -4869,6 +4903,7 @@ export type Database = {
           vehicle_id: string
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           email?: string | null
           id?: string
@@ -4880,6 +4915,7 @@ export type Database = {
           vehicle_id: string
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           email?: string | null
           id?: string
