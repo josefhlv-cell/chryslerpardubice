@@ -46,13 +46,29 @@ class ElmCommandQueue {
 
   pausePolling() {
     this.pausedDepth += 1;
-    if (this.pausedDepth === 1) this.pollingListeners.forEach((l) => l(true));
+    if (this.pausedDepth === 1) {
+      this.pollingListeners.forEach((l) => l(true));
+      logObdDebugEvent({
+        commandType: "polling_pause",
+        status: "info",
+        elmProfile: getActiveElmProfile(),
+        pollingPaused: true,
+      });
+    }
   }
 
   resumePolling() {
     if (this.pausedDepth === 0) return;
     this.pausedDepth -= 1;
-    if (this.pausedDepth === 0) this.pollingListeners.forEach((l) => l(false));
+    if (this.pausedDepth === 0) {
+      this.pollingListeners.forEach((l) => l(false));
+      logObdDebugEvent({
+        commandType: "polling_resume",
+        status: "info",
+        elmProfile: getActiveElmProfile(),
+        pollingPaused: false,
+      });
+    }
   }
 
   /* ------------------ exclusive scan lock ------------------ */
