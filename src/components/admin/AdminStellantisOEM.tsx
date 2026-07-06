@@ -361,6 +361,30 @@ function ResultCard({ r }: { r: AnyResult }) {
           <DtcRow r={r.data.permanent} />
         </>
       )}
+      {r.kind === "multi-dtc" && (
+        <>
+          <div className="font-semibold">Multi-ECU DTC scan</div>
+          <div className="text-muted-foreground">
+            Prošlo {r.data.totalEcusProbed} jednotek · odpovědělo {r.data.ecusResponding} · s chybami{" "}
+            {r.data.ecusWithCodes} · celkem {r.data.totalCodes} DTC
+          </div>
+          {r.data.results.map((er) => (
+            <div key={er.ecu.address} className="border-t border-border/50 pt-1 mt-1">
+              <div className="flex justify-between">
+                <span className="font-mono">
+                  {er.ecu.address} · {er.ecu.commonName}
+                </span>
+                <StatusBadge status={er.status} />
+              </div>
+              {er.codes.length > 0 && (
+                <div className="text-xs">
+                  {er.codes.map((c) => c.code).join(", ")}
+                </div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
       {r.kind === "basic" && (
         <>
           <div className="font-semibold">Stellantis basic scan</div>
