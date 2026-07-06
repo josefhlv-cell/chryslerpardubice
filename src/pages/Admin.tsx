@@ -490,26 +490,37 @@ const Admin = () => {
                 ))}
               </div>
             </div>
-            {filteredOrders.map((o) => (
-              <Card key={o.id} className="cursor-pointer hover:border-primary/40" onClick={() => openOrderEdit(o)}>
-                <CardContent className="p-4 flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm">{o.part_name || "—"}</p>
-                      <Badge variant="outline" className="text-[10px]">{o.order_type === "new" ? "Nový" : "Použitý"}</Badge>
+            <CollapsibleAdminSection
+              title="Aktivní objednávky"
+              count={filteredOrders.length}
+              icon={<ShoppingCart className="h-4 w-4" />}
+              description="Rozbal pro seznam. Vyřízené archivuj do sekce Vyřízené."
+            >
+              {filteredOrders.length === 0 && <p className="text-sm text-muted-foreground">Žádné objednávky</p>}
+              {filteredOrders.map((o) => (
+                <Card key={o.id} className="cursor-pointer hover:border-primary/40" onClick={() => openOrderEdit(o)}>
+                  <CardContent className="p-4 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm">{o.part_name || "—"}</p>
+                        <Badge variant="outline" className="text-[10px]">{o.order_type === "new" ? "Nový" : "Použitý"}</Badge>
+                      </div>
+                      <p className="text-xs text-primary">{o.profile_name || "—"} · {o.profile_email || "—"}</p>
+                      <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "—"} · {o.quantity}×</p>
+                      {o.catalog_source && <Badge variant="outline" className="text-[10px] mt-0.5">Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}</Badge>}
+                      <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)}</p>
                     </div>
-                    <p className="text-xs text-primary">{o.profile_name || "—"} · {o.profile_email || "—"}</p>
-                    <p className="text-xs text-muted-foreground">OEM: {o.oem_number || "—"} · {o.quantity}×</p>
-                    {o.catalog_source && <Badge variant="outline" className="text-[10px] mt-0.5">Zdroj: {sourceLabel[o.catalog_source] || o.catalog_source}</Badge>}
-                    <p className="text-xs text-muted-foreground mt-1">{fmtDate(o.created_at)}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
-                    {o.price_with_vat != null && <p className="text-sm font-semibold mt-1">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                      <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
+                      {o.price_with_vat != null && <p className="text-sm font-semibold">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
+                      {["vyrizena","dorucena","zrusena","cancelled","delivered","completed"].includes(o.status) && (
+                        <ArchiveInlineButton table="orders" id={o.id} onDone={fetchAll} />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </CollapsibleAdminSection>
           </div>
         );
 
