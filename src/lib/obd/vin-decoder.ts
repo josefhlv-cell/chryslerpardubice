@@ -89,43 +89,28 @@ export function decodeVin(vin: string): DecodedVin {
 }
 
 /**
- * Načte VIN z ECU přes Mode 09 PID 02. Vrací dekódovaný objekt nebo null.
- * Bezpečně restartuje header na 7DF po dotazu.
+ * Načte VIN z ECU. Vrací dekódovaný objekt nebo null.
+ * Interně používá Mode 09 → fallback UDS 22 F190 (viz service09.ts).
  */
 export async function readVinFromEcu(): Promise<DecodedVin | null> {
   try {
-    console.log("[VIN RESOLVER] querying 0902...");
-    const raw = await elm327.sendCommand("0902", "low");
-    if (!raw || /NO\s*DATA|UNABLE|ERROR|STOPPED|\?/i.test(raw)) {
-      console.log("[VIN RESOLVER] 0902 unavailable:", raw);
+    console.log("[VIN RESOLVER] querying VIN (Mode 09 + UDS F190 fallback)...");
+    const result = await readVinMode09();
+    if (result.status !== "ok" || !result.vin) {
+      console.log("[VIN RESOLVER] unavailable:", result.status, result.cleaned);
       return null;
     }
-
-    // Odpověď: 49 02 01 XX XX XX ... (17 znaků VIN rozdělených do frames)
-    const clean = raw.replace(/[^0-9A-Fa-f]/g, "").toUpperCase();
-    const idx = clean.indexOf("4902");
-    if (idx < 0) return null;
-
-    // Za 4902 následuje 01 (record #), pak 17 ASCII bajtů VIN.
-    // Multi-frame odpovědi mají v každém segmentu předsazený index – vytáhneme jen ASCII v tisknutelném rozsahu.
-    const payload = clean.slice(idx + 4);
-    const bytes: number[] = [];
-    for (let i = 0; i + 1 < payload.length; i += 2) {
-      bytes.push(parseInt(payload.slice(i, i + 2), 16));
-    }
-    const chars = bytes
-      .map((b) => (b >= 0x30 && b <= 0x5a ? String.fromCharCode(b) : ""))
-      .join("");
-
-    // Vytáhneme nejdelší souvislý VIN-like segment 17 znaků
-    const vinMatch = chars.match(/[A-HJ-NPR-Z0-9]{17}/);
-    if (!vinMatch) {
-      console.log("[VIN RESOLVER] no VIN pattern in:", chars);
+    if (result.vin.length !== 17) {
+      console.log("[VIN RESOLVER] VIN length invalid:", result.vin);
       return null;
     }
-
-    const decoded = decodeVin(vinMatch[0]);
-    console.log("[VIN RESOLVER] VIN=", decoded.vin, "brand=", decoded.brand, "profile=", decoded.protocolGroup);
+    const decoded = decodeVin(result.vin);
+    console.log(
+      "[VIN RESOLVER] VIN=", decoded.vin,
+      "brand=", decoded.brand,
+      "profile=", decoded.protocolGroup,
+      "source=", result.source,
+    );
     return decoded;
   } catch (e) {
     console.warn("[VIN RESOLVER] error", e);
