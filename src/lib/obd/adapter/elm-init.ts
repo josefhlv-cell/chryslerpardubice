@@ -27,10 +27,9 @@ const PROFILES: Record<ElmProfile, string[]> = {
     "0100",
   ],
   simple: [
-    "ATD", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0",
+    "ATE0", "ATL0", "ATS0", "ATH0",
     "ATAT1",
     "ATST32",       // HW timeout 200ms — rychlé PID
-    "0100",
   ],
 };
 
@@ -47,7 +46,7 @@ export async function applyElmProfile(profile: ElmProfile, force = false): Promi
   const errors: string[] = [];
   for (const cmd of PROFILES[profile]) {
     try {
-      await elm327.sendCommand(cmd, "high");
+      await elm327.sendCommand(cmd, "high", cmd === "ATD" || cmd === "ATSP0" || cmd === "0100" ? 2500 : 900);
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
       errors.push(`${cmd}: ${msg}`);
