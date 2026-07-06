@@ -542,7 +542,12 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     // Souběžně čti Mode 03 (stored), 07 (pending) a 0A (permanent) — jako Delphi-OBD.
     // Selhání jednotlivé služby nezhodí celé čtení, ale hard error z Mode 03 propadne,
     // aby uživatel viděl skutečnou chybu (BUS INIT, UNABLE TO CONNECT, …).
+    // Sekvenční čtení Mode 03 → 07 → 0A (jako Delphi-OBD / Torque).
+    // Paralelní volání ELM327 přes 'high' prioritu prohazovalo pořadí a některé
+    // ECU pak vracely NO DATA na 07/0A. Sekvenčně to odpovídá reálným diag toolům.
     let stored: ObdDtc[] = [];
+    let pending: ObdDtc[] = [];
+    let permanent: ObdDtc[] = [];
     let storedError: unknown = null;
     try {
       stored = await dtcEngine.scanDTCs();
@@ -550,17 +555,16 @@ export function ObdProvider({ children }: { children: ReactNode }) {
       storedError = e;
       console.warn("[OBD DTC] Mode 03 failed:", e);
     }
-
-    const [pending, permanent] = await Promise.all([
-      dtcEngine.scanPendingDTCs().catch((e) => {
-        console.warn("[OBD DTC] Mode 07 failed:", e);
-        return [] as ObdDtc[];
-      }),
-      dtcEngine.scanPermanentDTCs().catch((e) => {
-        console.warn("[OBD DTC] Mode 0A failed:", e);
-        return [] as ObdDtc[];
-      }),
-    ]);
+    try {
+      pending = await dtcEngine.scanPendingDTCs();
+    } catch (e) {
+      console.warn("[OBD DTC] Mode 07 failed:", e);
+    }
+    try {
+      permanent = await dtcEngine.scanPermanentDTCs();
+    } catch (e) {
+      console.warn("[OBD DTC] Mode 0A failed:", e);
+    }
 
     // Deduplikuj podle code (permanent > stored > pending v prioritě popisu)
     const map = new Map<string, ObdDtc>();
