@@ -109,6 +109,7 @@ export async function readVinMode09(): Promise<VinReadResult> {
     } finally {
       // Vrátit rychlý HW timeout pro následující probe/scan operace.
       await elmQueue.send("ATST32", { timeoutMs: 700 }).catch(() => undefined);
+      await elmQueue.applyProfile("simple").catch(() => undefined);
     }
   });
 }
