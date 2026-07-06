@@ -53,16 +53,27 @@ const BASIC_DIDS: OemDidDef[] = [
 ];
 
 const ENGINE_LIVE_DIDS: OemDidDef[] = [
+  // Základní engine (7E0) — Service 22
+  { did: "4000", cmd: "22 40 00", label: "Engine RPM", category: "engine" },
+  { did: "4001", cmd: "22 40 01", label: "Engine torque", category: "engine" },
+  { did: "4004", cmd: "22 40 04", label: "Coolant", category: "engine" },
   { did: "1B04", cmd: "22 1B 04", label: "Coolant temp", category: "engine" },
   { did: "4005", cmd: "22 40 05", label: "Engine oil temp", category: "engine" },
   { did: "4007", cmd: "22 40 07", label: "Oil pressure", category: "engine" },
   { did: "4009", cmd: "22 40 09", label: "MAF", category: "engine" },
   { did: "400B", cmd: "22 40 0B", label: "Boost", category: "engine" },
+  { did: "400E", cmd: "22 40 0E", label: "Lambda B1", category: "engine" },
+  { did: "4014", cmd: "22 40 14", label: "Fuel rail pressure", category: "engine" },
+  { did: "4017", cmd: "22 40 17", label: "Ignition advance", category: "engine" },
   { did: "4019", cmd: "22 40 19", label: "EGR position", category: "engine" },
   { did: "4026", cmd: "22 40 26", label: "Battery voltage (engine bus)", category: "engine" },
-  { did: "4048", cmd: "22 40 48", label: "DPF soot load", category: "engine" },
-  { did: "404A", cmd: "22 40 4A", label: "Distance since DPF regen", category: "engine" },
-  { did: "404B", cmd: "22 40 4B", label: "DPF active regen", category: "engine" },
+  { did: "402E", cmd: "22 40 2E", label: "Evap purge", category: "engine" },
+  // DPF / diesel — kompletní blok podle Delphi-OBD stellantis catalog
+  { did: "4048", cmd: "22 40 48", label: "DPF soot load [%]", category: "engine" },
+  { did: "4049", cmd: "22 40 49", label: "DPF regen count", category: "engine" },
+  { did: "404A", cmd: "22 40 4A", label: "Distance since DPF regen [km]", category: "engine" },
+  { did: "404B", cmd: "22 40 4B", label: "DPF active regen (bool)", category: "engine" },
+  { did: "404C", cmd: "22 40 4C", label: "DEF (AdBlue) level", category: "engine" },
 ];
 
 /* ------------------ Session ------------------ */
