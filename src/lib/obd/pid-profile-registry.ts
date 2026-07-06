@@ -51,8 +51,12 @@ export const PID_PROFILES: Record<VehiclePidProfileId, VehiclePidProfile> = {
     id: "unknown",
     label: "Neznámé vozidlo",
     brands: [],
-    allowChryslerCustomPids: false,
-    notes: "Pouze generic OBD-II.",
+    // Aplikace slouží výhradně Chrysler/Dodge/Jeep/RAM/Lancia/Cadillac.
+    // I když VIN dekodér selže, jsme v Chrysler kontextu — necháme discovery
+    // custom PIDů (teplota oleje převodovky, tlak oleje) proběhnout.
+    // Discovery je defenzivní: pokud PID nevrátí validní hodnotu, tiše se vypne.
+    allowChryslerCustomPids: true,
+    notes: "Chrysler kontext bez rozpoznaného VIN — povolena discovery Mopar PIDů.",
   },
 };
 

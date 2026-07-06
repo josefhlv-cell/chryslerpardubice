@@ -186,6 +186,50 @@ export const CHRYSLER_CUSTOM_PIDS: ChryslerCustomPidDefinition[] = [
       return round1(bytes[0] - 40);
     },
   },
+  // G) ZF 8HP TCM na novějších FCA/Stellantis (2017+) — TCM přeadresován na 7E2
+  //    (viz Delphi-OBD catalogs/stellantis.json, ECU 0x7E2 = TCM ZF 8HP/9HP)
+  {
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (7E2 / 22 19 40)",
+    header: "7E2",
+    command: "221940",
+    responsePrefix: "621940",
+    unit: "°C",
+    min: -20,
+    max: 180,
+    decoder: (bytes) => {
+      if (bytes.length >= 2) {
+        const raw = bytes[0] * 256 + bytes[1];
+        if (raw === 0x0000 || raw === 0xffff) return null;
+        return round1(raw / 10 - 40);
+      }
+      if (bytes.length >= 1) {
+        if (invalidByte(bytes[0])) return null;
+        return round1(bytes[0] - 40);
+      }
+      return null;
+    },
+  },
+  // H) Stellantis Service 22 DID 0x4005 (Delphi catalog: live_oil_temp),
+  //    na TCM (7E2) v některých vozech vrací TFT (transmission fluid temp).
+  {
+    key: "transmissionOilTemp",
+    label: "Teplota oleje převodovky (7E2 / 22 40 05)",
+    header: "7E2",
+    command: "224005",
+    responsePrefix: "624005",
+    unit: "°C",
+    min: -20,
+    max: 180,
+    decoder: (bytes) => {
+      if (bytes.length < 1) return null;
+      // int8 signed
+      const raw = bytes[0];
+      if (raw === 0xff) return null;
+      const signed = raw > 127 ? raw - 256 : raw;
+      return round1(signed);
+    },
+  },
   // Tlak motorového oleje – Chrysler Mode 22 PID 1101 (raw / 100 = bar)
   {
     key: "oilPressure",
