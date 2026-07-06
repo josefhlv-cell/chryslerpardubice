@@ -13,7 +13,8 @@
  */
 import { elm327 } from "@/lib/obd/elm327-engine";
 import { detectElmError, type ElmStatus } from "./elm-errors";
-import { applyElmProfile, withElmProfile, type ElmProfile } from "./elm-init";
+import { applyElmProfile, withElmProfile, getActiveElmProfile, type ElmProfile } from "./elm-init";
+import { logObdDebugEvent } from "@/lib/obd/debug/obd-debug-logger";
 
 export type ElmResult = {
   command: string;
