@@ -39,15 +39,27 @@ export function getActiveElmProfile(): ElmProfile | null {
 /** Přepne profil (pokud už je aktivní, nedělá nic). Vrací true při úspěchu. */
 export async function applyElmProfile(profile: ElmProfile, force = false): Promise<boolean> {
   if (!force && currentProfile === profile) return true;
+  const startedAt = Date.now();
+  const errors: string[] = [];
   for (const cmd of PROFILES[profile]) {
     try {
       await elm327.sendCommand(cmd, "high");
     } catch (e) {
+      const msg = String((e as Error)?.message ?? e);
+      errors.push(`${cmd}: ${msg}`);
       // Init je best-effort — 1 selhaný AT nezastaví celý profil.
       console.warn(`[elm-init] ${profile} step '${cmd}' failed:`, e);
     }
   }
   currentProfile = profile;
+  logObdDebugEvent({
+    commandType: profile === "debug" ? "elm_init_debug_ath1" : "elm_init_simple_ath0",
+    command: PROFILES[profile].join(" | "),
+    status: errors.length ? "warning" : "ok",
+    elmProfile: profile,
+    durationMs: Date.now() - startedAt,
+    warnings: errors.length ? errors : null,
+  });
   return true;
 }
 
