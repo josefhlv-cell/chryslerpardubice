@@ -36,6 +36,7 @@ export type ObdLiveData = {
   rpm: number;
   coolantTemp: number;
   intakeTemp: number;
+  ambientTemp: number;
   speed: number;
   throttle: number;
   fuelPressure: number;
@@ -85,6 +86,7 @@ const EMPTY_LIVE: ObdLiveData = {
   rpm: 0,
   coolantTemp: 0,
   intakeTemp: 0,
+  ambientTemp: 0,
   speed: 0,
   throttle: 0,
   fuelPressure: 0,
@@ -114,6 +116,7 @@ const PID_TO_KEY: Record<string, keyof ObdLiveData> = {
   "0111": "throttle",
   "0104": "engineLoad",
   "010F": "intakeTemp",
+  "0146": "ambientTemp",
   "010A": "fuelPressure",
   "010B": "boostPressure",
   "0142": "voltage",
