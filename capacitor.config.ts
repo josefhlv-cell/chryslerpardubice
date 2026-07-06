@@ -6,7 +6,7 @@ const useLiveReload = process.env.CAP_LIVE_RELOAD === '1';
 
 const config: CapacitorConfig = {
   appId: 'app.lovable.c6d932101224420590deeec3ccc6923f',
-  appName: 'Chrysler Pardubice',
+  appName: 'CHDP Garage',
   webDir: 'dist',
   ...(useLiveReload
     ? {
