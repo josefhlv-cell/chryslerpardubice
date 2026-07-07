@@ -5,6 +5,13 @@ import { elm327, ELMState, InitStep } from '@/lib/obd/elm327-engine';
 import { LIVE_PIDS, parsePIDResponse } from '@/lib/obd/obd-pids';
 import { elmQueue } from '@/lib/obd/adapter/elm-queue';
 import { isPidOnCooldown, markPidFailed, markPidSuccess } from '@/lib/obd/unsupported-pid-cache';
+import {
+  CHRYSLER_CUSTOM_PIDS,
+  testChryslerCustomPid,
+  type ChryslerCustomPidDefinition,
+  type ChryslerCustomPidKey,
+} from '@/lib/obd/chrysler-custom-pids';
+
 
 export function useBLE() {
   const [connectionState, setConnectionState] = useState<BLEConnectionState>('disconnected');
@@ -80,22 +87,24 @@ export function useLiveData(active: boolean) {
   const sessionUserIdRef = useRef<string | null>(null);
   const lastSessionUpdateRef = useRef<number>(0);
   const pollingRef = useRef(false);
+  const dataRef = useRef<LiveData>({});
+  // Chrysler custom PID discovery state (transmission oil temp, oil pressure)
+  const customPidsRef = useRef<Partial<Record<ChryslerCustomPidKey, ChryslerCustomPidDefinition | null>>>({});
+  const customPidTriedRef = useRef<Set<ChryslerCustomPidKey>>(new Set());
+  const cycleRef = useRef(0);
 
-  const updateObdSession = useCallback(async (nextData: LiveData) => {
+  // Force-write session state (no 2s throttle) — used for initial heartbeat.
+  const writeSession = useCallback(async (payload: LiveData, force = false) => {
     const now = Date.now();
-
-    if (now - lastSessionUpdateRef.current < 2000) return;
-
+    if (!force && now - lastSessionUpdateRef.current < 2000) return;
     lastSessionUpdateRef.current = now;
 
     const { data: authData } = await supabase.auth.getUser();
     const user = authData.user;
-
     if (!user) {
-      console.warn('OBD live session: user není přihlášený');
+      console.warn('[OBD live session] user není přihlášený');
       return;
     }
-
     sessionUserIdRef.current = user.id;
 
     const { error } = await supabase.from('obd_live_sessions').upsert(
@@ -104,22 +113,22 @@ export function useLiveData(active: boolean) {
         vin: null,
         is_active: true,
         last_seen: new Date().toISOString(),
-        payload: nextData,
+        payload: payload as any,
         dtcs: [],
       } as any,
       { onConflict: 'user_id' }
     );
-
-    if (error) {
-      console.error('OBD live session upsert error:', error);
-    }
+    if (error) console.error('[OBD live session] upsert error:', error);
   }, []);
+
+  const updateObdSession = useCallback((nextData: LiveData) => {
+    dataRef.current = nextData;
+    void writeSession(nextData, false);
+  }, [writeSession]);
 
   const closeObdSession = useCallback(async () => {
     const userId = sessionUserIdRef.current;
-
     if (!userId) return;
-
     const { error } = await supabase
       .from('obd_live_sessions')
       .update({
@@ -127,11 +136,9 @@ export function useLiveData(active: boolean) {
         last_seen: new Date().toISOString(),
       } as any)
       .eq('user_id', userId);
-
-    if (error) {
-      console.error('OBD live session close error:', error);
-    }
+    if (error) console.error('[OBD live session] close error:', error);
   }, []);
+
 
   useEffect(() => {
     if (!active) {
