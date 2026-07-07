@@ -1222,6 +1222,79 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
 
+  /**
+   * Auto "Všechny ECU" DTC scan.
+   * - COLD: 8 s po úspěšném připojení (ELM init obvykle hotový, ECU probuzené).
+   * - WARM: jakmile chladicí kapalina překročí 60 °C (převodovka a další subsystémy
+   *   často aktivují dodatečné monitory až po zahřátí).
+   * Každý běh se v rámci jedné relace spustí max. 1×. Reset při odpojení.
+   */
+  const runAutoMultiEcuScan = useCallback(async (trigger: "cold" | "warm") => {
+    if (!connectedRef.current) return;
+    // Respektujeme oprávnění — bez dtc_read (nebo admin) scan neběží.
+    const p = permissionsRef.current;
+    if (!isAdminRef.current && !p.dtc_read) return;
+    try {
+      addLog(`[AUTO-SCAN ${trigger.toUpperCase()}] spouštím Všechny ECU`);
+      const { runMultiEcuDtcScan, STELLANTIS_QUICK_ECUS } = await import(
+        "@/lib/obd/services/multi-ecu-dtc-scan"
+      );
+      const scan = await runMultiEcuDtcScan(STELLANTIS_QUICK_ECUS);
+      const flat: ObdDtc[] = [];
+      for (const ecu of scan.results ?? []) {
+        for (const code of ecu.codes ?? []) {
+          flat.push({
+            code: code.code,
+            description: code.description || `${ecu.ecu?.name || ecu.ecu?.address || ""} ${code.code}`,
+            severity: (code.severity as ObdDtc["severity"]) || "medium",
+            status: (code.status as ObdDtc["status"]) || "active",
+          });
+        }
+      }
+      // Sloučit s existujícími (unikátně dle code)
+      setDtcs((prev) => {
+        const map = new Map<string, ObdDtc>();
+        [...prev, ...flat].forEach((d) => map.set(d.code, d));
+        const merged = Array.from(map.values());
+        void upsertSession(liveDataRef.current, merged, true);
+        return merged;
+      });
+      addLog(`[AUTO-SCAN ${trigger.toUpperCase()}] hotovo, nalezeno ${flat.length} kódů`);
+    } catch (err) {
+      addLog(`[AUTO-SCAN ${trigger.toUpperCase()}] chyba: ${String(err)}`);
+    }
+  }, [addLog, upsertSession]);
+
+  // COLD trigger — 8 s po připojení.
+  useEffect(() => {
+    if (!connected) return;
+    if (autoScanColdRef.current) return;
+    autoScanTimerRef.current = window.setTimeout(() => {
+      if (autoScanColdRef.current) return;
+      autoScanColdRef.current = true;
+      void runAutoMultiEcuScan("cold");
+    }, 8000);
+    return () => {
+      if (autoScanTimerRef.current) {
+        window.clearTimeout(autoScanTimerRef.current);
+        autoScanTimerRef.current = null;
+      }
+    };
+  }, [connected, runAutoMultiEcuScan]);
+
+  // WARM trigger — coolant >= 60 °C.
+  useEffect(() => {
+    if (!connected) return;
+    if (autoScanWarmRef.current) return;
+    const ct = liveData.coolantTemp;
+    if (typeof ct === "number" && ct >= 60) {
+      autoScanWarmRef.current = true;
+      void runAutoMultiEcuScan("warm");
+    }
+  }, [connected, liveData.coolantTemp, runAutoMultiEcuScan]);
+
+
+
   const value: ObdContextValue = {
     connected,
     connecting,
