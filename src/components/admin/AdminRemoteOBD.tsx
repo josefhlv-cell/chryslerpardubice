@@ -278,17 +278,20 @@ const AdminRemoteOBD = () => {
               </div>
             ) : <div className="rounded-lg border p-3 text-muted-foreground flex gap-2 text-xs"><Lock className="w-4 h-4" /> Čtení DTC je vypnuté.</div>}
 
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("read_dtc")} disabled={!isLive(selected)}><ListChecks className="w-3.5 h-3.5 mr-1" /> Číst DTC</Button>
-              <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("full_dtc_scan")} disabled={!isLive(selected)}><ListChecks className="w-3.5 h-3.5 mr-1" /> Všechny ECU</Button>
-              <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("clear_dtc")} disabled={!isLive(selected)}><Trash2 className="w-3.5 h-3.5 mr-1" /> Mazat DTC</Button>
-              <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("refresh_live")} disabled={!isLive(selected)}><RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh</Button>
+            <div className={!isLive(selected) ? "opacity-50 pointer-events-none select-none" : ""} aria-disabled={!isLive(selected)}>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("read_dtc")} disabled={!isLive(selected)}><ListChecks className="w-3.5 h-3.5 mr-1" /> Číst DTC</Button>
+                <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("full_dtc_scan")} disabled={!isLive(selected)}><ListChecks className="w-3.5 h-3.5 mr-1" /> Všechny ECU</Button>
+                <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("clear_dtc")} disabled={!isLive(selected)}><Trash2 className="w-3.5 h-3.5 mr-1" /> Mazat DTC</Button>
+                <Button size="sm" variant="outline" onClick={() => sendRemoteCommand("refresh_live")} disabled={!isLive(selected)}><RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh</Button>
+              </div>
+
+              <div className="flex gap-2 mt-2">
+                <Input value={customCommand} onChange={(e) => setCustomCommand(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendCustom()} placeholder="Vlastní OBD/AT příkaz" className="font-mono text-xs" disabled={!isLive(selected)} />
+                <Button size="sm" onClick={sendCustom} disabled={!isLive(selected) || !customCommand.trim()}><Send className="w-3.5 h-3.5 mr-1" /> Odeslat</Button>
+              </div>
             </div>
 
-            <div className="flex gap-2">
-              <Input value={customCommand} onChange={(e) => setCustomCommand(e.target.value)} onKeyDown={(e) => e.key === "Enter" && sendCustom()} placeholder="Vlastní OBD/AT příkaz" className="font-mono text-xs" disabled={!isLive(selected)} />
-              <Button size="sm" onClick={sendCustom} disabled={!isLive(selected) || !customCommand.trim()}><Send className="w-3.5 h-3.5 mr-1" /> Odeslat</Button>
-            </div>
 
             <div className="space-y-2">
               <strong className="text-xs">Stav příkazů</strong>
