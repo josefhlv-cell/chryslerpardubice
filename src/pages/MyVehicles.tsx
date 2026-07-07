@@ -332,7 +332,7 @@ const MyVehicles = () => {
                 <div className="flex items-start gap-3">
                   <CarIcon car={v} size="md" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div>
                     <p className="font-display font-semibold text-sm">{v.brand} {v.model}</p>
                     <div className="flex gap-2 mt-1 flex-wrap">
@@ -353,7 +353,8 @@ const MyVehicles = () => {
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 flex-wrap justify-end shrink-0 max-w-full">
+
                     {!v.current_mileage && (
                       <Button size="icon" variant="ghost" onClick={() => { setMileageVehicle(v); setMileageInput(""); }}>
                         <Gauge className="w-4 h-4" />
