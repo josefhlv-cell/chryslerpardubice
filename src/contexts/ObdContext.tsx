@@ -355,12 +355,20 @@ export function ObdProvider({ children }: { children: ReactNode }) {
           oilPressureSupportedRef.current = null;
           selectedTransmissionOilTempPidRef.current = null;
           selectedOilPressurePidRef.current = null;
+          // Reset auto-scan gate — next connection triggers a fresh cold scan.
+          autoScanColdRef.current = false;
+          autoScanWarmRef.current = false;
+          if (autoScanTimerRef.current) {
+            window.clearTimeout(autoScanTimerRef.current);
+            autoScanTimerRef.current = null;
+          }
         }
       }
       if (event.type === "debug") addLog(String(event.payload));
     });
     return unsub;
   }, [addLog]);
+
 
   const upsertSession = useCallback(async (payload: ObdLiveData, dtcList: ObdDtc[], force = false) => {
     const now = Date.now();
