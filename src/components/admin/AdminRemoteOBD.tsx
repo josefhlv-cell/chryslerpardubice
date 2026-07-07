@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, ShieldCheck, Wifi, WifiOff, Lock, RefreshCw, Trash2, ListChecks, Send } from "lucide-react";
+import { Activity, ShieldCheck, Wifi, WifiOff, Lock, RefreshCw, Trash2, ListChecks, Send, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
@@ -194,17 +194,44 @@ const AdminRemoteOBD = () => {
       {selected && (
         <Card className="border-primary/30">
           <CardContent className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-success" /> Detail relace · {selected.profile_name}</h3>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>Zavřít</Button>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Button size="sm" variant="ghost" onClick={() => setSelected(null)} className="gap-1 -ml-2">
+                  <ArrowLeft className="w-4 h-4" /> Zpět
+                </Button>
+                <h3 className="text-sm font-semibold flex items-center gap-2 truncate">
+                  <ShieldCheck className="w-4 h-4 text-success shrink-0" />
+                  <span className="truncate">Detail relace · {selected.profile_name}</span>
+                </h3>
+              </div>
+              {isLive(selected) ? (
+                <Badge className="bg-success/15 text-success border-success/30 gap-1"><Wifi className="w-3 h-3" /> LIVE</Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1 text-muted-foreground"><WifiOff className="w-3 h-3" /> Offline</Badge>
+              )}
             </div>
 
             {!isLive(selected) && (
-              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 flex items-center gap-2 text-xs text-warning">
-                <WifiOff className="w-4 h-4 shrink-0" />
-                <span>Čeká na připojení — zákazník je offline. Live, DTC, mazání i terminál jsou dočasně nedostupné.</span>
+              <div className="rounded-lg border border-warning/50 bg-warning/10 p-3 space-y-2">
+                <div className="flex items-start gap-2 text-warning">
+                  <WifiOff className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <p className="font-semibold">Zákazník je offline — čeká na připojení</p>
+                    <p className="opacity-80 mt-0.5">
+                      Live data, čtení DTC, mazání DTC, refresh i terminál jsou dočasně nedostupné.
+                      Poslední signál: {new Date(selected.last_seen).toLocaleString("cs-CZ")}.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" variant="outline" onClick={() => setSelected(null)} className="gap-1">
+                    <ArrowLeft className="w-3.5 h-3.5" /> Zpět na seznam
+                  </Button>
+                </div>
               </div>
             )}
+
+
 
 
 
