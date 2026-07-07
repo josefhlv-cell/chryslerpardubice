@@ -200,7 +200,7 @@ const AccountSettings = () => {
 
   return (
     <div className="min-h-screen pb-40">
-      <PageHeader title="Nastavení účtu" />
+      <PageHeader title="Nastavení účtu" showBack />
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         {/* Soukromí a sdílení dat */}
         <motion.section

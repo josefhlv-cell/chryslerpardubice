@@ -301,7 +301,8 @@ const MyVehicles = () => {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen pb-20">
-        <PageHeader title="Moje vozidla" />
+        <PageHeader title="Moje vozidla" showBack />
+
         <div className="flex items-center justify-center py-20">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
@@ -311,7 +312,7 @@ const MyVehicles = () => {
 
   return (
     <div className="min-h-screen pb-20">
-      <PageHeader title="Moje vozidla" />
+      <PageHeader title="Moje vozidla" showBack />
       <div className="p-4 space-y-4 max-w-lg mx-auto">
         <Button onClick={openAdd} className="w-full">
           <Plus className="w-4 h-4 mr-2" />Přidat vozidlo
