@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 interface CollapsibleAdminSectionProps {
   title: string;
   count?: number;
+  /** Number of items selected — badge stays visible even when the section is collapsed. */
+  selectedCount?: number;
   icon?: ReactNode;
   defaultOpen?: boolean;
   description?: string;
@@ -23,6 +25,7 @@ interface CollapsibleAdminSectionProps {
 export function CollapsibleAdminSection({
   title,
   count,
+  selectedCount = 0,
   icon,
   defaultOpen = false,
   description,
@@ -47,6 +50,11 @@ export function CollapsibleAdminSection({
             {typeof count === "number" && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                 {count}
+              </Badge>
+            )}
+            {selectedCount > 0 && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-primary text-primary-foreground">
+                {selectedCount} vybráno
               </Badge>
             )}
           </div>

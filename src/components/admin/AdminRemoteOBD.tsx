@@ -199,6 +199,15 @@ const AdminRemoteOBD = () => {
               <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>Zavřít</Button>
             </div>
 
+            {!isLive(selected) && (
+              <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 flex items-center gap-2 text-xs text-warning">
+                <WifiOff className="w-4 h-4 shrink-0" />
+                <span>Čeká na připojení — zákazník je offline. Live, DTC, mazání i terminál jsou dočasně nedostupné.</span>
+              </div>
+            )}
+
+
+
             <div className="flex flex-wrap gap-1">
               <PermissionBadge enabled={!!selected.permissions?.live_data}>Live Data</PermissionBadge>
               <PermissionBadge enabled={!!selected.permissions?.dtc_read}>Čtení DTC</PermissionBadge>

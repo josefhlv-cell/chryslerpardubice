@@ -102,7 +102,7 @@ const MyOrders = () => {
 
   return (
     <div className="min-h-screen pb-20">
-      <PageHeader title="Moje objednávky" />
+      <PageHeader title="Moje objednávky" showBack />
       <div className="p-4 space-y-3 max-w-lg mx-auto">
         {orders.length === 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
