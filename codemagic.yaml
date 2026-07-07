@@ -117,7 +117,31 @@ workflows:
           set -e
           npx cap sync ios
 
+      - name: Force regenerate iOS CHDP icons after sync
+        script: |
+          set -e
+
+          echo "Checking CHDP icon sources..."
+          ls -lah resources || true
+          file resources/icon.png || true
+          file resources/icon-only.png || true
+
+          echo "Installing capacitor assets..."
+          npm install @capacitor/assets --save-dev
+
+          echo "Regenerating iOS AppIcon.appiconset from resources/icon.png..."
+          npx capacitor-assets generate --ios --assetPath resources
+
+          echo "Generated AppIcon.appiconset:"
+          ls -lah ios/App/App/Assets.xcassets/AppIcon.appiconset
+
+          echo "Checking Contents.json:"
+          cat ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json
+
+          echo "Checking generated png icons:"
+          find ios/App/App/Assets.xcassets/AppIcon.appiconset -maxdepth 1 -iname "*.png" -print
       - name: Patch iOS AppDelegate for APNs callbacks
+
         script: |
           set -e
 
