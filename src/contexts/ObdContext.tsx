@@ -245,6 +245,11 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   const isPollingRef = useRef(false);
   const isCheckingRemoteCommandsRef = useRef(false);
   const processingCommandIdsRef = useRef<Set<string>>(new Set());
+  // Auto "Všechny ECU" DTC scan trigger — jednou po připojení, jednou po zahřátí (>= 60°C).
+  const autoScanColdRef = useRef(false);
+  const autoScanWarmRef = useRef(false);
+  const autoScanTimerRef = useRef<number | null>(null);
+
 
   /**
    * Custom Chrysler/Mopar PID cache:
