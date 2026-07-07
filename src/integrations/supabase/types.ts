@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletion_requests: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          metadata: Json | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action: string

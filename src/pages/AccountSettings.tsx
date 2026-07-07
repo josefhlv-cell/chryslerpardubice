@@ -132,18 +132,46 @@ const AccountSettings = () => {
 
   const handleDeleteAccount = async () => {
     const ok = window.confirm(
-      "Opravdu chcete požádat o smazání účtu? Pošleme žádost správci, který ji vyřídí do 30 dnů.",
+      "Opravdu chcete NEVRATNĚ smazat svůj účet a všechna svá data? Tato akce je nevratná. Pokračováním potvrzujete, že rozumíte, že Váš účet, vozidla, objednávky a zprávy budou trvale odstraněny.",
     );
     if (!ok) return;
     try {
-      await supabase.from("notifications").insert({
-        user_id: user.id,
-        title: "Žádost o smazání účtu",
-        message: `Uživatel ${profile.email || user.id} žádá o smazání účtu (GDPR).`,
-      });
-      toast.success("Žádost odeslána. Ozveme se na " + (profile.email || "Váš e-mail") + ".");
+      // 1) Zapíšeme žádost o smazání (audit + reviewer)
+      const { error: reqErr } = await supabase
+        .from("account_deletion_requests")
+        .insert({
+          user_id: user.id,
+          email: profile.email || user.email || null,
+          status: "pending",
+          metadata: {
+            source: "in_app",
+            requested_at: new Date().toISOString(),
+            user_agent: navigator.userAgent,
+          },
+        });
+      if (reqErr) throw reqErr;
+
+      // 2) Informujeme administrátora (fire-and-forget)
+      supabase
+        .from("notifications")
+        .insert({
+          user_id: user.id,
+          title: "Žádost o smazání účtu",
+          message: `Uživatel ${profile.email || user.id} zahájil smazání účtu přímo v aplikaci (GDPR / App Store 5.1.1(v)).`,
+        })
+        .then(() => {});
+
+      toast.success(
+        "Žádost o smazání účtu byla přijata. Budete odhlášeni. Účet bude smazán do 30 dnů.",
+      );
+
+      // 3) Odhlásíme uživatele
+      setTimeout(async () => {
+        await signOut();
+        navigate("/", { replace: true });
+      }, 1500);
     } catch (e: any) {
-      toast.error("Nepodařilo se odeslat: " + (e?.message || "chyba"));
+      toast.error("Nepodařilo se odeslat žádost: " + (e?.message || "chyba"));
     }
   };
 
