@@ -209,13 +209,24 @@
   }
 
   /* Odsazení pro obsah nad spodní navigační lištou (60px + safe area).
-     Použij místo pb-20 na všech stránkách, které se zobrazují se spodní lištou. */
+     Použij místo pb-20 na všech stránkách, které se zobrazují se spodní lištou.
+     Zvýšeno kvůli poslední kartě a floating "Sekce" tlačítku. */
   .pb-nav {
-    padding-bottom: calc(60px + env(safe-area-inset-bottom, 16px) + 12px);
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 16px));
   }
   @media (min-width: 1024px) {
     .pb-nav {
-      padding-bottom: 16px;
+      padding-bottom: 24px;
+    }
+  }
+  /* Globální safety padding pro každou hlavní stránku (poslední text/karta nesmí být
+     překryta bottom-nav ani floating Sekce tlačítkem). */
+  main, .page-scroll {
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 16px));
+  }
+  @media (min-width: 1024px) {
+    main, .page-scroll {
+      padding-bottom: 24px;
     }
   }
 
