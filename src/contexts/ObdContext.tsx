@@ -1240,17 +1240,33 @@ export function ObdProvider({ children }: { children: ReactNode }) {
         "@/lib/obd/services/multi-ecu-dtc-scan"
       );
       const scan = await runMultiEcuDtcScan(STELLANTIS_QUICK_ECUS);
+      const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
       const flat: ObdDtc[] = [];
       for (const ecu of scan.results ?? []) {
         for (const code of ecu.codes ?? []) {
+          const info = resolveDTCInfo(code.code);
+          const prefix = code.code[0];
           flat.push({
             code: code.code,
-            description: code.description || `${ecu.ecu?.name || ecu.ecu?.address || ""} ${code.code}`,
-            severity: (code.severity as ObdDtc["severity"]) || "medium",
-            status: (code.status as ObdDtc["status"]) || "active",
+            system: prefix === "P" ? "powertrain" : prefix === "B" ? "body" : prefix === "C" ? "chassis" : "network",
+            description: info.description,
+            descriptionEn: info.descriptionEn,
+            category: info.category,
+            firstCheck: info.firstCheck,
+            moparNote: info.moparNote,
+            source: info.source || (ecu.ecu?.name ?? ecu.ecu?.address ?? "multi-ecu"),
+            severity: info.severity,
+            possibleCause: info.cause,
+            relatedSignals: info.signals,
+            isActive: true,
+            isPending: false,
+            occurenceCount: 1,
+            firstSeen: Date.now(),
+            lastSeen: Date.now(),
           });
         }
       }
+
       // Sloučit s existujícími (unikátně dle code)
       setDtcs((prev) => {
         const map = new Map<string, ObdDtc>();
