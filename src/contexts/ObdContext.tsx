@@ -245,6 +245,11 @@ export function ObdProvider({ children }: { children: ReactNode }) {
   const isPollingRef = useRef(false);
   const isCheckingRemoteCommandsRef = useRef(false);
   const processingCommandIdsRef = useRef<Set<string>>(new Set());
+  // Auto "Všechny ECU" DTC scan trigger — jednou po připojení, jednou po zahřátí (>= 60°C).
+  const autoScanColdRef = useRef(false);
+  const autoScanWarmRef = useRef(false);
+  const autoScanTimerRef = useRef<number | null>(null);
+
 
   /**
    * Custom Chrysler/Mopar PID cache:
@@ -350,12 +355,20 @@ export function ObdProvider({ children }: { children: ReactNode }) {
           oilPressureSupportedRef.current = null;
           selectedTransmissionOilTempPidRef.current = null;
           selectedOilPressurePidRef.current = null;
+          // Reset auto-scan gate — next connection triggers a fresh cold scan.
+          autoScanColdRef.current = false;
+          autoScanWarmRef.current = false;
+          if (autoScanTimerRef.current) {
+            window.clearTimeout(autoScanTimerRef.current);
+            autoScanTimerRef.current = null;
+          }
         }
       }
       if (event.type === "debug") addLog(String(event.payload));
     });
     return unsub;
   }, [addLog]);
+
 
   const upsertSession = useCallback(async (payload: ObdLiveData, dtcList: ObdDtc[], force = false) => {
     const now = Date.now();
@@ -1208,6 +1221,95 @@ export function ObdProvider({ children }: { children: ReactNode }) {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, []);
+
+  /**
+   * Auto "Všechny ECU" DTC scan.
+   * - COLD: 8 s po úspěšném připojení (ELM init obvykle hotový, ECU probuzené).
+   * - WARM: jakmile chladicí kapalina překročí 60 °C (převodovka a další subsystémy
+   *   často aktivují dodatečné monitory až po zahřátí).
+   * Každý běh se v rámci jedné relace spustí max. 1×. Reset při odpojení.
+   */
+  const runAutoMultiEcuScan = useCallback(async (trigger: "cold" | "warm") => {
+    if (!connectedRef.current) return;
+    // Respektujeme oprávnění — bez dtc_read (nebo admin) scan neběží.
+    const p = permissionsRef.current;
+    if (!isAdminRef.current && !p.dtc_read) return;
+    try {
+      addLog(`[AUTO-SCAN ${trigger.toUpperCase()}] spouštím Všechny ECU`);
+      const { runMultiEcuDtcScan, STELLANTIS_QUICK_ECUS } = await import(
+        "@/lib/obd/services/multi-ecu-dtc-scan"
+      );
+      const scan = await runMultiEcuDtcScan(STELLANTIS_QUICK_ECUS);
+      const { resolveDTCInfo } = await import("@/lib/obd/dtc-engine");
+      const flat: ObdDtc[] = [];
+      for (const ecu of scan.results ?? []) {
+        for (const code of ecu.codes ?? []) {
+          const info = resolveDTCInfo(code.code);
+          const prefix = code.code[0];
+          flat.push({
+            code: code.code,
+            system: prefix === "P" ? "powertrain" : prefix === "B" ? "body" : prefix === "C" ? "chassis" : "network",
+            description: info.description,
+            descriptionEn: info.descriptionEn,
+            category: info.category,
+            firstCheck: info.firstCheck,
+            moparNote: info.moparNote,
+            source: info.source || (ecu.ecu?.name ?? ecu.ecu?.address ?? "multi-ecu"),
+            severity: info.severity,
+            possibleCause: info.cause,
+            relatedSignals: info.signals,
+            isActive: true,
+            isPending: false,
+            occurenceCount: 1,
+            firstSeen: Date.now(),
+            lastSeen: Date.now(),
+          });
+        }
+      }
+
+      // Sloučit s existujícími (unikátně dle code)
+      setDtcs((prev) => {
+        const map = new Map<string, ObdDtc>();
+        [...prev, ...flat].forEach((d) => map.set(d.code, d));
+        const merged = Array.from(map.values());
+        void upsertSession(liveDataRef.current, merged, true);
+        return merged;
+      });
+      addLog(`[AUTO-SCAN ${trigger.toUpperCase()}] hotovo, nalezeno ${flat.length} kódů`);
+    } catch (err) {
+      addLog(`[AUTO-SCAN ${trigger.toUpperCase()}] chyba: ${String(err)}`);
+    }
+  }, [addLog, upsertSession]);
+
+  // COLD trigger — 8 s po připojení.
+  useEffect(() => {
+    if (!connected) return;
+    if (autoScanColdRef.current) return;
+    autoScanTimerRef.current = window.setTimeout(() => {
+      if (autoScanColdRef.current) return;
+      autoScanColdRef.current = true;
+      void runAutoMultiEcuScan("cold");
+    }, 8000);
+    return () => {
+      if (autoScanTimerRef.current) {
+        window.clearTimeout(autoScanTimerRef.current);
+        autoScanTimerRef.current = null;
+      }
+    };
+  }, [connected, runAutoMultiEcuScan]);
+
+  // WARM trigger — coolant >= 60 °C.
+  useEffect(() => {
+    if (!connected) return;
+    if (autoScanWarmRef.current) return;
+    const ct = liveData.coolantTemp;
+    if (typeof ct === "number" && ct >= 60) {
+      autoScanWarmRef.current = true;
+      void runAutoMultiEcuScan("warm");
+    }
+  }, [connected, liveData.coolantTemp, runAutoMultiEcuScan]);
+
+
 
   const value: ObdContextValue = {
     connected,
