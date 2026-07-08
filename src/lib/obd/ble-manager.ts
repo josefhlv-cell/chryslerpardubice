@@ -4,6 +4,7 @@
 
 import { BleClient, ScanResult } from '@capacitor-community/bluetooth-le';
 import { logObdDebugEvent, resetObdDebugThrottle } from '@/lib/obd/debug/obd-debug-logger';
+import { resetPidCache } from '@/lib/obd/unsupported-pid-cache';
 
 export type BLEDeviceInfo = {
   deviceId: string;
