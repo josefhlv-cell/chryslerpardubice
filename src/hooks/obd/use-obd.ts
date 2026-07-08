@@ -218,7 +218,10 @@ export function useLiveData(active: boolean) {
           try {
             const res = await elmQueue.send(pid, { timeoutMs: 900, commandType: 'live_poll_command' });
             if (res.status !== 'ok') {
-              markPidFailed(pid);
+              // Přechodné chyby (bus_error / timeout / adapter_error) nesmí eskalovat
+              // PID na 6h cooldown — jde o výpadek sběrnice, ne o unsupported PID.
+              if (isUnsupportedStatus(res.status)) markPidFailed(pid);
+              else markPidTransient(pid);
               continue;
             }
             const response = res.raw;
@@ -238,8 +241,9 @@ export function useLiveData(active: boolean) {
               markPidFailed(pid);
             }
           } catch {
-            markPidFailed(pid);
+            markPidTransient(pid);
           }
+
         }
 
         // Every 8 cycles poll Chrysler custom PIDs (trans temp, oil pressure)
