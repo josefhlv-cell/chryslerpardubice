@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { RefreshCw, Trash2, ChevronDown, ChevronRight, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import ObdHealthCheckCard from "@/components/obd/ObdHealthCheckCard";
 
 type ObdDebugLog = {
   id: string;
@@ -123,6 +124,7 @@ export default function AdminObdDebug() {
 
   return (
     <div className="space-y-4">
+      <ObdHealthCheckCard />
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
