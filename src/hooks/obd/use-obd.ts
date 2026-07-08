@@ -79,7 +79,27 @@ export function useELM327() {
   return { elmState, initSteps, initialize, sendCommand };
 }
 
-export type LiveData = Record<string, { value: number; timestamp: number }>;
+/**
+ * LiveData entry — kompatibilní se stávajícími konzumenty (value/timestamp),
+ * rozšířeno o diagnostická pole podle Delphi-OBD:
+ *   - status:        ok | no_data | unsupported | timeout | bus_error | adapter_error | invalid_response | stale
+ *   - lastValidValue poslední validní hodnota (nikdy se nepřepíše falešnou 0)
+ *   - lastUpdated    ms timestamp poslední validní hodnoty
+ *   - isStale        true, pokud aktuální čtení selhalo a hodnota je „poslední známá"
+ *   - raw            surová odpověď z ELM (jen poslední pokus)
+ *   - warning        human-readable důvod (např. „dočasně bez odpovědi")
+ */
+export type LiveDataEntry = {
+  value: number;
+  timestamp: number;
+  status?: 'ok' | 'no_data' | 'unsupported' | 'timeout' | 'bus_error' | 'adapter_error' | 'invalid_response' | 'stale';
+  lastValidValue?: number;
+  lastUpdated?: number;
+  isStale?: boolean;
+  raw?: string;
+  warning?: string;
+};
+export type LiveData = Record<string, LiveDataEntry>;
 
 export function useLiveData(active: boolean) {
   const [data, setData] = useState<LiveData>({});
