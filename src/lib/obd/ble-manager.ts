@@ -173,7 +173,7 @@ class BLEManager {
     };
     const commandType = map[state];
     if (commandType) {
-      if (state === 'connected') resetObdDebugThrottle();
+      if (state === 'connected') { resetObdDebugThrottle(); resetPidCache(); }
       logObdDebugEvent({
         commandType,
         connectionState: state,
