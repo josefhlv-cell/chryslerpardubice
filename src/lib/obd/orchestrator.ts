@@ -359,7 +359,8 @@ class AppOrchestrator {
         try {
           const res = await elmQueue.send(pid, { timeoutMs: 900, commandType: 'live_poll_command' });
           if (res.status !== 'ok') {
-            markPidFailed(pid);
+            if (isUnsupportedStatus(res.status)) markPidFailed(pid);
+            else markPidTransient(pid);
             continue;
           }
           const response = res.raw;
@@ -379,9 +380,10 @@ class AppOrchestrator {
             markPidFailed(pid);
           }
         } catch {
-          markPidFailed(pid);
+          markPidTransient(pid);
           this.state.stats.errorsCount++;
         }
+
       }
 
       // Track latency
