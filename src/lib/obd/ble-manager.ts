@@ -392,11 +392,22 @@ private async performConnect(deviceId: string): Promise<boolean> {
 
     this.connectedDevice = null;
     this.activeProfile = null;
+    // Explicitní log s chybovou zprávou — setState('error') samo o sobě
+    // logovalo prázdný connect_error bez error textu.
+    logObdDebugEvent({
+      commandType: 'connect_error',
+      connectionState: 'error',
+      status: 'error',
+      adapterId: deviceId ?? null,
+      error: String((e as Error)?.message ?? e ?? 'unknown BLE connect error'),
+      metadata: { stack: (e as Error)?.stack ?? null },
+    });
     this.setState('error');
     this.emit({ type: 'error', payload: e });
 
     return false;
   }
+
 }
 
 
