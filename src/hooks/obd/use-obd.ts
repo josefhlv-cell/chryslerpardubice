@@ -240,8 +240,34 @@ export function useLiveData(active: boolean) {
             if (res.status !== 'ok') {
               // Přechodné chyby (bus_error / timeout / adapter_error) nesmí eskalovat
               // PID na 6h cooldown — jde o výpadek sběrnice, ne o unsupported PID.
-              if (isUnsupportedStatus(res.status)) markPidFailed(pid);
-              else markPidTransient(pid);
+              const transient = !isUnsupportedStatus(res.status);
+              if (transient) markPidTransient(pid); else markPidFailed(pid);
+              // Nikdy nezobrazovat falešnou 0 — zachovat lastValidValue a označit jako stale.
+              setData((prev) => {
+                const existing = prev[pid];
+                const warning = transient ? 'Dočasně bez odpovědi' :
+                  res.status === 'no_data' || res.status === 'unsupported'
+                    ? 'Není podporováno tímto vozidlem' : 'Chybná odpověď adaptéru';
+                if (!existing || existing.lastValidValue === undefined) {
+                  // Nikdy jsme neměli platnou hodnotu → nezakládat entry s 0
+                  return prev;
+                }
+                const next: LiveData = {
+                  ...prev,
+                  [pid]: {
+                    value: existing.lastValidValue,
+                    timestamp: existing.lastUpdated ?? existing.timestamp,
+                    status: transient ? 'stale' : (res.status as LiveDataEntry['status']),
+                    lastValidValue: existing.lastValidValue,
+                    lastUpdated: existing.lastUpdated,
+                    isStale: true,
+                    raw: res.raw,
+                    warning,
+                  },
+                };
+                updateObdSession(next);
+                return next;
+              });
               continue;
             }
             const response = res.raw;
@@ -250,9 +276,17 @@ export function useLiveData(active: boolean) {
             if (value !== null) {
               markPidSuccess(pid);
               setData((prev) => {
-                const next = {
+                const next: LiveData = {
                   ...prev,
-                  [pid]: { value, timestamp: Date.now() },
+                  [pid]: {
+                    value,
+                    timestamp: Date.now(),
+                    status: 'ok',
+                    lastValidValue: value,
+                    lastUpdated: Date.now(),
+                    isStale: false,
+                    raw: response,
+                  },
                 };
                 updateObdSession(next);
                 return next;
