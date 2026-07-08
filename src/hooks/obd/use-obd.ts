@@ -4,7 +4,7 @@ import { bleManager, BLEConnectionState, BLEDeviceInfo } from '@/lib/obd/ble-man
 import { elm327, ELMState, InitStep } from '@/lib/obd/elm327-engine';
 import { LIVE_PIDS, parsePIDResponse } from '@/lib/obd/obd-pids';
 import { elmQueue } from '@/lib/obd/adapter/elm-queue';
-import { isPidOnCooldown, markPidFailed, markPidSuccess } from '@/lib/obd/unsupported-pid-cache';
+import { isPidOnCooldown, markPidFailed, markPidSuccess, markPidTransient, isUnsupportedStatus } from '@/lib/obd/unsupported-pid-cache';
 import {
   CHRYSLER_CUSTOM_PIDS,
   testChryslerCustomPid,
