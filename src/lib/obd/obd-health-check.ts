@@ -74,7 +74,7 @@ export async function runObdHealthCheck(): Promise<HealthReport> {
   const steps: HealthStep[] = [];
 
   // 1) BLE state
-  const bleState = bleManager.getConnectionState?.() ?? "unknown";
+  const bleState = bleManager.getState();
   const bluetooth: HealthReport["bluetooth"] = bleState === "connected" ? "ok" : "error";
   steps.push({
     id: "ble",
