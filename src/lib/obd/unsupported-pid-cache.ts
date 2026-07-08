@@ -50,6 +50,27 @@ export function markPidSuccess(pid: string): void {
   cache.delete(pid);
 }
 
+/**
+ * Krátký cooldown pro přechodné chyby (bus_error, timeout, adapter_error).
+ * Neinkrementuje `fails` counter — po pár sekundách bude PID zase pollován
+ * a při úspěchu se cache vyčistí. Zamezí zahlcení ELM queue při krátkém
+ * výpadku CAN sběrnice, ale nezpůsobí eskalaci na 6h jako u trvale
+ * nepodporovaných PIDů.
+ */
+export function markPidTransient(pid: string): void {
+  const existing = cache.get(pid);
+  cache.set(pid, {
+    fails: existing?.fails ?? 0,
+    cooldownUntil: Date.now() + 3_000,
+  });
+}
+
+/** Statusy, které znamenají „ECU tento PID nemá" — počítat do eskalace. */
+export function isUnsupportedStatus(status: string): boolean {
+  return status === "no_data" || status === "unsupported" || status === "invalid_response";
+}
+
 export function resetPidCache(): void {
   cache.clear();
 }
+
