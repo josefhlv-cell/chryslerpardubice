@@ -20,7 +20,7 @@ import { dataLogger } from '@/lib/obd/data-logger';
 import { LIVE_PIDS, parsePIDResponse } from '@/lib/obd/obd-pids';
 import { udsEngine } from '@/lib/obd/uds-engine';
 import { elmQueue } from '@/lib/obd/adapter/elm-queue';
-import { isPidOnCooldown, markPidFailed, markPidSuccess } from '@/lib/obd/unsupported-pid-cache';
+import { isPidOnCooldown, markPidFailed, markPidSuccess, markPidTransient, isUnsupportedStatus } from '@/lib/obd/unsupported-pid-cache';
 
 // ─── Types ───
 
