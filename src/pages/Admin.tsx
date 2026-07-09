@@ -87,6 +87,7 @@ const AdminDashboardStats = lazy(() => import("@/components/admin/AdminDashboard
 const AdminRemoteOBD = lazy(() => import("@/components/admin/AdminRemoteOBD"));
 const AdminChdpDiag = lazy(() => import("@/components/admin/AdminChdpDiag"));
 const AdminObdDebug = lazy(() => import("@/components/admin/AdminObdDebug"));
+const AdminVraForgeDiag = lazy(() => import("@/components/admin/AdminVraForgeDiag"));
 const AdminDTCLibrary = lazy(() => import("@/components/admin/AdminDTCLibrary"));
 const AdminTSBs = lazy(() => import("@/components/admin/AdminTSBs"));
 const AdminDiagPDFs = lazy(() => import("@/components/admin/AdminDiagPDFs"));
@@ -346,6 +347,7 @@ const Admin = () => {
        { key: "diag-chdp", label: "CHDP diag", icon: Activity },
        { key: "diag-remote", label: "Vzdálené OBD live" },
        { key: "diag-obd-debug", label: "OBD Debug", icon: Activity },
+       { key: "diag-vraforge", label: "VraForge Diag", icon: Activity },
        { key: "diag-dtc", label: "DTC knihovna", icon: BookOpen },
        { key: "diag-tsb", label: "TSB databáze", icon: FileText },
        { key: "diag-pdf", label: "Protokoly (PDF)", icon: FileSpreadsheet },
@@ -598,6 +600,7 @@ const Admin = () => {
       case "diag-chdp": return <Suspense fallback={<Loader />}><AdminChdpDiag /></Suspense>;
       case "diag-remote": return <Suspense fallback={<Loader />}><AdminRemoteOBD /></Suspense>;
       case "diag-obd-debug": return <Suspense fallback={<Loader />}><AdminObdDebug /></Suspense>;
+      case "diag-vraforge": return <Suspense fallback={<Loader />}><AdminVraForgeDiag /></Suspense>;
       case "diag-dtc": return <Suspense fallback={<Loader />}><AdminDTCLibrary /></Suspense>;
       case "diag-tsb": return <Suspense fallback={<Loader />}><AdminTSBs /></Suspense>;
       case "diag-pdf": return <Suspense fallback={<Loader />}><AdminDiagPDFs /></Suspense>;
