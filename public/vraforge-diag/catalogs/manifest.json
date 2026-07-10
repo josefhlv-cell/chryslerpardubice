@@ -1,0 +1,822 @@
+{
+  "generated_at": "build",
+  "brands": [
+    {
+      "file": "aston-martin.json",
+      "key": "ASTON_MARTIN",
+      "display_name": "Aston Martin Lagonda Ltd.",
+      "wmis": [
+        "SCF"
+      ],
+      "ecus": 118,
+      "dids": 2009,
+      "routines": 108,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "dacia.json",
+      "key": "DACIA",
+      "display_name": "Automobile Dacia SA (Renault Group)",
+      "wmis": [
+        "UU1",
+        "UU3",
+        "LBR",
+        "LRY"
+      ],
+      "ecus": 120,
+      "dids": 1963,
+      "routines": 106,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "lada.json",
+      "key": "LADA",
+      "display_name": "AvtoVAZ (Lada)",
+      "wmis": [
+        "XTA",
+        "XTC",
+        "XTV"
+      ],
+      "ecus": 120,
+      "dids": 1938,
+      "routines": 107,
+      "live_pids": 39,
+      "actuator_tests": 124
+    },
+    {
+      "file": "bmw.json",
+      "key": "BMW",
+      "display_name": "Bayerische Motoren Werke",
+      "wmis": [
+        "WBA",
+        "WBS",
+        "WBY",
+        "WMW",
+        "5UX",
+        "4US"
+      ],
+      "ecus": 140,
+      "dids": 2068,
+      "routines": 203,
+      "live_pids": 69,
+      "actuator_tests": 151
+    },
+    {
+      "file": "bentley.json",
+      "key": "BENTLEY",
+      "display_name": "Bentley Motors Ltd.",
+      "wmis": [
+        "SCB"
+      ],
+      "ecus": 120,
+      "dids": 1955,
+      "routines": 110,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "byd.json",
+      "key": "BYD",
+      "display_name": "BYD Auto Co. Ltd.",
+      "wmis": [
+        "L6T",
+        "LGX",
+        "8GA"
+      ],
+      "ecus": 122,
+      "dids": 2030,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "cummins.json",
+      "key": "CUMMINS",
+      "display_name": "Cummins Inc. (engine OEM)",
+      "wmis": [],
+      "ecus": 124,
+      "dids": 2007,
+      "routines": 110,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "detroit.json",
+      "key": "DDC",
+      "display_name": "Detroit Diesel Corp. (Daimler Truck — engine OEM)",
+      "wmis": [],
+      "ecus": 123,
+      "dids": 1904,
+      "routines": 108,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "porsche.json",
+      "key": "PORSCHE",
+      "display_name": "Dr. Ing. h.c. F. Porsche AG",
+      "wmis": [
+        "WP0",
+        "WP1"
+      ],
+      "ecus": 128,
+      "dids": 2423,
+      "routines": 141,
+      "live_pids": 40,
+      "actuator_tests": 139
+    },
+    {
+      "file": "ferrari.json",
+      "key": "FERRARI",
+      "display_name": "Ferrari N.V.",
+      "wmis": [
+        "ZFF"
+      ],
+      "ecus": 121,
+      "dids": 2002,
+      "routines": 110,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "ford.json",
+      "key": "FORD",
+      "display_name": "Ford Motor Company",
+      "wmis": [
+        "1FA",
+        "1FB",
+        "1FC",
+        "1FD",
+        "1FM",
+        "1FT",
+        "2FA",
+        "2FT",
+        "3FA",
+        "3FT",
+        "1LN",
+        "5LM",
+        "1MR",
+        "6FP",
+        "WF0"
+      ],
+      "ecus": 106,
+      "dids": 1941,
+      "routines": 187,
+      "live_pids": 40,
+      "actuator_tests": 111
+    },
+    {
+      "file": "geely.json",
+      "key": "GEELY",
+      "display_name": "Geely Auto / Lynk & Co",
+      "wmis": [
+        "LB3",
+        "LFM",
+        "LJV",
+        "LBE",
+        "LGZ"
+      ],
+      "ecus": 119,
+      "dids": 2101,
+      "routines": 109,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "gm.json",
+      "key": "GM",
+      "display_name": "General Motors",
+      "wmis": [
+        "1G1",
+        "1G2",
+        "1G4",
+        "1G6",
+        "1G8",
+        "1GC",
+        "1GT",
+        "2G1",
+        "2GT",
+        "3G1",
+        "3GT",
+        "5GR",
+        "6G1"
+      ],
+      "ecus": 132,
+      "dids": 2242,
+      "routines": 126,
+      "live_pids": 39,
+      "actuator_tests": 134
+    },
+    {
+      "file": "gwm.json",
+      "key": "GWM",
+      "display_name": "Great Wall Motor (Haval / WEY / ORA / Tank / Poer)",
+      "wmis": [
+        "LGW",
+        "LGE",
+        "LGT",
+        "X9X"
+      ],
+      "ecus": 119,
+      "dids": 2020,
+      "routines": 109,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "honda.json",
+      "key": "HONDA",
+      "display_name": "Honda Motor Co. (incl. Acura)",
+      "wmis": [
+        "JHM",
+        "JHL",
+        "JHF",
+        "JH4",
+        "1HG",
+        "19U",
+        "19V",
+        "2HG",
+        "2HK",
+        "2HN",
+        "3HG",
+        "5J6",
+        "5FN",
+        "5FP"
+      ],
+      "ecus": 91,
+      "dids": 1782,
+      "routines": 110,
+      "live_pids": 33,
+      "actuator_tests": 93
+    },
+    {
+      "file": "hmg.json",
+      "key": "HMG",
+      "display_name": "Hyundai Motor Group (Hyundai / Kia / Genesis)",
+      "wmis": [
+        "KMH",
+        "KM8",
+        "KMF",
+        "KMT",
+        "5NP",
+        "5NM",
+        "5NX",
+        "KNA",
+        "KND",
+        "KNH",
+        "KNB",
+        "5XX",
+        "5XY",
+        "KNF",
+        "KMK"
+      ],
+      "ecus": 143,
+      "dids": 2481,
+      "routines": 145,
+      "live_pids": 45,
+      "actuator_tests": 145
+    },
+    {
+      "file": "isuzu.json",
+      "key": "ISUZU",
+      "display_name": "Isuzu Motors Ltd.",
+      "wmis": [
+        "JAA",
+        "JAB",
+        "JAL",
+        "JAN",
+        "JAH",
+        "5RY",
+        "4GD"
+      ],
+      "ecus": 128,
+      "dids": 1958,
+      "routines": 109,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "iveco.json",
+      "key": "IVECO",
+      "display_name": "Iveco S.p.A. (Iveco Group)",
+      "wmis": [
+        "ZCF",
+        "VCF"
+      ],
+      "ecus": 127,
+      "dids": 1957,
+      "routines": 110,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "jlr.json",
+      "key": "JLR",
+      "display_name": "Jaguar Land Rover Limited (Tata)",
+      "wmis": [
+        "SAJ",
+        "SAL",
+        "SAD",
+        "MA1"
+      ],
+      "ecus": 144,
+      "dids": 2396,
+      "routines": 150,
+      "live_pids": 49,
+      "actuator_tests": 149
+    },
+    {
+      "file": "lucid.json",
+      "key": "LUCID",
+      "display_name": "Lucid Group, Inc.",
+      "wmis": [
+        "50A"
+      ],
+      "ecus": 119,
+      "dids": 1941,
+      "routines": 107,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "mahindra.json",
+      "key": "MAHINDRA",
+      "display_name": "Mahindra & Mahindra Ltd.",
+      "wmis": [
+        "MAJ",
+        "MA6",
+        "M3M"
+      ],
+      "ecus": 119,
+      "dids": 2005,
+      "routines": 106,
+      "live_pids": 39,
+      "actuator_tests": 124
+    },
+    {
+      "file": "man.json",
+      "key": "MAN",
+      "display_name": "MAN Truck & Bus SE (Traton Group)",
+      "wmis": [
+        "WMA",
+        "9BW"
+      ],
+      "ecus": 130,
+      "dids": 1911,
+      "routines": 108,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "mazda.json",
+      "key": "MAZDA",
+      "display_name": "Mazda Motor Corporation",
+      "wmis": [
+        "JM1",
+        "JM3",
+        "JM7",
+        "JMZ",
+        "4F2",
+        "4F4"
+      ],
+      "ecus": 114,
+      "dids": 2008,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "mclaren.json",
+      "key": "MCLAREN",
+      "display_name": "McLaren Automotive Ltd.",
+      "wmis": [
+        "SBM"
+      ],
+      "ecus": 123,
+      "dids": 1923,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "mercedes.json",
+      "key": "MB",
+      "display_name": "Mercedes-Benz Group",
+      "wmis": [
+        "WDB",
+        "WDC",
+        "WDD",
+        "WDF",
+        "WD3",
+        "WD4",
+        "4JG"
+      ],
+      "ecus": 140,
+      "dids": 2101,
+      "routines": 164,
+      "live_pids": 41,
+      "actuator_tests": 130
+    },
+    {
+      "file": "mini.json",
+      "key": "MINI",
+      "display_name": "MINI (BMW Group sub-brand)",
+      "wmis": [
+        "WMW",
+        "SAW"
+      ],
+      "ecus": 127,
+      "dids": 1983,
+      "routines": 108,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "mitsubishi.json",
+      "key": "MITSU",
+      "display_name": "Mitsubishi Motors Corp.",
+      "wmis": [
+        "JA3",
+        "JA4",
+        "JMB",
+        "JMY",
+        "4A3",
+        "4A4",
+        "MMB",
+        "6MM"
+      ],
+      "ecus": 119,
+      "dids": 2030,
+      "routines": 109,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "nio.json",
+      "key": "NIO",
+      "display_name": "NIO Inc.",
+      "wmis": [
+        "LJN",
+        "LBL"
+      ],
+      "ecus": 122,
+      "dids": 1967,
+      "routines": 112,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "nissan.json",
+      "key": "NISSAN",
+      "display_name": "Nissan Motor (incl. Infiniti, Datsun)",
+      "wmis": [
+        "JN1",
+        "JN6",
+        "JN8",
+        "1N4",
+        "1N6",
+        "3N1",
+        "5N1",
+        "5BZ",
+        "JNK",
+        "JNR",
+        "JNX",
+        "MNT"
+      ],
+      "ecus": 116,
+      "dids": 2058,
+      "routines": 109,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "paccar.json",
+      "key": "PACCAR",
+      "display_name": "PACCAR Inc. (Peterbilt / Kenworth / DAF / Leyland)",
+      "wmis": [
+        "1XP",
+        "1NP",
+        "5KJ",
+        "1NK",
+        "1XK",
+        "2NK",
+        "XLR",
+        "SAR"
+      ],
+      "ecus": 129,
+      "dids": 1982,
+      "routines": 110,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "polestar.json",
+      "key": "POLESTAR",
+      "display_name": "Polestar Performance AB (Geely)",
+      "wmis": [
+        "LPS",
+        "LFP"
+      ],
+      "ecus": 117,
+      "dids": 1970,
+      "routines": 107,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "renault.json",
+      "key": "RNLT",
+      "display_name": "Renault Group (Renault / Dacia / Alpine)",
+      "wmis": [
+        "VF1",
+        "VF2",
+        "VS5",
+        "VR1",
+        "3W2",
+        "UU1",
+        "UU3",
+        "UU6",
+        "VFA",
+        "VFD",
+        "KNM"
+      ],
+      "ecus": 118,
+      "dids": 2074,
+      "routines": 110,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "rivian.json",
+      "key": "RIVIAN",
+      "display_name": "Rivian Automotive, Inc.",
+      "wmis": [
+        "7PD"
+      ],
+      "ecus": 121,
+      "dids": 1931,
+      "routines": 109,
+      "live_pids": 39,
+      "actuator_tests": 127
+    },
+    {
+      "file": "rolls-royce.json",
+      "key": "ROLLS_ROYCE",
+      "display_name": "Rolls-Royce Motor Cars Ltd.",
+      "wmis": [
+        "SCA"
+      ],
+      "ecus": 132,
+      "dids": 1900,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 128
+    },
+    {
+      "file": "scania.json",
+      "key": "SCANIA",
+      "display_name": "Scania AB (Traton Group)",
+      "wmis": [
+        "VLU",
+        "YS2",
+        "XLE",
+        "9BS"
+      ],
+      "ecus": 130,
+      "dids": 1912,
+      "routines": 108,
+      "live_pids": 39,
+      "actuator_tests": 124
+    },
+    {
+      "file": "smart.json",
+      "key": "SMART",
+      "display_name": "smart Automobile Co. (Mercedes-Geely JV)",
+      "wmis": [
+        "WME",
+        "L7M"
+      ],
+      "ecus": 117,
+      "dids": 1932,
+      "routines": 104,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "stellantis.json",
+      "key": "STLA",
+      "display_name": "Stellantis (FCA + PSA)",
+      "wmis": [
+        "1C3",
+        "1C4",
+        "1C6",
+        "2C3",
+        "2C4",
+        "3C3",
+        "3C4",
+        "3C6",
+        "1D4",
+        "1D7",
+        "2D4",
+        "2D8",
+        "3D4",
+        "1J4",
+        "1J8",
+        "1RR",
+        "ZFA",
+        "ZFB",
+        "ZFC",
+        "9BD",
+        "ZAR",
+        "ZAM",
+        "VF3",
+        "VF7",
+        "W0L",
+        "VXR"
+      ],
+      "ecus": 157,
+      "dids": 2633,
+      "routines": 159,
+      "live_pids": 53,
+      "actuator_tests": 168
+    },
+    {
+      "file": "subaru.json",
+      "key": "SUBARU",
+      "display_name": "Subaru Corporation",
+      "wmis": [
+        "JF1",
+        "JF2",
+        "JF3",
+        "4S3",
+        "4S4"
+      ],
+      "ecus": 124,
+      "dids": 1961,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "suzuki.json",
+      "key": "SUZUKI",
+      "display_name": "Suzuki Motor Corp. (incl. Maruti Suzuki India)",
+      "wmis": [
+        "JS1",
+        "JS2",
+        "JSA",
+        "JSB",
+        "TSM",
+        "LSJ",
+        "MA3",
+        "MBH",
+        "ML8"
+      ],
+      "ecus": 120,
+      "dids": 2004,
+      "routines": 104,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "tata.json",
+      "key": "TATA",
+      "display_name": "Tata Motors Ltd.",
+      "wmis": [
+        "MAT",
+        "MAR",
+        "KMU"
+      ],
+      "ecus": 119,
+      "dids": 2054,
+      "routines": 107,
+      "live_pids": 39,
+      "actuator_tests": 124
+    },
+    {
+      "file": "tesla.json",
+      "key": "TESLA",
+      "display_name": "Tesla, Inc.",
+      "wmis": [
+        "5YJ",
+        "LRW",
+        "XP7",
+        "7SA"
+      ],
+      "ecus": 127,
+      "dids": 2005,
+      "routines": 114,
+      "live_pids": 39,
+      "actuator_tests": 132
+    },
+    {
+      "file": "toyota.json",
+      "key": "TOYOTA",
+      "display_name": "Toyota Motor Corporation",
+      "wmis": [
+        "JTD",
+        "JTE",
+        "JTH",
+        "JTJ",
+        "JTK",
+        "JTM",
+        "JTN",
+        "2T1",
+        "2T2",
+        "4T1",
+        "4T3",
+        "5TD",
+        "5TE",
+        "5TF",
+        "5TY",
+        "JDA"
+      ],
+      "ecus": 109,
+      "dids": 1860,
+      "routines": 124,
+      "live_pids": 38,
+      "actuator_tests": 104
+    },
+    {
+      "file": "vw.json",
+      "key": "VAG",
+      "display_name": "Volkswagen Audi Group — full diagnostic catalog",
+      "wmis": [
+        "WVW",
+        "WV1",
+        "WV2",
+        "WAU",
+        "TRU",
+        "TMB",
+        "VSS"
+      ],
+      "ecus": 117,
+      "dids": 3042,
+      "routines": 536,
+      "live_pids": 437,
+      "actuator_tests": 340
+    },
+    {
+      "file": "volvo.json",
+      "key": "VOLVO",
+      "display_name": "Volvo Cars (Geely)",
+      "wmis": [
+        "YV1",
+        "YV4",
+        "LYV",
+        "LVS",
+        "LVY",
+        "7JR"
+      ],
+      "ecus": 117,
+      "dids": 2078,
+      "routines": 108,
+      "live_pids": 39,
+      "actuator_tests": 126
+    },
+    {
+      "file": "volvotrucks.json",
+      "key": "VOLVOTR",
+      "display_name": "Volvo Group (Volvo Trucks / Mack / Renault Trucks)",
+      "wmis": [
+        "4V4",
+        "YV2",
+        "4V2",
+        "1M1",
+        "1M2",
+        "4V5",
+        "4V1",
+        "VG6",
+        "VF6"
+      ],
+      "ecus": 133,
+      "dids": 1969,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 125
+    },
+    {
+      "file": "xpeng.json",
+      "key": "XPENG",
+      "display_name": "Xpeng Motors (XPeng Inc.)",
+      "wmis": [
+        "LJY",
+        "LMZ"
+      ],
+      "ecus": 121,
+      "dids": 1950,
+      "routines": 111,
+      "live_pids": 39,
+      "actuator_tests": 128
+    }
+  ],
+  "generic": [
+    {
+      "file": "obd2-pids.json",
+      "key": "OBD2",
+      "display_name": "Generic OBD-II (ISO 15031)"
+    }
+  ]
+}
