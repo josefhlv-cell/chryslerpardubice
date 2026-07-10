@@ -13,42 +13,66 @@ import { bleManager } from "@/lib/obd/ble-manager";
 import { logObdDebugEvent } from "@/lib/obd/debug/obd-debug-logger";
 import { cleanResponse, decodeDtcs, decodeValue } from "./decoder";
 import { loadUdsNrcCatalog } from "./catalog-loader";
-import type { DiagFunction, DiagRunResult, DecodedValue } from "./types";
+import type { DiagFunction, DiagRunResult, DecodedValue, ActiveDiagContext } from "./types";
 
 interface RunContext {
   vin?: string | null;
   vehicleId?: string | null;
   userId?: string | null;
+  /** When set, overrides fn.ecuAddress (e.g. user selected a specific ECU tab). */
+  activeContext?: ActiveDiagContext | null;
 }
 
 function debugCommandType(fn: DiagFunction): string {
   if (fn.kind === "dtc_scan") return "vraforge_diag_dtc";
   if (fn.kind === "routine") return "vraforge_diag_routine";
+  if (fn.kind === "actuator_test") return "vraforge_diag_actuator";
   if (fn.kind === "raw") return "vraforge_diag_raw";
   return "vraforge_diag_read";
 }
 
+/** TX header for a given ECU address (11-bit CAN, ISO 15765-4). Returns ELM SH argument. */
+function txHeader(ecuAddr?: string): string | null {
+  if (!ecuAddr) return null;
+  return ecuAddr.replace(/^0x/i, "").toUpperCase();
+}
+
+/** RX header — for 7Ex ECUs it's TX+8, otherwise same address. */
+function rxHeader(ecuAddr?: string): string | null {
+  const tx = txHeader(ecuAddr);
+  if (!tx) return null;
+  const n = parseInt(tx, 16);
+  if (Number.isFinite(n) && tx.length === 3 && tx.startsWith("7E") && n < 0x7E8) {
+    return (n + 8).toString(16).toUpperCase().padStart(3, "0");
+  }
+  return tx;
+}
+
 /**
- * Optional session setup + header switch based on profile.
- * Uses only AT commands (no OBD writes).
+ * Prepare ELM for an OEM DID / routine — set headers and extended session.
  */
-async function ensureSessionFor(fn: DiagFunction): Promise<string[]> {
+async function ensureSessionFor(fn: DiagFunction, ctx: RunContext): Promise<string[]> {
   const warnings: string[] = [];
-  if (fn.profile === "obd2") return warnings;
+  if (!fn.isOem) return warnings;
 
-  // OEM DID / routine — need extended session on ecu_address
-  const ecu = (fn.ecuAddress || "0x7E0").replace(/^0x/i, "").toUpperCase();
-  const resp = ecu.startsWith("7E") ? (parseInt(ecu, 16) + 8).toString(16).toUpperCase() : ecu;
+  const effectiveEcu = ctx.activeContext?.ecuAddress || fn.ecuAddress;
+  const tx = txHeader(effectiveEcu);
+  const rx = rxHeader(effectiveEcu);
 
-  // Set headers + response filter
-  const setHdr = await elmQueue.send(`AT SH ${ecu}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
-  if (setHdr.status !== "ok") warnings.push(`ATSH ${ecu} → ${setHdr.status}`);
-  const setCra = await elmQueue.send(`AT CRA ${resp}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
-  if (setCra.status !== "ok") warnings.push(`ATCRA ${resp} → ${setCra.status}`);
+  if (tx) {
+    const setHdr = await elmQueue.send(`AT SH ${tx}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
+    if (setHdr.status !== "ok") warnings.push(`ATSH ${tx} → ${setHdr.status}`);
+  }
+  if (rx) {
+    const setCra = await elmQueue.send(`AT CRA ${rx}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
+    if (setCra.status !== "ok") warnings.push(`ATCRA ${rx} → ${setCra.status}`);
+  }
 
-  // Extended session (10 03) — safe read/routine session
-  const session = await elmQueue.send("10 03", { commandType: "vraforge_diag_init", timeoutMs: 2500 });
-  if (session.status !== "ok") warnings.push(`10 03 → ${session.status}`);
+  // Extended session — required for most 22 / 31 reads
+  if (fn.kind === "did" || fn.kind === "routine" || fn.kind === "actuator_test") {
+    const session = await elmQueue.send("10 03", { commandType: "vraforge_diag_init", timeoutMs: 2500 });
+    if (session.status !== "ok") warnings.push(`10 03 → ${session.status}`);
+  }
 
   return warnings;
 }
@@ -57,6 +81,7 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
   const start = Date.now();
   const nrcCatalog = await loadUdsNrcCatalog().catch(() => undefined);
   const bleState = bleManager.getState();
+
   if (bleState !== "connected") {
     const res: DiagRunResult = {
       fn, command: fn.command, rawResponse: "", cleanedResponse: "",
@@ -66,11 +91,11 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
     logObdDebugEvent({
       commandType: "vraforge_diag_error",
       command: fn.command, status: "error", error: res.error,
-      elmProfile: fn.profile === "obd2" ? "simple" : "debug",
+      elmProfile: fn.isOem ? "debug" : "simple",
       metadata: {
         source: "Delphi-OBD", module: "VraForge Diag",
         sourceFile: fn.sourceFile, originalName: fn.originalName,
-        profile: fn.profile, manufacturer: fn.manufacturer, ecu: fn.ecu, category: fn.category,
+        brand: fn.brandKey, ecu: fn.ecu, category: fn.category,
       },
     });
     return res;
@@ -79,14 +104,12 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
   return elmQueue.runExclusive(async () => {
     const warnings: string[] = [];
     try {
-      // OEM profiles need ATH1 (headers) for CAN filtering + UDS parsing
-      await applyElmProfile(fn.profile === "obd2" ? "simple" : "debug");
-
-      warnings.push(...(await ensureSessionFor(fn)));
+      await applyElmProfile(fn.isOem ? "debug" : "simple");
+      warnings.push(...(await ensureSessionFor(fn, ctx)));
 
       const cmdResult = await elmQueue.send(fn.command, {
-        commandType: debugCommandType(fn),
-        timeoutMs: fn.kind === "routine" ? 6000 : 4000,
+        commandType: debugCommandType(fn) as never,
+        timeoutMs: (fn.kind === "routine" || fn.kind === "actuator_test") ? 6000 : 4000,
       });
 
       const cleaned = cleanResponse(fn.command, cmdResult.raw, nrcCatalog);
@@ -113,6 +136,7 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
         status: finalStatus as DiagRunResult["status"],
         decoded,
         warnings,
+        nrc: cleaned.nrc,
         error: cmdResult.status !== "ok" && cmdResult.status !== "no_data" ? cmdResult.raw : null,
         durationMs: Date.now() - start,
         timestamp: new Date().toISOString(),
@@ -127,7 +151,7 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
         error: result.error,
         warnings,
         durationMs: result.durationMs,
-        elmProfile: fn.profile === "obd2" ? "simple" : "debug",
+        elmProfile: fn.isOem ? "debug" : "simple",
         userId: ctx.userId ?? null,
         vehicleId: ctx.vehicleId ?? null,
         metadata: {
@@ -135,10 +159,11 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
           module: "VraForge Diag",
           sourceFile: fn.sourceFile,
           originalName: fn.originalName,
-          profile: fn.profile,
-          manufacturer: fn.manufacturer,
+          brand: fn.brandKey,
           ecu: fn.ecu,
+          ecuAddress: ctx.activeContext?.ecuAddress || fn.ecuAddress,
           category: fn.category,
+          nrc: cleaned.nrc ?? null,
           decoded: decoded as unknown,
         },
       });
@@ -155,25 +180,34 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
         commandType: "vraforge_diag_error",
         command: fn.command, status: "error", error: res.error, warnings,
         durationMs: res.durationMs,
-        metadata: { source: "Delphi-OBD", module: "VraForge Diag", sourceFile: fn.sourceFile, originalName: fn.originalName, profile: fn.profile },
+        metadata: { source: "Delphi-OBD", module: "VraForge Diag", sourceFile: fn.sourceFile, originalName: fn.originalName, brand: fn.brandKey },
       });
       return res;
     }
   });
 }
 
-/** Free-form command — admin raw entry. Uses same runner path. */
-export async function runRawCommand(command: string, profile: "obd2" | "vag" | "stellantis" = "obd2", ctx: RunContext = {}): Promise<DiagRunResult> {
+/** Free-form command — admin raw entry. */
+export async function runRawCommand(
+  command: string,
+  activeContext?: ActiveDiagContext | null,
+  ctx: RunContext = {},
+): Promise<DiagRunResult> {
+  const isOem = !!activeContext?.isOem;
   const fn: DiagFunction = {
-    id: `${profile}:raw:${command}`,
-    profile, manufacturer: profile.toUpperCase(),
+    id: `raw:${command}`,
+    brandKey: activeContext?.brandKey || "OBD2",
+    brandLabel: activeContext?.brandLabel || "Raw",
+    isOem,
+    ecuAddress: activeContext?.ecuAddress,
+    ecu: activeContext?.ecuName,
     kind: "raw",
     name: `Raw: ${command}`,
     command,
     sourceFile: "raw",
     originalName: command,
   };
-  return runDiagFunction(fn, ctx);
+  return runDiagFunction(fn, { ...ctx, activeContext });
 }
 
 export function buildJsonReport(res: DiagRunResult, ctx: RunContext = {}) {
@@ -182,10 +216,9 @@ export function buildJsonReport(res: DiagRunResult, ctx: RunContext = {}) {
     module: "VraForge Diag",
     sourceFile: res.fn.sourceFile,
     originalName: res.fn.originalName,
-    profile: res.fn.profile,
-    manufacturer: res.fn.manufacturer,
+    brand: res.fn.brandKey,
     ecu: res.fn.ecu ?? null,
-    ecuAddress: res.fn.ecuAddress ?? null,
+    ecuAddress: ctx.activeContext?.ecuAddress || res.fn.ecuAddress || null,
     vin: ctx.vin ?? null,
     name: res.fn.name,
     command: res.command,
@@ -194,6 +227,7 @@ export function buildJsonReport(res: DiagRunResult, ctx: RunContext = {}) {
     cleanedResponse: res.cleanedResponse,
     decoded: res.decoded,
     warnings: res.warnings,
+    nrc: res.nrc ?? null,
     durationMs: res.durationMs,
     timestamp: res.timestamp,
   };
