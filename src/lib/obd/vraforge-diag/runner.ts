@@ -53,11 +53,12 @@ function rxHeader(ecuAddr?: string): string | null {
  */
 async function ensureSessionFor(fn: DiagFunction, ctx: RunContext): Promise<string[]> {
   const warnings: string[] = [];
-  if (!fn.isOem) return warnings;
 
-  const effectiveEcu = ctx.activeContext?.ecuAddress || fn.ecuAddress;
-  const tx = txHeader(effectiveEcu);
-  const rx = rxHeader(effectiveEcu);
+  // Priority: manual TX/RX > selected ECU > fn.ecuAddress
+  const effectiveTxRaw = ctx.activeContext?.manualTx || ctx.activeContext?.ecuAddress || fn.ecuAddress;
+  const effectiveRxRaw = ctx.activeContext?.manualRx || ctx.activeContext?.responseHeader;
+  const tx = txHeader(effectiveTxRaw);
+  const rx = effectiveRxRaw ? txHeader(effectiveRxRaw) : rxHeader(effectiveTxRaw);
 
   if (tx) {
     const setHdr = await elmQueue.send(`AT SH ${tx}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
@@ -68,8 +69,8 @@ async function ensureSessionFor(fn: DiagFunction, ctx: RunContext): Promise<stri
     if (setCra.status !== "ok") warnings.push(`ATCRA ${rx} → ${setCra.status}`);
   }
 
-  // Extended session — required for most 22 / 31 reads
-  if (fn.kind === "did" || fn.kind === "routine" || fn.kind === "actuator_test") {
+  // Extended session — required for most 22 / 31 reads. NEVER for raw/dtc/live_pid/obd2_pid.
+  if (fn.isOem && (fn.kind === "did" || fn.kind === "routine" || fn.kind === "actuator_test")) {
     const session = await elmQueue.send("10 03", { commandType: "vraforge_diag_init", timeoutMs: 2500 });
     if (session.status !== "ok") warnings.push(`10 03 → ${session.status}`);
   }
