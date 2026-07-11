@@ -389,12 +389,24 @@ export default function AdminVraForgeDiag() {
           <Card>
             <CardContent className="p-4 space-y-2">
               <p className="text-xs font-semibold flex items-center gap-2"><FileCode2 className="w-3.5 h-3.5"/> Raw příkaz</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-[10px]">Ruční TX (např. 7E0)</Label>
+                  <Input value={manualTx} onChange={(e) => setManualTx(e.target.value.toUpperCase())} placeholder="AUTO / 7E0 / 18DA10F1" className="font-mono text-xs h-8" />
+                </div>
+                <div>
+                  <Label className="text-[10px]">Ruční RX (např. 7E8)</Label>
+                  <Input value={manualRx} onChange={(e) => setManualRx(e.target.value.toUpperCase())} placeholder="AUTO / 7E8" className="font-mono text-xs h-8" />
+                </div>
+              </div>
               <div className="flex gap-2">
                 <Input value={rawCmd} onChange={(e) => setRawCmd(e.target.value)} placeholder="např. 22 F1 90"
                   className="font-mono text-xs" />
                 <Button onClick={runRaw} disabled={running || !bleOk || !rawCmd.trim()}><Play className="w-3.5 h-3.5 mr-1"/> Poslat</Button>
               </div>
-              <p className="text-[10px] text-muted-foreground">Používá aktivní ECU kontext (TX/RX). Přes elmQueue → bleManager → ELM327.</p>
+              <p className="text-[10px] text-muted-foreground">
+                Priorita TX/RX: Ruční → Vybraná ECU. Bez TX kontextu RAW <b>neodešle</b> (neposílá na engine default). Neaktivuje 10 03.
+              </p>
             </CardContent>
           </Card>
 
