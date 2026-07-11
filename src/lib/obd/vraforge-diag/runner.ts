@@ -102,6 +102,26 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
     return res;
   }
 
+  // RAW without any TX context must NOT silently fire at the engine default header.
+  if (fn.kind === "raw") {
+    const anyTx = ctx.activeContext?.manualTx || ctx.activeContext?.ecuAddress || fn.ecuAddress;
+    if (!anyTx) {
+      const res: DiagRunResult = {
+        fn, command: fn.command, rawResponse: "", cleanedResponse: "",
+        status: "error", decoded: [],
+        warnings: ["RAW vyžaduje vybranou ECU nebo ruční TX/RX. Nespouštím na default engine adresu."],
+        error: "Chybí TX/RX kontext pro RAW příkaz",
+        durationMs: 0, timestamp: new Date().toISOString(),
+      };
+      logObdDebugEvent({
+        commandType: "vraforge_diag_error", command: fn.command, status: "error",
+        error: res.error, warnings: res.warnings,
+        metadata: { source: "Delphi-OBD", module: "VraForge Diag", reason: "raw_without_tx", brand: fn.brandKey },
+      });
+      return res;
+    }
+  }
+
   return elmQueue.runExclusive(async () => {
     const warnings: string[] = [];
     try {
