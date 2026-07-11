@@ -1,26 +1,27 @@
-/**
- * VraForge Diag runner — executes a DiagFunction against the vehicle using
- * the SAME infrastructure as normal customer OBD:
- *   elm327 → elmQueue (mutex + polling pause) → bleManager → ELM327 → car
- *
- * Never opens BLE directly. Never spawns a second engine. Never writes
- * OBD data outside the Delphi-OBD catalogs (no invented PIDs).
- */
-
 import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { applyElmProfile } from "@/lib/obd/adapter/elm-init";
 import { bleManager } from "@/lib/obd/ble-manager";
 import { logObdDebugEvent } from "@/lib/obd/debug/obd-debug-logger";
 import { cleanResponse, decodeDtcs, decodeValue } from "./decoder";
 import { loadUdsNrcCatalog } from "./catalog-loader";
-import type { DiagFunction, DiagRunResult, DecodedValue, ActiveDiagContext } from "./types";
+import type {
+  DiagFunction,
+  DiagRunResult,
+  DecodedValue,
+  ActiveDiagContext,
+} from "./types";
 
 interface RunContext {
   vin?: string | null;
   vehicleId?: string | null;
   userId?: string | null;
-  /** When set, overrides fn.ecuAddress (e.g. user selected a specific ECU tab). */
   activeContext?: ActiveDiagContext | null;
+
+  /**
+   * Musí poslat UI až po zadání SERVISNI REZIM.
+   * Pokud false/undefined, routine 31 a actuator_test se nespustí.
+   */
+  serviceMode?: boolean;
 }
 
 function debugCommandType(fn: DiagFunction): string {
@@ -31,124 +32,290 @@ function debugCommandType(fn: DiagFunction): string {
   return "vraforge_diag_read";
 }
 
-/** TX header for a given ECU address (11-bit CAN, ISO 15765-4). Returns ELM SH argument. */
-function txHeader(ecuAddr?: string): string | null {
-  if (!ecuAddr) return null;
-  return ecuAddr.replace(/^0x/i, "").toUpperCase();
+function normalizeHeader(value?: string | null): string | null {
+  if (!value) return null;
+  const clean = value.replace(/^0x/i, "").replace(/\s+/g, "").toUpperCase();
+  if (!/^[0-9A-F]{3,8}$/.test(clean)) return null;
+  return clean;
 }
 
-/** RX header — for 7Ex ECUs it's TX+8, otherwise same address. */
-function rxHeader(ecuAddr?: string): string | null {
-  const tx = txHeader(ecuAddr);
-  if (!tx) return null;
-  const n = parseInt(tx, 16);
-  if (Number.isFinite(n) && tx.length === 3 && tx.startsWith("7E") && n < 0x7E8) {
+function rxHeaderFromTx(tx?: string | null): string | null {
+  const cleanTx = normalizeHeader(tx);
+  if (!cleanTx) return null;
+
+  const n = parseInt(cleanTx, 16);
+
+  if (
+    Number.isFinite(n) &&
+    cleanTx.length === 3 &&
+    cleanTx.startsWith("7E") &&
+    n >= 0x7E0 &&
+    n <= 0x7E7
+  ) {
     return (n + 8).toString(16).toUpperCase().padStart(3, "0");
   }
-  return tx;
+
+  return cleanTx;
 }
 
-/**
- * Prepare ELM for an OEM DID / routine — set headers and extended session.
- */
-async function ensureSessionFor(fn: DiagFunction, ctx: RunContext): Promise<string[]> {
-  const warnings: string[] = [];
+function isOemFunction(fn: DiagFunction): boolean {
+  return fn.isOem || fn.kind === "did" || fn.kind === "routine" || fn.kind === "actuator_test";
+}
 
-  // Priority: manual TX/RX > selected ECU > fn.ecuAddress
-  const effectiveTxRaw = ctx.activeContext?.manualTx || ctx.activeContext?.ecuAddress || fn.ecuAddress;
-  const effectiveRxRaw = ctx.activeContext?.manualRx || ctx.activeContext?.responseHeader;
-  const tx = txHeader(effectiveTxRaw);
-  const rx = effectiveRxRaw ? txHeader(effectiveRxRaw) : rxHeader(effectiveTxRaw);
+function requiresEcu(fn: DiagFunction): boolean {
+  return fn.kind === "did" || fn.kind === "routine" || fn.kind === "actuator_test";
+}
+
+function requiresServiceMode(fn: DiagFunction): boolean {
+  return fn.kind === "routine" || fn.kind === "actuator_test" || !!fn.destructive;
+}
+
+function commandStartsWithRoutine31(fn: DiagFunction): boolean {
+  return fn.command.replace(/\s+/g, "").toUpperCase().startsWith("3101");
+}
+
+function getEffectiveTxRx(fn: DiagFunction, activeContext?: ActiveDiagContext | null) {
+  const manualTx = normalizeHeader(activeContext?.manualTx);
+  const manualRx = normalizeHeader(activeContext?.manualRx);
+
+  const contextTx = normalizeHeader(activeContext?.ecuAddress);
+  const contextRx = normalizeHeader(activeContext?.responseHeader);
+
+  const fnTx = normalizeHeader(fn.ecuAddress);
+
+  const tx = manualTx || contextTx || fnTx;
+  const rx = manualRx || contextRx || rxHeaderFromTx(tx);
+
+  return { tx, rx };
+}
+
+function makeBlockedResult(
+  fn: DiagFunction,
+  error: string,
+  warnings: string[],
+): DiagRunResult {
+  return {
+    fn,
+    command: fn.command,
+    rawResponse: "",
+    cleanedResponse: "",
+    status: "error",
+    decoded: [],
+    warnings,
+    error,
+    durationMs: 0,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function logBlocked(fn: DiagFunction, res: DiagRunResult, ctx: RunContext, reason: string) {
+  logObdDebugEvent({
+    commandType: "vraforge_diag_error",
+    command: fn.command,
+    status: "error",
+    error: res.error,
+    warnings: res.warnings,
+    userId: ctx.userId ?? null,
+    vehicleId: ctx.vehicleId ?? null,
+    metadata: {
+      source: "Delphi-OBD",
+      module: "VraForge Diag",
+      reason,
+      sourceFile: fn.sourceFile,
+      originalName: fn.originalName,
+      brand: fn.brandKey,
+      ecu: fn.ecu,
+      ecuAddress: ctx.activeContext?.ecuAddress || fn.ecuAddress || null,
+      kind: fn.kind,
+      category: fn.category,
+    },
+  });
+}
+
+async function prepareElmForFunction(fn: DiagFunction, ctx: RunContext): Promise<{
+  warnings: string[];
+  tx: string | null;
+  rx: string | null;
+}> {
+  const warnings: string[] = [];
+  const { tx, rx } = getEffectiveTxRx(fn, ctx.activeContext);
 
   if (tx) {
-    const setHdr = await elmQueue.send(`AT SH ${tx}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
-    if (setHdr.status !== "ok") warnings.push(`ATSH ${tx} → ${setHdr.status}`);
+    const setHdr = await elmQueue.send(`AT SH ${tx}`, {
+      commandType: "vraforge_diag_init",
+      timeoutMs: 1200,
+    });
+
+    if (setHdr.status !== "ok") {
+      warnings.push(`AT SH ${tx} → ${setHdr.status}`);
+    }
   }
+
   if (rx) {
-    const setCra = await elmQueue.send(`AT CRA ${rx}`, { commandType: "vraforge_diag_init", timeoutMs: 1200 });
-    if (setCra.status !== "ok") warnings.push(`ATCRA ${rx} → ${setCra.status}`);
+    const setCra = await elmQueue.send(`AT CRA ${rx}`, {
+      commandType: "vraforge_diag_init",
+      timeoutMs: 1200,
+    });
+
+    if (setCra.status !== "ok") {
+      warnings.push(`AT CRA ${rx} → ${setCra.status}`);
+    }
   }
 
-  // Extended session — required for most 22 / 31 reads. NEVER for raw/dtc/live_pid/obd2_pid.
-  if (fn.isOem && (fn.kind === "did" || fn.kind === "routine" || fn.kind === "actuator_test")) {
-    const session = await elmQueue.send("10 03", { commandType: "vraforge_diag_init", timeoutMs: 2500 });
-    if (session.status !== "ok") warnings.push(`10 03 → ${session.status}`);
+  /**
+   * DŮLEŽITÉ:
+   * RAW nikdy neotvírá session.
+   * DTC nikdy neotvírá session.
+   * OBD2 PID nikdy neotvírá session.
+   *
+   * Session necháváme jen pro rutiny / actuator testy.
+   * DID 22 může být často čitelný i bez session; když ECU odpoví NRC, uvidíme přesně proč.
+   */
+  if (fn.isOem && (fn.kind === "routine" || fn.kind === "actuator_test")) {
+    const session = await elmQueue.send("10 03", {
+      commandType: "vraforge_diag_init",
+      timeoutMs: 2500,
+    });
+
+    const cleaned = cleanResponse("10 03", session.raw);
+
+    if (session.status !== "ok" || cleaned.status !== "ok") {
+      warnings.push(`10 03 → ${session.status}; ${cleaned.cleanedHex || session.raw || "no response"}`);
+    }
   }
 
-  return warnings;
+  return { warnings, tx, rx };
 }
 
-export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): Promise<DiagRunResult> {
+export async function runDiagFunction(
+  fn: DiagFunction,
+  ctx: RunContext = {},
+): Promise<DiagRunResult> {
   const start = Date.now();
   const nrcCatalog = await loadUdsNrcCatalog().catch(() => undefined);
   const bleState = bleManager.getState();
 
+  const activeContext = ctx.activeContext ?? null;
+  const { tx, rx } = getEffectiveTxRx(fn, activeContext);
+
   if (bleState !== "connected") {
-    const res: DiagRunResult = {
-      fn, command: fn.command, rawResponse: "", cleanedResponse: "",
-      status: "error", decoded: [], warnings: [`BLE state=${bleState}`],
-      error: "BLE není připojeno", durationMs: 0, timestamp: new Date().toISOString(),
-    };
-    logObdDebugEvent({
-      commandType: "vraforge_diag_error",
-      command: fn.command, status: "error", error: res.error,
-      elmProfile: fn.isOem ? "debug" : "simple",
-      metadata: {
-        source: "Delphi-OBD", module: "VraForge Diag",
-        sourceFile: fn.sourceFile, originalName: fn.originalName,
-        brand: fn.brandKey, ecu: fn.ecu, category: fn.category,
-      },
-    });
+    const res = makeBlockedResult(fn, "BLE není připojeno", [`BLE state=${bleState}`]);
+    logBlocked(fn, res, ctx, "ble_not_connected");
     return res;
   }
 
-  // RAW without any TX context must NOT silently fire at the engine default header.
-  if (fn.kind === "raw") {
-    const anyTx = ctx.activeContext?.manualTx || ctx.activeContext?.ecuAddress || fn.ecuAddress;
-    if (!anyTx) {
-      const res: DiagRunResult = {
-        fn, command: fn.command, rawResponse: "", cleanedResponse: "",
-        status: "error", decoded: [],
-        warnings: ["RAW vyžaduje vybranou ECU nebo ruční TX/RX. Nespouštím na default engine adresu."],
-        error: "Chybí TX/RX kontext pro RAW příkaz",
-        durationMs: 0, timestamp: new Date().toISOString(),
-      };
-      logObdDebugEvent({
-        commandType: "vraforge_diag_error", command: fn.command, status: "error",
-        error: res.error, warnings: res.warnings,
-        metadata: { source: "Delphi-OBD", module: "VraForge Diag", reason: "raw_without_tx", brand: fn.brandKey },
-      });
+  /**
+   * HARD GUARD 1:
+   * Generic OBD-II nikdy nesmí spouštět OEM routine/actuator/DID.
+   */
+  if (!activeContext?.isOem && isOemFunction(fn) && fn.kind !== "dtc_scan" && fn.kind !== "raw") {
+    const res = makeBlockedResult(
+      fn,
+      "Generic OBD-II nesmí spouštět OEM funkce",
+      ["Vyber konkrétní značku a ECU. Generic OBD-II je jen pro standardní OBD funkce."],
+    );
+    logBlocked(fn, res, ctx, "generic_blocked_oem_function");
+    return res;
+  }
+
+  /**
+   * HARD GUARD 2:
+   * OEM DID/routine/actuator musí mít ECU/TX.
+   */
+  if (requiresEcu(fn) && !tx) {
+    const res = makeBlockedResult(
+      fn,
+      "Chybí ECU/TX kontext",
+      ["Vyber ECU nebo zadej ruční TX/RX. Command se nesmí tiše poslat na default engine adresu."],
+    );
+    logBlocked(fn, res, ctx, "missing_tx_for_oem_function");
+    return res;
+  }
+
+  /**
+   * HARD GUARD 3:
+   * RAW bez TX se nesmí poslat.
+   */
+  if (fn.kind === "raw" && !tx) {
+    const res = makeBlockedResult(
+      fn,
+      "Chybí TX/RX kontext pro RAW příkaz",
+      ["RAW vyžaduje vybranou ECU nebo ruční TX/RX. Nespouštím na default engine adresu."],
+    );
+    logBlocked(fn, res, ctx, "raw_without_tx");
+    return res;
+  }
+
+  /**
+   * HARD GUARD 4:
+   * Routine 31 / actuator / destructive funkce pouze v servisním režimu.
+   */
+  if (requiresServiceMode(fn) || commandStartsWithRoutine31(fn)) {
+    if (!ctx.serviceMode) {
+      const res = makeBlockedResult(
+        fn,
+        "Servisní režim není aktivní",
+        ["Routine/adaptace/actuator testy jsou blokované. Aktivuj Servisní režim textem SERVISNI REZIM."],
+      );
+      logBlocked(fn, res, ctx, "service_mode_required");
       return res;
     }
   }
 
   return elmQueue.runExclusive(async () => {
     const warnings: string[] = [];
+
     try {
       await applyElmProfile(fn.isOem ? "debug" : "simple");
-      warnings.push(...(await ensureSessionFor(fn, ctx)));
+
+      const prepared = await prepareElmForFunction(fn, ctx);
+      warnings.push(...prepared.warnings);
 
       const cmdResult = await elmQueue.send(fn.command, {
         commandType: debugCommandType(fn) as never,
-        timeoutMs: (fn.kind === "routine" || fn.kind === "actuator_test") ? 6000 : 4000,
+        timeoutMs: fn.kind === "routine" || fn.kind === "actuator_test" ? 6000 : 4000,
       });
 
       const cleaned = cleanResponse(fn.command, cmdResult.raw, nrcCatalog);
       warnings.push(...cleaned.warnings);
 
       let decoded: DecodedValue[] = [];
+
       if (cleaned.status === "ok") {
         if (fn.kind === "dtc_scan") {
           const codes = decodeDtcs(cleaned.bytes);
           decoded = codes.length
-            ? codes.map((c) => ({ name: c, value: c, unit: null, description: null }))
-            : [{ name: "no_dtc", value: "Žádné DTC", unit: null, description: null }];
+            ? codes.map((c) => ({
+                name: c,
+                value: c,
+                unit: null,
+                description: null,
+              }))
+            : [{
+                name: "no_dtc",
+                value: "Žádné DTC",
+                unit: null,
+                description: null,
+              }];
         } else {
           decoded = decodeValue(fn, cleaned.bytes);
         }
       }
 
-      const finalStatus = cmdResult.status === "ok" ? cleaned.status : cmdResult.status;
+      let finalStatus = cmdResult.status === "ok" ? cleaned.status : cmdResult.status;
+
+      /**
+       * HARD GUARD 5:
+       * Routine 31 je úspěch pouze při 71.
+       */
+      if (commandStartsWithRoutine31(fn)) {
+        const compact = cleaned.cleanedHex.replace(/\s+/g, "").toUpperCase();
+        if (!compact.startsWith("71")) {
+          finalStatus = cleaned.status === "nrc" ? "nrc" : "error";
+          warnings.push("RoutineControl 31 success requires positive response 71.");
+        }
+      }
+
       const result: DiagRunResult = {
         fn,
         command: fn.command,
@@ -158,7 +325,12 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
         decoded,
         warnings,
         nrc: cleaned.nrc,
-        error: cmdResult.status !== "ok" && cmdResult.status !== "no_data" ? cmdResult.raw : null,
+        error:
+          cmdResult.status !== "ok" && cmdResult.status !== "no_data"
+            ? cmdResult.raw
+            : finalStatus === "error"
+              ? "Command failed or response is not valid for this function"
+              : null,
         durationMs: Date.now() - start,
         timestamp: new Date().toISOString(),
       };
@@ -181,28 +353,57 @@ export async function runDiagFunction(fn: DiagFunction, ctx: RunContext = {}): P
           sourceFile: fn.sourceFile,
           originalName: fn.originalName,
           brand: fn.brandKey,
-          ecu: fn.ecu,
-          ecuAddress: ctx.activeContext?.ecuAddress || fn.ecuAddress,
+          brandLabel: fn.brandLabel,
+          kind: fn.kind,
+          ecu: activeContext?.ecuName || fn.ecu || null,
+          ecuAddress: activeContext?.ecuAddress || fn.ecuAddress || null,
+          tx,
+          rx,
+          manualTx: activeContext?.manualTx || null,
+          manualRx: activeContext?.manualRx || null,
           category: fn.category,
           nrc: cleaned.nrc ?? null,
           decoded: decoded as unknown,
+          serviceMode: !!ctx.serviceMode,
         },
       });
 
       return result;
     } catch (e) {
       const err = e as Error;
+
       const res: DiagRunResult = {
-        fn, command: fn.command, rawResponse: "", cleanedResponse: "",
-        status: "error", decoded: [], warnings, error: err.message || String(e),
-        durationMs: Date.now() - start, timestamp: new Date().toISOString(),
+        fn,
+        command: fn.command,
+        rawResponse: "",
+        cleanedResponse: "",
+        status: "error",
+        decoded: [],
+        warnings,
+        error: err.message || String(e),
+        durationMs: Date.now() - start,
+        timestamp: new Date().toISOString(),
       };
+
       logObdDebugEvent({
         commandType: "vraforge_diag_error",
-        command: fn.command, status: "error", error: res.error, warnings,
+        command: fn.command,
+        status: "error",
+        error: res.error,
+        warnings,
         durationMs: res.durationMs,
-        metadata: { source: "Delphi-OBD", module: "VraForge Diag", sourceFile: fn.sourceFile, originalName: fn.originalName, brand: fn.brandKey },
+        metadata: {
+          source: "Delphi-OBD",
+          module: "VraForge Diag",
+          sourceFile: fn.sourceFile,
+          originalName: fn.originalName,
+          brand: fn.brandKey,
+          kind: fn.kind,
+          tx,
+          rx,
+        },
       });
+
       return res;
     }
   });
@@ -215,12 +416,13 @@ export async function runRawCommand(
   ctx: RunContext = {},
 ): Promise<DiagRunResult> {
   const isOem = !!activeContext?.isOem;
+
   const fn: DiagFunction = {
     id: `raw:${command}`,
     brandKey: activeContext?.brandKey || "OBD2",
     brandLabel: activeContext?.brandLabel || "Raw",
     isOem,
-    ecuAddress: activeContext?.ecuAddress,
+    ecuAddress: activeContext?.ecuAddress || activeContext?.manualTx || undefined,
     ecu: activeContext?.ecuName,
     kind: "raw",
     name: `Raw: ${command}`,
@@ -228,18 +430,27 @@ export async function runRawCommand(
     sourceFile: "raw",
     originalName: command,
   };
+
   return runDiagFunction(fn, { ...ctx, activeContext });
 }
 
 export function buildJsonReport(res: DiagRunResult, ctx: RunContext = {}) {
+  const { tx, rx } = getEffectiveTxRx(res.fn, ctx.activeContext);
+
   return {
     source: "Delphi-OBD",
     module: "VraForge Diag",
     sourceFile: res.fn.sourceFile,
     originalName: res.fn.originalName,
     brand: res.fn.brandKey,
-    ecu: res.fn.ecu ?? null,
+    brandLabel: res.fn.brandLabel,
+    kind: res.fn.kind,
+    ecu: ctx.activeContext?.ecuName || res.fn.ecu || null,
     ecuAddress: ctx.activeContext?.ecuAddress || res.fn.ecuAddress || null,
+    tx,
+    rx,
+    manualTx: ctx.activeContext?.manualTx || null,
+    manualRx: ctx.activeContext?.manualRx || null,
     vin: ctx.vin ?? null,
     name: res.fn.name,
     command: res.command,
@@ -251,5 +462,6 @@ export function buildJsonReport(res: DiagRunResult, ctx: RunContext = {}) {
     nrc: res.nrc ?? null,
     durationMs: res.durationMs,
     timestamp: res.timestamp,
+    serviceMode: !!ctx.serviceMode,
   };
 }
