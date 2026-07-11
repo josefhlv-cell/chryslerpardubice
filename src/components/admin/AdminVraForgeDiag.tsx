@@ -1,492 +1,352 @@
-/**
- * AdminVraForgeDiag — Delphi-style hierarchical diagnostic console powered
- * by the vendored Delphi-OBD catalogs (46+ manufacturers).
- *
- * Workflow (matches Delphi DS):
- *   1. Brand   (OBD2 + all catalog manufacturers, auto-picked from VIN)
- *   2. System  (ECU — chosen from the brand's ECU list)
- *   3. Function (DID / Live PID / Routine / Actuator / DTC scan)
- *   4. Run     (executes via elmQueue → BLE → ELM327)
- *
- * Admin-only tool — not for customer view.
- */
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  Activity, AlertTriangle, Bluetooth, Car, ChevronRight, ClipboardList,
+  Gauge, Play, Search, Settings2, ShieldCheck, Wrench,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import { bleManager } from "@/lib/obd/ble-manager";
 import {
-  Play, Search, Copy, FileCode2, ChevronLeft, ChevronRight,
-  ShieldAlert, CircleDot, Scan,
-} from "lucide-react";
-import {
-  listBrands, loadBrandFunctions, findBrandForVin,
-  runDiagFunction, runRawCommand, buildJsonReport,
+  findBrandForVin, listBrands, loadBrandFunctions, runDiagFunction,
 } from "@/lib/obd/vraforge-diag";
 import type {
-  DiagFunction, DiagRunResult, BrandManifestEntry, ActiveDiagContext, FunctionKind,
+  ActiveDiagContext, BrandManifestEntry, DiagFunction, DiagRunResult, FunctionKind,
 } from "@/lib/obd/vraforge-diag";
-import { bleManager } from "@/lib/obd/ble-manager";
-import { getActiveElmProfile } from "@/lib/obd/adapter/elm-init";
 
-type LastAction = { time: string; command: string; name: string; status: string; durationMs: number };
-const PAGE_SIZE = 25;
+type EcuOption = { address: string; name: string; common?: string };
+type MainSection = "overview" | "faults" | "live" | "tests" | "service";
 
-const KIND_LABEL: Record<FunctionKind, string> = {
-  obd2_pid: "PID",
-  live_pid: "LIVE",
-  did: "DID",
-  routine: "RUT",
-  actuator_test: "AKT",
-  dtc_scan: "DTC",
-  raw: "RAW",
+const sectionKinds: Record<Exclude<MainSection, "overview">, FunctionKind[]> = {
+  faults: ["dtc_scan"],
+  live: ["live_pid", "obd2_pid", "did"],
+  tests: ["actuator_test"],
+  service: ["routine"],
 };
 
-const StatusPill = ({ ok, label }: { ok: boolean; label: string }) => (
-  <Badge className={ok ? "bg-green-600/20 text-green-400 border-green-600/40" : "bg-red-600/20 text-red-400 border-red-600/40"}>
-    <CircleDot className="w-3 h-3 mr-1" /> {label}
-  </Badge>
-);
+const sectionLabel: Record<MainSection, string> = {
+  overview: "Přehled",
+  faults: "Chybové kódy",
+  live: "Živá data",
+  tests: "Testy akčních členů",
+  service: "Servisní funkce",
+};
+
+function statusClass(status?: string) {
+  if (status === "ok") return "border-green-500/40 bg-green-500/10 text-green-400";
+  if (status === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-400";
+  return "border-red-500/40 bg-red-500/10 text-red-400";
+}
 
 export default function AdminVraForgeDiag() {
-  // ---------- Brand / VIN ----------
   const [brands, setBrands] = useState<BrandManifestEntry[]>([]);
-  const [brandKey, setBrandKey] = useState<string>("OBD2");
+  const [brandKey, setBrandKey] = useState("OBD2");
   const [vin, setVin] = useState("");
-  const [brandLoading, setBrandLoading] = useState(false);
-
-  // ---------- ECU + functions ----------
   const [functions, setFunctions] = useState<DiagFunction[]>([]);
-  const [ecuOptions, setEcuOptions] = useState<{ address: string; name: string; common?: string }[]>([]);
-  const [ecuAddress, setEcuAddress] = useState<string>("__all");
-  const [kindFilter, setKindFilter] = useState<string>("__all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("__all");
+  const [ecus, setEcus] = useState<EcuOption[]>([]);
+  const [ecuAddress, setEcuAddress] = useState("__all");
+  const [section, setSection] = useState<MainSection>("overview");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<DiagFunction | null>(null);
-
-  // ---------- Runner ----------
   const [result, setResult] = useState<DiagRunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [rawCmd, setRawCmd] = useState("");
-  const [manualTx, setManualTx] = useState("");
-  const [manualRx, setManualRx] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [history, setHistory] = useState<LastAction[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [bleState, setBleState] = useState(bleManager.getState());
 
-  useEffect(() => bleManager.subscribe((e) => { if (e.type === "stateChange") setBleState(e.payload); }), []);
+  useEffect(() => bleManager.subscribe((e) => {
+    if (e.type === "stateChange") setBleState(e.payload);
+  }), []);
 
-  // Load brand manifest once
   useEffect(() => {
     listBrands()
-      .then((bs) => setBrands(bs))
-      .catch((e) => toast({ title: "Chyba manifestu", description: String(e), variant: "destructive" }));
+      .then(setBrands)
+      .catch((e) => toast({ title: "Katalog se nepodařilo načíst", description: String(e), variant: "destructive" }));
   }, []);
 
-  // Load functions when brand changes
   useEffect(() => {
-    if (!brandKey) return;
     let cancelled = false;
-    setBrandLoading(true);
-    loadBrandFunctions(brandKey).then((r) => {
-      if (cancelled) return;
-      setFunctions(r.functions);
-      const uniq = new Map<string, { address: string; name: string; common?: string }>();
-      (r.catalog.ecus || []).forEach((e) => uniq.set(e.address, { address: e.address, name: e.name, common: e.common_name }));
-      setEcuOptions(Array.from(uniq.values()).sort((a, b) => a.name.localeCompare(b.name)));
-      setEcuAddress("__all");
-      setKindFilter("__all");
-      setCategoryFilter("__all");
-      setPage(1);
-      setSelected(null);
-    }).catch((e) => toast({ title: "Chyba katalogu", description: String(e), variant: "destructive" }))
-      .finally(() => !cancelled && setBrandLoading(false));
+    setLoadingCatalog(true);
+    loadBrandFunctions(brandKey)
+      .then((data) => {
+        if (cancelled) return;
+        setFunctions(data.functions);
+        const map = new Map<string, EcuOption>();
+        for (const ecu of data.catalog.ecus || []) {
+          map.set(ecu.address, { address: ecu.address, name: ecu.name, common: ecu.common_name });
+        }
+        setEcus(Array.from(map.values()).sort((a, b) => (a.common || a.name).localeCompare(b.common || b.name)));
+        setEcuAddress("__all");
+        setSelected(null);
+        setResult(null);
+        setSection("overview");
+      })
+      .catch((e) => toast({ title: "Chyba katalogu", description: String(e), variant: "destructive" }))
+      .finally(() => !cancelled && setLoadingCatalog(false));
     return () => { cancelled = true; };
   }, [brandKey]);
 
   const brand = useMemo(() => brands.find((b) => b.key === brandKey), [brands, brandKey]);
-  const activeContext: ActiveDiagContext | null = useMemo(() => {
+  const selectedEcu = useMemo(() => ecus.find((e) => e.address === ecuAddress), [ecus, ecuAddress]);
+
+  const context: ActiveDiagContext | null = useMemo(() => {
     if (!brand) return null;
-    const ecu = ecuAddress !== "__all" ? ecuOptions.find((e) => e.address === ecuAddress) : undefined;
     return {
       brandKey: brand.key,
       brandLabel: brand.display_name,
       isOem: brand.key !== "OBD2",
       vin: vin || null,
-      ecuAddress: ecu?.address,
-      ecuName: ecu?.name,
-      manualTx: manualTx.trim() || undefined,
-      manualRx: manualRx.trim() || undefined,
+      ecuAddress: selectedEcu?.address,
+      ecuName: selectedEcu?.common || selectedEcu?.name,
     };
-  }, [brand, ecuAddress, ecuOptions, vin, manualTx, manualRx]);
+  }, [brand, selectedEcu, vin]);
 
-  const decodeVin = async () => {
-    const b = await findBrandForVin(vin);
-    if (b) {
-      setBrandKey(b.key);
-      toast({ title: "Rozpoznáno z VIN", description: b.display_name });
-    } else {
-      toast({ title: "VIN nerozpoznán", description: "Značka nebyla dohledána v katalogu WMI.", variant: "destructive" });
-    }
-  };
-
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    functions.forEach((f) => {
-      if (ecuAddress !== "__all" && f.ecuAddress !== ecuAddress) return;
-      if (f.category) set.add(f.category);
-    });
-    return Array.from(set).sort();
-  }, [functions, ecuAddress]);
-
-  const filtered = useMemo(() => {
+  const visibleFunctions = useMemo(() => {
+    if (section === "overview") return [];
+    const kinds = sectionKinds[section];
     const q = search.trim().toLowerCase();
-    return functions.filter((f) => {
-      if (ecuAddress !== "__all" && f.ecuAddress !== ecuAddress && f.kind !== "dtc_scan") return false;
-      if (kindFilter !== "__all" && f.kind !== kindFilter) return false;
-      if (categoryFilter !== "__all" && f.category !== categoryFilter) return false;
+    return functions.filter((fn) => {
+      if (!kinds.includes(fn.kind)) return false;
+      if (ecuAddress !== "__all" && fn.ecuAddress !== ecuAddress && fn.kind !== "dtc_scan") return false;
       if (!q) return true;
-      return f.name.toLowerCase().includes(q)
-        || (f.description || "").toLowerCase().includes(q)
-        || f.command.toLowerCase().includes(q)
-        || (f.did || "").toLowerCase().includes(q)
-        || (f.routineId || "").toLowerCase().includes(q)
-        || (f.ecu || "").toLowerCase().includes(q);
+      return [fn.name, fn.description, fn.category, fn.ecuCommonName, fn.ecu]
+        .filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [functions, ecuAddress, kindFilter, categoryFilter, search]);
+  }, [functions, section, search, ecuAddress]);
 
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const bleOk = bleState === "connected";
-  const elmProfileLabel = getActiveElmProfile() ?? "—";
+  const counts = useMemo(() => ({
+    faults: functions.filter((f) => f.kind === "dtc_scan").length,
+    live: functions.filter((f) => ["live_pid", "obd2_pid", "did"].includes(f.kind)).length,
+    tests: functions.filter((f) => f.kind === "actuator_test").length,
+    service: functions.filter((f) => f.kind === "routine").length,
+  }), [functions]);
 
-  const run = async () => {
+  async function decodeVin() {
+    const found = await findBrandForVin(vin);
+    if (!found) {
+      toast({ title: "VIN nerozpoznán", description: "Vyber značku ručně.", variant: "destructive" });
+      return;
+    }
+    setBrandKey(found.key);
+    toast({ title: "Vozidlo rozpoznáno", description: found.display_name });
+  }
+
+  async function runSelected() {
     if (!selected) return;
     if (selected.destructive) {
-      const isEgr = /egr/i.test(selected.name);
-      const need = isEgr ? "SPUSTIT EGR" : "SPUSTIT";
-      if (confirm !== need) {
-        toast({ title: "Vyžadováno potvrzení", description: `Do pole napiš: ${need}`, variant: "destructive" });
-        return;
-      }
+      const ok = window.confirm(`Pozor: ${selected.safetyWarning || "Tato funkce může měnit stav vozidla."}\n\nOpravdu pokračovat?`);
+      if (!ok) return;
     }
     setRunning(true);
     try {
-      const r = await runDiagFunction(selected, { activeContext, vin: vin || null });
-      setResult(r);
-      setHistory((h) => [{ time: new Date().toLocaleTimeString(), command: r.command, name: selected.name, status: r.status, durationMs: r.durationMs }, ...h].slice(0, 15));
-    } finally {
-      setRunning(false);
-      setConfirm("");
-    }
-  };
-
-  const runRaw = async () => {
-    if (!rawCmd.trim()) return;
-    setRunning(true);
-    try {
-      const r = await runRawCommand(rawCmd.trim(), activeContext, { vin: vin || null });
-      setResult(r);
-      setHistory((h) => [{ time: new Date().toLocaleTimeString(), command: r.command, name: `RAW ${r.command}`, status: r.status, durationMs: r.durationMs }, ...h].slice(0, 15));
+      const output = await runDiagFunction(selected, { activeContext: context, vin: vin || null });
+      setResult(output);
+    } catch (e) {
+      toast({ title: "Funkci se nepodařilo spustit", description: String(e), variant: "destructive" });
     } finally {
       setRunning(false);
     }
-  };
+  }
 
-  const copy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => toast({ title: `${label} zkopírováno` }));
-  };
-
-  const jsonReport = result ? JSON.stringify(buildJsonReport(result, { activeContext, vin: vin || null }), null, 2) : "";
+  const menu = [
+    { key: "overview" as const, label: "Přehled jednotky", icon: Car },
+    { key: "faults" as const, label: "Chybové kódy", icon: AlertTriangle, count: counts.faults },
+    { key: "live" as const, label: "Živá data", icon: Gauge, count: counts.live },
+    { key: "tests" as const, label: "Testy akčních členů", icon: Activity, count: counts.tests },
+    { key: "service" as const, label: "Servisní funkce", icon: Wrench, count: counts.service },
+  ];
 
   return (
     <div className="space-y-4">
-      {/* Breadcrumb */}
-      <div className="text-xs text-muted-foreground flex items-center gap-1">
-        Admin <ChevronRight className="w-3 h-3" /> Diagnostika <ChevronRight className="w-3 h-3" />
-        <span className="text-foreground font-semibold">VraForge Diag</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Diagnostika vozidla</p>
+          <h1 className="text-2xl font-bold">Servisní diagnostika</h1>
+        </div>
+        <Badge variant="outline" className={bleState === "connected" ? "border-green-500/40 text-green-400" : "border-red-500/40 text-red-400"}>
+          <Bluetooth className="mr-1 h-3.5 w-3.5" />
+          {bleState === "connected" ? "Adaptér připojen" : "Adaptér odpojen"}
+        </Badge>
       </div>
 
-      {/* Status bar */}
-      <Card className="bg-secondary/20">
-        <CardContent className="p-4 grid grid-cols-2 md:grid-cols-6 gap-4 text-xs">
-          <div><p className="text-muted-foreground">Značka</p><p className="font-semibold">{brand?.display_name || "—"}</p></div>
-          <div><p className="text-muted-foreground">ECU</p><p className="font-semibold">{activeContext?.ecuName || "Všechny"}</p></div>
-          <div><p className="text-muted-foreground">TX / RX</p><p className="font-semibold font-mono">{(activeContext?.manualTx || activeContext?.ecuAddress || "AUTO").replace(/^0x/i,'').toUpperCase()}{activeContext?.manualRx ? ` / ${activeContext.manualRx.replace(/^0x/i,'').toUpperCase()}` : ""}</p></div>
-          <div><p className="text-muted-foreground">ELM profil</p><p className="font-semibold uppercase">{elmProfileLabel}</p></div>
-          <div><p className="text-muted-foreground">BLE</p><StatusPill ok={bleOk} label={bleOk ? "OK" : bleState} /></div>
-          <div className="flex items-center gap-2 justify-end">
-            <Badge variant="outline"><ShieldAlert className="w-3 h-3 mr-1"/> Admin only</Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Delphi-style Vehicle Identification */}
       <Card>
-        <CardContent className="p-4 space-y-3">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">1. Identifikace vozidla</p>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 items-end">
-            <div>
-              <Label className="text-xs">VIN (volitelné — auto výběr značky)</Label>
-              <div className="flex gap-2">
-                <Input value={vin} maxLength={17}
-                  onChange={(e) => setVin(e.target.value.toUpperCase())}
-                  placeholder="např. WVWZZZ1KZ8W123456"
-                  className="font-mono text-xs" />
-                <Button size="sm" variant="outline" onClick={decodeVin} disabled={vin.length < 3}>
-                  <Scan className="w-3.5 h-3.5 mr-1" /> Dekódovat
-                </Button>
-              </div>
-            </div>
-            <div className="hidden md:block text-center text-muted-foreground text-xs pb-2">nebo</div>
-            <div>
-              <Label className="text-xs">Značka / výrobce ({brands.length})</Label>
-              <Select value={brandKey} onValueChange={setBrandKey}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-[400px]">
-                  {brands.map((b) => (
-                    <SelectItem key={b.key} value={b.key}>
-                      {b.display_name} <span className="text-[10px] text-muted-foreground ml-2">({b.ecus || 0} ECU · {b.dids || 0} DID · {b.routines || 0} rutin)</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+        <CardContent className="grid gap-4 p-4 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
+          <div>
+            <Label>VIN vozidla</Label>
+            <Input value={vin} maxLength={17} onChange={(e) => setVin(e.target.value.toUpperCase())} placeholder="17 znaků VIN" className="mt-1 font-mono" />
           </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4">
-        {/* Left: catalog browser */}
-        <Card>
-          <CardContent className="p-3 space-y-3">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">2. Systém (ECU)</p>
-            <Select value={ecuAddress} onValueChange={setEcuAddress}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+          <div>
+            <Label>Značka</Label>
+            <Select value={brandKey} onValueChange={setBrandKey}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent className="max-h-[380px]">
-                <SelectItem value="__all">Všechny systémy</SelectItem>
-                {ecuOptions.map((e) => (
-                  <SelectItem key={e.address} value={e.address}>
-                    <span className="font-mono text-[10px] mr-2">{e.address.replace(/^0x/i,'').toUpperCase()}</span>
-                    {e.common || e.name}
-                  </SelectItem>
-                ))}
+                {brands.map((b) => <SelectItem key={b.key} value={b.key}>{b.display_name}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label>Řídicí jednotka</Label>
+            <Select value={ecuAddress} onValueChange={(v) => { setEcuAddress(v); setSelected(null); setResult(null); }}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-h-[380px]">
+                <SelectItem value="__all">Celé vozidlo / všechny jednotky</SelectItem>
+                {ecus.map((ecu) => <SelectItem key={ecu.address} value={ecu.address}>{ecu.common || ecu.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={decodeVin} disabled={vin.length < 3}>Rozpoznat VIN</Button>
+        </CardContent>
+      </Card>
 
-            <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">3. Funkce</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={kindFilter} onValueChange={setKindFilter}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all">Všechny typy</SelectItem>
-                  <SelectItem value="live_pid">Live data</SelectItem>
-                  <SelectItem value="did">Čtení DID</SelectItem>
-                  <SelectItem value="obd2_pid">OBD-II PID</SelectItem>
-                  <SelectItem value="dtc_scan">DTC sken</SelectItem>
-                  <SelectItem value="routine">Servisní rutina</SelectItem>
-                  <SelectItem value="actuator_test">Aktuátor test</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  <SelectItem value="__all">Všechny kategorie</SelectItem>
-                  {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+      <div className="grid gap-4 lg:grid-cols-[290px_1fr]">
+        <Card className="h-fit">
+          <CardContent className="p-2">
+            <div className="mb-2 rounded-lg bg-secondary/40 p-3">
+              <p className="text-xs text-muted-foreground">Aktivní vozidlo</p>
+              <p className="font-semibold">{brand?.display_name || "Bez výběru"}</p>
+              <p className="text-sm text-muted-foreground">{selectedEcu?.common || selectedEcu?.name || "Všechny systémy"}</p>
             </div>
-
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
-              <Input placeholder="Hledat funkci / PID / DID / rutinu…"
-                className="pl-7 text-xs" value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-            </div>
-
-            <div className="text-xs text-muted-foreground pt-1">
-              {filtered.length} funkcí · zdroj: {brand?.file || "—"}
-            </div>
-
-            <div className="border border-border/40 rounded-md divide-y divide-border/30 max-h-[520px] overflow-y-auto">
-              {brandLoading && <div className="p-3 text-xs text-muted-foreground">Načítám katalog…</div>}
-              {!brandLoading && paged.map((f) => (
-                <button key={f.id} onClick={() => setSelected(f)}
-                  className={`w-full text-left px-3 py-2 text-xs hover:bg-secondary/40 ${selected?.id === f.id ? "bg-primary/10" : ""}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium truncate">{f.name}</span>
-                    <Badge variant="outline" className="text-[9px] uppercase">{KIND_LABEL[f.kind]}</Badge>
-                  </div>
-                  <div className="text-[10px] text-muted-foreground font-mono flex justify-between">
-                    <span>{f.command}</span>
-                    <span>{f.ecu || (f.ecuAddress || "—")}</span>
-                  </div>
-                </button>
-              ))}
-              {!brandLoading && paged.length === 0 && <div className="p-3 text-xs text-muted-foreground">Nic nenalezeno</div>}
-            </div>
-
-            <div className="flex items-center justify-between text-xs">
-              <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronLeft className="w-3 h-3"/></Button>
-              <span>Strana {page} / {totalPages}</span>
-              <Button size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}><ChevronRight className="w-3 h-3"/></Button>
+            <nav className="space-y-1">
+              {menu.map((item) => {
+                const Icon = item.icon;
+                const active = item.key === section;
+                return (
+                  <button key={item.key} onClick={() => { setSection(item.key); setSelected(null); setResult(null); }}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition ${active ? "bg-primary text-primary-foreground" : "hover:bg-secondary/70"}`}>
+                    <Icon className="h-4 w-4" />
+                    <span className="flex-1">{item.label}</span>
+                    {typeof item.count === "number" && <span className="text-xs opacity-70">{item.count}</span>}
+                    <ChevronRight className="h-4 w-4 opacity-60" />
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="mt-3 border-t pt-3">
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                <Settings2 className="h-4 w-4" /> RAW/PID/DID jsou schované z běžného pohledu
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Right: selected + result */}
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-xs text-muted-foreground">4. Vybraná funkce</p>
-              {!selected && <p className="text-sm text-muted-foreground mt-2">Vyber funkci z katalogu vlevo.</p>}
-              {selected && (
-                <div className="mt-2 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-lg font-semibold">{selected.name}</h3>
-                      <Badge variant="outline" className="font-mono text-xs">{selected.command}</Badge>
-                      <Badge variant="outline" className="text-[10px] uppercase">{KIND_LABEL[selected.kind]}</Badge>
-                      {selected.destructive && <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/40">DESTRUCTIVE</Badge>}
-                    </div>
-                    {selected.safetyWarning && (
-                      <p className="text-xs text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded p-2">
-                        ⚠ {selected.safetyWarning}
-                      </p>
-                    )}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                      <div><span className="text-muted-foreground">Zdroj:</span> {selected.sourceFile}</div>
-                      <div><span className="text-muted-foreground">Kategorie:</span> {selected.category || "—"}</div>
-                      <div><span className="text-muted-foreground">Popis:</span> {selected.description || "—"}</div>
-                      <div><span className="text-muted-foreground">ECU:</span> {selected.ecuCommonName || selected.ecu || selected.ecuAddress || "—"}</div>
-                      <div><span className="text-muted-foreground">TX:</span> <span className="font-mono">{(selected.ecuAddress || "").replace(/^0x/i,'').toUpperCase() || "AUTO"}</span></div>
-                      <div><span className="text-muted-foreground">Dekodér:</span> {selected.decoder?.kind || "—"}</div>
-                    </div>
-                    {selected.destructive && (
-                      <div className="pt-2">
-                        <Label className="text-xs">Napiš potvrzení: {/egr/i.test(selected.name) ? "SPUSTIT EGR" : "SPUSTIT"}</Label>
-                        <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} className="mt-1 text-xs" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex md:flex-col gap-2">
-                    <Button onClick={run} disabled={running || !bleOk} className="min-w-[120px]">
-                      <Play className="w-4 h-4 mr-1"/> {running ? "Běží…" : "Spustit"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Raw command */}
-          <Card>
-            <CardContent className="p-4 space-y-2">
-              <p className="text-xs font-semibold flex items-center gap-2"><FileCode2 className="w-3.5 h-3.5"/> Raw příkaz</p>
-              <div className="grid grid-cols-2 gap-2">
+        <Card>
+          <CardContent className="p-4">
+            {section === "overview" ? (
+              <div className="space-y-4">
                 <div>
-                  <Label className="text-[10px]">Ruční TX (např. 7E0)</Label>
-                  <Input value={manualTx} onChange={(e) => setManualTx(e.target.value.toUpperCase())} placeholder="AUTO / 7E0 / 18DA10F1" className="font-mono text-xs h-8" />
+                  <h2 className="text-xl font-semibold">Přehled diagnostiky</h2>
+                  <p className="text-sm text-muted-foreground">Vyber vlevo, co chceš na vozidle provést.</p>
                 </div>
-                <div>
-                  <Label className="text-[10px]">Ruční RX (např. 7E8)</Label>
-                  <Input value={manualRx} onChange={(e) => setManualRx(e.target.value.toUpperCase())} placeholder="AUTO / 7E8" className="font-mono text-xs h-8" />
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {menu.slice(1).map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button key={item.key} onClick={() => setSection(item.key)} className="rounded-xl border p-4 text-left transition hover:bg-secondary/50">
+                        <Icon className="mb-3 h-6 w-6" />
+                        <p className="font-semibold">{item.label}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Dostupných funkcí: {item.count}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rounded-xl border bg-secondary/20 p-4 text-sm">
+                  <div className="flex items-center gap-2 font-semibold"><ShieldCheck className="h-4 w-4" /> Bezpečný servisní režim</div>
+                  <p className="mt-1 text-muted-foreground">Technické příkazy, adresy TX/RX a HEX hodnoty se zobrazují až uvnitř detailu výsledku.</p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Input value={rawCmd} onChange={(e) => setRawCmd(e.target.value)} placeholder="např. 22 F1 90"
-                  className="font-mono text-xs" />
-                <Button onClick={runRaw} disabled={running || !bleOk || !rawCmd.trim()}><Play className="w-3.5 h-3.5 mr-1"/> Poslat</Button>
-              </div>
-              <p className="text-[10px] text-muted-foreground">
-                Priorita TX/RX: Ruční → Vybraná ECU. Bez TX kontextu RAW <b>neodešle</b> (neposílá na engine default). Neaktivuje 10 03.
-              </p>
-            </CardContent>
-          </Card>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold">{sectionLabel[section]}</h2>
+                    <p className="text-sm text-muted-foreground">{selectedEcu?.common || selectedEcu?.name || "Všechny řídicí jednotky"}</p>
+                  </div>
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Hledat funkci…" className="pl-9" />
+                  </div>
+                </div>
 
-          {/* Result */}
-          <Card>
-            <CardContent className="p-4">
-              <Tabs defaultValue="result">
-                <TabsList>
-                  <TabsTrigger value="result">Výsledek</TabsTrigger>
-                  <TabsTrigger value="raw">Raw</TabsTrigger>
-                  <TabsTrigger value="clean">Cleaned</TabsTrigger>
-                  <TabsTrigger value="decoded">Decoded</TabsTrigger>
-                  <TabsTrigger value="json">JSON</TabsTrigger>
-                  <TabsTrigger value="log">Log</TabsTrigger>
-                  <TabsTrigger value="hist">Historie</TabsTrigger>
-                </TabsList>
+                {loadingCatalog ? <p className="py-12 text-center text-muted-foreground">Načítám katalog…</p> : (
+                  <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+                    <div className="max-h-[620px] space-y-2 overflow-auto pr-1">
+                      {visibleFunctions.length === 0 && <p className="rounded-xl border p-8 text-center text-muted-foreground">Pro tento výběr nejsou dostupné žádné funkce.</p>}
+                      {visibleFunctions.map((fn) => (
+                        <button key={fn.id} onClick={() => { setSelected(fn); setResult(null); }}
+                          className={`w-full rounded-xl border p-4 text-left transition ${selected?.id === fn.id ? "border-primary bg-primary/10" : "hover:bg-secondary/40"}`}>
+                          <div className="flex items-start gap-3">
+                            <ClipboardList className="mt-0.5 h-5 w-5 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-semibold">{fn.name}</p>
+                                {fn.destructive && <Badge variant="destructive">Pozor</Badge>}
+                              </div>
+                              <p className="mt-1 text-sm text-muted-foreground">{fn.description || fn.category || "Diagnostická funkce"}</p>
+                              <p className="mt-2 text-xs text-muted-foreground">{fn.ecuCommonName || fn.ecu || "Obecná OBD-II funkce"}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
 
-                <TabsContent value="result">
-                  {!result && <p className="text-xs text-muted-foreground p-2">Zatím žádný výsledek.</p>}
-                  {result && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs p-2">
-                      <div><p className="text-muted-foreground">Status</p><p className={`font-semibold ${result.status === "ok" ? "text-green-500" : result.status === "nrc" ? "text-red-500" : "text-amber-500"}`}>{result.status}</p></div>
-                      <div><p className="text-muted-foreground">Doba odezvy</p><p className="font-semibold">{result.durationMs} ms</p></div>
-                      <div><p className="text-muted-foreground">Datum / čas</p><p className="font-semibold">{new Date(result.timestamp).toLocaleString()}</p></div>
-                      <div><p className="text-muted-foreground">Varování</p><p className="font-semibold">{result.warnings.length || "—"}</p></div>
-                      {result.nrc && (
-                        <div className="col-span-full text-red-400">
-                          <p className="text-muted-foreground">NRC</p>
-                          <p className="font-mono">7F {result.nrc.sid} {result.nrc.code} — {result.nrc.description || "?"}</p>
+                    <div className="rounded-xl border bg-secondary/20 p-4">
+                      {!selected ? (
+                        <div className="py-10 text-center text-muted-foreground">Vyber funkci ze seznamu.</div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div>
+                            <p className="text-xs uppercase text-muted-foreground">Vybraná funkce</p>
+                            <h3 className="mt-1 text-lg font-semibold">{selected.name}</h3>
+                            <p className="mt-1 text-sm text-muted-foreground">{selected.description}</p>
+                          </div>
+                          {selected.safetyWarning && <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-300">{selected.safetyWarning}</div>}
+                          <Button className="w-full" onClick={runSelected} disabled={running || bleState !== "connected"}>
+                            <Play className="mr-2 h-4 w-4" /> {running ? "Provádím…" : "Spustit funkci"}
+                          </Button>
+                          {bleState !== "connected" && <p className="text-center text-xs text-red-400">Nejdřív připoj OBD adaptér.</p>}
+
+                          {result && (
+                            <div className="space-y-3 border-t pt-4">
+                              <Badge variant="outline" className={statusClass(result.status)}>{result.status.toUpperCase()}</Badge>
+                              {result.decoded.length > 0 && (
+                                <div className="space-y-2">
+                                  {result.decoded.map((value, index) => (
+                                    <div key={`${value.name}-${index}`} className="flex items-center justify-between rounded-lg bg-background/70 p-3 text-sm">
+                                      <span className="text-muted-foreground">{value.name}</span>
+                                      <strong>{String(value.value ?? "—")} {value.unit || ""}</strong>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {result.error && <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{result.error}</div>}
+                              <Tabs defaultValue="result">
+                                <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger value="result">Výsledek</TabsTrigger>
+                                  <TabsTrigger value="technical">Technické</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="result" className="text-sm text-muted-foreground">
+                                  Doba odezvy: {result.durationMs} ms
+                                </TabsContent>
+                                <TabsContent value="technical" className="space-y-2 text-xs">
+                                  <p><span className="text-muted-foreground">Příkaz:</span> <code>{result.command}</code></p>
+                                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3">{result.rawResponse || "Bez odpovědi"}</pre>
+                                </TabsContent>
+                              </Tabs>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </TabsContent>
-                <TabsContent value="raw"><pre className="p-3 bg-secondary/30 text-xs font-mono whitespace-pre-wrap min-h-[80px] rounded">{result?.rawResponse || "—"}</pre></TabsContent>
-                <TabsContent value="clean"><pre className="p-3 bg-secondary/30 text-xs font-mono min-h-[80px] rounded">{result?.cleanedResponse || "—"}</pre></TabsContent>
-                <TabsContent value="decoded">
-                  <div className="p-2 text-xs">
-                    {!result?.decoded.length && "—"}
-                    {result?.decoded.map((d, i) => (
-                      <div key={i} className="grid grid-cols-4 gap-2 py-1 border-b border-border/20">
-                        <span>{d.name}</span>
-                        <span className="font-semibold">{String(d.value)}</span>
-                        <span className="text-muted-foreground">{d.unit || ""}</span>
-                        <span className="text-muted-foreground">{d.description || ""}</span>
-                      </div>
-                    ))}
                   </div>
-                </TabsContent>
-                <TabsContent value="json"><Textarea readOnly value={jsonReport} className="font-mono text-[10px] min-h-[240px]" /></TabsContent>
-                <TabsContent value="log">
-                  <ul className="text-xs space-y-1 p-2">
-                    {result?.warnings.map((w, i) => <li key={i} className="text-amber-500">⚠ {w}</li>)}
-                    {result?.error && <li className="text-red-500">✖ {result.error}</li>}
-                    {!result && <li className="text-muted-foreground">—</li>}
-                  </ul>
-                </TabsContent>
-                <TabsContent value="hist">
-                  <ul className="text-xs space-y-1 p-2 font-mono">
-                    {history.map((h, i) => (
-                      <li key={i} className="flex justify-between gap-2 border-b border-border/20 py-1">
-                        <span className="text-muted-foreground">{h.time}</span>
-                        <span className="truncate flex-1">{h.name}</span>
-                        <span>{h.command}</span>
-                        <span className={h.status === "ok" ? "text-green-500" : "text-amber-500"}>{h.status}</span>
-                        <span className="text-muted-foreground">{h.durationMs}ms</span>
-                      </li>
-                    ))}
-                    {!history.length && <li className="text-muted-foreground">—</li>}
-                  </ul>
-                </TabsContent>
-              </Tabs>
-
-              <div className="flex flex-wrap gap-2 pt-3 border-t border-border/30 mt-3">
-                <Button variant="outline" size="sm" disabled={!result} onClick={() => copy(result?.cleanedResponse || "", "Výsledek")}><Copy className="w-3.5 h-3.5 mr-1"/> Kopírovat výsledek</Button>
-                <Button variant="outline" size="sm" disabled={!result} onClick={() => copy(jsonReport, "JSON")}><Copy className="w-3.5 h-3.5 mr-1"/> Kopírovat JSON</Button>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
