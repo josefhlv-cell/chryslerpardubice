@@ -218,7 +218,7 @@ export default function AdminVraForgeDiag() {
         <CardContent className="p-4 grid grid-cols-2 md:grid-cols-6 gap-4 text-xs">
           <div><p className="text-muted-foreground">Značka</p><p className="font-semibold">{brand?.display_name || "—"}</p></div>
           <div><p className="text-muted-foreground">ECU</p><p className="font-semibold">{activeContext?.ecuName || "Všechny"}</p></div>
-          <div><p className="text-muted-foreground">TX / RX</p><p className="font-semibold font-mono">{activeContext?.ecuAddress ? `${activeContext.ecuAddress.replace(/^0x/i,'').toUpperCase()}` : "AUTO"}</p></div>
+          <div><p className="text-muted-foreground">TX / RX</p><p className="font-semibold font-mono">{(activeContext?.manualTx || activeContext?.ecuAddress || "AUTO").replace(/^0x/i,'').toUpperCase()}{activeContext?.manualRx ? ` / ${activeContext.manualRx.replace(/^0x/i,'').toUpperCase()}` : ""}</p></div>
           <div><p className="text-muted-foreground">ELM profil</p><p className="font-semibold uppercase">{elmProfileLabel}</p></div>
           <div><p className="text-muted-foreground">BLE</p><StatusPill ok={bleOk} label={bleOk ? "OK" : bleState} /></div>
           <div className="flex items-center gap-2 justify-end">
