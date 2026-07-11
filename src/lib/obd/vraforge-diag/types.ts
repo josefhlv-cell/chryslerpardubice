@@ -141,7 +141,9 @@ export interface ActiveDiagContext {
   brandLabel: string;
   isOem: boolean;
   vin?: string | null;
-  ecuAddress?: string;   // TX header
+  ecuAddress?: string;      // TX header from ECU selection
   ecuName?: string;
-  responseHeader?: string; // RX header (usually TX+8 for 7Ex range)
+  responseHeader?: string;  // RX header
+  manualTx?: string;        // admin-typed TX (overrides ecuAddress)
+  manualRx?: string;        // admin-typed RX (overrides responseHeader)
 }
