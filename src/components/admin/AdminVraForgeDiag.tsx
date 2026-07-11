@@ -74,6 +74,8 @@ export default function AdminVraForgeDiag() {
   const [result, setResult] = useState<DiagRunResult | null>(null);
   const [running, setRunning] = useState(false);
   const [rawCmd, setRawCmd] = useState("");
+  const [manualTx, setManualTx] = useState("");
+  const [manualRx, setManualRx] = useState("");
   const [confirm, setConfirm] = useState("");
   const [history, setHistory] = useState<LastAction[]>([]);
   const [bleState, setBleState] = useState(bleManager.getState());
