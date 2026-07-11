@@ -121,8 +121,10 @@ export default function AdminVraForgeDiag() {
       vin: vin || null,
       ecuAddress: ecu?.address,
       ecuName: ecu?.name,
+      manualTx: manualTx.trim() || undefined,
+      manualRx: manualRx.trim() || undefined,
     };
-  }, [brand, ecuAddress, ecuOptions, vin]);
+  }, [brand, ecuAddress, ecuOptions, vin, manualTx, manualRx]);
 
   const decodeVin = async () => {
     const b = await findBrandForVin(vin);
