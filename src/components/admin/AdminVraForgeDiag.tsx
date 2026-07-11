@@ -33,6 +33,7 @@ import {
   listBrands,
   loadBrandFunctions,
   runDiagFunction,
+  COMMON_VEHICLE_MAKES,
   uniqueSorted,
   VEHICLE_PROFILES,
 } from "@/lib/obd/vraforge-diag";
@@ -158,7 +159,7 @@ export default function AdminVraForgeDiag() {
   }, [brandKey]);
 
   const makes = useMemo(
-    () => uniqueSorted(VEHICLE_PROFILES.map((item) => item.make)),
+    () => uniqueSorted([...COMMON_VEHICLE_MAKES, ...VEHICLE_PROFILES.map((item) => item.make)]),
     [],
   );
 
