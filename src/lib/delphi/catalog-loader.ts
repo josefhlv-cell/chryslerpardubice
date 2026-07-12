@@ -1,5 +1,5 @@
 /**
- * Loads Delphi-OBD catalog JSON files from /vraforge-diag/catalogs/ and
+ * Loads Delphi-OBD catalog JSON files from /delphi/catalogs/ and
  * expands them into flat DiagFunction[] entries used by the VraForge Diag UI.
  *
  * Uses manifest.json to discover the full brand list (46+ manufacturers).
@@ -11,7 +11,7 @@ import type {
   UdsNrcCatalog, CatalogManifest, BrandManifestEntry,
 } from "./types";
 
-const BASE = "/vraforge-diag/catalogs";
+const BASE = "/delphi/catalogs";
 
 const jsonCache = new Map<string, unknown>();
 
