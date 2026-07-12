@@ -122,6 +122,7 @@ const App = () => (
                     <Route path="/my-service-orders" element={<MyServiceOrders />} />
                     <Route path="/my-tow-requests" element={<MyTowRequests />} />
                     <Route path="/obd" element={<OBDDiagnostics />} />
+                    <Route path="/delphi" element={<DelphiPage />} />
                     <Route path="/presentation" element={<AppPresentation />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/complete-profile" element={<CompleteProfile />} />
