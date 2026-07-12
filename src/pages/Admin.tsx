@@ -603,6 +603,7 @@ const Admin = () => {
       case "diag-remote": return <Suspense fallback={<Loader />}><AdminRemoteOBD /></Suspense>;
       case "diag-obd-debug": return <Suspense fallback={<Loader />}><AdminObdDebug /></Suspense>;
       case "diag-vraforge": return <Suspense fallback={<Loader />}><AdminVraForgeDiag /></Suspense>;
+      case "diag-delphi": return <Suspense fallback={<Loader />}><AdminDelphi /></Suspense>;
       case "diag-dtc": return <Suspense fallback={<Loader />}><AdminDTCLibrary /></Suspense>;
       case "diag-tsb": return <Suspense fallback={<Loader />}><AdminTSBs /></Suspense>;
       case "diag-pdf": return <Suspense fallback={<Loader />}><AdminDiagPDFs /></Suspense>;
