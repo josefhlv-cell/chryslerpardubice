@@ -88,6 +88,7 @@ const AdminRemoteOBD = lazy(() => import("@/components/admin/AdminRemoteOBD"));
 const AdminChdpDiag = lazy(() => import("@/components/admin/AdminChdpDiag"));
 const AdminObdDebug = lazy(() => import("@/components/admin/AdminObdDebug"));
 const AdminVraForgeDiag = lazy(() => import("@/components/admin/AdminVraForgeDiag"));
+const AdminDelphi = lazy(() => import("@/components/admin/AdminDelphi"));
 const AdminDTCLibrary = lazy(() => import("@/components/admin/AdminDTCLibrary"));
 const AdminTSBs = lazy(() => import("@/components/admin/AdminTSBs"));
 const AdminDiagPDFs = lazy(() => import("@/components/admin/AdminDiagPDFs"));
