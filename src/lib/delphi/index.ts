@@ -3,6 +3,7 @@ export * from "./catalog-loader";
 export * from "./decoder";
 export * from "./runner";
 export * from "./vehicleProfiles";
+export * from "./transport";
 
 export function uniqueSorted(values: string[]) {
   return [...new Set(values)].sort((a, b) =>
