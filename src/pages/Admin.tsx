@@ -349,6 +349,7 @@ const Admin = () => {
        { key: "diag-remote", label: "Vzdálené OBD live" },
        { key: "diag-obd-debug", label: "OBD Debug", icon: Activity },
        { key: "diag-vraforge", label: "VraForge Diag", icon: Activity },
+       { key: "diag-delphi", label: "Delphi", icon: Activity },
        { key: "diag-dtc", label: "DTC knihovna", icon: BookOpen },
        { key: "diag-tsb", label: "TSB databáze", icon: FileText },
        { key: "diag-pdf", label: "Protokoly (PDF)", icon: FileSpreadsheet },
