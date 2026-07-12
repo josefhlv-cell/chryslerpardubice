@@ -48,6 +48,7 @@ const VehicleOffer = lazy(() => import("./pages/VehicleOffer"));
 const EPC = lazy(() => import("./pages/EPC"));
 const MechanicDashboard = lazy(() => import("./pages/MechanicDashboard"));
 const OBDDiagnostics = lazy(() => import("./pages/OBDDiagnostics"));
+const DelphiPage = lazy(() => import("./pages/Delphi"));
 const Garage = lazy(() => import("./pages/Garage"));
 const AdminCompatibility = lazy(() => import("./pages/AdminCompatibility"));
 const AdminUser360 = lazy(() => import("./pages/AdminUser360"));
@@ -121,6 +122,7 @@ const App = () => (
                     <Route path="/my-service-orders" element={<MyServiceOrders />} />
                     <Route path="/my-tow-requests" element={<MyTowRequests />} />
                     <Route path="/obd" element={<OBDDiagnostics />} />
+                    <Route path="/delphi" element={<DelphiPage />} />
                     <Route path="/presentation" element={<AppPresentation />} />
                     <Route path="/auth" element={<Auth />} />
                     <Route path="/complete-profile" element={<CompleteProfile />} />
