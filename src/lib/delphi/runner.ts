@@ -25,11 +25,11 @@ interface RunContext {
 }
 
 function debugCommandType(fn: DiagFunction): string {
-  if (fn.kind === "dtc_scan") return "vraforge_diag_dtc";
-  if (fn.kind === "routine") return "vraforge_diag_routine";
-  if (fn.kind === "actuator_test") return "vraforge_diag_actuator";
-  if (fn.kind === "raw") return "vraforge_diag_raw";
-  return "vraforge_diag_read";
+  if (fn.kind === "dtc_scan") return "delphi_diag_dtc";
+  if (fn.kind === "routine") return "delphi_diag_routine";
+  if (fn.kind === "actuator_test") return "delphi_diag_actuator";
+  if (fn.kind === "raw") return "delphi_diag_raw";
+  return "delphi_diag_read";
 }
 
 function normalizeHeader(value?: string | null): string | null {
@@ -110,7 +110,7 @@ function makeBlockedResult(
 
 function logBlocked(fn: DiagFunction, res: DiagRunResult, ctx: RunContext, reason: string) {
   logObdDebugEvent({
-    commandType: "vraforge_diag_error",
+    commandType: "delphi_diag_error",
     command: fn.command,
     status: "error",
     error: res.error,
@@ -119,7 +119,7 @@ function logBlocked(fn: DiagFunction, res: DiagRunResult, ctx: RunContext, reaso
     vehicleId: ctx.vehicleId ?? null,
     metadata: {
       source: "Delphi-OBD",
-      module: "VraForge Diag",
+      module: "Delphi",
       reason,
       sourceFile: fn.sourceFile,
       originalName: fn.originalName,
@@ -142,7 +142,7 @@ async function prepareElmForFunction(fn: DiagFunction, ctx: RunContext): Promise
 
   if (tx) {
     const setHdr = await elmQueue.send(`AT SH ${tx}`, {
-      commandType: "vraforge_diag_init",
+      commandType: "delphi_diag_init",
       timeoutMs: 1200,
     });
 
@@ -153,7 +153,7 @@ async function prepareElmForFunction(fn: DiagFunction, ctx: RunContext): Promise
 
   if (rx) {
     const setCra = await elmQueue.send(`AT CRA ${rx}`, {
-      commandType: "vraforge_diag_init",
+      commandType: "delphi_diag_init",
       timeoutMs: 1200,
     });
 
@@ -173,7 +173,7 @@ async function prepareElmForFunction(fn: DiagFunction, ctx: RunContext): Promise
    */
   if (fn.isOem && (fn.kind === "routine" || fn.kind === "actuator_test")) {
     const session = await elmQueue.send("10 03", {
-      commandType: "vraforge_diag_init",
+      commandType: "delphi_diag_init",
       timeoutMs: 2500,
     });
 
@@ -349,7 +349,7 @@ export async function runDiagFunction(
         vehicleId: ctx.vehicleId ?? null,
         metadata: {
           source: "Delphi-OBD",
-          module: "VraForge Diag",
+          module: "Delphi",
           sourceFile: fn.sourceFile,
           originalName: fn.originalName,
           brand: fn.brandKey,
@@ -386,7 +386,7 @@ export async function runDiagFunction(
       };
 
       logObdDebugEvent({
-        commandType: "vraforge_diag_error",
+        commandType: "delphi_diag_error",
         command: fn.command,
         status: "error",
         error: res.error,
@@ -394,7 +394,7 @@ export async function runDiagFunction(
         durationMs: res.durationMs,
         metadata: {
           source: "Delphi-OBD",
-          module: "VraForge Diag",
+          module: "Delphi",
           sourceFile: fn.sourceFile,
           originalName: fn.originalName,
           brand: fn.brandKey,
@@ -439,7 +439,7 @@ export function buildJsonReport(res: DiagRunResult, ctx: RunContext = {}) {
 
   return {
     source: "Delphi-OBD",
-    module: "VraForge Diag",
+    module: "Delphi",
     sourceFile: res.fn.sourceFile,
     originalName: res.fn.originalName,
     brand: res.fn.brandKey,
