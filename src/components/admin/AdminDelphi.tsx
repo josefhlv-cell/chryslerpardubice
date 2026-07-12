@@ -5,17 +5,20 @@ import {
   Bluetooth,
   Car,
   ChevronRight,
+  CircleDot,
   ClipboardList,
+  Cpu,
+  FileCode2,
   Gauge,
+  Info,
   Play,
   Search,
-  Settings2,
-  ShieldCheck,
+  ShieldAlert,
   Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -33,7 +36,6 @@ import {
   listBrands,
   loadBrandFunctions,
   runDiagFunction,
-  COMMON_VEHICLE_MAKES,
   uniqueSorted,
   VEHICLE_PROFILES,
 } from "@/lib/delphi";
@@ -47,9 +49,9 @@ import type {
 } from "@/lib/delphi";
 
 type EcuOption = { address: string; name: string; common?: string };
-type MainSection = "overview" | "faults" | "live" | "tests" | "service";
+type MainSection = "information" | "faults" | "live" | "tests" | "service";
 
-const sectionKinds: Record<Exclude<MainSection, "overview">, FunctionKind[]> = {
+const sectionKinds: Record<Exclude<MainSection, "information">, FunctionKind[]> = {
   faults: ["dtc_scan"],
   live: ["live_pid", "obd2_pid", "did"],
   tests: ["actuator_test"],
@@ -57,18 +59,12 @@ const sectionKinds: Record<Exclude<MainSection, "overview">, FunctionKind[]> = {
 };
 
 const sectionLabel: Record<MainSection, string> = {
-  overview: "Přehled",
+  information: "Informace",
   faults: "Chybové kódy",
   live: "Živá data",
   tests: "Testy akčních členů",
   service: "Servisní funkce",
 };
-
-function statusClass(status?: string) {
-  if (status === "ok") return "border-green-500/40 bg-green-500/10 text-green-400";
-  if (status === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-400";
-  return "border-red-500/40 bg-red-500/10 text-red-400";
-}
 
 function normalizeText(value?: string) {
   return (value || "").toLocaleLowerCase("cs");
@@ -79,14 +75,24 @@ function ecuMatchesProfile(ecu: EcuOption, profile: VehicleProfile) {
   return profile.ecuHints.some((hint) => text.includes(normalizeText(hint)));
 }
 
-export default function AdminDelphiDiag() {
+function statusClass(status?: string) {
+  if (status === "ok") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
+  if (status === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-300";
+  return "border-red-500/40 bg-red-500/10 text-red-300";
+}
+
+function isWriteFunction(fn: DiagFunction) {
+  return fn.kind === "routine" || fn.kind === "actuator_test" || Boolean(fn.destructive);
+}
+
+export default function AdminDelphi() {
   const [brands, setBrands] = useState<BrandManifestEntry[]>([]);
   const [brandKey, setBrandKey] = useState("OBD2");
   const [vin, setVin] = useState("");
   const [functions, setFunctions] = useState<DiagFunction[]>([]);
   const [ecus, setEcus] = useState<EcuOption[]>([]);
   const [ecuAddress, setEcuAddress] = useState("__all");
-  const [section, setSection] = useState<MainSection>("overview");
+  const [section, setSection] = useState<MainSection>("information");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<DiagFunction | null>(null);
   const [result, setResult] = useState<DiagRunResult | null>(null);
@@ -113,7 +119,7 @@ export default function AdminDelphiDiag() {
       .then(setBrands)
       .catch((error) =>
         toast({
-          title: "Katalog se nepodařilo načíst",
+          title: "Katalog Delphi se nepodařilo načíst",
           description: String(error),
           variant: "destructive",
         }),
@@ -127,7 +133,9 @@ export default function AdminDelphiDiag() {
     loadBrandFunctions(brandKey)
       .then((data) => {
         if (cancelled) return;
+
         setFunctions(data.functions);
+
         const map = new Map<string, EcuOption>();
         for (const ecu of data.catalog.ecus || []) {
           map.set(ecu.address, {
@@ -136,6 +144,7 @@ export default function AdminDelphiDiag() {
             common: ecu.common_name,
           });
         }
+
         setEcus(
           Array.from(map.values()).sort((a, b) =>
             (a.common || a.name).localeCompare(b.common || b.name, "cs"),
@@ -144,10 +153,13 @@ export default function AdminDelphiDiag() {
         setEcuAddress("__all");
         setSelected(null);
         setResult(null);
-        setSection("overview");
       })
       .catch((error) =>
-        toast({ title: "Chyba katalogu", description: String(error), variant: "destructive" }),
+        toast({
+          title: "Chyba katalogu Delphi",
+          description: String(error),
+          variant: "destructive",
+        }),
       )
       .finally(() => {
         if (!cancelled) setLoadingCatalog(false);
@@ -158,8 +170,9 @@ export default function AdminDelphiDiag() {
     };
   }, [brandKey]);
 
+  // Pouze značky, které mají skutečné profily ve stromu.
   const makes = useMemo(
-    () => uniqueSorted([...COMMON_VEHICLE_MAKES, ...VEHICLE_PROFILES.map((item) => item.make)]),
+    () => uniqueSorted(VEHICLE_PROFILES.map((item) => item.make)),
     [],
   );
 
@@ -182,16 +195,18 @@ export default function AdminDelphiDiag() {
   );
 
   const years = useMemo(() => {
-    const list = new Set<number>();
+    const values = new Set<number>();
     VEHICLE_PROFILES.filter(
       (item) =>
         item.make === make &&
         item.model === model &&
         item.generation === generation,
     ).forEach((item) => {
-      for (let value = item.yearFrom; value <= item.yearTo; value += 1) list.add(value);
+      for (let current = item.yearFrom; current <= item.yearTo; current += 1) {
+        values.add(current);
+      }
     });
-    return [...list].sort((a, b) => b - a);
+    return [...values].sort((a, b) => b - a);
   }, [make, model, generation]);
 
   const matchingProfiles = useMemo(
@@ -202,7 +217,8 @@ export default function AdminDelphiDiag() {
           item.make === make &&
           item.model === model &&
           item.generation === generation &&
-          (!selectedYear || (selectedYear >= item.yearFrom && selectedYear <= item.yearTo))
+          (!selectedYear ||
+            (selectedYear >= item.yearFrom && selectedYear <= item.yearTo))
         );
       }),
     [make, model, generation, year],
@@ -214,8 +230,9 @@ export default function AdminDelphiDiag() {
   );
 
   useEffect(() => {
-    if (!profile) return;
-    if (profile.brandKey !== brandKey) setBrandKey(profile.brandKey);
+    if (profile && profile.brandKey !== brandKey) {
+      setBrandKey(profile.brandKey);
+    }
   }, [profile, brandKey]);
 
   const brand = useMemo(
@@ -234,11 +251,6 @@ export default function AdminDelphiDiag() {
     [filteredEcus, ecuAddress],
   );
 
-  const exactVehicleSelected = Boolean(profile && year);
-  const exactEcuSelected = ecuAddress !== "__all" && Boolean(selectedEcu);
-  const serviceUnlocked = exactVehicleSelected && exactEcuSelected;
-  const verifiedRoutineIds = profile?.verifiedRoutineIds || [];
-
   const context: ActiveDiagContext | null = useMemo(() => {
     if (!brand) return null;
     return {
@@ -251,123 +263,115 @@ export default function AdminDelphiDiag() {
     };
   }, [brand, selectedEcu, vin]);
 
+  // Všechny katalogové funkce jsou viditelné. Neověřené se pouze označí varováním.
   const visibleFunctions = useMemo(() => {
-    if (section === "overview") return [];
+    if (section === "information") return [];
     const kinds = sectionKinds[section];
-    const query = search.trim().toLowerCase();
+    const query = search.trim().toLocaleLowerCase("cs");
 
     return functions.filter((fn) => {
       if (!kinds.includes(fn.kind)) return false;
-      if (ecuAddress !== "__all" && fn.ecuAddress !== ecuAddress && fn.kind !== "dtc_scan") {
-        return false;
-      }
-      if ((fn.kind === "routine" || fn.kind === "actuator_test") && !serviceUnlocked) {
-        return false;
-      }
+
       if (
-        (fn.kind === "routine" || fn.kind === "actuator_test") &&
-        !verifiedRoutineIds.includes((fn.routineId || "").toUpperCase())
+        ecuAddress !== "__all" &&
+        fn.ecuAddress &&
+        fn.ecuAddress !== ecuAddress &&
+        fn.kind !== "dtc_scan"
       ) {
         return false;
       }
+
       if (!query) return true;
-      return [fn.name, fn.description, fn.category, fn.ecuCommonName, fn.ecu]
+
+      return [
+        fn.name,
+        fn.description,
+        fn.category,
+        fn.ecuCommonName,
+        fn.ecu,
+        fn.routineId,
+      ]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase()
+        .toLocaleLowerCase("cs")
         .includes(query);
     });
-  }, [functions, section, search, ecuAddress, serviceUnlocked, verifiedRoutineIds]);
+  }, [functions, section, search, ecuAddress]);
 
   const counts = useMemo(
     () => ({
       faults: functions.filter((item) => item.kind === "dtc_scan").length,
-      live: functions.filter((item) => ["live_pid", "obd2_pid", "did"].includes(item.kind)).length,
-      tests: serviceUnlocked
-        ? functions.filter(
-            (item) =>
-              item.kind === "actuator_test" &&
-              verifiedRoutineIds.includes((item.routineId || "").toUpperCase()),
-          ).length
-        : 0,
-      service: serviceUnlocked
-        ? functions.filter(
-            (item) =>
-              item.kind === "routine" &&
-              verifiedRoutineIds.includes((item.routineId || "").toUpperCase()),
-          ).length
-        : 0,
+      live: functions.filter((item) =>
+        ["live_pid", "obd2_pid", "did"].includes(item.kind),
+      ).length,
+      tests: functions.filter((item) => item.kind === "actuator_test").length,
+      service: functions.filter((item) => item.kind === "routine").length,
     }),
-    [functions, serviceUnlocked, verifiedRoutineIds],
+    [functions],
   );
 
-  function resetAfterMake(value: string) {
-    setMake(value);
-    setModel("");
-    setGeneration("");
-    setYear("");
-    setProfileId("");
+  function clearBelow(level: "make" | "model" | "generation" | "year") {
+    if (level === "make") {
+      setModel("");
+      setGeneration("");
+      setYear("");
+      setProfileId("");
+    }
+    if (level === "model") {
+      setGeneration("");
+      setYear("");
+      setProfileId("");
+    }
+    if (level === "generation") {
+      setYear("");
+      setProfileId("");
+    }
+    if (level === "year") {
+      setProfileId("");
+    }
     setEcuAddress("__all");
-  }
-
-  function resetAfterModel(value: string) {
-    setModel(value);
-    setGeneration("");
-    setYear("");
-    setProfileId("");
-    setEcuAddress("__all");
-  }
-
-  function resetAfterGeneration(value: string) {
-    setGeneration(value);
-    setYear("");
-    setProfileId("");
-    setEcuAddress("__all");
+    setSelected(null);
+    setResult(null);
   }
 
   async function decodeVin() {
     const found = await findBrandForVin(vin);
     if (!found) {
-      toast({ title: "VIN nerozpoznán", description: "Vyber vozidlo ručně.", variant: "destructive" });
+      toast({
+        title: "VIN nebyl rozpoznán",
+        description: "Vyber vozidlo ručně ve stromu Delphi.",
+        variant: "destructive",
+      });
       return;
     }
+
     setBrandKey(found.key);
     toast({
       title: "Výrobce rozpoznán",
-      description: "VIN určil výrobce. Model a motor je ještě nutné vybrat přesně.",
+      description: `${found.display_name}. Model, rok a motor vyber ve stromu.`,
     });
   }
 
   async function runSelected() {
     if (!selected) return;
 
-    if ((selected.kind === "routine" || selected.kind === "actuator_test") && !serviceUnlocked) {
-      toast({
-        title: "Není vybrané přesné vozidlo",
-        description: "Vyber značku, model, generaci, rok, motor a konkrétní řídicí jednotku.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const warning = isWriteFunction(selected)
+      ? [
+          "VAROVÁNÍ – ODBORNÝ REŽIM",
+          "",
+          selected.safetyWarning ||
+            "Tato funkce může změnit stav řídicí jednotky nebo vozidla.",
+          "",
+          "Funkce může být pouze kandidátní pro zvolenou variantu ECU.",
+          "Před spuštěním zkontroluj cílovou ECU, zapalování, napětí, diagnostickou relaci a požadované podmínky.",
+          "",
+          "Opravdu funkci spustit?",
+        ].join("\n")
+      : selected.destructive
+        ? `Pozor: ${selected.safetyWarning || "Tato funkce může měnit stav vozidla."}\n\nOpravdu pokračovat?`
+        : null;
 
-    if (
-      (selected.kind === "routine" || selected.kind === "actuator_test") &&
-      !verifiedRoutineIds.includes((selected.routineId || "").toUpperCase())
-    ) {
-      toast({
-        title: "Neověřená servisní rutina",
-        description: "Tato rutina není pro zvolený motor ověřená a aplikace ji z bezpečnostních důvodů neodešle.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (selected.destructive) {
-      const ok = window.confirm(
-        `Pozor: ${selected.safetyWarning || "Tato funkce může měnit stav vozidla."}\n\nOpravdu pokračovat?`,
-      );
-      if (!ok) return;
-    }
+    if (warning && !window.confirm(warning)) return;
 
     setRunning(true);
     try {
@@ -387,109 +391,185 @@ export default function AdminDelphiDiag() {
     }
   }
 
-  const menu = [
-    { key: "overview" as const, label: "Přehled jednotky", icon: Car },
-    { key: "faults" as const, label: "Chybové kódy", icon: AlertTriangle, count: counts.faults },
+  const tabs = [
+    { key: "information" as const, label: "Informace", icon: Info },
+    { key: "faults" as const, label: "Chyby", icon: AlertTriangle, count: counts.faults },
     { key: "live" as const, label: "Živá data", icon: Gauge, count: counts.live },
-    { key: "tests" as const, label: "Testy akčních členů", icon: Activity, count: counts.tests },
+    { key: "tests" as const, label: "Akční testy", icon: Activity, count: counts.tests },
     { key: "service" as const, label: "Servisní funkce", icon: Wrench, count: counts.service },
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Diagnostika vozidla</p>
-          <h1 className="text-2xl font-bold">Servisní diagnostika</h1>
+    <div className="min-w-0 space-y-3">
+      <div className="rounded-lg border border-slate-600 bg-gradient-to-b from-slate-800 to-slate-950 px-4 py-3 shadow-lg">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+              Samostatná diagnostika
+            </p>
+            <h1 className="text-xl font-bold text-slate-100">Delphi Diagnostic</h1>
+          </div>
+          <Badge
+            variant="outline"
+            className={
+              bleState === "connected"
+                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+                : "border-red-500/50 bg-red-500/10 text-red-300"
+            }
+          >
+            <Bluetooth className="mr-1 h-3.5 w-3.5" />
+            {bleState === "connected" ? "OBD připojeno" : "OBD odpojeno"}
+          </Badge>
         </div>
-        <Badge
-          variant="outline"
-          className={
-            bleState === "connected"
-              ? "border-green-500/40 text-green-400"
-              : "border-red-500/40 text-red-400"
-          }
-        >
-          <Bluetooth className="mr-1 h-3.5 w-3.5" />
-          {bleState === "connected" ? "Adaptér připojen" : "Adaptér odpojen"}
-        </Badge>
       </div>
 
-      <Card>
-        <CardContent className="space-y-4 p-4">
-          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-            <div>
-              <Label>VIN vozidla</Label>
-              <Input
-                value={vin}
-                maxLength={17}
-                onChange={(event) => setVin(event.target.value.toUpperCase())}
-                placeholder="17 znaků VIN"
-                className="mt-1 font-mono"
-              />
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[340px_minmax(0,1fr)]">
+        {/* Levý Delphi strom */}
+        <Card className="h-fit min-w-0 overflow-hidden border-slate-700 bg-slate-950/70">
+          <CardHeader className="border-b border-slate-700 bg-slate-900 px-3 py-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Car className="h-4 w-4 text-cyan-400" />
+              Výběr vozidla
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-3">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto] xl:grid-cols-1">
+              <div>
+                <Label className="text-xs">VIN</Label>
+                <Input
+                  value={vin}
+                  maxLength={17}
+                  onChange={(event) => setVin(event.target.value.toUpperCase())}
+                  placeholder="17 znaků VIN"
+                  className="mt-1 h-9 font-mono text-xs"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={decodeVin}
+                disabled={vin.length < 3}
+                className="self-end"
+              >
+                Identifikovat
+              </Button>
             </div>
-            <Button onClick={decodeVin} disabled={vin.length < 3}>Rozpoznat VIN</Button>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-            <div>
-              <Label>Značka</Label>
-              <Select value={make} onValueChange={resetAfterMake}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Vyber značku" /></SelectTrigger>
-                <SelectContent>{makes.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-              </Select>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs">1. Výrobce</Label>
+                <Select
+                  value={make}
+                  onValueChange={(value) => {
+                    setMake(value);
+                    clearBelow("make");
+                  }}
+                >
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue placeholder="Vyber výrobce" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {makes.map((value) => (
+                      <SelectItem key={value} value={value}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">2. Model</Label>
+                <Select
+                  value={model}
+                  onValueChange={(value) => {
+                    setModel(value);
+                    clearBelow("model");
+                  }}
+                  disabled={!make}
+                >
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue placeholder="Vyber model" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {models.map((value) => (
+                      <SelectItem key={value} value={value}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">3. Generace / platforma</Label>
+                <Select
+                  value={generation}
+                  onValueChange={(value) => {
+                    setGeneration(value);
+                    clearBelow("generation");
+                  }}
+                  disabled={!model}
+                >
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue placeholder="Vyber generaci" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {generations.map((value) => (
+                      <SelectItem key={value} value={value}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">4. Modelový rok</Label>
+                <Select
+                  value={year}
+                  onValueChange={(value) => {
+                    setYear(value);
+                    clearBelow("year");
+                  }}
+                  disabled={!generation}
+                >
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue placeholder="Vyber rok" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {years.map((value) => (
+                      <SelectItem key={value} value={String(value)}>{value}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">5. Motor</Label>
+                <Select
+                  value={profileId}
+                  onValueChange={(value) => {
+                    setProfileId(value);
+                    setEcuAddress("__all");
+                    setSelected(null);
+                    setResult(null);
+                  }}
+                  disabled={!year}
+                >
+                  <SelectTrigger className="mt-1 h-9">
+                    <SelectValue placeholder="Vyber motor" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    {matchingProfiles.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.engine} · {item.engineCode}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div>
-              <Label>Model</Label>
-              <Select value={model} onValueChange={resetAfterModel} disabled={!make}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Vyber model" /></SelectTrigger>
-                <SelectContent>{models.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Generace</Label>
-              <Select value={generation} onValueChange={resetAfterGeneration} disabled={!model}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Vyber generaci" /></SelectTrigger>
-                <SelectContent>{generations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Rok</Label>
-              <Select
-                value={year}
-                onValueChange={(value) => {
-                  setYear(value);
-                  setProfileId("");
-                  setEcuAddress("__all");
-                }}
-                disabled={!generation}
-              >
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Vyber rok" /></SelectTrigger>
-                <SelectContent>{years.map((value) => <SelectItem key={value} value={String(value)}>{value}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Motor</Label>
-              <Select
-                value={profileId}
-                onValueChange={(value) => {
-                  setProfileId(value);
-                  setEcuAddress("__all");
-                }}
-                disabled={!year}
-              >
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Vyber motor" /></SelectTrigger>
-                <SelectContent>
-                  {matchingProfiles.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.engine} ({item.engineCode})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Řídicí jednotka</Label>
+
+            <div className="border-t border-slate-700 pt-3">
+              <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-300">
+                <Cpu className="h-4 w-4 text-cyan-400" />
+                Systém / řídicí jednotka
+              </p>
               <Select
                 value={ecuAddress}
                 onValueChange={(value) => {
@@ -499,41 +579,50 @@ export default function AdminDelphiDiag() {
                 }}
                 disabled={!profile || loadingCatalog}
               >
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Vyber ECU" /></SelectTrigger>
-                <SelectContent className="max-h-[380px]">
-                  <SelectItem value="__all">Všechny jednotky</SelectItem>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Vyber systém" />
+                </SelectTrigger>
+                <SelectContent className="max-h-96">
+                  <SelectItem value="__all">Všechny systémy</SelectItem>
                   {filteredEcus.map((ecu) => (
                     <SelectItem key={ecu.address} value={ecu.address}>
-                      {ecu.common || ecu.name}
+                      {ecu.common || ecu.name} [{ecu.address}]
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[290px_1fr]">
-        <Card className="h-fit">
-          <CardContent className="p-2">
-            <div className="mb-2 rounded-lg bg-secondary/40 p-3">
-              <p className="text-xs text-muted-foreground">Aktivní vozidlo</p>
-              <p className="font-semibold">
-                {profile ? `${profile.make} ${profile.model} ${profile.generation}` : "Vozidlo není vybrané"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {profile ? `${year} · ${profile.engine} · ${profile.engineCode}` : "Vyber značku, model, rok a motor"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {selectedEcu?.common || selectedEcu?.name || "ECU není vybraná"}
-              </p>
+            <div className="rounded-md border border-slate-700 bg-slate-900/80 p-3 text-xs">
+              <div className="flex items-start gap-2">
+                <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-200">
+                    {profile
+                      ? `${profile.make} ${profile.model} ${profile.generation}`
+                      : "Vozidlo není vybrané"}
+                  </p>
+                  <p className="truncate text-slate-400">
+                    {profile
+                      ? `${year} · ${profile.engine} · ${profile.engineCode}`
+                      : "Postupuj stromem shora dolů"}
+                  </p>
+                  <p className="mt-1 truncate text-slate-400">
+                    {selectedEcu?.common || selectedEcu?.name || "ECU není vybraná"}
+                  </p>
+                </div>
+              </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <nav className="space-y-1">
-              {menu.map((item) => {
+        {/* Pravá servisní plocha */}
+        <Card className="min-w-0 overflow-hidden border-slate-700 bg-slate-950/40">
+          <div className="border-b border-slate-700 bg-slate-900 p-2">
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
+              {tabs.map((item) => {
                 const Icon = item.icon;
-                const active = item.key === section;
+                const active = section === item.key;
                 return (
                   <button
                     key={item.key}
@@ -542,69 +631,78 @@ export default function AdminDelphiDiag() {
                       setSelected(null);
                       setResult(null);
                     }}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm transition ${
-                      active ? "bg-primary text-primary-foreground" : "hover:bg-secondary/70"
+                    className={`flex min-w-0 items-center justify-center gap-1.5 rounded px-2 py-2 text-xs transition ${
+                      active
+                        ? "bg-cyan-700 text-white shadow-inner"
+                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
-                    {typeof item.count === "number" && <span className="text-xs opacity-70">{item.count}</span>}
-                    <ChevronRight className="h-4 w-4 opacity-60" />
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                    {typeof item.count === "number" && (
+                      <span className="rounded bg-black/30 px-1 text-[10px]">
+                        {item.count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
-            </nav>
-
-            <div className="mt-3 border-t pt-3">
-              <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-                <Settings2 className="h-4 w-4" /> RAW/PID/DID jsou schované z běžného pohledu
-              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardContent className="p-4">
-            {section === "overview" ? (
+          <CardContent className="min-w-0 p-3 sm:p-4">
+            {section === "information" ? (
               <div className="space-y-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Přehled diagnostiky</h2>
-                  <p className="text-sm text-muted-foreground">Nejdřív vyber přesné vozidlo a řídicí jednotku.</p>
+                <div className="rounded-md border border-cyan-800/50 bg-cyan-950/20 p-4">
+                  <h2 className="flex items-center gap-2 text-lg font-semibold">
+                    <Info className="h-5 w-5 text-cyan-400" />
+                    Informace o diagnostice
+                  </h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Vyber vozidlo a řídicí systém v levém stromu. Delphi načte
+                    diagnostické funkce z katalogu zvoleného výrobce.
+                  </p>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {menu.slice(1).map((item) => {
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {tabs.slice(1).map((item) => {
                     const Icon = item.icon;
                     return (
                       <button
                         key={item.key}
                         onClick={() => setSection(item.key)}
-                        className="rounded-xl border p-4 text-left transition hover:bg-secondary/50"
+                        className="rounded-md border border-slate-700 bg-slate-900/70 p-4 text-left transition hover:border-cyan-700 hover:bg-slate-800"
                       >
-                        <Icon className="mb-3 h-6 w-6" />
+                        <Icon className="mb-3 h-6 w-6 text-cyan-400" />
                         <p className="font-semibold">{item.label}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">Dostupných funkcí: {item.count}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Dostupných položek: {item.count}
+                        </p>
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="rounded-xl border bg-secondary/20 p-4 text-sm">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <ShieldCheck className="h-4 w-4" /> Bezpečný servisní režim
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+                  <div className="flex items-center gap-2 font-semibold text-amber-300">
+                    <ShieldAlert className="h-4 w-4" />
+                    Odborný režim – všechny katalogové funkce povoleny
                   </div>
-                  <p className="mt-1 text-muted-foreground">
-                    Neověřené servisní rutiny se nezobrazují. Tím se zabrání odesílání náhodných RoutineControl příkazů do nesprávné ECU.
+                  <p className="mt-1 text-amber-200/80">
+                    Neověřené rutiny, adaptace a akční testy nejsou skryté ani
+                    blokované. Před jejich spuštěním se zobrazí výrazné varování.
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-semibold">{sectionLabel[section]}</h2>
-                    <p className="text-sm text-muted-foreground">
-                      {selectedEcu?.common || selectedEcu?.name || "Vyber konkrétní řídicí jednotku"}
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold">{sectionLabel[section]}</h2>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {selectedEcu?.common ||
+                        selectedEcu?.name ||
+                        "Všechny systémy z katalogu"}
                     </p>
                   </div>
                   <div className="relative w-full sm:w-72">
@@ -612,32 +710,29 @@ export default function AdminDelphiDiag() {
                     <Input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Hledat funkci…"
-                      className="pl-9"
+                      placeholder="Hledat v Delphi katalogu…"
+                      className="h-9 pl-9"
                     />
                   </div>
                 </div>
 
-                {(section === "tests" || section === "service") && !serviceUnlocked && (
-                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
-                    Pro testy a servisní funkce vyber přesnou značku, model, generaci, rok, motor a konkrétní ECU.
-                  </div>
-                )}
-
-                {(section === "tests" || section === "service") && serviceUnlocked && verifiedRoutineIds.length === 0 && (
-                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-300">
-                    Pro tento motor zatím nejsou v souboru vehicle-profiles.ts zapsané žádné ověřené rutiny. Čtení chyb a živých dat zůstává dostupné.
+                {(section === "tests" || section === "service") && (
+                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    Všechny nalezené funkce jsou dostupné. Kandidátní nebo
+                    neověřená funkce zobrazí varování, ale zůstane spustitelná.
                   </div>
                 )}
 
                 {loadingCatalog ? (
-                  <p className="py-12 text-center text-muted-foreground">Načítám katalog…</p>
+                  <p className="py-12 text-center text-muted-foreground">
+                    Načítám Delphi katalog…
+                  </p>
                 ) : (
-                  <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-                    <div className="max-h-[620px] space-y-2 overflow-auto pr-1">
+                  <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+                    <div className="max-h-[650px] min-w-0 space-y-1.5 overflow-y-auto pr-1">
                       {visibleFunctions.length === 0 && (
-                        <p className="rounded-xl border p-8 text-center text-muted-foreground">
-                          Pro tento výběr nejsou dostupné žádné ověřené funkce.
+                        <p className="rounded-md border border-slate-700 p-8 text-center text-sm text-muted-foreground">
+                          Pro tento výběr nejsou v katalogu žádné položky.
                         </p>
                       )}
 
@@ -648,50 +743,81 @@ export default function AdminDelphiDiag() {
                             setSelected(fn);
                             setResult(null);
                           }}
-                          className={`w-full rounded-xl border p-4 text-left transition ${
+                          className={`w-full min-w-0 rounded-md border p-3 text-left transition ${
                             selected?.id === fn.id
-                              ? "border-primary bg-primary/10"
-                              : "hover:bg-secondary/40"
+                              ? "border-cyan-600 bg-cyan-950/40"
+                              : "border-slate-700 bg-slate-900/60 hover:border-slate-500 hover:bg-slate-800"
                           }`}
                         >
                           <div className="flex items-start gap-3">
-                            <ClipboardList className="mt-0.5 h-5 w-5 shrink-0" />
+                            <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="font-semibold">{fn.name}</p>
-                                {fn.destructive && <Badge variant="destructive">Pozor</Badge>}
+                                <p className="break-words text-sm font-semibold">{fn.name}</p>
+                                {isWriteFunction(fn) && (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-amber-500/50 text-[10px] text-amber-300"
+                                  >
+                                    ODBORNÝ REŽIM
+                                  </Badge>
+                                )}
+                                {fn.destructive && (
+                                  <Badge variant="destructive" className="text-[10px]">
+                                    ZÁSAH
+                                  </Badge>
+                                )}
                               </div>
-                              <p className="mt-1 text-sm text-muted-foreground">
+                              <p className="mt-1 break-words text-xs text-muted-foreground">
                                 {fn.description || fn.category || "Diagnostická funkce"}
                               </p>
-                              <p className="mt-2 text-xs text-muted-foreground">
+                              <p className="mt-1 truncate text-[11px] text-slate-500">
                                 {fn.ecuCommonName || fn.ecu || "Obecná OBD-II funkce"}
                               </p>
                             </div>
+                            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
                           </div>
                         </button>
                       ))}
                     </div>
 
-                    <div className="rounded-xl border bg-secondary/20 p-4">
+                    <div className="min-w-0 rounded-md border border-slate-700 bg-slate-900/70 p-4">
                       {!selected ? (
-                        <div className="py-10 text-center text-muted-foreground">Vyber funkci ze seznamu.</div>
+                        <div className="py-12 text-center text-sm text-muted-foreground">
+                          Vyber funkci ze seznamu.
+                        </div>
                       ) : (
                         <div className="space-y-4">
                           <div>
-                            <p className="text-xs uppercase text-muted-foreground">Vybraná funkce</p>
-                            <h3 className="mt-1 text-lg font-semibold">{selected.name}</h3>
-                            <p className="mt-1 text-sm text-muted-foreground">{selected.description}</p>
+                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
+                              Vybraná funkce
+                            </p>
+                            <h3 className="mt-1 break-words text-lg font-semibold">
+                              {selected.name}
+                            </h3>
+                            <p className="mt-1 break-words text-sm text-muted-foreground">
+                              {selected.description || "Bez dalšího popisu."}
+                            </p>
                           </div>
 
+                          {isWriteFunction(selected) && (
+                            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200">
+                              <p className="font-semibold">Funkce je povolena v odborném režimu</p>
+                              <p className="mt-1">
+                                Nemusí být ověřena pro konkrétní SW variantu ECU.
+                                Před odesláním zkontroluj cílovou jednotku a podmínky.
+                              </p>
+                            </div>
+                          )}
+
                           {selected.safetyWarning && (
-                            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-300">
+                            <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
                               {selected.safetyWarning}
                             </div>
                           )}
 
                           <Button
-                            className="w-full"
+                            className="w-full bg-cyan-700 hover:bg-cyan-600"
                             onClick={runSelected}
                             disabled={running || bleState !== "connected"}
                           >
@@ -700,31 +826,37 @@ export default function AdminDelphiDiag() {
                           </Button>
 
                           {bleState !== "connected" && (
-                            <p className="text-center text-xs text-red-400">Nejdřív připoj OBD adaptér.</p>
+                            <p className="text-center text-xs text-red-400">
+                              Nejdřív připoj OBD adaptér.
+                            </p>
                           )}
 
                           {result && (
-                            <div className="space-y-3 border-t pt-4">
+                            <div className="space-y-3 border-t border-slate-700 pt-4">
                               <Badge variant="outline" className={statusClass(result.status)}>
                                 {result.status.toUpperCase()}
                               </Badge>
 
                               {result.decoded.length > 0 && (
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                   {result.decoded.map((value, index) => (
                                     <div
                                       key={`${value.name}-${index}`}
-                                      className="flex items-center justify-between rounded-lg bg-background/70 p-3 text-sm"
+                                      className="flex min-w-0 items-center justify-between gap-3 rounded bg-slate-950/70 p-2.5 text-xs"
                                     >
-                                      <span className="text-muted-foreground">{value.name}</span>
-                                      <strong>{String(value.value ?? "—")} {value.unit || ""}</strong>
+                                      <span className="min-w-0 break-words text-slate-400">
+                                        {value.name}
+                                      </span>
+                                      <strong className="shrink-0 text-right">
+                                        {String(value.value ?? "—")} {value.unit || ""}
+                                      </strong>
                                     </div>
                                   ))}
                                 </div>
                               )}
 
                               {result.error && (
-                                <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+                                <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
                                   {result.error}
                                 </div>
                               )}
@@ -734,12 +866,15 @@ export default function AdminDelphiDiag() {
                                   <TabsTrigger value="result">Výsledek</TabsTrigger>
                                   <TabsTrigger value="technical">Technické</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="result" className="text-sm text-muted-foreground">
+                                <TabsContent value="result" className="text-xs text-muted-foreground">
                                   Doba odezvy: {result.durationMs} ms
                                 </TabsContent>
-                                <TabsContent value="technical" className="space-y-2 text-xs">
-                                  <p><span className="text-muted-foreground">Příkaz:</span> <code>{result.command}</code></p>
-                                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-3">
+                                <TabsContent value="technical" className="min-w-0 space-y-2 text-xs">
+                                  <p className="break-all">
+                                    <span className="text-muted-foreground">Příkaz:</span>{" "}
+                                    <code>{result.command}</code>
+                                  </p>
+                                  <pre className="max-h-48 max-w-full overflow-auto whitespace-pre-wrap break-all rounded bg-black/50 p-3">
                                     {result.rawResponse || "Bez odpovědi"}
                                   </pre>
                                 </TabsContent>
