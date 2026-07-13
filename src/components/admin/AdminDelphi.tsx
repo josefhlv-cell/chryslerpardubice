@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -18,6 +19,9 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  User,
+  Wifi,
+  WifiOff,
   Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -34,11 +38,16 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import { bleManager } from "@/lib/obd/ble-manager";
 import {
   findBrandForVin,
   listBrands,
   loadBrandFunctions,
+  cleanResponse,
+  decodeDtcs,
+  decodeValue,
+  loadUdsNrcCatalog,
   runDiagFunction,
   runRawCommand,
   uniqueSorted,
@@ -53,6 +62,33 @@ import type {
 } from "@/lib/delphi";
 
 type EcuOption = { address: string; name: string; common?: string };
+
+type RemoteSession = {
+  id: string;
+  user_id: string;
+  vin: string | null;
+  last_seen: string;
+  is_active: boolean;
+  profile_name: string;
+  profile_email: string;
+  permissions?: {
+    live_data?: boolean;
+    dtc_read?: boolean;
+    dtc_clear?: boolean;
+    terminal?: boolean;
+    can_bus?: boolean;
+    uds?: boolean;
+    coding?: boolean;
+    flash?: boolean;
+  };
+};
+
+type RemoteCommandRow = {
+  id: string;
+  status: string;
+  result: unknown;
+  error: string | null;
+};
 
 type PanelKey =
   | "dtc"
@@ -130,6 +166,12 @@ export default function AdminDelphi() {
   const [bleState, setBleState] = useState(bleManager.getState());
   const [loadingCatalog, setLoadingCatalog] = useState(false);
 
+  // Krok 0 — zdroj OBD: tento telefon nebo aktivní zákaznická relace.
+  const [remoteSessions, setRemoteSessions] = useState<RemoteSession[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [transportSource, setTransportSource] = useState<string>("");
+  const [selectedRemoteSession, setSelectedRemoteSession] = useState<RemoteSession | null>(null);
+
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [generation, setGeneration] = useState("");
@@ -154,6 +196,89 @@ export default function AdminDelphi() {
       }),
     [],
   );
+
+  const isRemoteSessionLive = (session: RemoteSession) =>
+    session.is_active && Date.now() - new Date(session.last_seen).getTime() < 60_000;
+
+  const fetchRemoteSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from("obd_live_sessions")
+        .select("*")
+        .order("last_seen", { ascending: false })
+        .limit(100);
+
+      if (sessionsError) throw sessionsError;
+
+      const rawSessions = (sessionsData || []) as Array<Record<string, any>>;
+      const userIds = [...new Set(rawSessions.map((item) => item.user_id).filter(Boolean))];
+
+      if (userIds.length === 0) {
+        setRemoteSessions([]);
+        return;
+      }
+
+      const [{ data: profiles }, { data: permissions }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, full_name, email")
+          .in("user_id", userIds),
+        supabase
+          .from("obd_permissions")
+          .select("*")
+          .in("user_id", userIds),
+      ]);
+
+      const profileMap = new Map(
+        (profiles || []).map((item: any) => [item.user_id, item]),
+      );
+      const permissionMap = new Map(
+        (permissions || []).map((item: any) => [item.user_id, item]),
+      );
+
+      const mapped: RemoteSession[] = rawSessions.map((item) => ({
+        id: String(item.id),
+        user_id: String(item.user_id),
+        vin: item.vin ? String(item.vin) : null,
+        last_seen: String(item.last_seen),
+        is_active: Boolean(item.is_active),
+        profile_name: profileMap.get(item.user_id)?.full_name || "Bez jména",
+        profile_email: profileMap.get(item.user_id)?.email || "—",
+        permissions: permissionMap.get(item.user_id) || undefined,
+      }));
+
+      setRemoteSessions(mapped);
+      setSelectedRemoteSession((current) =>
+        current ? mapped.find((item) => item.id === current.id) || null : null,
+      );
+    } catch (error) {
+      toast({
+        title: "Nepodařilo se načíst OBD relace",
+        description: String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRemoteSessions();
+
+    const channel = supabase
+      .channel("delphi-remote-session-selector")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "obd_live_sessions" },
+        () => fetchRemoteSessions(),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   useEffect(() => {
     listBrands()
@@ -294,6 +419,16 @@ export default function AdminDelphi() {
     () => filteredEcus.find((item) => normalizeAddress(item.address) === normalizeAddress(ecuAddress)),
     [filteredEcus, ecuAddress],
   );
+
+  const usingLocalTransport = transportSource === "local";
+  const usingRemoteTransport = transportSource.startsWith("remote:");
+  const remoteLive = selectedRemoteSession
+    ? isRemoteSessionLive(selectedRemoteSession)
+    : false;
+  const transportReady = usingLocalTransport
+    ? bleState === "connected"
+    : usingRemoteTransport && remoteLive;
+  const transportChosen = usingLocalTransport || usingRemoteTransport;
 
   const activeContext: ActiveDiagContext | null = useMemo(() => {
     if (!brand) return null;
@@ -453,10 +588,263 @@ export default function AdminDelphi() {
     };
   }
 
+  function extractRemoteRaw(result: unknown): string {
+    if (typeof result === "string") return result;
+    if (!result || typeof result !== "object") return "";
+
+    const value = result as Record<string, unknown>;
+    const candidates = [
+      value.rawResponse,
+      value.raw_response,
+      value.raw,
+      value.response,
+      value.output,
+      value.data,
+      value.value,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string") return candidate;
+      if (candidate && typeof candidate === "object") {
+        const nested = candidate as Record<string, unknown>;
+        for (const key of ["rawResponse", "raw", "response", "output", "value"]) {
+          if (typeof nested[key] === "string") return nested[key] as string;
+        }
+      }
+    }
+
+    return JSON.stringify(result);
+  }
+
+  async function sendRemoteRawCommand(
+    command: string,
+    timeoutMs = 30_000,
+  ): Promise<{ status: string; raw: string; error: string | null }> {
+    if (!selectedRemoteSession) {
+      throw new Error("Není vybraný zákaznický OBD uživatel.");
+    }
+
+    if (!isRemoteSessionLive(selectedRemoteSession)) {
+      throw new Error("Vybraný zákazník je offline.");
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from("obd_remote_commands")
+      .insert({
+        user_id: selectedRemoteSession.user_id,
+        command_type: "custom_command",
+        command_payload: {
+          command: command.trim().toUpperCase(),
+          source: "delphi",
+          session_id: selectedRemoteSession.id,
+        } as any,
+        status: "pending",
+        created_by: authData.user?.id ?? null,
+      })
+      .select("id")
+      .single();
+
+    if (error || !data?.id) {
+      throw new Error(error?.message || "Vzdálený příkaz se nepodařilo vytvořit.");
+    }
+
+    const started = Date.now();
+
+    while (Date.now() - started < timeoutMs) {
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+
+      const { data: row, error: readError } = await supabase
+        .from("obd_remote_commands")
+        .select("id, status, result, error")
+        .eq("id", data.id)
+        .single();
+
+      if (readError) throw new Error(readError.message);
+
+      const commandRow = row as RemoteCommandRow;
+      if (commandRow.status === "done") {
+        return {
+          status: "ok",
+          raw: extractRemoteRaw(commandRow.result),
+          error: null,
+        };
+      }
+
+      if (commandRow.status === "error") {
+        return {
+          status: "error",
+          raw: extractRemoteRaw(commandRow.result),
+          error: commandRow.error || "Vzdálený příkaz skončil chybou.",
+        };
+      }
+    }
+
+    return {
+      status: "timeout",
+      raw: "",
+      error: "Vzdálený příkaz překročil časový limit.",
+    };
+  }
+
+  function responseHeaderFromRequest(request?: string) {
+    const clean = normalizeAddress(request);
+    if (/^7E[0-7]$/.test(clean)) {
+      return (parseInt(clean, 16) + 8).toString(16).toUpperCase();
+    }
+    return clean;
+  }
+
+  async function runRemoteFunction(
+    fn: DiagFunction,
+    context: ActiveDiagContext | null,
+    serviceMode = false,
+  ): Promise<DiagRunResult> {
+    const started = Date.now();
+    const warnings: string[] = [];
+    const tx = normalizeAddress(context?.ecuAddress || fn.ecuAddress);
+    const rx = responseHeaderFromRequest(tx);
+
+    try {
+      if (tx) {
+        const header = await sendRemoteRawCommand(`AT SH ${tx}`, 10_000);
+        if (header.status !== "ok") warnings.push(`AT SH ${tx}: ${header.status}`);
+      }
+
+      if (rx) {
+        const filter = await sendRemoteRawCommand(`AT CRA ${rx}`, 10_000);
+        if (filter.status !== "ok") warnings.push(`AT CRA ${rx}: ${filter.status}`);
+      }
+
+      if (
+        serviceMode &&
+        fn.isOem &&
+        (fn.kind === "routine" || fn.kind === "actuator_test")
+      ) {
+        const session = await sendRemoteRawCommand("10 03", 15_000);
+        if (session.status !== "ok") warnings.push(`10 03: ${session.status}`);
+      }
+
+      const remote = await sendRemoteRawCommand(
+        fn.command,
+        fn.kind === "routine" || fn.kind === "actuator_test" ? 45_000 : 30_000,
+      );
+
+      const nrcCatalog = await loadUdsNrcCatalog().catch(() => undefined);
+      const cleaned = cleanResponse(fn.command, remote.raw, nrcCatalog);
+      warnings.push(...cleaned.warnings);
+
+      let decoded: DiagRunResult["decoded"] = [];
+      if (remote.status === "ok" && cleaned.status === "ok") {
+        if (fn.kind === "dtc_scan") {
+          const codes = decodeDtcs(cleaned.bytes);
+          decoded = codes.length
+            ? codes.map((code) => ({
+                name: code,
+                value: code,
+                unit: null,
+                description: null,
+              }))
+            : [{
+                name: "no_dtc",
+                value: "Žádné DTC",
+                unit: null,
+                description: null,
+              }];
+        } else {
+          decoded = decodeValue(fn, cleaned.bytes);
+        }
+      }
+
+      return {
+        fn,
+        command: fn.command,
+        rawResponse: remote.raw,
+        cleanedResponse: cleaned.cleanedHex,
+        status:
+          remote.status === "ok"
+            ? cleaned.status
+            : remote.status === "timeout"
+              ? "timeout"
+              : "error",
+        decoded,
+        warnings,
+        nrc: cleaned.nrc,
+        error: remote.error,
+        durationMs: Date.now() - started,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        fn,
+        command: fn.command,
+        rawResponse: "",
+        cleanedResponse: "",
+        status: "error",
+        decoded: [],
+        warnings,
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - started,
+        timestamp: new Date().toISOString(),
+      };
+    } finally {
+      await sendRemoteRawCommand("AT CRA", 8_000).catch(() => undefined);
+    }
+  }
+
+  async function runThroughSelectedTransport(
+    fn: DiagFunction,
+    context: ActiveDiagContext | null,
+    serviceMode = false,
+  ) {
+    if (!transportChosen) {
+      throw new Error("Nejdřív vyber zdroj OBD v kroku 0.");
+    }
+
+    if (usingRemoteTransport) {
+      return runRemoteFunction(fn, context, serviceMode);
+    }
+
+    return runDiagFunction(fn, {
+      activeContext: context,
+      vin: vin || null,
+      serviceMode,
+    });
+  }
+
+  async function runRawThroughSelectedTransport(
+    command: string,
+    context: ActiveDiagContext | null,
+    serviceMode = false,
+  ): Promise<DiagRunResult> {
+    if (usingRemoteTransport) {
+      const fn: DiagFunction = {
+        id: `remote-raw:${command}`,
+        brandKey: context?.brandKey || "OBD2",
+        brandLabel: context?.brandLabel || "Raw",
+        isOem: Boolean(context?.isOem),
+        ecuAddress: context?.ecuAddress,
+        ecu: context?.ecuName,
+        kind: "raw",
+        name: `Raw: ${command}`,
+        command,
+        sourceFile: "remote",
+        originalName: command,
+      };
+      return runRemoteFunction(fn, context, serviceMode);
+    }
+
+    return runRawCommand(command, context, {
+      activeContext: context,
+      vin: vin || null,
+      serviceMode,
+    });
+  }
+
   async function scanAllFaults() {
-    if (bleState !== "connected") {
+    if (!transportReady) {
       toast({
-        title: "OBD adaptér není připojen",
+        title: usingRemoteTransport ? "Vybraný zákazník je offline" : "OBD adaptér není připojen",
         variant: "destructive",
       });
       return;
@@ -504,23 +892,14 @@ export default function AdminDelphi() {
 
         const ctx = contextForEcu(ecu);
 
-        const stored = await runDiagFunction(storedDtcFn, {
-          activeContext: ctx,
-          vin: vin || null,
-        });
+        const stored = await runThroughSelectedTransport(storedDtcFn, ctx);
 
         const pending = pendingDtcFn
-          ? await runDiagFunction(pendingDtcFn, {
-              activeContext: ctx,
-              vin: vin || null,
-            })
+          ? await runThroughSelectedTransport(pendingDtcFn, ctx)
           : null;
 
         const permanent = permanentDtcFn
-          ? await runDiagFunction(permanentDtcFn, {
-              activeContext: ctx,
-              vin: vin || null,
-            })
+          ? await runThroughSelectedTransport(permanentDtcFn, ctx)
           : null;
 
         const row = { ecu, stored, pending, permanent };
@@ -546,9 +925,9 @@ export default function AdminDelphi() {
   }
 
   async function clearAllFaults() {
-    if (bleState !== "connected") {
+    if (!transportReady) {
       toast({
-        title: "OBD adaptér není připojen",
+        title: usingRemoteTransport ? "Vybraný zákazník je offline" : "OBD adaptér není připojen",
         variant: "destructive",
       });
       return;
@@ -587,11 +966,7 @@ export default function AdminDelphi() {
         );
 
         const ctx = contextForEcu(ecu);
-        const clear = await runRawCommand("04", ctx, {
-          activeContext: ctx,
-          vin: vin || null,
-          serviceMode: true,
-        });
+        const clear = await runRawThroughSelectedTransport("04", ctx, true);
 
         const stored = storedDtcFn
           ? await runDiagFunction(storedDtcFn, {
@@ -601,17 +976,11 @@ export default function AdminDelphi() {
           : null;
 
         const pending = pendingDtcFn
-          ? await runDiagFunction(pendingDtcFn, {
-              activeContext: ctx,
-              vin: vin || null,
-            })
+          ? await runThroughSelectedTransport(pendingDtcFn, ctx)
           : null;
 
         const permanent = permanentDtcFn
-          ? await runDiagFunction(permanentDtcFn, {
-              activeContext: ctx,
-              vin: vin || null,
-            })
+          ? await runThroughSelectedTransport(permanentDtcFn, ctx)
           : null;
 
         const row = { ecu, clear, stored, pending, permanent };
@@ -652,11 +1021,11 @@ export default function AdminDelphi() {
 
     setRunning(true);
     try {
-      const output = await runDiagFunction(selected, {
+      const output = await runThroughSelectedTransport(
+        selected,
         activeContext,
-        vin: vin || null,
-        serviceMode: true,
-      });
+        true,
+      );
       setResult(output);
     } catch (error) {
       toast({
@@ -692,17 +1061,175 @@ export default function AdminDelphi() {
           <Badge
             variant="outline"
             className={
-              bleState === "connected"
+              transportReady
                 ? "border-emerald-400 bg-emerald-950/50 text-emerald-200"
                 : "border-red-400 bg-red-950/50 text-red-200"
             }
           >
-            <Bluetooth className="mr-1 h-3.5 w-3.5" />
-            {bleState === "connected" ? "OBD připojeno" : "OBD odpojeno"}
+            {usingRemoteTransport ? (
+              <Wifi className="mr-1 h-3.5 w-3.5" />
+            ) : (
+              <Bluetooth className="mr-1 h-3.5 w-3.5" />
+            )}
+            {!transportChosen
+              ? "Vyber OBD zdroj"
+              : transportReady
+                ? usingRemoteTransport
+                  ? "Vzdálené OBD LIVE"
+                  : "Lokální OBD připojeno"
+                : usingRemoteTransport
+                  ? "Zákazník offline"
+                  : "Lokální OBD odpojeno"}
           </Badge>
         </div>
 
         <div className="space-y-3 p-3 sm:p-4">
+          {/* 0. VÝBĚR UŽIVATELE / OBD ZDROJE */}
+          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-400 bg-slate-200 px-3 py-2">
+              <span className="text-sm font-bold">0. Vyber uživatele / OBD relaci</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={fetchRemoteSessions}
+                disabled={loadingSessions}
+                className="h-7 text-slate-700"
+              >
+                <RefreshCw className={`mr-1 h-3.5 w-3.5 ${loadingSessions ? "animate-spin" : ""}`} />
+                Obnovit
+              </Button>
+            </div>
+
+            <div className="space-y-2 p-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setTransportSource("local");
+                  setSelectedRemoteSession(null);
+                  setScanResults([]);
+                  setResult(null);
+                }}
+                className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
+                  usingLocalTransport
+                    ? "border-blue-600 bg-blue-50"
+                    : "border-slate-300 bg-white hover:bg-slate-50"
+                }`}
+              >
+                <Bluetooth className="h-5 w-5 shrink-0 text-blue-700" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-slate-950">Tento telefon – lokální OBD</p>
+                  <p className="text-xs text-slate-600">
+                    Použije adaptér připojený přímo k tomuto zařízení.
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    bleState === "connected"
+                      ? "border-emerald-400 text-emerald-700"
+                      : "border-red-400 text-red-700"
+                  }
+                >
+                  {bleState === "connected" ? "Připojeno" : "Odpojeno"}
+                </Badge>
+              </button>
+
+              <div className="pt-1">
+                <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
+                  <User className="h-4 w-4" />
+                  Zákaznické OBD relace
+                </p>
+
+                {loadingSessions && remoteSessions.length === 0 ? (
+                  <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 p-5 text-sm text-slate-600">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Načítám uživatele…
+                  </div>
+                ) : remoteSessions.length === 0 ? (
+                  <p className="rounded-lg border border-slate-300 p-4 text-sm text-slate-600">
+                    Nebyla nalezena žádná zákaznická OBD relace.
+                  </p>
+                ) : (
+                  <div className="max-h-80 space-y-2 overflow-y-auto">
+                    {remoteSessions.map((session) => {
+                      const live = isRemoteSessionLive(session);
+                      const active = transportSource === `remote:${session.id}`;
+
+                      return (
+                        <button
+                          type="button"
+                          key={session.id}
+                          onClick={() => {
+                            setTransportSource(`remote:${session.id}`);
+                            setSelectedRemoteSession(session);
+                            if (session.vin) setVin(session.vin.toUpperCase());
+                            setScanResults([]);
+                            setResult(null);
+                          }}
+                          className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
+                            active
+                              ? "border-orange-500 bg-orange-50"
+                              : "border-slate-300 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          {live ? (
+                            <Wifi className="h-5 w-5 shrink-0 text-emerald-600" />
+                          ) : (
+                            <WifiOff className="h-5 w-5 shrink-0 text-slate-500" />
+                          )}
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-bold text-slate-950">
+                              {session.profile_name}
+                            </p>
+                            <p className="truncate text-xs text-slate-600">
+                              {session.profile_email}
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              VIN: {session.vin || "—"} · poslední signál{" "}
+                              {new Date(session.last_seen).toLocaleString("cs-CZ")}
+                            </p>
+                          </div>
+
+                          <Badge
+                            variant="outline"
+                            className={
+                              live
+                                ? "border-emerald-400 text-emerald-700"
+                                : "border-slate-400 text-slate-600"
+                            }
+                          >
+                            {live ? "LIVE" : "Offline"}
+                          </Badge>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {transportChosen && (
+                <div className={`rounded-lg border p-3 text-sm ${
+                  transportReady
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                    : "border-amber-300 bg-amber-50 text-amber-900"
+                }`}>
+                  <p className="font-bold">
+                    Aktivní zdroj:{" "}
+                    {usingLocalTransport
+                      ? "Tento telefon"
+                      : selectedRemoteSession?.profile_name || "Vzdálený uživatel"}
+                  </p>
+                  <p className="mt-1 text-xs">
+                    {transportReady
+                      ? "Diagnostické příkazy budou odesílány přes tento OBD transport."
+                      : "Zdroj je vybraný, ale momentálně není online."}
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* 1. VÝBĚR VOZIDLA */}
           <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
             <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
@@ -936,7 +1463,7 @@ export default function AdminDelphi() {
                     <div className="grid gap-2 sm:grid-cols-2">
                       <Button
                         onClick={scanAllFaults}
-                        disabled={fullScanRunning || fullClearRunning || bleState !== "connected"}
+                        disabled={fullScanRunning || fullClearRunning || !transportReady}
                         className="bg-blue-700 hover:bg-blue-600"
                       >
                         {fullScanRunning ? (
@@ -949,7 +1476,7 @@ export default function AdminDelphi() {
 
                       <Button
                         onClick={clearAllFaults}
-                        disabled={fullScanRunning || fullClearRunning || bleState !== "connected"}
+                        disabled={fullScanRunning || fullClearRunning || !transportReady}
                         variant="destructive"
                       >
                         {fullClearRunning ? (
@@ -1317,7 +1844,7 @@ export default function AdminDelphi() {
                           </Button>
                           <Button
                             onClick={runSelected}
-                            disabled={running || bleState !== "connected"}
+                            disabled={running || !transportReady}
                             className="bg-blue-700 hover:bg-blue-600"
                           >
                             {running ? (
@@ -1329,9 +1856,9 @@ export default function AdminDelphi() {
                           </Button>
                         </div>
 
-                        {bleState !== "connected" && (
+                        {!transportReady && (
                           <p className="text-center text-xs font-bold text-red-700">
-                            Nejdřív připoj OBD adaptér.
+                            Nejdřív v kroku 0 vyber online OBD zdroj.
                           </p>
                         )}
 
@@ -1427,7 +1954,7 @@ function FunctionPanelHeader({
   openPanel: PanelKey | null;
   title: string;
   description: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   onToggle: (panel: PanelKey) => void;
 }) {
   const open = panel === openPanel;
