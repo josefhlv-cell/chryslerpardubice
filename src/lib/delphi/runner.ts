@@ -18,7 +18,7 @@ interface RunContext {
   activeContext?: ActiveDiagContext | null;
 
   /**
-   * Musí poslat UI až po zadání SERVISNI REZIM.
+   * Musí poslat UI až po potvrzení odborného servisního režimu.
    * Pokud false/undefined, routine 31 a actuator_test se nespustí.
    */
   serviceMode?: boolean;
@@ -162,15 +162,6 @@ async function prepareElmForFunction(fn: DiagFunction, ctx: RunContext): Promise
     }
   }
 
-  /**
-   * DŮLEŽITÉ:
-   * RAW nikdy neotvírá session.
-   * DTC nikdy neotvírá session.
-   * OBD2 PID nikdy neotvírá session.
-   *
-   * Session necháváme jen pro rutiny / actuator testy.
-   * DID 22 může být často čitelný i bez session; když ECU odpoví NRC, uvidíme přesně proč.
-   */
   if (fn.isOem && (fn.kind === "routine" || fn.kind === "actuator_test")) {
     const session = await elmQueue.send("10 03", {
       commandType: "delphi_diag_init",
@@ -185,6 +176,29 @@ async function prepareElmForFunction(fn: DiagFunction, ctx: RunContext): Promise
   }
 
   return { warnings, tx, rx };
+}
+
+/**
+ * Po každé Delphi OEM operaci vrátí ELM do běžného profilu.
+ * Důležité: odstraní přijímací filtr CRA, jinak další standardní PIDy
+ * mohou končit jako no_data, protože adaptér stále poslouchá jen jednu ECU.
+ */
+async function restoreElmAfterFunction(): Promise<void> {
+  try {
+    // ELM327: AT CRA bez adresy vypne receive-address filter.
+    await elmQueue.send("AT CRA", {
+      commandType: "delphi_diag_restore",
+      timeoutMs: 1200,
+    });
+  } catch {
+    // Obnova profilu níže je důležitější; chyba resetu filtru nesmí shodit UI.
+  }
+
+  try {
+    await applyElmProfile("simple");
+  } catch {
+    // Chybu obnovy pouze tolerujeme, aby se neztratila původní odpověď funkce.
+  }
 }
 
 export async function runDiagFunction(
@@ -204,10 +218,6 @@ export async function runDiagFunction(
     return res;
   }
 
-  /**
-   * HARD GUARD 1:
-   * Generic OBD-II nikdy nesmí spouštět OEM routine/actuator/DID.
-   */
   if (!activeContext?.isOem && isOemFunction(fn) && fn.kind !== "dtc_scan" && fn.kind !== "raw") {
     const res = makeBlockedResult(
       fn,
@@ -218,10 +228,6 @@ export async function runDiagFunction(
     return res;
   }
 
-  /**
-   * HARD GUARD 2:
-   * OEM DID/routine/actuator musí mít ECU/TX.
-   */
   if (requiresEcu(fn) && !tx) {
     const res = makeBlockedResult(
       fn,
@@ -232,10 +238,6 @@ export async function runDiagFunction(
     return res;
   }
 
-  /**
-   * HARD GUARD 3:
-   * RAW bez TX se nesmí poslat.
-   */
   if (fn.kind === "raw" && !tx) {
     const res = makeBlockedResult(
       fn,
@@ -246,16 +248,12 @@ export async function runDiagFunction(
     return res;
   }
 
-  /**
-   * HARD GUARD 4:
-   * Routine 31 / actuator / destructive funkce pouze v servisním režimu.
-   */
   if (requiresServiceMode(fn) || commandStartsWithRoutine31(fn)) {
     if (!ctx.serviceMode) {
       const res = makeBlockedResult(
         fn,
         "Servisní režim není aktivní",
-        ["Routine/adaptace/actuator testy jsou blokované. Aktivuj Servisní režim textem SERVISNI REZIM."],
+        ["Routine/adaptace/actuator testy vyžadují potvrzený odborný režim v UI."],
       );
       logBlocked(fn, res, ctx, "service_mode_required");
       return res;
@@ -304,10 +302,6 @@ export async function runDiagFunction(
 
       let finalStatus = cmdResult.status === "ok" ? cleaned.status : cmdResult.status;
 
-      /**
-       * HARD GUARD 5:
-       * Routine 31 je úspěch pouze při 71.
-       */
       if (commandStartsWithRoutine31(fn)) {
         const compact = cleaned.cleanedHex.replace(/\s+/g, "").toUpperCase();
         if (!compact.startsWith("71")) {
@@ -405,6 +399,8 @@ export async function runDiagFunction(
       });
 
       return res;
+    } finally {
+      await restoreElmAfterFunction();
     }
   });
 }
