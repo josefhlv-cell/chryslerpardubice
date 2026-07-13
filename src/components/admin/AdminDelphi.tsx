@@ -2059,6 +2059,24 @@ export default function AdminDelphi() {
                               </div>
                             )}
 
+                            {(() => {
+                              const explain = explainStatus(result);
+                              if (!explain) return null;
+                              return (
+                                <div className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+                                  <p className="font-bold">{explain.title}</p>
+                                  {explain.causes.length > 0 && (
+                                    <>
+                                      <p className="text-xs font-semibold uppercase text-amber-800">Možné příčiny</p>
+                                      <ul className="list-disc pl-5 text-xs space-y-0.5">
+                                        {explain.causes.map((c) => <li key={c}>{c}</li>)}
+                                      </ul>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
                             {result.nrc && (
                               <div className="rounded border border-orange-400 bg-orange-50 p-3 text-sm text-orange-900">
                                 <p className="font-bold">
@@ -2081,14 +2099,32 @@ export default function AdminDelphi() {
                               <TabsContent value="summary" className="space-y-1 text-sm">
                                 <p>Doba odezvy: {result.durationMs} ms</p>
                                 <p>Stav: {result.status}</p>
+                                <p>Transport: {usingLocalTransport ? "Lokální BLE" : usingRemoteTransport ? `Vzdálený (${selectedRemoteSession?.profile_name || "?"})` : "—"}</p>
                               </TabsContent>
                               <TabsContent value="technical" className="space-y-2 text-xs">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <InfoRow label="TX (AT SH)" value={normalizeAddress(activeContext?.manualTx || activeContext?.ecuAddress || selected?.ecuAddress) || "default"} mono />
+                                  <InfoRow label="RX (AT CRA)" value={normalizeAddress(activeContext?.manualRx || activeContext?.responseHeader) || "auto"} mono />
+                                  <InfoRow label="ECU" value={activeContext?.ecuName || selected?.ecu || "—"} />
+                                  <InfoRow label="Profil ELM" value={selected?.isOem ? "debug (ATH1)" : "simple (ATH0)"} />
+                                </div>
                                 <p className="break-all">
                                   <strong>Příkaz:</strong> {result.command}
+                                </p>
+                                <p className="break-all">
+                                  <strong>Cleaned:</strong> <span className="font-mono">{result.cleanedResponse || "—"}</span>
                                 </p>
                                 <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-slate-100">
                                   {result.rawResponse || "Bez odpovědi"}
                                 </pre>
+                                {result.warnings.length > 0 && (
+                                  <div className="rounded border border-slate-300 bg-white p-2">
+                                    <p className="text-[10px] font-bold uppercase text-slate-500">Warnings</p>
+                                    <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                                      {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
                               </TabsContent>
                             </Tabs>
 
