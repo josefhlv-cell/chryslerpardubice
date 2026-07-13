@@ -24,6 +24,7 @@ export const COMMON_VEHICLE_MAKES: string[] = [
 
 const vagEcu = ["EDC16", "EDC17", "MD1", "MED17", "MG1", "Simos", "Engine ECU", "Motor"];
 const fcaEcu = ["PCM", "ECM", "Engine Control", "Powertrain Control", "Motor"];
+const fordEcu = ["PCM", "ECM", "Powertrain Control Module", "Engine Control Module", "TCM", "ABS", "RCM", "BCM", "GWM", "IPC", "HVAC", "PSCM", "SCCM", "APIM", "Ford"];
 
 function profile(
   id: string, brandKey: string, make: string, model: string, generation: string,
@@ -68,6 +69,10 @@ export const VEHICLE_PROFILES: VehicleProfile[] = [
   profile("seat-leon-1p-bkd","VAG","SEAT","Leon","1P",2005,2009,"2.0 TDI 103 kW","BKD","Diesel",["EDC16U31",...vagEcu]),
   profile("seat-leon-5f-crlb","VAG","SEAT","Leon","5F",2013,2020,"2.0 TDI 110 kW","CRLB","Diesel",["EDC17C64",...vagEcu]),
   profile("seat-alhambra-7n-cffb","VAG","SEAT","Alhambra","7N",2010,2015,"2.0 TDI 103 kW","CFFB","Diesel",["EDC17CP14",...vagEcu]),
+
+  // FORD
+  profile("ford-mustang-s550-23-ecoboost","FORD","Ford","Mustang","VI / S550",2015,2023,"2.3 EcoBoost","2.3L EcoBoost","Benzín",["PCM","ECM","Bosch MED17","Continental",...fordEcu]),
+  profile("ford-mustang-s650-23-ecoboost","FORD","Ford","Mustang","VII / S650",2024,2026,"2.3 EcoBoost","2.3L EcoBoost","Benzín",["PCM","ECM","Powertrain Control Module",...fordEcu]),
 
   // CHRYSLER
   profile("chrysler-pacifica-ru-erb","STLA","Chrysler","Pacifica","RU",2017,2026,"3.6 V6 Pentastar","ERB","Benzín",fcaEcu),
