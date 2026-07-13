@@ -4,21 +4,25 @@ import {
   AlertTriangle,
   Bluetooth,
   Car,
+  CheckCircle2,
+  ChevronDown,
   ChevronRight,
-  CircleDot,
+  CircleX,
   ClipboardList,
   Cpu,
-  FileCode2,
+  Eraser,
   Gauge,
   Info,
+  Loader2,
   Play,
+  RefreshCw,
   Search,
   ShieldAlert,
   Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,6 +40,7 @@ import {
   listBrands,
   loadBrandFunctions,
   runDiagFunction,
+  runRawCommand,
   uniqueSorted,
   VEHICLE_PROFILES,
 } from "@/lib/delphi";
@@ -44,30 +49,43 @@ import type {
   BrandManifestEntry,
   DiagFunction,
   DiagRunResult,
-  FunctionKind,
   VehicleProfile,
 } from "@/lib/delphi";
 
 type EcuOption = { address: string; name: string; common?: string };
-type MainSection = "information" | "faults" | "live" | "tests" | "service";
 
-const sectionKinds: Record<Exclude<MainSection, "information">, FunctionKind[]> = {
-  faults: ["dtc_scan"],
-  live: ["live_pid", "obd2_pid", "did"],
-  tests: ["actuator_test"],
-  service: ["routine"],
+type PanelKey =
+  | "dtc"
+  | "live"
+  | "actuators"
+  | "service"
+  | "ecuInfo";
+
+type EcuScanResult = {
+  ecu: EcuOption;
+  stored: DiagRunResult | null;
+  pending: DiagRunResult | null;
+  permanent: DiagRunResult | null;
+  clear?: DiagRunResult | null;
 };
 
-const sectionLabel: Record<MainSection, string> = {
-  information: "Informace",
-  faults: "Chybové kódy",
+const panelTitles: Record<PanelKey, string> = {
+  dtc: "Diagnostika závad",
   live: "Živá data",
-  tests: "Testy akčních členů",
+  actuators: "Testy akčních členů",
   service: "Servisní funkce",
+  ecuInfo: "Informace o ECU",
 };
 
 function normalizeText(value?: string) {
   return (value || "").toLocaleLowerCase("cs");
+}
+
+function normalizeAddress(value?: string) {
+  return (value || "")
+    .replace(/^0x/i, "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
 }
 
 function ecuMatchesProfile(ecu: EcuOption, profile: VehicleProfile) {
@@ -75,14 +93,31 @@ function ecuMatchesProfile(ecu: EcuOption, profile: VehicleProfile) {
   return profile.ecuHints.some((hint) => text.includes(normalizeText(hint)));
 }
 
-function statusClass(status?: string) {
-  if (status === "ok") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
-  if (status === "pending") return "border-amber-500/40 bg-amber-500/10 text-amber-300";
-  return "border-red-500/40 bg-red-500/10 text-red-300";
-}
-
 function isWriteFunction(fn: DiagFunction) {
   return fn.kind === "routine" || fn.kind === "actuator_test" || Boolean(fn.destructive);
+}
+
+function statusClass(status?: string) {
+  if (status === "ok") return "border-emerald-600 bg-emerald-50 text-emerald-800";
+  if (status === "pending") return "border-amber-500 bg-amber-50 text-amber-800";
+  if (status === "nrc") return "border-orange-500 bg-orange-50 text-orange-800";
+  return "border-red-500 bg-red-50 text-red-800";
+}
+
+function collectCodes(result: DiagRunResult | null): string[] {
+  if (!result || result.status !== "ok") return [];
+  return result.decoded
+    .map((item) => String(item.value ?? item.name ?? "").trim())
+    .filter((value) => value && value !== "Žádné DTC" && value !== "no_dtc");
+}
+
+function resultText(result: DiagRunResult | null) {
+  if (!result) return "Nespouštěno";
+  if (result.status === "ok") return "OK";
+  if (result.status === "no_data") return "Bez dat";
+  if (result.status === "timeout") return "Timeout";
+  if (result.status === "nrc") return `NRC ${result.nrc?.code || ""}`.trim();
+  return "Chyba";
 }
 
 export default function AdminDelphi() {
@@ -92,19 +127,25 @@ export default function AdminDelphi() {
   const [functions, setFunctions] = useState<DiagFunction[]>([]);
   const [ecus, setEcus] = useState<EcuOption[]>([]);
   const [ecuAddress, setEcuAddress] = useState("__all");
-  const [section, setSection] = useState<MainSection>("information");
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<DiagFunction | null>(null);
-  const [result, setResult] = useState<DiagRunResult | null>(null);
-  const [running, setRunning] = useState(false);
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [bleState, setBleState] = useState(bleManager.getState());
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
 
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [generation, setGeneration] = useState("");
   const [year, setYear] = useState("");
   const [profileId, setProfileId] = useState("");
+
+  const [openPanel, setOpenPanel] = useState<PanelKey | null>("dtc");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<DiagFunction | null>(null);
+  const [result, setResult] = useState<DiagRunResult | null>(null);
+  const [running, setRunning] = useState(false);
+
+  const [fullScanRunning, setFullScanRunning] = useState(false);
+  const [fullClearRunning, setFullClearRunning] = useState(false);
+  const [scanProgress, setScanProgress] = useState("");
+  const [scanResults, setScanResults] = useState<EcuScanResult[]>([]);
 
   useEffect(
     () =>
@@ -138,7 +179,9 @@ export default function AdminDelphi() {
 
         const map = new Map<string, EcuOption>();
         for (const ecu of data.catalog.ecus || []) {
-          map.set(ecu.address, {
+          const key = normalizeAddress(ecu.address);
+          if (!key) continue;
+          map.set(key, {
             address: ecu.address,
             name: ecu.name,
             common: ecu.common_name,
@@ -150,9 +193,11 @@ export default function AdminDelphi() {
             (a.common || a.name).localeCompare(b.common || b.name, "cs"),
           ),
         );
+
         setEcuAddress("__all");
         setSelected(null);
         setResult(null);
+        setScanResults([]);
       })
       .catch((error) =>
         toast({
@@ -170,7 +215,6 @@ export default function AdminDelphi() {
     };
   }, [brandKey]);
 
-  // Pouze značky, které mají skutečné profily ve stromu.
   const makes = useMemo(
     () => uniqueSorted(VEHICLE_PROFILES.map((item) => item.make)),
     [],
@@ -247,11 +291,11 @@ export default function AdminDelphi() {
   }, [ecus, profile]);
 
   const selectedEcu = useMemo(
-    () => filteredEcus.find((item) => item.address === ecuAddress),
+    () => filteredEcus.find((item) => normalizeAddress(item.address) === normalizeAddress(ecuAddress)),
     [filteredEcus, ecuAddress],
   );
 
-  const context: ActiveDiagContext | null = useMemo(() => {
+  const activeContext: ActiveDiagContext | null = useMemo(() => {
     if (!brand) return null;
     return {
       brandKey: brand.key,
@@ -263,20 +307,49 @@ export default function AdminDelphi() {
     };
   }, [brand, selectedEcu, vin]);
 
-  // Všechny katalogové funkce jsou viditelné. Neověřené se pouze označí varováním.
-  const visibleFunctions = useMemo(() => {
-    if (section === "information") return [];
-    const kinds = sectionKinds[section];
+  const dtcFunctions = useMemo(
+    () => functions.filter((fn) => fn.kind === "dtc_scan"),
+    [functions],
+  );
+
+  const storedDtcFn = dtcFunctions.find((fn) => fn.command.trim() === "03") || null;
+  const pendingDtcFn = dtcFunctions.find((fn) => fn.command.trim() === "07") || null;
+  const permanentDtcFn = dtcFunctions.find((fn) => fn.command.trim().toUpperCase() === "0A") || null;
+
+  const liveFunctions = useMemo(
+    () =>
+      functions.filter((fn) =>
+        ["live_pid", "obd2_pid", "did"].includes(fn.kind),
+      ),
+    [functions],
+  );
+
+  const actuatorFunctions = useMemo(
+    () => functions.filter((fn) => fn.kind === "actuator_test"),
+    [functions],
+  );
+
+  const serviceFunctions = useMemo(
+    () => functions.filter((fn) => fn.kind === "routine"),
+    [functions],
+  );
+
+  const functionGroups = useMemo(() => {
+    const source =
+      openPanel === "live"
+        ? liveFunctions
+        : openPanel === "actuators"
+          ? actuatorFunctions
+          : openPanel === "service"
+            ? serviceFunctions
+            : [];
+
     const query = search.trim().toLocaleLowerCase("cs");
-
-    return functions.filter((fn) => {
-      if (!kinds.includes(fn.kind)) return false;
-
+    const filtered = source.filter((fn) => {
       if (
         ecuAddress !== "__all" &&
         fn.ecuAddress &&
-        fn.ecuAddress !== ecuAddress &&
-        fn.kind !== "dtc_scan"
+        normalizeAddress(fn.ecuAddress) !== normalizeAddress(ecuAddress)
       ) {
         return false;
       }
@@ -296,42 +369,59 @@ export default function AdminDelphi() {
         .toLocaleLowerCase("cs")
         .includes(query);
     });
-  }, [functions, section, search, ecuAddress]);
 
-  const counts = useMemo(
-    () => ({
-      faults: functions.filter((item) => item.kind === "dtc_scan").length,
-      live: functions.filter((item) =>
-        ["live_pid", "obd2_pid", "did"].includes(item.kind),
-      ).length,
-      tests: functions.filter((item) => item.kind === "actuator_test").length,
-      service: functions.filter((item) => item.kind === "routine").length,
-    }),
-    [functions],
+    const groups = new Map<string, DiagFunction[]>();
+    for (const fn of filtered) {
+      const key = fn.category || fn.ecuCommonName || fn.ecu || "Ostatní";
+      const list = groups.get(key) || [];
+      list.push(fn);
+      groups.set(key, list);
+    }
+
+    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "cs"));
+  }, [
+    openPanel,
+    liveFunctions,
+    actuatorFunctions,
+    serviceFunctions,
+    search,
+    ecuAddress,
+  ]);
+
+  const totalDtc = useMemo(
+    () =>
+      scanResults.reduce(
+        (sum, item) =>
+          sum +
+          collectCodes(item.stored).length +
+          collectCodes(item.pending).length +
+          collectCodes(item.permanent).length,
+        0,
+      ),
+    [scanResults],
   );
 
-  function clearBelow(level: "make" | "model" | "generation" | "year") {
+  function resetBelow(level: "make" | "model" | "generation" | "year") {
     if (level === "make") {
       setModel("");
       setGeneration("");
       setYear("");
       setProfileId("");
-    }
-    if (level === "model") {
+    } else if (level === "model") {
       setGeneration("");
       setYear("");
       setProfileId("");
-    }
-    if (level === "generation") {
+    } else if (level === "generation") {
       setYear("");
       setProfileId("");
-    }
-    if (level === "year") {
+    } else {
       setProfileId("");
     }
+
     setEcuAddress("__all");
     setSelected(null);
     setResult(null);
+    setScanResults([]);
   }
 
   async function decodeVin() {
@@ -339,7 +429,7 @@ export default function AdminDelphi() {
     if (!found) {
       toast({
         title: "VIN nebyl rozpoznán",
-        description: "Vyber vozidlo ručně ve stromu Delphi.",
+        description: "Vyber vozidlo ručně.",
         variant: "destructive",
       });
       return;
@@ -348,8 +438,195 @@ export default function AdminDelphi() {
     setBrandKey(found.key);
     toast({
       title: "Výrobce rozpoznán",
-      description: `${found.display_name}. Model, rok a motor vyber ve stromu.`,
+      description: `${found.display_name}. Model, rok a motor vyber ručně.`,
     });
+  }
+
+  function contextForEcu(ecu: EcuOption): ActiveDiagContext {
+    return {
+      brandKey: brand?.key || brandKey,
+      brandLabel: brand?.display_name || brandKey,
+      isOem: (brand?.key || brandKey) !== "OBD2",
+      vin: vin || null,
+      ecuAddress: ecu.address,
+      ecuName: ecu.common || ecu.name,
+    };
+  }
+
+  async function scanAllFaults() {
+    if (bleState !== "connected") {
+      toast({
+        title: "OBD adaptér není připojen",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!profile) {
+      toast({
+        title: "Nejdřív vyber vozidlo",
+        description: "Vyber značku, model, generaci, rok a motor.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!storedDtcFn) {
+      toast({
+        title: "V katalogu chybí čtení DTC",
+        description: "Nebyla nalezena funkce Mode 03.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const targets = filteredEcus.length > 0 ? filteredEcus : ecus;
+    if (targets.length === 0) {
+      toast({
+        title: "Pro značku nejsou dostupné ECU",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setFullScanRunning(true);
+    setScanResults([]);
+    setResult(null);
+
+    const collected: EcuScanResult[] = [];
+
+    try {
+      for (let index = 0; index < targets.length; index += 1) {
+        const ecu = targets[index];
+        setScanProgress(
+          `${index + 1}/${targets.length} · ${ecu.common || ecu.name}`,
+        );
+
+        const ctx = contextForEcu(ecu);
+
+        const stored = await runDiagFunction(storedDtcFn, {
+          activeContext: ctx,
+          vin: vin || null,
+        });
+
+        const pending = pendingDtcFn
+          ? await runDiagFunction(pendingDtcFn, {
+              activeContext: ctx,
+              vin: vin || null,
+            })
+          : null;
+
+        const permanent = permanentDtcFn
+          ? await runDiagFunction(permanentDtcFn, {
+              activeContext: ctx,
+              vin: vin || null,
+            })
+          : null;
+
+        const row = { ecu, stored, pending, permanent };
+        collected.push(row);
+        setScanResults([...collected]);
+      }
+
+      toast({
+        title: "Kompletní diagnostika dokončena",
+        description: `Zkontrolováno ${targets.length} jednotek, nalezeno ${collected.reduce(
+          (sum, item) =>
+            sum +
+            collectCodes(item.stored).length +
+            collectCodes(item.pending).length +
+            collectCodes(item.permanent).length,
+          0,
+        )} DTC.`,
+      });
+    } finally {
+      setFullScanRunning(false);
+      setScanProgress("");
+    }
+  }
+
+  async function clearAllFaults() {
+    if (bleState !== "connected") {
+      toast({
+        title: "OBD adaptér není připojen",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!profile) {
+      toast({
+        title: "Nejdřív vyber vozidlo",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const targets = filteredEcus.length > 0 ? filteredEcus : ecus;
+    if (targets.length === 0) return;
+
+    const confirmed = window.confirm(
+      [
+        "SMAZAT CHYBY VE VŠECH DOSTUPNÝCH JEDNOTKÁCH?",
+        "",
+        "Zapalování musí být zapnuté a motor podle požadavků výrobce vypnutý.",
+        "Po vymazání se automaticky znovu načtou chyby.",
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    setFullClearRunning(true);
+
+    const cleared: EcuScanResult[] = [];
+
+    try {
+      for (let index = 0; index < targets.length; index += 1) {
+        const ecu = targets[index];
+        setScanProgress(
+          `${index + 1}/${targets.length} · mazání · ${ecu.common || ecu.name}`,
+        );
+
+        const ctx = contextForEcu(ecu);
+        const clear = await runRawCommand("04", ctx, {
+          activeContext: ctx,
+          vin: vin || null,
+          serviceMode: true,
+        });
+
+        const stored = storedDtcFn
+          ? await runDiagFunction(storedDtcFn, {
+              activeContext: ctx,
+              vin: vin || null,
+            })
+          : null;
+
+        const pending = pendingDtcFn
+          ? await runDiagFunction(pendingDtcFn, {
+              activeContext: ctx,
+              vin: vin || null,
+            })
+          : null;
+
+        const permanent = permanentDtcFn
+          ? await runDiagFunction(permanentDtcFn, {
+              activeContext: ctx,
+              vin: vin || null,
+            })
+          : null;
+
+        const row = { ecu, clear, stored, pending, permanent };
+        cleared.push(row);
+        setScanResults([...cleared]);
+      }
+
+      toast({
+        title: "Mazání dokončeno",
+        description: "Proběhla následná kontrola chyb.",
+      });
+    } finally {
+      setFullClearRunning(false);
+      setScanProgress("");
+    }
   }
 
   async function runSelected() {
@@ -362,13 +639,13 @@ export default function AdminDelphi() {
           selected.safetyWarning ||
             "Tato funkce může změnit stav řídicí jednotky nebo vozidla.",
           "",
-          "Funkce může být pouze kandidátní pro zvolenou variantu ECU.",
-          "Před spuštěním zkontroluj cílovou ECU, zapalování, napětí, diagnostickou relaci a požadované podmínky.",
+          "Funkce nemusí být ověřena pro konkrétní SW variantu ECU.",
+          "Zkontroluj vybranou ECU, napětí, zapalování a podmínky výrobce.",
           "",
-          "Opravdu funkci spustit?",
+          "Spustit funkci?",
         ].join("\n")
       : selected.destructive
-        ? `Pozor: ${selected.safetyWarning || "Tato funkce může měnit stav vozidla."}\n\nOpravdu pokračovat?`
+        ? `Pozor: ${selected.safetyWarning || "Tato funkce může změnit stav vozidla."}\n\nPokračovat?`
         : null;
 
     if (warning && !window.confirm(warning)) return;
@@ -376,8 +653,9 @@ export default function AdminDelphi() {
     setRunning(true);
     try {
       const output = await runDiagFunction(selected, {
-        activeContext: context,
+        activeContext,
         vin: vin || null,
+        serviceMode: true,
       });
       setResult(output);
     } catch (error) {
@@ -391,506 +669,803 @@ export default function AdminDelphi() {
     }
   }
 
-  const tabs = [
-    { key: "information" as const, label: "Informace", icon: Info },
-    { key: "faults" as const, label: "Chyby", icon: AlertTriangle, count: counts.faults },
-    { key: "live" as const, label: "Živá data", icon: Gauge, count: counts.live },
-    { key: "tests" as const, label: "Akční testy", icon: Activity, count: counts.tests },
-    { key: "service" as const, label: "Servisní funkce", icon: Wrench, count: counts.service },
-  ];
+  function togglePanel(panel: PanelKey) {
+    setOpenPanel((current) => (current === panel ? null : panel));
+    setSelected(null);
+    setResult(null);
+    setSearch("");
+  }
 
   return (
     <div className="min-w-0 space-y-3">
-      <div className="rounded-lg border border-slate-600 bg-gradient-to-b from-slate-800 to-slate-950 px-4 py-3 shadow-lg">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="overflow-hidden rounded-xl border border-slate-500 bg-gradient-to-b from-slate-100 to-slate-300 text-slate-950 shadow-lg">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-500 bg-gradient-to-b from-slate-700 to-slate-950 px-4 py-3 text-white">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-slate-300">
               Samostatná diagnostika
             </p>
-            <h1 className="text-xl font-bold text-slate-100">Delphi Diagnostic</h1>
+            <h1 className="text-xl font-extrabold tracking-tight">
+              Delphi Diagnostic
+            </h1>
           </div>
+
           <Badge
             variant="outline"
             className={
               bleState === "connected"
-                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
-                : "border-red-500/50 bg-red-500/10 text-red-300"
+                ? "border-emerald-400 bg-emerald-950/50 text-emerald-200"
+                : "border-red-400 bg-red-950/50 text-red-200"
             }
           >
             <Bluetooth className="mr-1 h-3.5 w-3.5" />
             {bleState === "connected" ? "OBD připojeno" : "OBD odpojeno"}
           </Badge>
         </div>
-      </div>
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[340px_minmax(0,1fr)]">
-        {/* Levý Delphi strom */}
-        <Card className="h-fit min-w-0 overflow-hidden border-slate-700 bg-slate-950/70">
-          <CardHeader className="border-b border-slate-700 bg-slate-900 px-3 py-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Car className="h-4 w-4 text-cyan-400" />
-              Výběr vozidla
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 p-3">
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto] xl:grid-cols-1">
-              <div>
-                <Label className="text-xs">VIN</Label>
-                <Input
-                  value={vin}
-                  maxLength={17}
-                  onChange={(event) => setVin(event.target.value.toUpperCase())}
-                  placeholder="17 znaků VIN"
-                  className="mt-1 h-9 font-mono text-xs"
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={decodeVin}
-                disabled={vin.length < 3}
-                className="self-end"
-              >
-                Identifikovat
-              </Button>
+        <div className="space-y-3 p-3 sm:p-4">
+          {/* 1. VÝBĚR VOZIDLA */}
+          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+            <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
+              1. Vyber vozidlo
             </div>
 
-            <div className="space-y-2">
-              <div>
-                <Label className="text-xs">1. Výrobce</Label>
-                <Select
-                  value={make}
-                  onValueChange={(value) => {
-                    setMake(value);
-                    clearBelow("make");
-                  }}
+            <div className="space-y-3 p-3">
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <div>
+                  <Label className="text-xs font-bold text-slate-700">VIN</Label>
+                  <Input
+                    value={vin}
+                    maxLength={17}
+                    onChange={(event) => setVin(event.target.value.toUpperCase())}
+                    placeholder="17 znaků VIN"
+                    className="mt-1 border-slate-400 bg-white font-mono text-slate-950"
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={decodeVin}
+                  disabled={vin.length < 3}
+                  className="self-end border border-slate-500"
                 >
-                  <SelectTrigger className="mt-1 h-9">
-                    <SelectValue placeholder="Vyber výrobce" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    {makes.map((value) => (
-                      <SelectItem key={value} value={value}>{value}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  Identifikovat
+                </Button>
               </div>
 
-              <div>
-                <Label className="text-xs">2. Model</Label>
-                <Select
-                  value={model}
-                  onValueChange={(value) => {
-                    setModel(value);
-                    clearBelow("model");
-                  }}
-                  disabled={!make}
-                >
-                  <SelectTrigger className="mt-1 h-9">
-                    <SelectValue placeholder="Vyber model" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    {models.map((value) => (
-                      <SelectItem key={value} value={value}>{value}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <Label className="text-xs font-bold text-slate-700">Značka</Label>
+                  <Select
+                    value={make}
+                    onValueChange={(value) => {
+                      setMake(value);
+                      resetBelow("make");
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 border-slate-400 bg-white text-slate-950">
+                      <SelectValue placeholder="Vyber značku" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      {makes.map((value) => (
+                        <SelectItem key={value} value={value}>{value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <Label className="text-xs">3. Generace / platforma</Label>
-                <Select
-                  value={generation}
-                  onValueChange={(value) => {
-                    setGeneration(value);
-                    clearBelow("generation");
-                  }}
-                  disabled={!model}
-                >
-                  <SelectTrigger className="mt-1 h-9">
-                    <SelectValue placeholder="Vyber generaci" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    {generations.map((value) => (
-                      <SelectItem key={value} value={value}>{value}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <Label className="text-xs font-bold text-slate-700">Model</Label>
+                  <Select
+                    value={model}
+                    onValueChange={(value) => {
+                      setModel(value);
+                      resetBelow("model");
+                    }}
+                    disabled={!make}
+                  >
+                    <SelectTrigger className="mt-1 border-slate-400 bg-white text-slate-950">
+                      <SelectValue placeholder="Vyber model" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      {models.map((value) => (
+                        <SelectItem key={value} value={value}>{value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <Label className="text-xs">4. Modelový rok</Label>
-                <Select
-                  value={year}
-                  onValueChange={(value) => {
-                    setYear(value);
-                    clearBelow("year");
-                  }}
-                  disabled={!generation}
-                >
-                  <SelectTrigger className="mt-1 h-9">
-                    <SelectValue placeholder="Vyber rok" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    {years.map((value) => (
-                      <SelectItem key={value} value={String(value)}>{value}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div>
+                  <Label className="text-xs font-bold text-slate-700">Generace</Label>
+                  <Select
+                    value={generation}
+                    onValueChange={(value) => {
+                      setGeneration(value);
+                      resetBelow("generation");
+                    }}
+                    disabled={!model}
+                  >
+                    <SelectTrigger className="mt-1 border-slate-400 bg-white text-slate-950">
+                      <SelectValue placeholder="Vyber generaci" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      {generations.map((value) => (
+                        <SelectItem key={value} value={value}>{value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
+                <div>
+                  <Label className="text-xs font-bold text-slate-700">Modelový rok</Label>
+                  <Select
+                    value={year}
+                    onValueChange={(value) => {
+                      setYear(value);
+                      resetBelow("year");
+                    }}
+                    disabled={!generation}
+                  >
+                    <SelectTrigger className="mt-1 border-slate-400 bg-white text-slate-950">
+                      <SelectValue placeholder="Vyber rok" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      {years.map((value) => (
+                        <SelectItem key={value} value={String(value)}>{value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-bold text-slate-700">Motor</Label>
+                  <Select
+                    value={profileId}
+                    onValueChange={(value) => {
+                      setProfileId(value);
+                      setEcuAddress("__all");
+                      setSelected(null);
+                      setResult(null);
+                      setScanResults([]);
+                    }}
+                    disabled={!year}
+                  >
+                    <SelectTrigger className="mt-1 border-slate-400 bg-white text-slate-950">
+                      <SelectValue placeholder="Vyber motor" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-80">
+                      {matchingProfiles.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.engine} · {item.engineCode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 2. VÝBĚR SYSTÉMU */}
+          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+            <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
+              2. Vyber systém
+            </div>
+
+            <div className="space-y-3 p-3">
               <div>
-                <Label className="text-xs">5. Motor</Label>
+                <Label className="text-xs font-bold text-slate-700">
+                  Řídicí jednotka / systém
+                </Label>
                 <Select
-                  value={profileId}
+                  value={ecuAddress}
                   onValueChange={(value) => {
-                    setProfileId(value);
-                    setEcuAddress("__all");
+                    setEcuAddress(value);
                     setSelected(null);
                     setResult(null);
                   }}
-                  disabled={!year}
+                  disabled={!profile || loadingCatalog}
                 >
-                  <SelectTrigger className="mt-1 h-9">
-                    <SelectValue placeholder="Vyber motor" />
+                  <SelectTrigger className="mt-1 border-slate-400 bg-white text-slate-950">
+                    <SelectValue placeholder="Vyber systém" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    {matchingProfiles.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.engine} · {item.engineCode}
+                  <SelectContent className="max-h-96">
+                    <SelectItem value="__all">Všechny dostupné systémy</SelectItem>
+                    {filteredEcus.map((ecu) => (
+                      <SelectItem key={normalizeAddress(ecu.address)} value={ecu.address}>
+                        {ecu.common || ecu.name} [{normalizeAddress(ecu.address)}]
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="border-t border-slate-700 pt-3">
-              <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-300">
-                <Cpu className="h-4 w-4 text-cyan-400" />
-                Systém / řídicí jednotka
-              </p>
-              <Select
-                value={ecuAddress}
-                onValueChange={(value) => {
-                  setEcuAddress(value);
-                  setSelected(null);
-                  setResult(null);
-                }}
-                disabled={!profile || loadingCatalog}
-              >
-                <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Vyber systém" />
-                </SelectTrigger>
-                <SelectContent className="max-h-96">
-                  <SelectItem value="__all">Všechny systémy</SelectItem>
-                  {filteredEcus.map((ecu) => (
-                    <SelectItem key={ecu.address} value={ecu.address}>
-                      {ecu.common || ecu.name} [{ecu.address}]
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="rounded-md border border-slate-700 bg-slate-900/80 p-3 text-xs">
-              <div className="flex items-start gap-2">
-                <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
-                <div className="min-w-0">
-                  <p className="font-semibold text-slate-200">
-                    {profile
-                      ? `${profile.make} ${profile.model} ${profile.generation}`
-                      : "Vozidlo není vybrané"}
-                  </p>
-                  <p className="truncate text-slate-400">
-                    {profile
-                      ? `${year} · ${profile.engine} · ${profile.engineCode}`
-                      : "Postupuj stromem shora dolů"}
-                  </p>
-                  <p className="mt-1 truncate text-slate-400">
-                    {selectedEcu?.common || selectedEcu?.name || "ECU není vybraná"}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pravá servisní plocha */}
-        <Card className="min-w-0 overflow-hidden border-slate-700 bg-slate-950/40">
-          <div className="border-b border-slate-700 bg-slate-900 p-2">
-            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
-              {tabs.map((item) => {
-                const Icon = item.icon;
-                const active = section === item.key;
-                return (
-                  <button
-                    key={item.key}
-                    onClick={() => {
-                      setSection(item.key);
-                      setSelected(null);
-                      setResult(null);
-                    }}
-                    className={`flex min-w-0 items-center justify-center gap-1.5 rounded px-2 py-2 text-xs transition ${
-                      active
-                        ? "bg-cyan-700 text-white shadow-inner"
-                        : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                    {typeof item.count === "number" && (
-                      <span className="rounded bg-black/30 px-1 text-[10px]">
-                        {item.count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <CardContent className="min-w-0 p-3 sm:p-4">
-            {section === "information" ? (
-              <div className="space-y-4">
-                <div className="rounded-md border border-cyan-800/50 bg-cyan-950/20 p-4">
-                  <h2 className="flex items-center gap-2 text-lg font-semibold">
-                    <Info className="h-5 w-5 text-cyan-400" />
-                    Informace o diagnostice
-                  </h2>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Vyber vozidlo a řídicí systém v levém stromu. Delphi načte
-                    diagnostické funkce z katalogu zvoleného výrobce.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {tabs.slice(1).map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => setSection(item.key)}
-                        className="rounded-md border border-slate-700 bg-slate-900/70 p-4 text-left transition hover:border-cyan-700 hover:bg-slate-800"
-                      >
-                        <Icon className="mb-3 h-6 w-6 text-cyan-400" />
-                        <p className="font-semibold">{item.label}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Dostupných položek: {item.count}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
-                  <div className="flex items-center gap-2 font-semibold text-amber-300">
-                    <ShieldAlert className="h-4 w-4" />
-                    Odborný režim – všechny katalogové funkce povoleny
-                  </div>
-                  <p className="mt-1 text-amber-200/80">
-                    Neověřené rutiny, adaptace a akční testy nejsou skryté ani
-                    blokované. Před jejich spuštěním se zobrazí výrazné varování.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="rounded-lg border border-slate-400 bg-slate-100 p-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <Car className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
                   <div className="min-w-0">
-                    <h2 className="text-lg font-semibold">{sectionLabel[section]}</h2>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="font-bold">
+                      {profile
+                        ? `${profile.make} ${profile.model} ${profile.generation}`
+                        : "Vozidlo není vybrané"}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      {profile
+                        ? `${year} · ${profile.engine} · ${profile.engineCode}`
+                        : "Vyber vozidlo shora dolů"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
                       {selectedEcu?.common ||
                         selectedEcu?.name ||
-                        "Všechny systémy z katalogu"}
+                        "Všechny dostupné systémy"}
                     </p>
                   </div>
-                  <div className="relative w-full sm:w-72">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 3. DIAGNOSTICKÉ FUNKCE */}
+          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+            <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
+              3. Diagnostické funkce
+            </div>
+
+            <div className="divide-y divide-slate-300">
+              {/* DTC */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => togglePanel("dtc")}
+                  className="flex w-full items-center gap-3 px-3 py-4 text-left hover:bg-slate-100"
+                >
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-950">Diagnostika závad</p>
+                    <p className="text-xs text-slate-600">
+                      Načíst nebo vymazat chyby ve všech dostupných jednotkách
+                    </p>
+                  </div>
+                  {openPanel === "dtc" ? (
+                    <ChevronDown className="h-5 w-5 text-slate-600" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5 text-slate-600" />
+                  )}
+                </button>
+
+                {openPanel === "dtc" && (
+                  <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button
+                        onClick={scanAllFaults}
+                        disabled={fullScanRunning || fullClearRunning || bleState !== "connected"}
+                        className="bg-blue-700 hover:bg-blue-600"
+                      >
+                        {fullScanRunning ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                        )}
+                        Načíst všechny chyby
+                      </Button>
+
+                      <Button
+                        onClick={clearAllFaults}
+                        disabled={fullScanRunning || fullClearRunning || bleState !== "connected"}
+                        variant="destructive"
+                      >
+                        {fullClearRunning ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Eraser className="mr-2 h-4 w-4" />
+                        )}
+                        Smazat všechny chyby
+                      </Button>
+                    </div>
+
+                    {(fullScanRunning || fullClearRunning) && (
+                      <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <span>{scanProgress || "Probíhá diagnostika…"}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {scanResults.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-400 bg-white p-3 text-center">
+                          <div>
+                            <p className="text-lg font-black">{scanResults.length}</p>
+                            <p className="text-[10px] uppercase text-slate-500">Jednotek</p>
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-red-700">{totalDtc}</p>
+                            <p className="text-[10px] uppercase text-slate-500">DTC</p>
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-emerald-700">
+                              {
+                                scanResults.filter(
+                                  (item) =>
+                                    collectCodes(item.stored).length +
+                                      collectCodes(item.pending).length +
+                                      collectCodes(item.permanent).length ===
+                                    0,
+                                ).length
+                              }
+                            </p>
+                            <p className="text-[10px] uppercase text-slate-500">Bez chyb</p>
+                          </div>
+                        </div>
+
+                        {scanResults.map((item) => {
+                          const storedCodes = collectCodes(item.stored);
+                          const pendingCodes = collectCodes(item.pending);
+                          const permanentCodes = collectCodes(item.permanent);
+                          const allCodes = [
+                            ...storedCodes.map((code) => ({ code, type: "Uložená" })),
+                            ...pendingCodes.map((code) => ({ code, type: "Čekající" })),
+                            ...permanentCodes.map((code) => ({ code, type: "Trvalá" })),
+                          ];
+
+                          return (
+                            <details
+                              key={normalizeAddress(item.ecu.address)}
+                              className="overflow-hidden rounded-lg border border-slate-400 bg-white"
+                              open={allCodes.length > 0}
+                            >
+                              <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
+                                {allCodes.length > 0 ? (
+                                  <CircleX className="h-5 w-5 shrink-0 text-red-600" />
+                                ) : (
+                                  <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-bold">
+                                    {item.ecu.common || item.ecu.name}
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    ECU {normalizeAddress(item.ecu.address)} · {allCodes.length} DTC
+                                  </p>
+                                </div>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    allCodes.length > 0
+                                      ? "border-red-400 text-red-700"
+                                      : "border-emerald-400 text-emerald-700"
+                                  }
+                                >
+                                  {allCodes.length > 0 ? `${allCodes.length} chyb` : "Bez chyb"}
+                                </Badge>
+                              </summary>
+
+                              <div className="space-y-2 border-t border-slate-300 bg-slate-50 p-3">
+                                {item.clear && (
+                                  <p className="text-xs text-slate-600">
+                                    Mazání: <strong>{resultText(item.clear)}</strong>
+                                  </p>
+                                )}
+
+                                {allCodes.length === 0 ? (
+                                  <p className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
+                                    Jednotka nehlásí žádný dekódovaný DTC.
+                                  </p>
+                                ) : (
+                                  allCodes.map((entry, index) => (
+                                    <div
+                                      key={`${entry.type}-${entry.code}-${index}`}
+                                      className="rounded border border-red-300 bg-red-50 p-3"
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <strong className="font-mono text-red-900">
+                                          {entry.code}
+                                        </strong>
+                                        <Badge variant="outline" className="border-red-300 text-red-700">
+                                          {entry.type}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+
+                                <details className="rounded border border-slate-300 bg-white">
+                                  <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-slate-600">
+                                    Technické výsledky
+                                  </summary>
+                                  <div className="space-y-1 border-t border-slate-200 p-3 text-xs text-slate-600">
+                                    <p>Uložené: {resultText(item.stored)}</p>
+                                    <p>Čekající: {resultText(item.pending)}</p>
+                                    <p>Trvalé: {resultText(item.permanent)}</p>
+                                  </div>
+                                </details>
+                              </div>
+                            </details>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {scanResults.length === 0 && !fullScanRunning && !fullClearRunning && (
+                      <div className="rounded-lg border border-slate-300 bg-white p-4 text-sm text-slate-600">
+                        Stiskni <strong>Načíst všechny chyby</strong>. Aplikace projde dostupné
+                        řídicí jednotky postupně a zobrazí výsledky podle systému.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* LIVE */}
+              <FunctionPanelHeader
+                panel="live"
+                openPanel={openPanel}
+                title="Živá data"
+                description={`${liveFunctions.length} položek · rozděleno do skupin`}
+                icon={<Gauge className="h-5 w-5 text-blue-700" />}
+                onToggle={togglePanel}
+              />
+
+              {/* ACTUATORS */}
+              <FunctionPanelHeader
+                panel="actuators"
+                openPanel={openPanel}
+                title="Testy akčních členů"
+                description={`${actuatorFunctions.length} funkcí · všechny dostupné`}
+                icon={<Activity className="h-5 w-5 text-violet-700" />}
+                onToggle={togglePanel}
+              />
+
+              {/* SERVICE */}
+              <FunctionPanelHeader
+                panel="service"
+                openPanel={openPanel}
+                title="Servisní funkce"
+                description={`${serviceFunctions.length} funkcí · rozbal, vyber a spusť`}
+                icon={<Wrench className="h-5 w-5 text-amber-700" />}
+                onToggle={togglePanel}
+              />
+
+              {/* ECU INFO */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => togglePanel("ecuInfo")}
+                  className="flex w-full items-center gap-3 px-3 py-4 text-left hover:bg-slate-100"
+                >
+                  <Info className="h-5 w-5 text-slate-700" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-950">Informace o ECU</p>
+                    <p className="text-xs text-slate-600">
+                      Vybraná jednotka, adresa, katalog a vozidlo
+                    </p>
+                  </div>
+                  {openPanel === "ecuInfo" ? (
+                    <ChevronDown className="h-5 w-5 text-slate-600" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5 text-slate-600" />
+                  )}
+                </button>
+
+                {openPanel === "ecuInfo" && (
+                  <div className="space-y-2 border-t border-slate-300 bg-slate-50 p-3">
+                    <InfoRow label="Výrobce" value={brand?.display_name || "—"} />
+                    <InfoRow label="Vozidlo" value={profile ? `${profile.make} ${profile.model}` : "—"} />
+                    <InfoRow label="Generace" value={profile?.generation || "—"} />
+                    <InfoRow label="Rok" value={year || "—"} />
+                    <InfoRow label="Motor" value={profile ? `${profile.engine} (${profile.engineCode})` : "—"} />
+                    <InfoRow label="ECU" value={selectedEcu?.common || selectedEcu?.name || "Všechny"} />
+                    <InfoRow label="TX adresa" value={selectedEcu ? normalizeAddress(selectedEcu.address) : "—"} />
+                    <InfoRow label="Katalog" value={brand?.file || "—"} />
+                  </div>
+                )}
+              </div>
+
+              {(openPanel === "live" ||
+                openPanel === "actuators" ||
+                openPanel === "service") && (
+                <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <Input
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Hledat v Delphi katalogu…"
-                      className="h-9 pl-9"
+                      placeholder={`Hledat v sekci ${panelTitles[openPanel]}…`}
+                      className="border-slate-400 bg-white pl-9 text-slate-950"
                     />
                   </div>
-                </div>
 
-                {(section === "tests" || section === "service") && (
-                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                    Všechny nalezené funkce jsou dostupné. Kandidátní nebo
-                    neověřená funkce zobrazí varování, ale zůstane spustitelná.
-                  </div>
-                )}
-
-                {loadingCatalog ? (
-                  <p className="py-12 text-center text-muted-foreground">
-                    Načítám Delphi katalog…
-                  </p>
-                ) : (
-                  <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
-                    <div className="max-h-[650px] min-w-0 space-y-1.5 overflow-y-auto pr-1">
-                      {visibleFunctions.length === 0 && (
-                        <p className="rounded-md border border-slate-700 p-8 text-center text-sm text-muted-foreground">
-                          Pro tento výběr nejsou v katalogu žádné položky.
+                  {(openPanel === "actuators" || openPanel === "service") && (
+                    <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
+                      <div className="flex items-start gap-2">
+                        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>
+                          Všechny katalogové funkce jsou viditelné a spustitelné.
+                          Neověřená funkce před spuštěním zobrazí varování.
                         </p>
-                      )}
+                      </div>
+                    </div>
+                  )}
 
-                      {visibleFunctions.map((fn) => (
-                        <button
-                          key={fn.id}
-                          onClick={() => {
-                            setSelected(fn);
-                            setResult(null);
-                          }}
-                          className={`w-full min-w-0 rounded-md border p-3 text-left transition ${
-                            selected?.id === fn.id
-                              ? "border-cyan-600 bg-cyan-950/40"
-                              : "border-slate-700 bg-slate-900/60 hover:border-slate-500 hover:bg-slate-800"
-                          }`}
+                  {loadingCatalog ? (
+                    <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-600">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Načítám katalog…
+                    </div>
+                  ) : functionGroups.length === 0 ? (
+                    <p className="rounded-lg border border-slate-300 bg-white p-5 text-center text-sm text-slate-600">
+                      Pro tento výběr nejsou v katalogu žádné položky.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {functionGroups.map(([groupName, groupFunctions]) => (
+                        <details
+                          key={groupName}
+                          className="overflow-hidden rounded-lg border border-slate-400 bg-white"
                         >
-                          <div className="flex items-start gap-3">
-                            <ClipboardList className="mt-0.5 h-4 w-4 shrink-0 text-cyan-400" />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="break-words text-sm font-semibold">{fn.name}</p>
-                                {isWriteFunction(fn) && (
-                                  <Badge
-                                    variant="outline"
-                                    className="border-amber-500/50 text-[10px] text-amber-300"
-                                  >
-                                    ODBORNÝ REŽIM
-                                  </Badge>
-                                )}
-                                {fn.destructive && (
-                                  <Badge variant="destructive" className="text-[10px]">
-                                    ZÁSAH
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="mt-1 break-words text-xs text-muted-foreground">
-                                {fn.description || fn.category || "Diagnostická funkce"}
-                              </p>
-                              <p className="mt-1 truncate text-[11px] text-slate-500">
-                                {fn.ecuCommonName || fn.ecu || "Obecná OBD-II funkce"}
-                              </p>
-                            </div>
-                            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
+                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-100 px-3 py-3">
+                            <ClipboardList className="h-4 w-4 text-blue-700" />
+                            <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
+                              {groupName}
+                            </span>
+                            <Badge variant="outline" className="border-slate-400 text-slate-700">
+                              {groupFunctions.length}
+                            </Badge>
+                            <ChevronDown className="h-4 w-4 text-slate-600" />
+                          </summary>
+
+                          <div className="divide-y divide-slate-200 border-t border-slate-300">
+                            {groupFunctions.map((fn) => (
+                              <button
+                                type="button"
+                                key={fn.id}
+                                onClick={() => {
+                                  setSelected(fn);
+                                  setResult(null);
+                                }}
+                                className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
+                                  selected?.id === fn.id
+                                    ? "bg-blue-50"
+                                    : "bg-white hover:bg-slate-50"
+                                }`}
+                              >
+                                <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-bold text-slate-950">{fn.name}</p>
+                                    {isWriteFunction(fn) && (
+                                      <Badge
+                                        variant="outline"
+                                        className="border-amber-400 text-[10px] text-amber-800"
+                                      >
+                                        ODBORNÝ REŽIM
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-xs text-slate-600">
+                                    {fn.description || fn.category || "Diagnostická funkce"}
+                                  </p>
+                                </div>
+                                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
+                              </button>
+                            ))}
                           </div>
-                        </button>
+                        </details>
                       ))}
                     </div>
+                  )}
 
-                    <div className="min-w-0 rounded-md border border-slate-700 bg-slate-900/70 p-4">
-                      {!selected ? (
-                        <div className="py-12 text-center text-sm text-muted-foreground">
-                          Vyber funkci ze seznamu.
+                  {selected && (
+                    <div className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+                      <div className="border-b border-slate-400 bg-slate-200 px-4 py-3">
+                        <p className="text-xs font-bold uppercase text-slate-500">
+                          Vybraná funkce
+                        </p>
+                        <h3 className="mt-1 text-lg font-black text-slate-950">
+                          {selected.name}
+                        </h3>
+                      </div>
+
+                      <div className="space-y-3 p-4 text-slate-950">
+                        <div>
+                          <p className="text-xs font-bold uppercase text-slate-500">Popis</p>
+                          <p className="mt-1 text-sm">
+                            {selected.description || "K funkci není v katalogu další popis."}
+                          </p>
                         </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-slate-500">
-                              Vybraná funkce
-                            </p>
-                            <h3 className="mt-1 break-words text-lg font-semibold">
-                              {selected.name}
-                            </h3>
-                            <p className="mt-1 break-words text-sm text-muted-foreground">
-                              {selected.description || "Bez dalšího popisu."}
-                            </p>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <InfoRow
+                            label="Cílová ECU"
+                            value={selected.ecuCommonName || selected.ecu || selectedEcu?.common || selectedEcu?.name || "—"}
+                          />
+                          <InfoRow
+                            label="Adresa"
+                            value={normalizeAddress(selected.ecuAddress || selectedEcu?.address) || "—"}
+                          />
+                          <InfoRow label="Kategorie" value={selected.category || "—"} />
+                          <InfoRow label="Příkaz" value={selected.command || "—"} mono />
+                        </div>
+
+                        {isWriteFunction(selected) && (
+                          <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
+                            <p className="font-bold">Podmínky před spuštěním</p>
+                            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
+                              <li>Zkontroluj správně vybranou řídicí jednotku.</li>
+                              <li>Zapalování a motor nastav podle požadavků funkce.</li>
+                              <li>Zajisti stabilní napětí baterie.</li>
+                              <li>Neodpojuj adaptér během provádění.</li>
+                            </ul>
                           </div>
+                        )}
 
-                          {isWriteFunction(selected) && (
-                            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-200">
-                              <p className="font-semibold">Funkce je povolena v odborném režimu</p>
-                              <p className="mt-1">
-                                Nemusí být ověřena pro konkrétní SW variantu ECU.
-                                Před odesláním zkontroluj cílovou jednotku a podmínky.
-                              </p>
-                            </div>
-                          )}
+                        {selected.safetyWarning && (
+                          <div className="rounded-lg border border-red-400 bg-red-50 p-3 text-sm text-red-900">
+                            {selected.safetyWarning}
+                          </div>
+                        )}
 
-                          {selected.safetyWarning && (
-                            <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
-                              {selected.safetyWarning}
-                            </div>
-                          )}
-
+                        <div className="grid grid-cols-2 gap-2">
                           <Button
-                            className="w-full bg-cyan-700 hover:bg-cyan-600"
+                            variant="outline"
+                            onClick={() => {
+                              setSelected(null);
+                              setResult(null);
+                            }}
+                            className="border-slate-500"
+                          >
+                            Zrušit
+                          </Button>
+                          <Button
                             onClick={runSelected}
                             disabled={running || bleState !== "connected"}
+                            className="bg-blue-700 hover:bg-blue-600"
                           >
-                            <Play className="mr-2 h-4 w-4" />
-                            {running ? "Provádím…" : "Spustit funkci"}
+                            {running ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Play className="mr-2 h-4 w-4" />
+                            )}
+                            {running ? "Provádím…" : "Start"}
                           </Button>
+                        </div>
 
-                          {bleState !== "connected" && (
-                            <p className="text-center text-xs text-red-400">
-                              Nejdřív připoj OBD adaptér.
-                            </p>
-                          )}
+                        {bleState !== "connected" && (
+                          <p className="text-center text-xs font-bold text-red-700">
+                            Nejdřív připoj OBD adaptér.
+                          </p>
+                        )}
 
-                          {result && (
-                            <div className="space-y-3 border-t border-slate-700 pt-4">
+                        {result && (
+                          <div className="space-y-3 rounded-xl border border-slate-400 bg-slate-50 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="font-black">Výsledek</p>
                               <Badge variant="outline" className={statusClass(result.status)}>
                                 {result.status.toUpperCase()}
                               </Badge>
-
-                              {result.decoded.length > 0 && (
-                                <div className="space-y-1.5">
-                                  {result.decoded.map((value, index) => (
-                                    <div
-                                      key={`${value.name}-${index}`}
-                                      className="flex min-w-0 items-center justify-between gap-3 rounded bg-slate-950/70 p-2.5 text-xs"
-                                    >
-                                      <span className="min-w-0 break-words text-slate-400">
-                                        {value.name}
-                                      </span>
-                                      <strong className="shrink-0 text-right">
-                                        {String(value.value ?? "—")} {value.unit || ""}
-                                      </strong>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              {result.error && (
-                                <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
-                                  {result.error}
-                                </div>
-                              )}
-
-                              <Tabs defaultValue="result">
-                                <TabsList className="grid w-full grid-cols-2">
-                                  <TabsTrigger value="result">Výsledek</TabsTrigger>
-                                  <TabsTrigger value="technical">Technické</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="result" className="text-xs text-muted-foreground">
-                                  Doba odezvy: {result.durationMs} ms
-                                </TabsContent>
-                                <TabsContent value="technical" className="min-w-0 space-y-2 text-xs">
-                                  <p className="break-all">
-                                    <span className="text-muted-foreground">Příkaz:</span>{" "}
-                                    <code>{result.command}</code>
-                                  </p>
-                                  <pre className="max-h-48 max-w-full overflow-auto whitespace-pre-wrap break-all rounded bg-black/50 p-3">
-                                    {result.rawResponse || "Bez odpovědi"}
-                                  </pre>
-                                </TabsContent>
-                              </Tabs>
                             </div>
-                          )}
-                        </div>
-                      )}
+
+                            {result.decoded.length > 0 && (
+                              <div className="space-y-1.5">
+                                {result.decoded.map((value, index) => (
+                                  <div
+                                    key={`${value.name}-${index}`}
+                                    className="flex items-center justify-between gap-3 rounded border border-slate-300 bg-white p-2 text-sm"
+                                  >
+                                    <span className="text-slate-600">{value.name}</span>
+                                    <strong>
+                                      {String(value.value ?? "—")} {value.unit || ""}
+                                    </strong>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {result.nrc && (
+                              <div className="rounded border border-orange-400 bg-orange-50 p-3 text-sm text-orange-900">
+                                <p className="font-bold">
+                                  NRC {result.nrc.code}: {result.nrc.description || "Negativní odpověď ECU"}
+                                </p>
+                              </div>
+                            )}
+
+                            {result.error && (
+                              <div className="rounded border border-red-400 bg-red-50 p-3 text-sm text-red-900">
+                                {result.error}
+                              </div>
+                            )}
+
+                            <Tabs defaultValue="summary">
+                              <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="summary">Souhrn</TabsTrigger>
+                                <TabsTrigger value="technical">Technické</TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="summary" className="space-y-1 text-sm">
+                                <p>Doba odezvy: {result.durationMs} ms</p>
+                                <p>Stav: {result.status}</p>
+                              </TabsContent>
+                              <TabsContent value="technical" className="space-y-2 text-xs">
+                                <p className="break-all">
+                                  <strong>Příkaz:</strong> {result.command}
+                                </p>
+                                <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-slate-100">
+                                  {result.rawResponse || "Bez odpovědi"}
+                                </pre>
+                              </TabsContent>
+                            </Tabs>
+
+                            <Button
+                              variant="outline"
+                              className="w-full border-slate-500"
+                              onClick={() => setResult(null)}
+                            >
+                              OK
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function FunctionPanelHeader({
+  panel,
+  openPanel,
+  title,
+  description,
+  icon,
+  onToggle,
+}: {
+  panel: PanelKey;
+  openPanel: PanelKey | null;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  onToggle: (panel: PanelKey) => void;
+}) {
+  const open = panel === openPanel;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(panel)}
+      className="flex w-full items-center gap-3 px-3 py-4 text-left hover:bg-slate-100"
+    >
+      {icon}
+      <div className="min-w-0 flex-1">
+        <p className="font-bold text-slate-950">{title}</p>
+        <p className="text-xs text-slate-600">{description}</p>
+      </div>
+      {open ? (
+        <ChevronDown className="h-5 w-5 text-slate-600" />
+      ) : (
+        <ChevronRight className="h-5 w-5 text-slate-600" />
+      )}
+    </button>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded border border-slate-300 bg-white p-2">
+      <p className="text-[10px] font-bold uppercase text-slate-500">{label}</p>
+      <p className={`mt-0.5 break-words text-sm text-slate-950 ${mono ? "font-mono" : ""}`}>
+        {value}
+      </p>
     </div>
   );
 }
