@@ -157,6 +157,54 @@ function resultText(result: DiagRunResult | null) {
   return "Chyba";
 }
 
+/** Vrátí lidský význam a možné příčiny stavu odpovědi. */
+function explainStatus(result: DiagRunResult | null): { title: string; causes: string[] } | null {
+  if (!result) return null;
+  if (result.status === "ok") return null;
+  if (result.status === "no_data") {
+    return {
+      title: "Jednotka nevrátila platná data pro tento požadavek.",
+      causes: [
+        "DID/PID není podporovaný touto ECU.",
+        "Je potřeba jiná diagnostická session (10 03 / 10 02).",
+        "Je potřeba security access (27 XX).",
+        "Nesprávná TX/RX adresa nebo ECU není přítomná ve výbavě vozidla.",
+        "Nesplněné podmínky (zapalování, otáčky motoru, rychlost, teplota).",
+      ],
+    };
+  }
+  if (result.status === "timeout") {
+    return {
+      title: "ECU neodpověděla v časovém limitu.",
+      causes: [
+        "Jednotka je na jiné CAN větvi (Body/Chassis CAN vs. Powertrain CAN).",
+        "Špatná TX/RX adresa nebo špatný CAN speed (500k vs 125k).",
+        "Adaptér nepodporuje danou sběrnici (např. SW-CAN, MS-CAN).",
+        "ECU spí — probuď zapalováním nebo Wake-Up frame.",
+        "Příkaz byl přerušen souběžným pollingem (nemělo by nastat — runExclusive).",
+      ],
+    };
+  }
+  if (result.status === "nrc") {
+    return {
+      title: `Negativní odpověď ECU (NRC ${result.nrc?.code || ""}): ${result.nrc?.description || "Podrobnosti viz UDS katalog."}`,
+      causes: [
+        "Aktivuj správnou diagnostickou session (Extended 10 03).",
+        "Ověř podmínky spuštění pro danou funkci.",
+        "Některé funkce vyžadují security access (27 01/03).",
+      ],
+    };
+  }
+  return {
+    title: "Odpověď adaptéru je chybová.",
+    causes: [
+      "Ověř připojení OBD adaptéru a napětí baterie.",
+      "Ověř zvolený transport (lokální BLE / vzdálená relace).",
+      "Zkontroluj TX/RX hlavičky a příkaz.",
+    ],
+  };
+}
+
 export default function AdminDelphi() {
   const [brands, setBrands] = useState<BrandManifestEntry[]>([]);
   const [brandKey, setBrandKey] = useState("OBD2");
@@ -1580,19 +1628,37 @@ export default function AdminDelphi() {
                             ...pendingCodes.map((code) => ({ code, type: "Čekající" })),
                             ...permanentCodes.map((code) => ({ code, type: "Trvalá" })),
                           ];
+                          const respondedOk = item.stored?.status === "ok";
+                          const ecuFailStatus = item.stored?.status;
+                          const badgeLabel =
+                            allCodes.length > 0
+                              ? `${allCodes.length} chyb`
+                              : respondedOk
+                                ? "Bez chyb"
+                                : ecuFailStatus === "timeout"
+                                  ? "Timeout"
+                                  : ecuFailStatus === "no_data"
+                                    ? "Bez dat"
+                                    : "Nedostupná";
+                          const badgeClass = allCodes.length > 0
+                            ? "border-red-400 text-red-700"
+                            : respondedOk
+                              ? "border-emerald-400 text-emerald-700"
+                              : "border-amber-400 text-amber-800";
+                          const icon = allCodes.length > 0
+                            ? <CircleX className="h-5 w-5 shrink-0 text-red-600" />
+                            : respondedOk
+                              ? <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                              : <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />;
 
                           return (
                             <details
                               key={normalizeAddress(item.ecu.address)}
                               className="overflow-hidden rounded-lg border border-slate-400 bg-white"
-                              open={allCodes.length > 0}
+                              open={allCodes.length > 0 || !respondedOk}
                             >
                               <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
-                                {allCodes.length > 0 ? (
-                                  <CircleX className="h-5 w-5 shrink-0 text-red-600" />
-                                ) : (
-                                  <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-                                )}
+                                {icon}
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate font-bold">
                                     {item.ecu.common || item.ecu.name}
@@ -1601,15 +1667,8 @@ export default function AdminDelphi() {
                                     ECU {normalizeAddress(item.ecu.address)} · {allCodes.length} DTC
                                   </p>
                                 </div>
-                                <Badge
-                                  variant="outline"
-                                  className={
-                                    allCodes.length > 0
-                                      ? "border-red-400 text-red-700"
-                                      : "border-emerald-400 text-emerald-700"
-                                  }
-                                >
-                                  {allCodes.length > 0 ? `${allCodes.length} chyb` : "Bez chyb"}
+                                <Badge variant="outline" className={badgeClass}>
+                                  {badgeLabel}
                                 </Badge>
                               </summary>
 
@@ -1620,14 +1679,26 @@ export default function AdminDelphi() {
                                   </p>
                                 )}
 
-                                {allCodes.length === 0 && item.stored?.status === "ok" ? (
+                                {allCodes.length === 0 && respondedOk ? (
                                   <p className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
                                     Jednotka odpověděla a nehlásí žádný dekódovaný DTC.
                                   </p>
                                 ) : allCodes.length === 0 ? (
-                                  <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                                    Jednotka nevrátila platná DTC data. Stav: {resultText(item.stored)}.
-                                  </p>
+                                  (() => {
+                                    const explain = explainStatus(item.stored);
+                                    return (
+                                      <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+                                        <p className="font-bold">
+                                          {explain?.title || `Jednotka nevrátila platná DTC data (stav: ${resultText(item.stored)}).`}
+                                        </p>
+                                        {explain?.causes && (
+                                          <ul className="list-disc pl-5 text-xs space-y-0.5">
+                                            {explain.causes.map((c) => <li key={c}>{c}</li>)}
+                                          </ul>
+                                        )}
+                                      </div>
+                                    );
+                                  })()
                                 ) : (
                                   allCodes.map((entry, index) => {
                                     const info = resolveDTCInfo(entry.code);
@@ -1988,6 +2059,24 @@ export default function AdminDelphi() {
                               </div>
                             )}
 
+                            {(() => {
+                              const explain = explainStatus(result);
+                              if (!explain) return null;
+                              return (
+                                <div className="rounded border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+                                  <p className="font-bold">{explain.title}</p>
+                                  {explain.causes.length > 0 && (
+                                    <>
+                                      <p className="text-xs font-semibold uppercase text-amber-800">Možné příčiny</p>
+                                      <ul className="list-disc pl-5 text-xs space-y-0.5">
+                                        {explain.causes.map((c) => <li key={c}>{c}</li>)}
+                                      </ul>
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
                             {result.nrc && (
                               <div className="rounded border border-orange-400 bg-orange-50 p-3 text-sm text-orange-900">
                                 <p className="font-bold">
@@ -2010,14 +2099,32 @@ export default function AdminDelphi() {
                               <TabsContent value="summary" className="space-y-1 text-sm">
                                 <p>Doba odezvy: {result.durationMs} ms</p>
                                 <p>Stav: {result.status}</p>
+                                <p>Transport: {usingLocalTransport ? "Lokální BLE" : usingRemoteTransport ? `Vzdálený (${selectedRemoteSession?.profile_name || "?"})` : "—"}</p>
                               </TabsContent>
                               <TabsContent value="technical" className="space-y-2 text-xs">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <InfoRow label="TX (AT SH)" value={normalizeAddress(activeContext?.manualTx || activeContext?.ecuAddress || selected?.ecuAddress) || "default"} mono />
+                                  <InfoRow label="RX (AT CRA)" value={normalizeAddress(activeContext?.manualRx || activeContext?.responseHeader) || "auto"} mono />
+                                  <InfoRow label="ECU" value={activeContext?.ecuName || selected?.ecu || "—"} />
+                                  <InfoRow label="Profil ELM" value={selected?.isOem ? "debug (ATH1)" : "simple (ATH0)"} />
+                                </div>
                                 <p className="break-all">
                                   <strong>Příkaz:</strong> {result.command}
+                                </p>
+                                <p className="break-all">
+                                  <strong>Cleaned:</strong> <span className="font-mono">{result.cleanedResponse || "—"}</span>
                                 </p>
                                 <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-slate-950 p-3 text-slate-100">
                                   {result.rawResponse || "Bez odpovědi"}
                                 </pre>
+                                {result.warnings.length > 0 && (
+                                  <div className="rounded border border-slate-300 bg-white p-2">
+                                    <p className="text-[10px] font-bold uppercase text-slate-500">Warnings</p>
+                                    <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                                      {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                                    </ul>
+                                  </div>
+                                )}
                               </TabsContent>
                             </Tabs>
 
