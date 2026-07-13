@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { bleManager } from "@/lib/obd/ble-manager";
+import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import {
   findBrandForVin,
   listBrands,
@@ -409,15 +410,23 @@ export default function AdminDelphi() {
     [brands, brandKey],
   );
 
-  const filteredEcus = useMemo(() => {
-    if (!profile) return ecus;
-    const matches = ecus.filter((ecu) => ecuMatchesProfile(ecu, profile));
-    return matches.length > 0 ? matches : ecus;
+  const availableEcus = useMemo(() => ecus, [ecus]);
+
+  const recommendedEcuAddresses = useMemo(() => {
+    if (!profile) return new Set<string>();
+    return new Set(
+      ecus
+        .filter((ecu) => ecuMatchesProfile(ecu, profile))
+        .map((ecu) => normalizeAddress(ecu.address)),
+    );
   }, [ecus, profile]);
 
   const selectedEcu = useMemo(
-    () => filteredEcus.find((item) => normalizeAddress(item.address) === normalizeAddress(ecuAddress)),
-    [filteredEcus, ecuAddress],
+    () =>
+      availableEcus.find(
+        (item) => normalizeAddress(item.address) === normalizeAddress(ecuAddress),
+      ),
+    [availableEcus, ecuAddress],
   );
 
   const usingLocalTransport = transportSource === "local";
@@ -505,15 +514,46 @@ export default function AdminDelphi() {
         .includes(query);
     });
 
-    const groups = new Map<string, DiagFunction[]>();
+    const ecuGroups = new Map<
+      string,
+      {
+        ecuLabel: string;
+        ecuAddress: string;
+        categories: Map<string, DiagFunction[]>;
+      }
+    >();
+
     for (const fn of filtered) {
-      const key = fn.category || fn.ecuCommonName || fn.ecu || "Ostatní";
-      const list = groups.get(key) || [];
-      list.push(fn);
-      groups.set(key, list);
+      const address = normalizeAddress(fn.ecuAddress) || "GENERAL";
+      const ecuLabel =
+        fn.ecuCommonName ||
+        fn.ecu ||
+        (address === "GENERAL" ? "Obecné OBD-II funkce" : `ECU ${address}`);
+      const category = fn.category || "Ostatní";
+
+      const existing = ecuGroups.get(address) || {
+        ecuLabel,
+        ecuAddress: address,
+        categories: new Map<string, DiagFunction[]>(),
+      };
+
+      const categoryFunctions = existing.categories.get(category) || [];
+      categoryFunctions.push(fn);
+      existing.categories.set(category, categoryFunctions);
+      ecuGroups.set(address, existing);
     }
 
-    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "cs"));
+    return [...ecuGroups.values()]
+      .map((group) => ({
+        ...group,
+        categories: [...group.categories.entries()]
+          .map(([category, items]) => ({
+            category,
+            items: items.sort((a, b) => a.name.localeCompare(b.name, "cs")),
+          }))
+          .sort((a, b) => a.category.localeCompare(b.category, "cs")),
+      }))
+      .sort((a, b) => a.ecuLabel.localeCompare(b.ecuLabel, "cs"));
   }, [
     openPanel,
     liveFunctions,
@@ -868,7 +908,7 @@ export default function AdminDelphi() {
       return;
     }
 
-    const targets = filteredEcus.length > 0 ? filteredEcus : ecus;
+    const targets = availableEcus;
     if (targets.length === 0) {
       toast({
         title: "Pro značku nejsou dostupné ECU",
@@ -941,7 +981,7 @@ export default function AdminDelphi() {
       return;
     }
 
-    const targets = filteredEcus.length > 0 ? filteredEcus : ecus;
+    const targets = availableEcus;
     if (targets.length === 0) return;
 
     const confirmed = window.confirm(
@@ -969,10 +1009,7 @@ export default function AdminDelphi() {
         const clear = await runRawThroughSelectedTransport("04", ctx, true);
 
         const stored = storedDtcFn
-          ? await runDiagFunction(storedDtcFn, {
-              activeContext: ctx,
-              vin: vin || null,
-            })
+          ? await runThroughSelectedTransport(storedDtcFn, ctx)
           : null;
 
         const pending = pendingDtcFn
@@ -1396,9 +1433,12 @@ export default function AdminDelphi() {
                   </SelectTrigger>
                   <SelectContent className="max-h-96">
                     <SelectItem value="__all">Všechny dostupné systémy</SelectItem>
-                    {filteredEcus.map((ecu) => (
+                    {availableEcus.map((ecu) => (
                       <SelectItem key={normalizeAddress(ecu.address)} value={ecu.address}>
                         {ecu.common || ecu.name} [{normalizeAddress(ecu.address)}]
+                        {recommendedEcuAddresses.has(normalizeAddress(ecu.address))
+                          ? " · doporučená"
+                          : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1423,6 +1463,12 @@ export default function AdminDelphi() {
                       {selectedEcu?.common ||
                         selectedEcu?.name ||
                         "Všechny dostupné systémy"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Katalog obsahuje {availableEcus.length} jednotek
+                      {recommendedEcuAddresses.size > 0
+                        ? ` · doporučených ${recommendedEcuAddresses.size}`
+                        : ""}
                     </p>
                   </div>
                 </div>
@@ -1513,10 +1559,11 @@ export default function AdminDelphi() {
                               {
                                 scanResults.filter(
                                   (item) =>
+                                    item.stored?.status === "ok" &&
                                     collectCodes(item.stored).length +
                                       collectCodes(item.pending).length +
                                       collectCodes(item.permanent).length ===
-                                    0,
+                                      0,
                                 ).length
                               }
                             </p>
@@ -1573,26 +1620,50 @@ export default function AdminDelphi() {
                                   </p>
                                 )}
 
-                                {allCodes.length === 0 ? (
+                                {allCodes.length === 0 && item.stored?.status === "ok" ? (
                                   <p className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
-                                    Jednotka nehlásí žádný dekódovaný DTC.
+                                    Jednotka odpověděla a nehlásí žádný dekódovaný DTC.
+                                  </p>
+                                ) : allCodes.length === 0 ? (
+                                  <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                    Jednotka nevrátila platná DTC data. Stav: {resultText(item.stored)}.
                                   </p>
                                 ) : (
-                                  allCodes.map((entry, index) => (
-                                    <div
-                                      key={`${entry.type}-${entry.code}-${index}`}
-                                      className="rounded border border-red-300 bg-red-50 p-3"
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <strong className="font-mono text-red-900">
-                                          {entry.code}
-                                        </strong>
-                                        <Badge variant="outline" className="border-red-300 text-red-700">
-                                          {entry.type}
-                                        </Badge>
+                                  allCodes.map((entry, index) => {
+                                    const info = resolveDTCInfo(entry.code);
+                                    return (
+                                      <div
+                                        key={`${entry.type}-${entry.code}-${index}`}
+                                        className="rounded border border-red-300 bg-red-50 p-3"
+                                      >
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div className="min-w-0 flex-1">
+                                            <strong className="font-mono text-red-900">
+                                              {entry.code}
+                                            </strong>
+                                            <p className="mt-1 text-sm font-semibold text-red-950">
+                                              {info.description || "Popis chyby není v databázi dostupný."}
+                                            </p>
+                                            <div className="mt-2 flex flex-wrap gap-1">
+                                              {info.category && (
+                                                <Badge variant="outline" className="border-red-300 text-red-700">
+                                                  {info.category}
+                                                </Badge>
+                                              )}
+                                              {info.severity && (
+                                                <Badge variant="outline" className="border-red-300 text-red-700">
+                                                  Závažnost: {info.severity}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <Badge variant="outline" className="shrink-0 border-red-300 text-red-700">
+                                            {entry.type}
+                                          </Badge>
+                                        </div>
                                       </div>
-                                    </div>
-                                  ))
+                                    );
+                                  })
                                 )}
 
                                 <details className="rounded border border-slate-300 bg-white">
@@ -1724,56 +1795,86 @@ export default function AdminDelphi() {
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {functionGroups.map(([groupName, groupFunctions]) => (
+                      {functionGroups.map((ecuGroup) => (
                         <details
-                          key={groupName}
-                          className="overflow-hidden rounded-lg border border-slate-400 bg-white"
+                          key={ecuGroup.ecuAddress}
+                          className="overflow-hidden rounded-lg border border-slate-500 bg-white"
+                          open={ecuAddress !== "__all"}
                         >
-                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-100 px-3 py-3">
-                            <ClipboardList className="h-4 w-4 text-blue-700" />
-                            <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
-                              {groupName}
-                            </span>
-                            <Badge variant="outline" className="border-slate-400 text-slate-700">
-                              {groupFunctions.length}
+                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-200 px-3 py-3">
+                            <Cpu className="h-5 w-5 shrink-0 text-blue-800" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-black text-slate-950">
+                                {ecuGroup.ecuLabel}
+                              </p>
+                              <p className="text-[11px] text-slate-600">
+                                {ecuGroup.ecuAddress === "GENERAL"
+                                  ? "Obecné funkce"
+                                  : `Adresa ${ecuGroup.ecuAddress}`}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="border-slate-500 text-slate-800">
+                              {ecuGroup.categories.reduce(
+                                (sum, category) => sum + category.items.length,
+                                0,
+                              )}
                             </Badge>
                             <ChevronDown className="h-4 w-4 text-slate-600" />
                           </summary>
 
-                          <div className="divide-y divide-slate-200 border-t border-slate-300">
-                            {groupFunctions.map((fn) => (
-                              <button
-                                type="button"
-                                key={fn.id}
-                                onClick={() => {
-                                  setSelected(fn);
-                                  setResult(null);
-                                }}
-                                className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
-                                  selected?.id === fn.id
-                                    ? "bg-blue-50"
-                                    : "bg-white hover:bg-slate-50"
-                                }`}
+                          <div className="space-y-2 border-t border-slate-400 bg-slate-50 p-2">
+                            {ecuGroup.categories.map((categoryGroup) => (
+                              <details
+                                key={`${ecuGroup.ecuAddress}:${categoryGroup.category}`}
+                                className="overflow-hidden rounded-lg border border-slate-300 bg-white"
                               >
-                                <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-slate-600" />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="font-bold text-slate-950">{fn.name}</p>
-                                    {isWriteFunction(fn) && (
-                                      <Badge
-                                        variant="outline"
-                                        className="border-amber-400 text-[10px] text-amber-800"
-                                      >
-                                        ODBORNÝ REŽIM
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="mt-1 text-xs text-slate-600">
-                                    {fn.description || fn.category || "Diagnostická funkce"}
-                                  </p>
+                                <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
+                                  <ClipboardList className="h-4 w-4 shrink-0 text-blue-700" />
+                                  <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
+                                    {categoryGroup.category}
+                                  </span>
+                                  <Badge variant="outline" className="border-slate-400 text-slate-700">
+                                    {categoryGroup.items.length}
+                                  </Badge>
+                                  <ChevronDown className="h-4 w-4 text-slate-600" />
+                                </summary>
+
+                                <div className="divide-y divide-slate-200 border-t border-slate-300">
+                                  {categoryGroup.items.map((fn) => (
+                                    <button
+                                      type="button"
+                                      key={fn.id}
+                                      onClick={() => {
+                                        setSelected(fn);
+                                        setResult(null);
+                                      }}
+                                      className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
+                                        selected?.id === fn.id
+                                          ? "bg-blue-50"
+                                          : "bg-white hover:bg-slate-50"
+                                      }`}
+                                    >
+                                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <p className="font-bold text-slate-950">{fn.name}</p>
+                                          {isWriteFunction(fn) && (
+                                            <Badge
+                                              variant="outline"
+                                              className="border-amber-400 text-[10px] text-amber-800"
+                                            >
+                                              ODBORNÝ REŽIM
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-600">
+                                          {fn.description || "Bez dalšího popisu v katalogu."}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  ))}
                                 </div>
-                                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
-                              </button>
+                              </details>
                             ))}
                           </div>
                         </details>
