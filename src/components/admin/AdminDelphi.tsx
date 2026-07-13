@@ -157,6 +157,54 @@ function resultText(result: DiagRunResult | null) {
   return "Chyba";
 }
 
+/** Vrátí lidský význam a možné příčiny stavu odpovědi. */
+function explainStatus(result: DiagRunResult | null): { title: string; causes: string[] } | null {
+  if (!result) return null;
+  if (result.status === "ok") return null;
+  if (result.status === "no_data") {
+    return {
+      title: "Jednotka nevrátila platná data pro tento požadavek.",
+      causes: [
+        "DID/PID není podporovaný touto ECU.",
+        "Je potřeba jiná diagnostická session (10 03 / 10 02).",
+        "Je potřeba security access (27 XX).",
+        "Nesprávná TX/RX adresa nebo ECU není přítomná ve výbavě vozidla.",
+        "Nesplněné podmínky (zapalování, otáčky motoru, rychlost, teplota).",
+      ],
+    };
+  }
+  if (result.status === "timeout") {
+    return {
+      title: "ECU neodpověděla v časovém limitu.",
+      causes: [
+        "Jednotka je na jiné CAN větvi (Body/Chassis CAN vs. Powertrain CAN).",
+        "Špatná TX/RX adresa nebo špatný CAN speed (500k vs 125k).",
+        "Adaptér nepodporuje danou sběrnici (např. SW-CAN, MS-CAN).",
+        "ECU spí — probuď zapalováním nebo Wake-Up frame.",
+        "Příkaz byl přerušen souběžným pollingem (nemělo by nastat — runExclusive).",
+      ],
+    };
+  }
+  if (result.status === "nrc") {
+    return {
+      title: `Negativní odpověď ECU (NRC ${result.nrc?.code || ""}): ${result.nrc?.description || "Podrobnosti viz UDS katalog."}`,
+      causes: [
+        "Aktivuj správnou diagnostickou session (Extended 10 03).",
+        "Ověř podmínky spuštění pro danou funkci.",
+        "Některé funkce vyžadují security access (27 01/03).",
+      ],
+    };
+  }
+  return {
+    title: "Odpověď adaptéru je chybová.",
+    causes: [
+      "Ověř připojení OBD adaptéru a napětí baterie.",
+      "Ověř zvolený transport (lokální BLE / vzdálená relace).",
+      "Zkontroluj TX/RX hlavičky a příkaz.",
+    ],
+  };
+}
+
 export default function AdminDelphi() {
   const [brands, setBrands] = useState<BrandManifestEntry[]>([]);
   const [brandKey, setBrandKey] = useState("OBD2");
