@@ -937,7 +937,100 @@ export default function AdminDelphi() {
     });
   }
 
-  async function scanAllFaults() {
+  /**
+   * Non-destruktivní auto-detekce ECU.
+   * Pro každou ECU z katalogu pošle Tester Present (3E 00) na TX/CRA adresy.
+   * Jednotka, která odpoví (pozitivně 7E, negativně NRC 7F, nebo cokoliv
+   * není-NO_DATA/UNABLE), je označena jako přítomná. Nezápisuje, nemění
+   * session ani coding. Po dokončení ELM se vrátí do "simple" profilu
+   * s broadcast SH 7DF, aby živé PIDy fungovaly dál.
+   */
+  async function detectAvailableEcus() {
+    if (!transportReady) {
+      toast({
+        title: usingRemoteTransport ? "Vybraný zákazník je offline" : "OBD adaptér není připojen",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (usingRemoteTransport) {
+      toast({
+        title: "Detekce ECU je zatím jen pro lokální BLE",
+        description: "Vzdálený režim není v této iteraci podporován.",
+      });
+      return;
+    }
+    if (availableEcus.length === 0) {
+      toast({ title: "Katalog neobsahuje žádné ECU pro tuto značku", variant: "destructive" });
+      return;
+    }
+
+    setDetectingEcus(true);
+    setDetectProgress("Připravuji ELM…");
+    const found = new Set<string>();
+    const probed = new Set<string>();
+
+    try {
+      await elmQueue.runExclusive(async () => {
+        await applyElmProfile("debug", true).catch(() => undefined);
+
+        for (let i = 0; i < availableEcus.length; i++) {
+          const ecu = availableEcus[i];
+          const tx = normalizeAddress(ecu.address);
+          if (!tx || !/^[0-9A-F]{3,8}$/.test(tx)) continue;
+          const rx = tx.length === 3 && tx.startsWith("7E")
+            ? (parseInt(tx, 16) + 8).toString(16).toUpperCase().padStart(3, "0")
+            : tx;
+
+          setDetectProgress(`Testuji ${ecu.common || ecu.name} [${tx}] (${i + 1}/${availableEcus.length})`);
+
+          try {
+            await elmQueue.send(`AT SH ${tx}`, { commandType: "delphi_diag_init", timeoutMs: 900 });
+            await elmQueue.send(`AT CRA ${rx}`, { commandType: "delphi_diag_init", timeoutMs: 900 });
+            const r = await elmQueue.send("3E 00", {
+              commandType: "delphi_diag_read",
+              timeoutMs: 900,
+            });
+            probed.add(tx);
+            const raw = (r.raw || "").toUpperCase();
+            const isNoData = /NO\s*DATA|UNABLE|CAN\s*ERROR|BUS\s*INIT|STOPPED|BUFFER/.test(raw);
+            const isAck = /\b7E\s?00\b/.test(raw) || /\b7F\s?3E\b/.test(raw) || r.status === "nrc";
+            if (r.status === "ok" && !isNoData) {
+              if (isAck || /^[0-9A-F ]+$/.test(raw.trim())) {
+                found.add(tx);
+              }
+            }
+          } catch {
+            // pokračuj na další ECU
+          }
+        }
+
+        // Obnova: broadcast a simple profil
+        try { await elmQueue.send("AT CRA", { commandType: "delphi_diag_restore", timeoutMs: 900 }); } catch {}
+        try { await elmQueue.send("AT SH 7DF", { commandType: "delphi_diag_restore", timeoutMs: 900 }); } catch {}
+        try { await applyElmProfile("simple", true); } catch {}
+      });
+
+      setDetectedEcus(found);
+      setProbedEcus(probed);
+      toast({
+        title: `Detekce dokončena: ${found.size} / ${probed.size} ECU odpovědělo`,
+        description: found.size === 0
+          ? "Žádná ECU neodpověděla — zkontroluj profil vozidla a připojení."
+          : "Dostupné jednotky jsou zvýrazněné v seznamu.",
+      });
+    } catch (e) {
+      toast({
+        title: "Detekce ECU selhala",
+        description: String((e as Error)?.message || e),
+        variant: "destructive",
+      });
+    } finally {
+      setDetectingEcus(false);
+      setDetectProgress("");
+    }
+  }
+
     if (!transportReady) {
       toast({
         title: usingRemoteTransport ? "Vybraný zákazník je offline" : "OBD adaptér není připojen",
