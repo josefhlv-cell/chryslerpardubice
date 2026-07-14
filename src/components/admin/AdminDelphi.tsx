@@ -240,6 +240,12 @@ export default function AdminDelphi() {
   const [scanProgress, setScanProgress] = useState("");
   const [scanResults, setScanResults] = useState<EcuScanResult[]>([]);
 
+  // Auto-detekce dostupných ECU (non-destructive: Tester Present 3E 00).
+  const [detectingEcus, setDetectingEcus] = useState(false);
+  const [detectProgress, setDetectProgress] = useState("");
+  const [detectedEcus, setDetectedEcus] = useState<Set<string>>(new Set());
+  const [probedEcus, setProbedEcus] = useState<Set<string>>(new Set());
+
   useEffect(
     () =>
       bleManager.subscribe((event) => {
