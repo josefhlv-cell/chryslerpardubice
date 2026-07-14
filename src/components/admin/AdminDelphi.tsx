@@ -994,7 +994,7 @@ export default function AdminDelphi() {
             probed.add(tx);
             const raw = (r.raw || "").toUpperCase();
             const isNoData = /NO\s*DATA|UNABLE|CAN\s*ERROR|BUS\s*INIT|STOPPED|BUFFER/.test(raw);
-            const isAck = /\b7E\s?00\b/.test(raw) || /\b7F\s?3E\b/.test(raw) || r.status === "nrc";
+            const isAck = /\b7E\s?00\b/.test(raw) || /\b7F\s?3E\b/.test(raw);
             if (r.status === "ok" && !isNoData) {
               if (isAck || /^[0-9A-F ]+$/.test(raw.trim())) {
                 found.add(tx);
