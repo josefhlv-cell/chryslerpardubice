@@ -40,6 +40,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { bleManager } from "@/lib/obd/ble-manager";
+import { elmQueue } from "@/lib/obd/adapter/elm-queue";
+import { applyElmProfile } from "@/lib/obd/adapter/elm-init";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
 import {
   findBrandForVin,
