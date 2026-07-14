@@ -1031,6 +1031,7 @@ export default function AdminDelphi() {
     }
   }
 
+  async function scanAllFaults() {
     if (!transportReady) {
       toast({
         title: usingRemoteTransport ? "Vybraný zákazník je offline" : "OBD adaptér není připojen",
