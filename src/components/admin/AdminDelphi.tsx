@@ -1583,16 +1583,62 @@ export default function AdminDelphi() {
                   </SelectTrigger>
                   <SelectContent className="max-h-96">
                     <SelectItem value="__all">Všechny dostupné systémy</SelectItem>
-                    {availableEcus.map((ecu) => (
-                      <SelectItem key={normalizeAddress(ecu.address)} value={ecu.address}>
-                        {ecu.common || ecu.name} [{normalizeAddress(ecu.address)}]
-                        {recommendedEcuAddresses.has(normalizeAddress(ecu.address))
-                          ? " · doporučená"
-                          : ""}
-                      </SelectItem>
-                    ))}
+                    {availableEcus.map((ecu) => {
+                      const addr = normalizeAddress(ecu.address);
+                      const recommended = recommendedEcuAddresses.has(addr);
+                      const wasProbed = probedEcus.has(addr);
+                      const isDetected = detectedEcus.has(addr);
+                      const badge = isDetected
+                        ? " · ✓ dostupná"
+                        : wasProbed
+                          ? " · ✗ neodpovídá"
+                          : recommended
+                            ? " · doporučená"
+                            : "";
+                      return (
+                        <SelectItem
+                          key={addr}
+                          value={ecu.address}
+                          className={
+                            isDetected
+                              ? "font-semibold text-emerald-700"
+                              : wasProbed
+                                ? "text-slate-400"
+                                : ""
+                          }
+                        >
+                          {ecu.common || ecu.name} [{addr}]{badge}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={detectAvailableEcus}
+                  disabled={detectingEcus || !transportReady || availableEcus.length === 0}
+                  className="border-emerald-500 text-emerald-800 hover:bg-emerald-50"
+                >
+                  {detectingEcus ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Search className="mr-2 h-4 w-4" />
+                  )}
+                  Auto-detekce ECU (bezpečné)
+                </Button>
+                {detectedEcus.size > 0 && (
+                  <Badge variant="outline" className="border-emerald-600 text-emerald-700">
+                    Nalezeno {detectedEcus.size} / {probedEcus.size}
+                  </Badge>
+                )}
+                {detectingEcus && detectProgress && (
+                  <span className="text-xs text-slate-600">{detectProgress}</span>
+                )}
               </div>
 
               <div className="rounded-lg border border-slate-400 bg-slate-100 p-3 text-sm">
