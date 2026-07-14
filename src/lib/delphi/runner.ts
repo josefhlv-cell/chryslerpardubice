@@ -195,7 +195,19 @@ async function restoreElmAfterFunction(): Promise<void> {
   }
 
   try {
-    await applyElmProfile("simple");
+    // KRITICKÉ: vrátit vysílací hlavičku zpět na CAN broadcast 7DF,
+    // jinak zůstane zaseknutá na poslední OEM ECU (např. 771) a všechny
+    // následné OBD-II live PIDy vrací NO_DATA → v UI "Nedostupné".
+    await elmQueue.send("AT SH 7DF", {
+      commandType: "delphi_diag_restore",
+      timeoutMs: 1200,
+    });
+  } catch {
+    // best-effort
+  }
+
+  try {
+    await applyElmProfile("simple", true);
   } catch {
     // Chybu obnovy pouze tolerujeme, aby se neztratila původní odpověď funkce.
   }
