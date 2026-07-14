@@ -27,6 +27,9 @@ const PROFILES: Record<ElmProfile, string[]> = {
   ],
   simple: [
     "ATAR",         // zrušit CAN receive filtr po DTC/UDS scanu (ATCRA7E9 apod.)
+    "ATSH7DF",      // reset TX hlavičky na OBD-II broadcast (jinak zůstane
+                    // zaseknutá na poslední OEM adrese z Delphi/UDS scanu
+                    // a všechny live PIDy vrací NO_DATA)
     "ATE0", "ATL0", "ATS0", "ATH0",
     "ATAT1",
     "ATST32",       // HW timeout 200ms — rychlé PID
