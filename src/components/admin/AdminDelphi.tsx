@@ -207,7 +207,10 @@ function explainStatus(result: DiagRunResult | null): { title: string; causes: s
   };
 }
 
+const AdminDelphiWowLazy = lazy(() => import("./delphi/AdminDelphiWow"));
+
 export default function AdminDelphi() {
+  const [wowOpen, setWowOpen] = useState(false);
   const [brands, setBrands] = useState<BrandManifestEntry[]>([]);
   const [brandKey, setBrandKey] = useState("OBD2");
   const [vin, setVin] = useState("");
