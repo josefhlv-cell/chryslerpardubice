@@ -271,19 +271,3 @@ export default function AdminDelphiWow() {
     </div>
   );
 }
-
-export const AdminDelphiWowLazy = lazy(() => import("./AdminDelphiWow"));
-
-export function AdminDelphiWowSection() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center p-6 text-sm text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Načítám WOW modul…
-        </div>
-      }
-    >
-      <AdminDelphiWowLazy />
-    </Suspense>
-  );
-}
