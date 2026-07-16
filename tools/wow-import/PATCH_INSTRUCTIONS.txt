@@ -1,0 +1,26 @@
+WOW / WÜRTH DATA PATCH V2
+
+This patch was rebuilt using BOTH supplied archives:
+- data.zip
+- ac_diagnosis_module.zip
+
+Copy the folders `public`, `src` and `tools` into the repository root.
+
+What is included now:
+1. A real parsed catalog with 63,017 records from mid_prot_overview.csv.
+2. A searchable index of 3,000 serial-help HTML documents from serial_help.zip (metadata only).
+3. A complete source inventory from both archives.
+4. A safe TypeScript loader and conservative ELM/Vgate compatibility gate.
+5. A repeatable importer script.
+
+Re-run import:
+node tools/wow-import/import-wow.mjs \
+  --data /path/to/data.zip \
+  --module /path/to/ac_diagnosis_module.zip \
+  --out public/delphi/wow
+
+IMPORTANT:
+- This patch does NOT enable unverified service commands.
+- Protocol names and ECU metadata are real source records, but they are not executable request sequences.
+- Connect records to the Delphi UI via `src/lib/delphi/wow`.
+- Keep existing BLE runner unchanged until exact request, response, addressing and transport are verified.
