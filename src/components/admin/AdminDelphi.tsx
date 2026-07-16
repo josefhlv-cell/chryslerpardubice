@@ -2292,6 +2292,25 @@ export default function AdminDelphi() {
               )}
             </div>
           </section>
+
+          {/* WOW/Würth katalog – pouze metadata a nápověda, viz src/components/admin/delphi/AdminDelphiWow.tsx */}
+          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+            <button
+              type="button"
+              onClick={() => setWowOpen((v) => !v)}
+              className="flex w-full items-center justify-between gap-2 border-b border-slate-400 bg-slate-200 px-3 py-2 text-left text-sm font-bold"
+            >
+              <span>WOW / Würth katalog (metadata + nápověda)</span>
+              {wowOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+            {wowOpen ? (
+              <div className="p-3">
+                <Suspense fallback={<div className="flex items-center gap-2 p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" /> Načítám WOW modul…</div>}>
+                  <AdminDelphiWowLazy />
+                </Suspense>
+              </div>
+            ) : null}
+          </section>
         </div>
       </div>
     </div>
