@@ -1,0 +1,132 @@
+{
+  "protocolRows": 63017,
+  "helpDocuments": 2733,
+  "sourceFiles": 1449,
+  "topSystems": [
+    [
+      "[Generic OBD]",
+      2661
+    ],
+    [
+      "Airbag",
+      1943
+    ],
+    [
+      "Reset service",
+      1856
+    ],
+    [
+      "ABS",
+      1762
+    ],
+    [
+      "Instrument",
+      1622
+    ],
+    [
+      "Climate control",
+      1598
+    ],
+    [
+      "",
+      1508
+    ],
+    [
+      "Infotainment",
+      1488
+    ],
+    [
+      "Gearbox",
+      1308
+    ],
+    [
+      "Immobiliser",
+      1183
+    ],
+    [
+      "Door electronics",
+      777
+    ],
+    [
+      "Central electronics",
+      748
+    ],
+    [
+      "Parking assistance",
+      548
+    ],
+    [
+      "Steering wheel electronics",
+      546
+    ],
+    [
+      "Headlight control",
+      482
+    ],
+    [
+      "Quick services",
+      445
+    ],
+    [
+      "Central body",
+      445
+    ],
+    [
+      "Convenience system",
+      392
+    ],
+    [
+      "ABS/ESP",
+      386
+    ],
+    [
+      "Driver help system",
+      375
+    ],
+    [
+      "Radio",
+      371
+    ],
+    [
+      "Steering assistance",
+      301
+    ],
+    [
+      "Tyre pressure monitoring",
+      295
+    ],
+    [
+      "Gateway",
+      286
+    ],
+    [
+      "Power steering",
+      275
+    ],
+    [
+      "Parking/ extra heater",
+      266
+    ],
+    [
+      "Immo/Instr",
+      221
+    ],
+    [
+      "Navigation",
+      221
+    ],
+    [
+      "Transport mode",
+      212
+    ],
+    [
+      "Additional heater",
+      205
+    ]
+  ],
+  "notes": [
+    "Protocol overview is parsed from the real mid_prot_overview.csv.",
+    "HTML content is not bundled; only a searchable metadata index is generated.",
+    "No unverified service command is enabled."
+  ]
+}
