@@ -1,3 +1,4 @@
+import protocolAsset from "./protocol-overview.asset.json";
 import type { WowHelpRecord, WowProtocolCatalog, WowProtocolRecord } from "./types";
 
 let protocolPromise: Promise<WowProtocolCatalog> | null = null;
@@ -10,7 +11,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export function loadWowProtocolCatalog(): Promise<WowProtocolCatalog> {
-  protocolPromise ??= fetchJson<WowProtocolCatalog>("/delphi/wow/protocol-overview.json");
+  protocolPromise ??= fetchJson<WowProtocolCatalog>(protocolAsset.url);
   return protocolPromise;
 }
 
@@ -24,20 +25,25 @@ export async function findWowProtocols(query: {
   protocol?: string;
   startYear?: number;
   endYear?: number;
+  limit?: number;
 }): Promise<WowProtocolRecord[]> {
   const catalog = await loadWowProtocolCatalog();
   const system = query.system?.trim().toLowerCase();
   const protocol = query.protocol?.replace(/\s+/g, "").toLowerCase();
-  return catalog.records.filter((row) => {
+  const limit = query.limit ?? 500;
+  const out: WowProtocolRecord[] = [];
+  for (const row of catalog.records) {
     const rowStart = Number(row.startYear) || 0;
     const rowEnd = Number(row.endYear) || 9999;
-    if (query.startYear && rowEnd < query.startYear) return false;
-    if (query.endYear && rowStart > query.endYear) return false;
-    if (system && !`${row.systemName} ${row.systemVariant}`.toLowerCase().includes(system)) return false;
+    if (query.startYear && rowEnd < query.startYear) continue;
+    if (query.endYear && rowStart > query.endYear) continue;
+    if (system && !`${row.systemName} ${row.systemVariant}`.toLowerCase().includes(system)) continue;
     if (protocol) {
-      const haystack = [row.obdProtocol,row.diagnosisProtocol,row.eobdProtocol,row.measurementProtocol,row.ecuObd].join("").toLowerCase();
-      if (!haystack.includes(protocol)) return false;
+      const haystack = [row.obdProtocol, row.diagnosisProtocol, row.eobdProtocol, row.measurementProtocol, row.ecuObd].join("").toLowerCase();
+      if (!haystack.includes(protocol)) continue;
     }
-    return true;
-  });
+    out.push(row);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
