@@ -209,6 +209,27 @@ function explainStatus(result: DiagRunResult | null): { title: string; causes: s
 
 const AdminDelphiWowLazy = lazy(() => import("./delphi/AdminDelphiWow"));
 
+import {
+  DeveloperModeBadge,
+  DeveloperConfirmDialog,
+  type DevConfirmDetails,
+} from "./delphi/DeveloperMode";
+import {
+  isDeveloperModeActive,
+  subscribeDeveloperMode,
+  logDevExecution,
+} from "@/lib/delphi/developer-mode";
+
+/** Odhad úrovně rizika neověřené funkce podle typu / destructive příznaku. */
+function assessRisk(fn: DiagFunction): "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" {
+  if (fn.kind === "routine" && fn.destructive) return "CRITICAL";
+  if (fn.kind === "actuator_test") return "HIGH";
+  if (fn.kind === "routine") return "HIGH";
+  if (fn.kind === "raw") return "MEDIUM";
+  if (fn.destructive) return "HIGH";
+  return "LOW";
+}
+
 export default function AdminDelphi() {
   const [wowOpen, setWowOpen] = useState(false);
   const [brands, setBrands] = useState<BrandManifestEntry[]>([]);
