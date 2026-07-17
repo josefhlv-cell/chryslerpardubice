@@ -1215,9 +1215,82 @@ export default function AdminDelphi() {
     }
   }
 
+  async function executeSelected() {
+    if (!selected) return;
+    setRunning(true);
+    try {
+      const output = await runThroughSelectedTransport(selected, activeContext, true);
+      setResult(output);
+      if (isDeveloperModeActive()) {
+        void logDevExecution({
+          vin: vin || null,
+          hardware: usingRemoteTransport ? "remote" : "local-ble",
+          ecu: selected.ecu || selected.ecuAddress || null,
+          protocol: selected.isOem ? "OEM (CAN/UDS)" : "OBD-II",
+          request: output.command,
+          response: output.rawResponse,
+          parsed: output.decoded,
+          session: isWriteFunction(selected) ? "10 03 (extended)" : "10 01 (default)",
+          result_status: output.status,
+          risk_level: assessRisk(selected),
+          function_id: selected.id,
+          function_name: selected.name,
+          function_kind: selected.kind,
+          reason_unverified:
+            "Funkce nebyla ověřena pro konkrétní SW variantu ECU tohoto vozidla.",
+          tx: activeContext?.manualTx || activeContext?.ecuAddress || null,
+          rx: activeContext?.manualRx || activeContext?.responseHeader || null,
+          transport_log: (output.warnings || []).join("\n") || null,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Funkci se nepodařilo spustit",
+        description: String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function runSelected() {
     if (!selected) return;
 
+    // Developer Mode: candidate/blocked funkce → strukturovaný confirm s druhým potvrzením.
+    if (isDeveloperModeActive() && (isWriteFunction(selected) || selected.destructive)) {
+      setDevConfirm({
+        functionName: selected.name,
+        functionKind: selected.kind,
+        ecu: selected.ecu || selected.ecuAddress || null,
+        protocol: selected.isOem ? "OEM (CAN/UDS)" : "OBD-II",
+        request: selected.command,
+        session: isWriteFunction(selected) ? "10 03 (extended)" : "10 01 (default)",
+        hardware: usingRemoteTransport ? "Vzdálený zákaznický OBD" : "Lokální BLE OBD",
+        tx: activeContext?.manualTx || activeContext?.ecuAddress || null,
+        rx: activeContext?.manualRx || activeContext?.responseHeader || null,
+        requirements: [
+          "Zapalování ON, motor podle podmínek výrobce.",
+          "Napětí baterie v normě (>12.4V).",
+          "Vybraná správná ECU pro dané vozidlo.",
+        ],
+        limitations: [
+          "Funkce nebyla ověřena pro tuto konkrétní SW variantu ECU.",
+          "Odpověď nemusí být korektně dekódována.",
+        ],
+        reasonUnverified:
+          selected.safetyWarning ||
+          "Chybí ověřená komunikační definice pro tento konkrétní model / SW ECU.",
+        consequences: [
+          "Změna coding/adaptací, ztráta naučených hodnot, nutnost kalibrace.",
+        ],
+        risk: assessRisk(selected),
+      });
+      setDevPending(() => executeSelected);
+      return;
+    }
+
+    // Standardní režim — původní chování (window.confirm pro destruktivní funkce).
     const warning = isWriteFunction(selected)
       ? [
           "VAROVÁNÍ – ODBORNÝ REŽIM",
@@ -1235,24 +1308,7 @@ export default function AdminDelphi() {
         : null;
 
     if (warning && !window.confirm(warning)) return;
-
-    setRunning(true);
-    try {
-      const output = await runThroughSelectedTransport(
-        selected,
-        activeContext,
-        true,
-      );
-      setResult(output);
-    } catch (error) {
-      toast({
-        title: "Funkci se nepodařilo spustit",
-        description: String(error),
-        variant: "destructive",
-      });
-    } finally {
-      setRunning(false);
-    }
+    await executeSelected();
   }
 
   function togglePanel(panel: PanelKey) {
