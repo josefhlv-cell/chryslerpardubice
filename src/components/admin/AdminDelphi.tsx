@@ -1354,6 +1354,7 @@ export default function AdminDelphi() {
                   ? "Zákazník offline"
                   : "Lokální OBD odpojeno"}
           </Badge>
+          <DeveloperModeBadge />
         </div>
 
         <div className="space-y-3 p-3 sm:p-4">
