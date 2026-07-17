@@ -2400,6 +2400,18 @@ export default function AdminDelphi() {
           </section>
         </div>
       </div>
+
+      <DeveloperConfirmDialog
+        open={devConfirm !== null}
+        details={devConfirm}
+        onCancel={() => { setDevConfirm(null); setDevPending(null); }}
+        onConfirm={async () => {
+          const runner = devPending;
+          setDevConfirm(null);
+          setDevPending(null);
+          if (runner) await runner();
+        }}
+      />
     </div>
   );
 }
