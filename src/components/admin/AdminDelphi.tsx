@@ -270,6 +270,12 @@ export default function AdminDelphi() {
   const [detectedEcus, setDetectedEcus] = useState<Set<string>>(new Set());
   const [probedEcus, setProbedEcus] = useState<Set<string>>(new Set());
 
+  // Developer Mode (session-only unlock, klíč 1607).
+  const [devActive, setDevActive] = useState(isDeveloperModeActive());
+  const [devConfirm, setDevConfirm] = useState<DevConfirmDetails | null>(null);
+  const [devPending, setDevPending] = useState<null | (() => Promise<void>)>(null);
+  useEffect(() => subscribeDeveloperMode(setDevActive), []);
+
   useEffect(
     () =>
       bleManager.subscribe((event) => {
