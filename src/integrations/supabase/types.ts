@@ -1232,6 +1232,75 @@ export type Database = {
         }
         Relationships: []
       }
+      delphi_dev_executions: {
+        Row: {
+          created_at: string
+          ecu: string | null
+          function_id: string | null
+          function_kind: string | null
+          function_name: string | null
+          hardware: string | null
+          id: string
+          parsed: Json | null
+          protocol: string | null
+          reason_unverified: string | null
+          request: string | null
+          response: string | null
+          result_status: string | null
+          risk_level: string | null
+          rx: string | null
+          session: string | null
+          transport_log: string | null
+          tx: string | null
+          user_id: string | null
+          vin: string | null
+        }
+        Insert: {
+          created_at?: string
+          ecu?: string | null
+          function_id?: string | null
+          function_kind?: string | null
+          function_name?: string | null
+          hardware?: string | null
+          id?: string
+          parsed?: Json | null
+          protocol?: string | null
+          reason_unverified?: string | null
+          request?: string | null
+          response?: string | null
+          result_status?: string | null
+          risk_level?: string | null
+          rx?: string | null
+          session?: string | null
+          transport_log?: string | null
+          tx?: string | null
+          user_id?: string | null
+          vin?: string | null
+        }
+        Update: {
+          created_at?: string
+          ecu?: string | null
+          function_id?: string | null
+          function_kind?: string | null
+          function_name?: string | null
+          hardware?: string | null
+          id?: string
+          parsed?: Json | null
+          protocol?: string | null
+          reason_unverified?: string | null
+          request?: string | null
+          response?: string | null
+          result_status?: string | null
+          risk_level?: string | null
+          rx?: string | null
+          session?: string | null
+          transport_log?: string | null
+          tx?: string | null
+          user_id?: string | null
+          vin?: string | null
+        }
+        Relationships: []
+      }
       device_tokens: {
         Row: {
           created_at: string
