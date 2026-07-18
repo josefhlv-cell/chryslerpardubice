@@ -61,8 +61,16 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        navigateFallbackDenylist: [/^\/~oauth/],
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webp,jpg}"],
+        navigateFallbackDenylist: [/^\/~oauth/, /^\/delphi\/wow\//],
+        globPatterns: ["**/*.{js,css,html,ico,svg,woff2}"],
+        globIgnores: [
+          "**/delphi/wow/**",
+          "**/delphi/catalogs/**",
+          "**/vraforge-diag/catalogs/**",
+          "**/*.zip",
+          "**/*.rar",
+        ],
+
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/nzmeiluvpmchipyssdms\.supabase\.co\/rest\/.*/i,

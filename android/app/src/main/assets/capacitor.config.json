@@ -1,16 +1,13 @@
 {
 	"appId": "app.lovable.c6d932101224420590deeec3ccc6923f",
-	"appName": "Chrysler Pardubice",
+	"appName": "CHDP Garage",
 	"webDir": "dist",
-	"server": {
-		"url": "https://c6d93210-1224-4205-90de-eec3ccc6923f.lovableproject.com?forceHideBadge=true",
-		"cleartext": true
-	},
 	"ios": {
 		"contentInset": "automatic",
 		"backgroundColor": "#0f0f23",
 		"preferredContentMode": "mobile",
-		"scheme": "chdp-servis"
+		"scheme": "chdp-servis",
+		"limitsNavigationsToAppBoundDomains": false
 	},
 	"android": {
 		"backgroundColor": "#0f0f23",
@@ -18,16 +15,24 @@
 	},
 	"plugins": {
 		"SplashScreen": {
+			"launchShowDuration": 1500,
 			"launchAutoHide": true,
 			"backgroundColor": "#0f0f23",
 			"showSpinner": false,
+			"androidSpinnerStyle": "large",
+			"iosSpinnerStyle": "small",
+			"spinnerColor": "#FFBF00",
 			"androidScaleType": "CENTER_CROP",
 			"splashFullScreen": true,
 			"splashImmersive": true
 		},
 		"StatusBar": {
 			"style": "DARK",
-			"backgroundColor": "#1a1a2e"
+			"backgroundColor": "#0d1117",
+			"overlaysWebView": false
+		},
+		"PushNotifications": {
+			"presentationOptions": ["badge", "sound", "alert"]
 		}
 	}
 }

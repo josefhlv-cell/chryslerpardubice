@@ -1,0 +1,19 @@
+<html xmlns:cf="http://docbook.sourceforge.net/xmlns/chunkfast/1.0"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>Testing electromagnet gearshift selector</title><link rel="stylesheet" href="OBDhelp.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.69.0"><link rel="start" href="index.html" title="Help"><link rel="up" href="index.html" title="Help"><link rel="prev" href="hd_volvo_gear_selector_position_test.html" title="Testing gearshift selector"><link rel="next" href="hd_volvo_reverse_start_relays_test.html" title="Testing relay reverse light and immobilizer"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="article" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="id5049731"></a><sup>[<a name="id5047978" href="#ftn.id5047978">1728</a>]</sup>Testing electromagnet gearshift selector</h2></div></div><hr></div><p>This function is used to check the electromagnets in the lever
+  carrier.</p><p>Start the test by checking that electromagnet "SOX1" is "Active" and
+  that electromagnet "SOLF" is "Inactive", when the gear lever is in position
+  "N". Status active/inactive is shown during the test.</p><p><span class="bold"><strong>Test conditions:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>Parking brake applied.</p></li><li><p>Battery voltage above 20 V.</p></li><li><p>Engine off.</p></li><li><p>Gear lever in position N.</p></li></ul></div><p><span class="bold"><strong>Procedure:</strong></span></p><div class="orderedlist"><ol type="1"><li><p>Select the function, press "OK".</p></li><li><p>A dialogue shows the test conditions, check these.</p></li><li><p>Check that electromagnet "SOX1" is "Active".</p></li><li><p>Check that electromagnet "SOLF" is "Inactive".</p></li><li><p>Move the gearshift lever to a gear position (does not apply to
+      automatic transmission). Now check that electromagnet "SOX1" is
+      "Inactive".</p></li><li><p>Move the gearshift lever from "N" towards "Hold". Check that
+      electromagnet "SOX1" is activated for a second or two. It should not be
+      possible to reach the "Hold" position directly since "SOX1" locks out
+      the position for a few seconds.</p></li><li><p>When the "Hold" position is obtained, check that electromagnet
+      "SOLF" reaches status "Active".</p></li><li><p>Activate electromagnet "SOX1" with the diagnostics program and
+      feel with the gearshift lever that the electromagnet locks out from
+      "Automatic" towards "Hold". "SOX1"="Active".</p></li><li><p>Deactivate electromagnet "SOX1" with the diagnostics program and
+      feel with the gearshift lever that the electromagnet does not lock out
+      "Automatic " towards "Hold". "SOX1"="Inactive".</p></li><li><p>Activate electromagnet "SOLF" with the diagnostics program and
+      feel with the gearshift lever that the lever carrier is locked out. It
+      is not possible to select or deselect a gear. "SOLF"="Active".</p></li><li><p>Deactivate electromagnet "SOLF" with the diagnostics program and
+      feel with the gearshift lever that the lever carrier is no longer locked
+      out. "SOLF"="Inactive".</p></li><li><p>The function is done.</p><div class="itemizedlist"><ul type="disc"><li><p>If the function fails, check the test conditions and repair
+          any faults.</p></li></ul></div></li></ol></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.id5047978" href="#id5047978">1728</a>] </sup></p></div></div></div></body></html>

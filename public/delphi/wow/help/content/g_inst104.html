@@ -1,0 +1,48 @@
+<html xmlns:cf="http://docbook.sourceforge.net/xmlns/chunkfast/1.0"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>
+      Lambda regulation, cylinder bank 2
+  </title><link rel="stylesheet" href="OBDhelp.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.69.0"><link rel="start" href="index.html" title="Help"><link rel="up" href="index.html" title="Help"><link rel="prev" href="g_inst103.html" title="
+      Lambda regulation, cylinder bank 1
+  "><link rel="next" href="volvo_x70_addremote.html" title="Add remote controls"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="article" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="id4989803"></a><sup>[<a name="id4995964" href="#ftn.id4995964">1400</a>]</sup>
+      Lambda regulation, cylinder bank 2
+  </h2></div></div><hr></div><p>
+    Preconditions for the test:
+  </p><div class="itemizedlist"><ul type="disc"><li style="list-style-type: disc"><p>
+        Engine running.
+      </p></li><li style="list-style-type: disc"><p>
+          No faults stored.
+        </p></li><li style="list-style-type: disc"><p>
+            Engine temperature 80 to 110 °C.
+          </p></li><li style="list-style-type: disc"><p>
+              All electrical loads switched off.
+            </p></li></ul></div><p>
+              Note:
+            </p><div class="itemizedlist"><ul type="disc"><li style="list-style-type: disc"><p>
+                  Used for testing lambda regulation and lambda adaption, cylinder bank 2.
+                </p></li><li style="list-style-type: disc"><p>
+                    At basic setting, the ignition timing is locked to 12° before TDC, digital idling ­stabilisation is locked, the carbon canister valve is closed, the AC compressor is off, the EGR valve is closed, no engine temperature correction is applied and
+                    <span class="emphasis"><em>
+                      adaption values are set to 0
+                      </em></span>.
+                  </p></li><li style="list-style-type: disc"><p>
+                      Adaption values are always set to zero on starting with engine temperature below 40 °C.
+                    </p></li></ul></div><p>
+                      Procedure:
+                    </p><div class="itemizedlist"><ul type="disc"><li style="list-style-type: disc"><p>
+                          Choose the lambda regulation function, cylinder bank 2.
+                        </p></li><li style="list-style-type: disc"><p>
+                            Adaption values are set to zero and learning is initialised after about 20 seconds.
+                          </p></li><li style="list-style-type: disc"><p>
+                              Adaption is divided into four areas: idling, part load one, part load two and part load three. For the adaption to be applied in all the areas, the following procedure must be carried out:
+                            </p><div class="itemizedlist"><ul type="disc"><li style="list-style-type: disc"><p>
+                                  Idling: Let the engine idle (650-900 rpm).
+                                </p></li><li style="list-style-type: disc"><p>
+                                    Part loads one to three: Perform the drive test, in which the engine speed must be increased between 1500-3000 rpm, under load (load by braking).
+                                  </p></li></ul></div><p>
+                                    The four-digit block in the adaption step indicates in which range the test is being done. The first digit from the left stands for idling, the second to fourth for part loads one to three (0 = test condition not met, 1 = test condition met).
+                                  </p></li><li style="list-style-type: disc"><p>
+                                      The eight-digit block in Adaption (done), indicates in which ranges adaption has been applied (the respective digit is changed from 0 to 1). The first digit from the left = part load three, the third = part load two, the fifth = part load one, the seventh = idling.
+                                    </p></li><li style="list-style-type: disc"><p>                                        The eight-digit block in Adaption (learnt), indicates in which ranges adaption has been learnt and is OK (the respective digit is
+                                        changed from 0 to 1). The first digit from the left = part load three, the third = part load two, the fifth = part load one, the seventh = idling.
+                                      </p></li><li style="list-style-type: disc"><p>
+                                          After the test, the value in lambda regulation, cylinder bank 2 must hunt around 0.0 % by no more than ± 6.0 %.
+                                        </p></li></ul></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.id4995964" href="#id4995964">1400</a>] </sup></p></div></div></div></body></html>

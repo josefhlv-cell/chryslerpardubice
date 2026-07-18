@@ -1,91 +1,254 @@
-import { useEffect, useMemo, useState } from "react";
-import { Loader2, Search, ShieldAlert, Info, FileText, Database } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Search,
+  X,
+  Wrench,
+  Stethoscope,
+  HelpCircle,
+  Plug,
+  Film,
+  Network,
+  Filter,
+  Globe,
+  Car,
+  Info,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  isHtmlRecord,
+  isImageRecord,
+  loadWowFullContentManifest,
+  loadWowFullHelpIndex,
+  loadWowMediaIndex,
   loadWowProtocolCatalog,
-  loadWowHelpIndex,
-  evaluateWowElmCompatibility,
+  type WowContentRecord,
+  type WowFullContentManifest,
   type WowProtocolRecord,
-  type WowHelpRecord,
 } from "@/lib/delphi/wow";
 
-type CatalogState = {
-  loading: boolean;
-  error: string | null;
-  total: number;
-  systems: string[];
-  helpCount: number;
+export type WowVehicleContext = {
+  vin: string | null;
+  brandKey: string | null;
+  brandLabel: string | null;
+  make: string | null;
+  model: string | null;
+  generation: string | null;
+  year: string | null;
+  ecuName: string | null;
+  ecuAddress: string | null;
+  selectedFunction: string | null;
 };
 
-function stateLabel(state: "metadata" | "candidate" | "blocked"): { label: string; className: string } {
-  if (state === "candidate")
-    return {
-      label: "Kandidát – vyžaduje ověření",
-      className: "border-amber-400 bg-amber-50 text-amber-900",
-    };
-  if (state === "blocked")
-    return {
-      label: "Vyžaduje Delphi CDP+/Snooper",
-      className: "border-rose-400 bg-rose-50 text-rose-900",
-    };
-  return {
-    label: "Pouze technická dokumentace",
-    className: "border-slate-400 bg-slate-100 text-slate-800",
-  };
+type Props = {
+  vehicleContext?: WowVehicleContext | null;
+};
+
+type SectionKey =
+  | "service"
+  | "diagnosis"
+  | "help"
+  | "connector"
+  | "media"
+  | "protocols";
+
+const SECTION_LABEL: Record<SectionKey, string> = {
+  service: "Servisní postupy",
+  diagnosis: "Diagnostické postupy",
+  help: "Technická nápověda",
+  connector: "OBD konektor",
+  media: "Obrázky a animace",
+  protocols: "Protokoly",
+};
+
+const SECTION_ICON: Record<SectionKey, JSX.Element> = {
+  service: <Wrench className="h-4 w-4" />,
+  diagnosis: <Stethoscope className="h-4 w-4" />,
+  help: <HelpCircle className="h-4 w-4" />,
+  connector: <Plug className="h-4 w-4" />,
+  media: <Film className="h-4 w-4" />,
+  protocols: <Network className="h-4 w-4" />,
+};
+
+const SERVICE_TERMS = [
+  "service","servis","reset","bleed","odvzdušn","install","adaptation","adaptace",
+  "kalibrace","calibr","learn","teach","aktivac","activation","clear","test","dpf",
+  "egr","injector","vstřik","pumpinst","valve","aktuator"
+];
+
+const DIAGNOSIS_TERMS = [
+  "diag","selftest","self-test","fauld","fault","dtc","erase","openadp",
+  "protocol","measure","ground","kabel","chyb","paralel","short"
+];
+
+const CONNECTOR_TERMS = [
+  "obd","connector","conector","dlc","pinout","socket","zásuvka","zasuvka","port"
+];
+
+function slugify(x: string | null | undefined) {
+  return (x || "").toString().toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
 }
 
-export default function AdminDelphiWow() {
-  const [meta, setMeta] = useState<CatalogState>({
-    loading: true,
-    error: null,
-    total: 0,
-    systems: [],
-    helpCount: 0,
-  });
-  const [system, setSystem] = useState("");
-  const [protocol, setProtocol] = useState("");
-  const [rows, setRows] = useState<WowProtocolRecord[]>([]);
-  const [help, setHelp] = useState<WowHelpRecord[]>([]);
-  const [helpQuery, setHelpQuery] = useState("");
-  const [searching, setSearching] = useState(false);
+function textOf(rec: WowContentRecord) {
+  return `${rec.title} ${rec.fileName} ${rec.tags.join(" ")} ${rec.excerpt}`.toLowerCase();
+}
+
+function classifyRecord(rec: WowContentRecord): SectionKey {
+  const t = textOf(rec);
+  if (isImageRecord(rec) && !isHtmlRecord(rec)) {
+    if (CONNECTOR_TERMS.some((k) => t.includes(k))) return "connector";
+    return "media";
+  }
+  if (rec.kind === "diagnosis") return "diagnosis";
+  if (CONNECTOR_TERMS.some((k) => t.includes(k))) return "connector";
+  if (DIAGNOSIS_TERMS.some((k) => t.includes(k))) return "diagnosis";
+  if (SERVICE_TERMS.some((k) => t.includes(k))) return "service";
+  return "help";
+}
+
+function vehicleMatches(rec: WowContentRecord, ctx?: WowVehicleContext | null): boolean {
+  if (!ctx) return false;
+  const parts = [ctx.brandLabel, ctx.brandKey, ctx.make, ctx.model, ctx.generation, ctx.ecuName]
+    .map(slugify)
+    .filter((x) => x && x.length >= 3);
+  if (!parts.length) return false;
+  const haystack = slugify(textOf(rec));
+  return parts.some((p) => haystack.includes(p));
+}
+
+function useDebounced<T>(value: T, ms = 250): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+function formatBytes(b: number) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} kB`;
+  return `${(b / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function DocumentViewer({ record, onClose }: { record: WowContentRecord; onClose: () => void }) {
+  const [html, setHtml] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isHtmlRecord(record)) return;
+    setLoading(true);
+    setError(null);
+    fetch(record.url)
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`))))
+      .then((raw) => {
+        if (cancelled) return;
+        // Sanitize: strip <script>, on* handlers, external navigation, and rebase relative asset URLs
+        const baseDir = record.url.replace(/[^/]+$/, "");
+        let out = raw
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, "")
+          .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, "")
+          .replace(/\shref\s*=\s*"(?!https?:|mailto:|#|\/)([^"]+)"/gi, ` href="${baseDir}$1"`)
+          .replace(/\ssrc\s*=\s*"(?!https?:|data:|\/)([^"]+)"/gi, ` src="${baseDir}$1"`)
+          .replace(/\ssrc\s*=\s*'(?!https?:|data:|\/)([^']+)'/gi, ` src='${baseDir}$1'`)
+          .replace(/\shref\s*=\s*'(?!https?:|mailto:|#|\/)([^']+)'/gi, ` href='${baseDir}$1'`);
+        // Wrap for readable style
+        out = `<!doctype html><html><head><meta charset="utf-8"><base href="${baseDir}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+          body{font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;background:#fff;padding:12px;margin:0;word-wrap:break-word}
+          img,video{max-width:100%;height:auto}
+          a{color:#2563eb;pointer-events:none;text-decoration:underline}
+          table{border-collapse:collapse;max-width:100%}
+          td,th{border:1px solid #cbd5e1;padding:4px 8px}
+        </style></head><body>${out}</body></html>`;
+        setHtml(out);
+      })
+      .catch((e) => !cancelled && setError(String(e?.message || e)))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [record]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/60 p-2 sm:p-4">
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+        <div className="flex items-center justify-between gap-2 border-b bg-slate-100 px-3 py-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">{record.title}</div>
+            <div className="truncate text-[11px] text-slate-500">{record.url}</div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Zavřít">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-hidden bg-white">
+          {loading ? (
+            <div className="flex h-full items-center justify-center text-sm text-slate-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Načítám dokument…
+            </div>
+          ) : error ? (
+            <div className="p-4 text-sm text-rose-700">Nelze načíst dokument: {error}</div>
+          ) : isHtmlRecord(record) && html ? (
+            <iframe
+              title={record.title}
+              sandbox=""
+              srcDoc={html}
+              className="h-full w-full border-0"
+            />
+          ) : isImageRecord(record) ? (
+            <div className="flex h-full items-center justify-center overflow-auto bg-slate-50 p-2">
+              <img src={record.url} alt={record.title} className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <div className="p-4 text-sm text-slate-600">Nepodporovaný formát: {record.extension}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminDelphiWow({ vehicleContext }: Props = {}) {
+  const [manifest, setManifest] = useState<WowFullContentManifest | null>(null);
+  const [records, setRecords] = useState<WowContentRecord[]>([]);
+  const [protocols, setProtocols] = useState<WowProtocolRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [section, setSection] = useState<SectionKey>("service");
+  const [query, setQuery] = useState("");
+  const debounced = useDebounced(query, 250);
+  const [showAll, setShowAll] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<WowContentRecord | null>(null);
+  const [page, setPage] = useState(1);
+  const perPage = 40;
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [catalog, helpIdx] = await Promise.all([
-          loadWowProtocolCatalog(),
-          loadWowHelpIndex().catch(() => ({ records: [] as WowHelpRecord[] })),
+        const [m, help, media, proto] = await Promise.all([
+          loadWowFullContentManifest(),
+          loadWowFullHelpIndex(),
+          loadWowMediaIndex(),
+          loadWowProtocolCatalog().catch(() => ({ records: [] as WowProtocolRecord[] } as any)),
         ]);
         if (cancelled) return;
-        const systems = Array.from(
-          new Set(
-            catalog.records
-              .map((r) => r.systemName?.trim())
-              .filter((s): s is string => Boolean(s)),
-          ),
-        ).sort((a, b) => a.localeCompare(b));
-        setMeta({
-          loading: false,
-          error: null,
-          total: catalog.recordCount,
-          systems,
-          helpCount: helpIdx.records.length,
-        });
-        setHelp(helpIdx.records);
-      } catch (e) {
-        if (cancelled) return;
-        setMeta({
-          loading: false,
-          error: (e as Error).message,
-          total: 0,
-          systems: [],
-          helpCount: 0,
-        });
+        setManifest(m);
+        setRecords([...help.records, ...media.records]);
+        setProtocols((proto as any).records || []);
+      } catch (e: any) {
+        if (!cancelled) setError(String(e?.message || e));
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -93,181 +256,216 @@ export default function AdminDelphiWow() {
     };
   }, []);
 
-  async function runSearch() {
-    setSearching(true);
-    try {
-      const { findWowProtocols } = await import("@/lib/delphi/wow");
-      const results = await findWowProtocols({
-        system: system || undefined,
-        protocol: protocol || undefined,
-        limit: 300,
-      });
-      setRows(results);
-    } finally {
-      setSearching(false);
+  const hasVehicleCtx = !!(vehicleContext && (vehicleContext.brandLabel || vehicleContext.make));
+
+  useEffect(() => {
+    setPage(1);
+  }, [debounced, section, showAll, vehicleContext?.brandKey, vehicleContext?.make, vehicleContext?.model]);
+
+  const categorized = useMemo(() => {
+    const map: Record<SectionKey, WowContentRecord[]> = {
+      service: [],
+      diagnosis: [],
+      help: [],
+      connector: [],
+      media: [],
+      protocols: [],
+    };
+    for (const r of records) map[classifyRecord(r)].push(r);
+    return map;
+  }, [records]);
+
+  const vehicleScoped = useMemo(() => {
+    if (!hasVehicleCtx || showAll) return null;
+    const filtered: Record<SectionKey, WowContentRecord[]> = {
+      service: [], diagnosis: [], help: [], connector: [], media: [], protocols: [],
+    };
+    (Object.keys(categorized) as SectionKey[]).forEach((k) => {
+      if (k === "protocols") return;
+      filtered[k] = categorized[k].filter((r) => vehicleMatches(r, vehicleContext));
+    });
+    return filtered;
+  }, [categorized, vehicleContext, hasVehicleCtx, showAll]);
+
+  const activeSet = vehicleScoped ? vehicleScoped[section] : categorized[section];
+
+  const filtered = useMemo(() => {
+    if (section === "protocols") return [];
+    const q = debounced.trim().toLowerCase();
+    if (!q) return activeSet;
+    const tokens = q.split(/\s+/).filter(Boolean);
+    return activeSet.filter((r) => {
+      const hay = textOf(r);
+      return tokens.every((t) => hay.includes(t));
+    });
+  }, [activeSet, debounced, section]);
+
+  const filteredProtocols = useMemo(() => {
+    if (section !== "protocols") return [];
+    const q = debounced.trim().toLowerCase();
+    let out = protocols;
+    if (!showAll && vehicleContext?.brandKey) {
+      const brand = slugify(vehicleContext.brandLabel || vehicleContext.brandKey);
+      out = out.filter((r) => slugify(r.systemName + r.systemVariant + r.brandId).includes(brand));
     }
+    if (q) out = out.filter((r) => `${r.systemName} ${r.systemVariant} ${r.obdProtocol} ${r.diagnosisProtocol}`.toLowerCase().includes(q));
+    return out.slice(0, 500);
+  }, [protocols, showAll, vehicleContext, debounced, section]);
+
+  const pageStart = (page - 1) * perPage;
+  const pageItems = filtered.slice(pageStart, pageStart + perPage);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+
+  const openDoc = (r: WowContentRecord) => {
+    if (isHtmlRecord(r) || isImageRecord(r)) setSelectedDoc(r);
+    else window.open(r.url, "_blank", "noopener,noreferrer");
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 p-4 text-sm text-slate-600">
+        <Loader2 className="h-4 w-4 animate-spin" /> Načítám WOW obsah…
+      </div>
+    );
+  }
+  if (error) {
+    return <div className="p-4 text-sm text-rose-700">Chyba při načítání: {error}</div>;
   }
 
-  const helpResults = useMemo(() => {
-    const q = helpQuery.trim().toLowerCase();
-    if (!q) return help.slice(0, 40);
-    return help
-      .filter((h) => `${h.title} ${h.fileName} ${h.tags.join(" ")}`.toLowerCase().includes(q))
-      .slice(0, 80);
-  }, [help, helpQuery]);
-
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
-        <div className="flex items-start gap-2">
-          <ShieldAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div>
-            <p className="font-semibold">WOW/Würth katalog – pouze metadata</p>
-            <p className="mt-1">
-              Data pocházejí z reálných zdrojů <code>mid_prot_overview.csv</code> a <code>ac_diagnosis_module.zip</code>.
-              Žádná servisní funkce z tohoto katalogu <strong>není povolena ke spuštění</strong> – WOW protokoly
-              vyžadují ověřenou sekvenci bytů, ECU adresu, transport a bezpečnostní podmínky, které nejsou v CSV obsaženy.
-              Ověřené a spustitelné funkce zůstávají v hlavním Delphi runneru výše.
-            </p>
-          </div>
+    <div className="flex flex-col gap-3">
+      {/* Header */}
+      <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
+          <Info className="h-3.5 w-3.5" />
+          <span>
+            WOW/Würth: <b>{manifest?.helpDocuments ?? 0}</b> dok. nápovědy, <b>{manifest?.diagnosisRecords ?? 0}</b> diag. karet, <b>{manifest?.helpMedia ?? 0}</b> médií, <b>{protocols.length.toLocaleString("cs-CZ")}</b> protokolů.
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {hasVehicleCtx ? (
+            <Badge variant="secondary" className="gap-1"><Car className="h-3 w-3" /> {vehicleContext?.brandLabel || vehicleContext?.make} {vehicleContext?.model || ""} {vehicleContext?.year || ""}</Badge>
+          ) : (
+            <Badge variant="outline" className="gap-1"><Filter className="h-3 w-3" /> Bez kontextu vozidla – zobrazeny všechny</Badge>
+          )}
+          {vehicleContext?.ecuName ? <Badge variant="outline">ECU: {vehicleContext.ecuName}</Badge> : null}
+          {vehicleContext?.selectedFunction ? <Badge variant="outline">Fce: {vehicleContext.selectedFunction}</Badge> : null}
+          {hasVehicleCtx ? (
+            <Button size="sm" variant={showAll ? "default" : "outline"} onClick={() => setShowAll((v) => !v)} className="ml-auto h-7 text-xs">
+              <Globe className="mr-1 h-3.5 w-3.5" />
+              {showAll ? "Zobrazit jen dokumentaci vozidla" : "Zobrazit dokumentaci všech vozidel"}
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Database className="h-4 w-4 text-primary" />
-            <span>Prohlížeč WOW protokolů</span>
-            {meta.loading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-            ) : meta.error ? (
-              <Badge variant="destructive">Chyba: {meta.error}</Badge>
-            ) : (
-              <Badge variant="secondary">
-                {meta.total.toLocaleString("cs")} záznamů · {meta.systems.length} systémů
-              </Badge>
-            )}
-          </div>
+      {/* Search */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Hledat: EGR, DPF, adaptace, reset, odvzdušnění, ABS, kalibrace…"
+          className="pl-8 text-sm"
+        />
+      </div>
 
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-            <div>
-              <Label className="text-xs">Systém (např. Airbag, ABS, Gearbox)</Label>
-              <Input
-                value={system}
-                onChange={(e) => setSystem(e.target.value)}
-                placeholder="obsahuje…"
-                disabled={meta.loading}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Protokol / ECU (např. eobd, vpw, j1962)</Label>
-              <Input
-                value={protocol}
-                onChange={(e) => setProtocol(e.target.value)}
-                placeholder="obsahuje…"
-                disabled={meta.loading}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button onClick={runSearch} disabled={meta.loading || searching} className="w-full sm:w-auto">
-                {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                <span className="ml-2">Hledat</span>
-              </Button>
-            </div>
-          </div>
+      {/* Sections */}
+      <Tabs value={section} onValueChange={(v) => setSection(v as SectionKey)} className="w-full">
+        <TabsList className="flex w-full flex-wrap gap-1 bg-slate-100 p-1">
+          {(Object.keys(SECTION_LABEL) as SectionKey[]).map((k) => {
+            const count = k === "protocols" ? filteredProtocols.length : (vehicleScoped ? vehicleScoped[k].length : categorized[k].length);
+            return (
+              <TabsTrigger key={k} value={k} className="flex-1 min-w-[110px] text-xs">
+                <span className="inline-flex items-center gap-1">
+                  {SECTION_ICON[k]}
+                  <span className="hidden sm:inline">{SECTION_LABEL[k]}</span>
+                  <span className="sm:hidden">{SECTION_LABEL[k].split(" ")[0]}</span>
+                  <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{count}</Badge>
+                </span>
+              </TabsTrigger>
+            );
+          })}
+        </TabsList>
 
-          <div className="max-h-[420px] overflow-y-auto rounded border">
-            {rows.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">
-                {meta.loading
-                  ? "Načítám WOW katalog…"
-                  : "Zadejte filtr a stiskněte Hledat. Zobrazí se max. 300 záznamů."}
+        {(Object.keys(SECTION_LABEL) as SectionKey[]).map((k) => (
+          <TabsContent key={k} value={k} className="mt-2">
+            {k === "protocols" ? (
+              <div ref={listRef} className="max-h-[60vh] overflow-y-auto rounded border border-slate-200">
+                {filteredProtocols.length === 0 ? (
+                  <div className="p-3 text-sm text-slate-500">Žádné protokoly.</div>
+                ) : (
+                  <ul className="divide-y divide-slate-100 text-xs">
+                    {filteredProtocols.map((p) => (
+                      <li key={p.id} className="p-2">
+                        <div className="font-medium">{p.systemName} {p.systemVariant ? `– ${p.systemVariant}` : ""}</div>
+                        <div className="text-slate-500">
+                          {p.obdProtocol || p.diagnosisProtocol || "–"} · {p.startYear}–{p.endYear} · ECU {p.ecuObd || "–"}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-muted">
-                  <tr>
-                    <th className="p-2 text-left">Systém</th>
-                    <th className="p-2 text-left">Roky</th>
-                    <th className="p-2 text-left">Protokol</th>
-                    <th className="p-2 text-left">ECU</th>
-                    <th className="p-2 text-left">Stav pro ELM/Vgate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const decision = evaluateWowElmCompatibility(r);
-                    const s = stateLabel(decision.state);
-                    return (
-                      <tr key={r.id} className="border-t align-top">
-                        <td className="p-2">
-                          <div className="font-medium">{r.systemName || "—"}</div>
-                          {r.systemVariant ? (
-                            <div className="text-muted-foreground">{r.systemVariant}</div>
-                          ) : null}
-                        </td>
-                        <td className="p-2 whitespace-nowrap">
-                          {r.startYear || "?"}–{r.endYear || "?"}
-                        </td>
-                        <td className="p-2 font-mono text-[10px]">
-                          {r.obdProtocol || r.diagnosisProtocol || r.eobdProtocol || "—"}
-                        </td>
-                        <td className="p-2 font-mono text-[10px]">{r.ecuObd || "—"}</td>
-                        <td className="p-2">
-                          <Badge variant="outline" className={s.className}>
-                            {s.label}
-                          </Badge>
-                          <div className="mt-1 text-[10px] text-muted-foreground">{decision.reason}</div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <>
+                {filtered.length === 0 ? (
+                  <div className="rounded border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+                    {hasVehicleCtx && !showAll
+                      ? "Pro vybrané vozidlo v této sekci nebyla nalezena žádná dokumentace. Zvolte „Zobrazit dokumentaci všech vozidel“."
+                      : "Nic nenalezeno."}
+                  </div>
+                ) : (
+                  <>
+                    <div ref={listRef} className="max-h-[60vh] overflow-y-auto rounded border border-slate-200">
+                      <ul className="divide-y divide-slate-100">
+                        {pageItems.map((r) => (
+                          <li key={r.id}>
+                            <button
+                              type="button"
+                              onClick={() => openDoc(r)}
+                              className="flex w-full items-start gap-2 p-2 text-left hover:bg-slate-50 active:bg-slate-100"
+                            >
+                              {isImageRecord(r) && !isHtmlRecord(r) ? (
+                                <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                              ) : (
+                                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium">{r.title}</div>
+                                {r.excerpt ? <div className="line-clamp-2 text-xs text-slate-500">{r.excerpt}</div> : null}
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
+                                  <span>{r.fileName}</span>
+                                  <span>·</span>
+                                  <span>{r.extension.toUpperCase()}</span>
+                                  <span>·</span>
+                                  <span>{formatBytes(r.size)}</span>
+                                  {r.tags.slice(0, 3).map((t) => (
+                                    <Badge key={t} variant="outline" className="h-4 px-1 text-[10px]">{t}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    {totalPages > 1 ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Předchozí</Button>
+                        <span className="text-slate-600">Strana {page} / {totalPages} · celkem {filtered.length}</span>
+                        <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Další</Button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
 
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <FileText className="h-4 w-4 text-primary" />
-            <span>Technická nápověda (WOW help)</span>
-            <Badge variant="secondary">{meta.helpCount.toLocaleString("cs")} dokumentů</Badge>
-          </div>
-          <Input
-            value={helpQuery}
-            onChange={(e) => setHelpQuery(e.target.value)}
-            placeholder="Hledat v názvech (např. adaption, activation, dpf, egr)…"
-          />
-          <div className="max-h-72 overflow-y-auto rounded border divide-y">
-            {helpResults.length === 0 ? (
-              <div className="p-4 text-center text-xs text-muted-foreground">Žádné dokumenty.</div>
-            ) : (
-              helpResults.map((h) => (
-                <div key={h.id} className="p-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <Info className="h-3 w-3 text-muted-foreground" />
-                    <span className="font-medium">{h.title || h.fileName}</span>
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap gap-1 text-[10px] text-muted-foreground">
-                    <span className="font-mono">{h.fileName}</span>
-                    {h.tags.map((t) => (
-                      <Badge key={t} variant="outline" className="h-4 px-1 py-0 text-[9px]">
-                        {t}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            Zobrazuje se pouze index (název, tagy, zdrojový soubor). Obsah HTML dokumentů se do bundlu nepřidává.
-          </p>
-        </CardContent>
-      </Card>
+      {selectedDoc ? <DocumentViewer record={selectedDoc} onClose={() => setSelectedDoc(null)} /> : null}
     </div>
   );
 }

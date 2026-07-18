@@ -1,0 +1,98 @@
+﻿body{
+	font-family: Verdana;
+	font-size:10pt;
+	color: #444;
+	max-width:800;
+}
+
+.Title{
+	font-size: 13pt;
+	padding-top: 20px;
+    padding-bottom: 20px;
+	font-weight: bold;
+	line-height: 5px;
+	letter-spacing: -0.5px;
+}
+
+.SubTitle{
+	font-size:12pt;	
+}
+
+.Step {
+	padding-top: 5px;
+	padding-right: 5px;
+	padding-bottom: 5px;
+	padding-left: 5px;
+	letter-spacing: -1px;
+	font-size:10pt;
+	font-weight: bold;
+}
+
+.Paragraph{
+	padding: 1px;
+	line-height: 20px;
+}
+
+.Bolded{
+	font-weight:bold;	
+}
+
+.Highlighted {
+	height: auto;
+	border: solid #333;
+	border-width: 2px 2px 2px 2px;
+	background-color:#FF3;
+	margin: 0px;	
+	font-style: italic;
+	
+}
+
+.Missing {
+	height: auto;
+	border: solid #333;
+	border-width: 2px 2px 2px 2px;
+	background-color:#FF0000;
+	margin: 0px;	
+	font-style: italic;
+	
+}
+
+.Normal{
+}
+
+.DottedList{
+	list-style-type: disc;	
+}
+
+.NumberedList{
+}
+
+.Grid{
+		width: 100%;
+		border-spacing: 0px;
+		padding-top: 5px;
+		padding-bottom: 10px;
+}
+
+.TableBody{
+	border-width: 0px;
+}
+
+.Row{
+	font-size: 13px;
+	border-spacing: 0px;
+}
+
+.Cell {
+ 	vertical-align:top;
+}
+
+.Bordered {
+	border-color: #000;	
+	border-width: 1px;
+	border-style:solid;
+	padding: 4px;
+}
+	
+
+
