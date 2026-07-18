@@ -1,0 +1,21 @@
+<html xmlns:cf="http://docbook.sourceforge.net/xmlns/chunkfast/1.0"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>Regeneration of particle filter</title><link rel="stylesheet" href="OBDhelp.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.69.0"><link rel="start" href="index.html" title="Help"><link rel="up" href="index.html" title="Help"><link rel="prev" href="bmw_change_instrument_language.html" title="Change of language in combination instrument IKE"><link rel="next" href="bmw_bleeding_fuelsystem.html" title="Bleeding the fuel system"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="article" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="id5010654"></a><sup>[<a name="id5006983" href="#ftn.id5006983">1554</a>]</sup>Regeneration of particle filter</h2></div></div><hr></div><p>With this function a request is sent to the engine control unit that a
+  regeneration of the particle filter should be implemented.</p><p><span class="bold"><strong> Note:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>Regeneration of the particle filter is normally operated by the
+      engine control unit, but for example at city driving, the exhaust gas
+      temperature often does not reach the temperature required for a
+      regeneration to start. Then it is necessary that the car is run a longer
+      distance at a steady pace with a speed of at least 60 km/h. If you still
+      are not sure that a regeneration is carried out, you can request that it
+      starts with this function.</p></li><li><p>If the particle filter is very blocked by soot, it is possible
+      that the regeneration is frozen after a short period of time. Then it is
+      necessary to regenerate the particle filter by driving in such a steady
+      speed as possible for about 30 minutes, at a speed of at least 60 km/h.
+      Then a new request for the regeneration of the particle filter should be
+      done.</p></li></ul></div><p><span class="bold"><strong>Test prerequisites:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>No faults in the system.</p></li><li><p>Fuel level at least 10 litres.</p></li><li><p>Ignition on, engine off.</p></li></ul></div><p><span class="bold"><strong>Procedure:</strong></span></p><div class="orderedlist"><ol type="1"><li><p>Press "OK" to ask for a regeneration in the engine control
+      unit.</p></li><li><p>Turn off the ignition for 10 seconds.</p></li><li><p>Start the engine.</p></li><li><p>Run the car for at least 20 minutes with such a steady speed as
+      possible of at least 60 km/h.</p></li><li><p>Regeneration of the particle filter is started as soon as the
+      coolant temperature reaches 75 °C and the exhaust gas temperature
+      exceeds 240 °C.</p></li><li><p>The status of the regeneration can be seen in the datalist
+      parameters, which can also read the mileage since the latest
+      regeneration.</p></li><li><p>If a regeneration can not be completed in time, it will resume in
+      the next operating cycle, as soon as the coolant temperature reachs 75
+      °C and the exhaust gas temperature exceeds 240 °C.</p></li></ol></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.id5006983" href="#id5006983">1554</a>] </sup></p></div></div></div></body></html>

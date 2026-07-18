@@ -1,0 +1,18 @@
+<html xmlns:cf="http://docbook.sourceforge.net/xmlns/chunkfast/1.0"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>Forced regeneration</title><link rel="stylesheet" href="OBDhelp.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.69.0"><link rel="start" href="index.html" title="Help"><link rel="up" href="index.html" title="Help"><link rel="prev" href="vag_intake_mainfold_throttle_2.html" title="Intake mainfold throttle bank 2"><link rel="next" href="psa_egr_init.html" title="EGR valve"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="article" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="id4835973"></a><sup>[<a name="id5004008" href="#ftn.id5004008">1482</a>]</sup>Forced regeneration</h2></div></div><hr></div><p>Regeneration of the particle emission filter is a function that can be
+  started with the diagnostic equipment. This function burns particles present
+  in the particle emission filter in order to clean it. Some driving
+  conditions are unfavourable to automatic regeneration, e.g. urban driving.
+  In these cases the forced regeneration procedure can be used to avoid
+  clogging of the particle emission filter. During the regeneration procedure
+  the engine speed is raised to 1500 rpm. The procedure can last for up to 40
+  minutes. It is possible to read out the status and time for the regeneration
+  in the datalist parameters.</p><p><span class="bold"><strong>Observe:</strong></span></p><p>This operation results in very high exhaust temperatures. Perform the
+  operation outdoors and without exhaust gas extraction take-off.</p><p><span class="bold"><strong>Test prerequisites:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>Engine idling.</p></li><li><p>Engine at operation temperature.</p></li><li><p>Fuel level above ¼ full.</p></li><li><p>Gear in P/N.</p></li><li><p>Do not operate the clutch, brake or gas pedal during the
+      regeneration.</p></li></ul></div><p><span class="bold"><strong>Procedure:</strong></span></p><div class="orderedlist"><ol type="1"><li><p>Choose the function: Regeneration.</p></li><li><p>Enter the valid code in the input field: 10016. Press OK.</p></li><li><p>A dialog box presents: operation succeeded/ failed.</p><div class="itemizedlist"><ul type="disc"><li><p>If the function fails, check test prerequisites.</p></li></ul></div></li><li><p>The engine speed is automatically raised to 1500 rpm and the
+      regeneration procedure is started.</p><div class="itemizedlist"><ul type="disc"><li><p>Shut off the engine to abort the regeneration
+          procedure.</p></li></ul></div></li><li><p>It is possible to read out the regeneration status in the datalist
+      parameters according to the following:</p><div class="itemizedlist"><ul type="disc"><li><p>Regeneration total time: Counts from 0 to 255 and returns to 0
+          when the procedure is finished.</p></li><li><p>Regeneration phase: When the regeneration starts 001 is
+          presented, and shifts after a while to 010 and 100, to return to 000
+          when the procedure is finished.</p></li></ul></div></li><li><p>The engine speed returns automatically to normal idling when the
+      procedure is finished.</p></li></ol></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.id5004008" href="#id5004008">1482</a>] </sup></p></div></div></div></body></html>

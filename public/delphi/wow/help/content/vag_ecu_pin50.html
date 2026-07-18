@@ -1,0 +1,31 @@
+<html xmlns:cf="http://docbook.sourceforge.net/xmlns/chunkfast/1.0"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>Adaption after replacing the engine control unit (immobiliser
+  generation 3)</title><link rel="stylesheet" href="OBDhelp.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.69.0"><link rel="start" href="index.html" title="Help"><link rel="up" href="index.html" title="Help"><link rel="prev" href="vag_coding_abs.html" title="Coding ABS"><link rel="next" href="vag_ecu_pin50_can.html" title="Adaption after replacing the engine control unit"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="article" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="id4973937"></a><sup>[<a name="id4978818" href="#ftn.id4978818">1270</a>]</sup>Adaption after replacing the engine control unit (immobiliser
+  generation 3)</h2></div></div><hr></div><p>The electronic immobiliser is composed of three main parts:
+  immobiliser control unit, engine control unit and keys. If one of these
+  three parts is replaced it must be adapted to the immobiliser sytem. Before
+  a successful adapation is carried out the immobiliser warning lamp will
+  flash on the instrument panel, fault code 17978 is stored and the car can
+  not be started. Before an adaption can be carried out, the engine control
+  unit must be correctly variant coded, and on petrol engines the throttle
+  needs to be adapted.</p><p><span class="bold"><strong>Note:</strong></span></p><p>This function should only be used with the immobiliser version 3. From
+  the immobiliser it's possible to read out the version from the datalist
+  parameters. Version 3 is known as 1. The function must be carried out when a
+  new or used engine control unit is adapted to the immobiliser. During an
+  adaption four or five digit PIN codes, must be known both for the engine and
+  immobiliser control unit. The PIN code is found on the key tag or at an
+  authorized workshop. After a successful adaption, the PIN code for engine
+  control unit is the same as for the immobiliser control unit.</p><p><span class="bold"><strong>Test prerequisites:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>The battery voltage should be above 12V</p></li><li><p>All electrical loads should be switched off.</p></li><li><p>Four or five digit PIN code for both control units.</p></li><li><p>The correct version of the engine control unit is needed.</p></li><li><p>The engine control unit should be correctly variant coded.</p></li><li><p>On petrol engines the throttle should be adapted.</p></li><li><p>No lockout time in immobiliser (the lockout time is availible in
+      the data list).</p></li></ul></div><p><span class="bold"><strong>Procedure:</strong></span></p><div class="orderedlist"><ol type="1"><li><p>Start the function 'Engine control unit adaption'.</p></li><li><p>Enter the PIN code for the engine control unit in input field and
+      confirm with 'OK'.</p><div class="itemizedlist"><ul type="disc"><li><p>If the control unit is old, use the PIN code from the original
+          system.</p></li><li><p>If the control unit is new, use the PIN code from the
+          table.</p><p>Bosch: <span class="bold"><strong>12233</strong></span></p><p>Diesel: <span class="bold"><strong>12233</strong></span></p><p>Simos: <span class="bold"><strong>00000</strong></span></p></li><li><p>If the wrong PIN code is entered the function is
+          aborted.</p></li></ul></div></li><li><p>Enter the PIN code for the immobiliser control unit in the input
+      field and confirm with 'OK'.</p><div class="itemizedlist"><ul type="disc"><li><p>If the wrong PIN code is entered a fault reason is presented
+          and the function is aborted.</p></li></ul></div></li><li><p>A dialog box will present the chassi number.</p><div class="itemizedlist"><ul type="disc"><li><p>If the wrong chassi number is presented the function should be
+          aborted by the user.</p></li><li><p>If the timeout (control unit doesn't reply in time) is
+          reached, check for lockout time and fault codes.</p></li></ul></div></li><li><p>If the correct chassi number is presented press 'OK' to complete
+      the adaption.</p><div class="itemizedlist"><ul type="disc"><li><p>If the adaption can not be performed check for fault
+          codes.</p></li><li><p>If a timeout (control unit doesn't reply in time) is reached,
+          check for the lockout time and fault codes.</p></li></ul></div></li><li><p>Exit the function and check for fault codes.</p></li><li><p>The PIN code for the engine control unit is now the same as for
+      the immobiliser unit.</p></li><li><p>The cruise control should be activated/deactivated according to
+      vehicle equipment, see separate function.</p></li></ol></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.id4978818" href="#id4978818">1270</a>] </sup></p></div></div></div></body></html>

@@ -1,0 +1,16 @@
+<html xmlns:cf="http://docbook.sourceforge.net/xmlns/chunkfast/1.0"><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>Configure control unit</title><link rel="stylesheet" href="OBDhelp.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.69.0"><link rel="start" href="index.html" title="Help"><link rel="up" href="index.html" title="Help"><link rel="prev" href="fal_overboost_counter_reset.html" title="Reset boost pressure counter"><link rel="next" href="fal_zeroing_of_self-adaption_parameters.html" title="Reset adaptation values"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="article" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="id5054710"></a><sup>[<a name="id5043998" href="#ftn.id5043998">1602</a>]</sup>Configure control unit</h2></div></div><hr></div><p>This function is used to reset the control unit's (vehicle's)
+  configuration. E.g., if the vehicle is equipped with or is not equipped
+  with: AC, cruise control, transmission, ABS, etc. This is necessary when the
+  control unit has been replaced.</p><p>Trouble code P1302 'gearbox identification' may be displayed when the
+  reset has been performed. To reset it, drive the vehicle forwards and
+  backwards then switch the ignition off/on. Then clear the trouble
+  codes.</p><p>After resetting, the control unit registers which functions the
+  vehicle is equipped with via activation of each function or via the CAN net
+  (each ECU/function sends information via the CAN net).</p><p>The following functions will be affected by the reset:</p><div class="itemizedlist"><ul type="disc"><li><p>Air conditioning. The function is registered when activating the
+      air conditioning.</p></li><li><p>Cruise control. The function is registered when activating the
+      cruise control.</p></li><li><p>Manual transmission. The function is registered when the clutch
+      pedal is depressed.</p></li><li><p>Selespeed transmission. The function is registered via the
+      vehicle's internal communication network.</p></li><li><p>ABS/VDC/ASR. The function is registered via the vehicle's internal
+      communication network (only if these are connected to the CAN
+      net).</p></li></ul></div><p><span class="bold"><strong>Note:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>The reset takes approx. 60 seconds.</p></li></ul></div><p><span class="bold"><strong>Test conditions:</strong></span></p><div class="itemizedlist"><ul type="disc"><li><p>Ignition on, engine off.</p></li></ul></div><p><span class="bold"><strong>Procedure:</strong></span></p><div class="orderedlist"><ol type="1"><li><p>Select the "Self-learning functions reset" function and press
+      "OK".</p></li><li><p>Follow the instructions.</p></li></ol></div><div class="footnotes"><br><hr width="100" align="left"><div class="footnote"><p><sup>[<a name="ftn.id5043998" href="#id5043998">1602</a>] </sup></p></div></div></div></body></html>
