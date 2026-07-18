@@ -1,15 +1,15 @@
 {
-  "version": 1,
+  "version": 2,
   "generatedAt": "2026-07-18",
   "helpDocuments": 2733,
   "helpMedia": 265,
   "diagnosisRecords": 35,
   "manualImages": 18,
   "wizardImages": 7,
-  "rawDataFiles": 637,
-  "rawImageStoreFiles": 31,
+  "rawDataFiles": 0,
+  "rawImageStoreFiles": 0,
   "notes": [
-    "Firmware and Windows drivers intentionally excluded from the web application.",
-    "Original WOW binary stores are retained as raw source files; only directly readable HTML/JPG/PNG/GIF assets are rendered."
+    "Firmware, Windows drivers and original WOW binary stores are intentionally excluded from the web application.",
+    "Only directly readable HTML/JPG/JPEG/PNG/GIF/WEBP/SVG assets are served at runtime."
   ]
 }
