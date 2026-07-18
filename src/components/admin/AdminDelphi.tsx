@@ -2393,10 +2393,24 @@ export default function AdminDelphi() {
             {wowOpen ? (
               <div className="p-3">
                 <Suspense fallback={<div className="flex items-center gap-2 p-4 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" /> Načítám WOW modul…</div>}>
-                  <AdminDelphiWowLazy />
+                  <AdminDelphiWowLazy
+                    vehicleContext={{
+                      vin: vin || null,
+                      brandKey: brand?.key ?? null,
+                      brandLabel: brand?.display_name ?? null,
+                      make: make || null,
+                      model: model || null,
+                      generation: generation || null,
+                      year: year || null,
+                      ecuName: selectedEcu?.common || selectedEcu?.name || null,
+                      ecuAddress: selectedEcu?.address ?? null,
+                      selectedFunction: selected?.name ?? null,
+                    }}
+                  />
                 </Suspense>
               </div>
             ) : null}
+
           </section>
         </div>
       </div>
