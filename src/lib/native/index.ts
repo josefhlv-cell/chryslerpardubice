@@ -37,11 +37,20 @@ export async function initNative() {
     console.warn("[native] init failed", e);
   }
 
-  // Push notifications (don't block on errors)
-  initPushNotifications().catch((e) =>
-    console.warn("[native] push init failed", e)
-  );
+  // Push notifications — SKIPPED on Android when Firebase (google-services.json)
+  // is not configured, because @capacitor/push-notifications v8 crashes the app
+  // during FirebaseMessagingService init if google-services.json is missing.
+  // iOS uses APNs directly and is safe. Enable Android push once Firebase is set up.
+  const platform = Capacitor.getPlatform();
+  if (platform === "ios") {
+    initPushNotifications().catch((e) =>
+      console.warn("[native] push init failed", e)
+    );
+  } else {
+    console.info("[native] push notifications disabled on Android (no Firebase config)");
+  }
 }
+
 
 async function initPushNotifications() {
   if (!Capacitor.isNativePlatform()) return;
