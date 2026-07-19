@@ -474,3 +474,15 @@ function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
     </div>
   );
 }
+
+export default function AdminDelphiWow(props: Props = {}) {
+  return (
+    <WowVehicleProvider>
+      <div className="flex flex-col gap-3">
+        <WowVehicleSelector />
+        <AdminDelphiWowInner {...props} />
+      </div>
+    </WowVehicleProvider>
+  );
+}
+
