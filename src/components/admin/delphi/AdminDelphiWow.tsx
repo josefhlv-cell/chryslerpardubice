@@ -31,6 +31,11 @@ import {
   type WowFullContentManifest,
   type WowProtocolRecord,
 } from "@/lib/delphi/wow";
+import { partitionByApplicability } from "@/lib/delphi/wow/applicability";
+import { WowVehicleProvider, useWowVehicle } from "@/lib/delphi/wow/vehicle-context";
+import { WowVehicleSelector } from "./WowVehicleSelector";
+import { WowDocumentTree } from "./WowDocumentTree";
+
 
 export type WowVehicleContext = {
   vin: string | null;
@@ -216,7 +221,7 @@ function DocumentViewer({ record, onClose }: { record: WowContentRecord; onClose
   );
 }
 
-export default function AdminDelphiWow({ vehicleContext }: Props = {}) {
+function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
   const [manifest, setManifest] = useState<WowFullContentManifest | null>(null);
   const [records, setRecords] = useState<WowContentRecord[]>([]);
   const [protocols, setProtocols] = useState<WowProtocolRecord[]>([]);
@@ -469,3 +474,15 @@ export default function AdminDelphiWow({ vehicleContext }: Props = {}) {
     </div>
   );
 }
+
+export default function AdminDelphiWow(props: Props = {}) {
+  return (
+    <WowVehicleProvider>
+      <div className="flex flex-col gap-3">
+        <WowVehicleSelector />
+        <AdminDelphiWowInner {...props} />
+      </div>
+    </WowVehicleProvider>
+  );
+}
+
