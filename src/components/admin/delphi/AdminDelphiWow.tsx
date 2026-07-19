@@ -221,7 +221,7 @@ function DocumentViewer({ record, onClose }: { record: WowContentRecord; onClose
   );
 }
 
-export default function AdminDelphiWow({ vehicleContext }: Props = {}) {
+function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
   const [manifest, setManifest] = useState<WowFullContentManifest | null>(null);
   const [records, setRecords] = useState<WowContentRecord[]>([]);
   const [protocols, setProtocols] = useState<WowProtocolRecord[]>([]);
