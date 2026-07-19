@@ -31,6 +31,11 @@ import {
   type WowFullContentManifest,
   type WowProtocolRecord,
 } from "@/lib/delphi/wow";
+import { partitionByApplicability } from "@/lib/delphi/wow/applicability";
+import { WowVehicleProvider, useWowVehicle } from "@/lib/delphi/wow/vehicle-context";
+import { WowVehicleSelector } from "./WowVehicleSelector";
+import { WowDocumentTree } from "./WowDocumentTree";
+
 
 export type WowVehicleContext = {
   vin: string | null;
