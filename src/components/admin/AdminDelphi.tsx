@@ -43,6 +43,7 @@ import { bleManager } from "@/lib/obd/ble-manager";
 import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { applyElmProfile } from "@/lib/obd/adapter/elm-init";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
+import { LiveDashboard } from "@/components/admin/delphi/LiveDashboard";
 import {
   findBrandForVin,
   listBrands,
@@ -1319,7 +1320,7 @@ export default function AdminDelphi() {
   }
 
   return (
-    <div className="min-w-0 space-y-3">
+    <div className="min-w-0 space-y-3 pb-[env(safe-area-inset-bottom)]">
       <div className="overflow-hidden rounded-xl border border-slate-500 bg-gradient-to-b from-slate-100 to-slate-300 text-slate-950 shadow-lg">
         <div className="flex items-center justify-between gap-3 border-b border-slate-500 bg-gradient-to-b from-slate-700 to-slate-950 px-4 py-3 text-white">
           <div>
@@ -2068,6 +2069,13 @@ export default function AdminDelphi() {
                 openPanel === "actuators" ||
                 openPanel === "service") && (
                 <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
+                  {openPanel === "live" && (
+                    <LiveDashboard
+                      liveFunctions={liveFunctions}
+                      activeContext={activeContext}
+                      transportReady={transportReady}
+                    />
+                  )}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <Input
