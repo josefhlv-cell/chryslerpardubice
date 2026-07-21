@@ -43,6 +43,7 @@ import { bleManager } from "@/lib/obd/ble-manager";
 import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { applyElmProfile } from "@/lib/obd/adapter/elm-init";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
+import { LiveDashboard } from "@/components/admin/delphi/LiveDashboard";
 import {
   findBrandForVin,
   listBrands,
