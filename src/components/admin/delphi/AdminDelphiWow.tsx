@@ -475,14 +475,41 @@ function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
   );
 }
 
+/**
+ * Bridge: when the parent (AdminDelphi) passes a vehicleContext, mirror it into
+ * the WowVehicleProvider so applicability / tree filtering all read from ONE
+ * shared vehicle. Prevents the duplicate selector the user reported.
+ */
+function VehicleContextBridge({ ctx }: { ctx?: WowVehicleContext | null }) {
+  const { setField, vehicle } = useWowVehicle();
+  useEffect(() => {
+    if (!ctx) return;
+    const year = ctx.year ? Number(ctx.year) : null;
+    if ((ctx.make || null) !== vehicle.make) setField("make", ctx.make || null);
+    if ((ctx.model || null) !== vehicle.model) setField("model", ctx.model || null);
+    if ((ctx.generation || null) !== vehicle.generation) setField("generation", ctx.generation || null);
+    if (year !== vehicle.year) setField("year", Number.isFinite(year as number) ? year : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx?.make, ctx?.model, ctx?.generation, ctx?.year]);
+  return null;
+}
+
 export default function AdminDelphiWow(props: Props = {}) {
+  const hasParentVehicle = !!(
+    props.vehicleContext && (props.vehicleContext.make || props.vehicleContext.brandLabel)
+  );
   return (
     <WowVehicleProvider>
-      <div className="flex flex-col gap-3">
-        <WowVehicleSelector />
+      <VehicleContextBridge ctx={props.vehicleContext} />
+      <div
+        className="flex flex-col gap-3 pb-[env(safe-area-inset-bottom)]"
+        data-shared-vehicle={hasParentVehicle ? "parent" : "local"}
+      >
+        {!hasParentVehicle ? <WowVehicleSelector /> : null}
         <AdminDelphiWowInner {...props} />
       </div>
     </WowVehicleProvider>
   );
 }
+
 
