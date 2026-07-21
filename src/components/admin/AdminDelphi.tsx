@@ -2069,6 +2069,13 @@ export default function AdminDelphi() {
                 openPanel === "actuators" ||
                 openPanel === "service") && (
                 <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
+                  {openPanel === "live" && (
+                    <LiveDashboard
+                      liveFunctions={liveFunctions}
+                      activeContext={activeContext}
+                      transportReady={transportReady}
+                    />
+                  )}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <Input
