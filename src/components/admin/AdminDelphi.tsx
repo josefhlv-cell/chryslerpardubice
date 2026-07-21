@@ -1320,7 +1320,7 @@ export default function AdminDelphi() {
   }
 
   return (
-    <div className="min-w-0 space-y-3">
+    <div className="min-w-0 space-y-3 pb-[env(safe-area-inset-bottom)]">
       <div className="overflow-hidden rounded-xl border border-slate-500 bg-gradient-to-b from-slate-100 to-slate-300 text-slate-950 shadow-lg">
         <div className="flex items-center justify-between gap-3 border-b border-slate-500 bg-gradient-to-b from-slate-700 to-slate-950 px-4 py-3 text-white">
           <div>
