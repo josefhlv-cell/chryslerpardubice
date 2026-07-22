@@ -1106,7 +1106,7 @@ export default function AdminDelphi() {
       return;
     }
 
-    const targets = availableEcus;
+    const targets = ecuAddress === "__all" ? availableEcus : availableEcus.filter((e) => normalizeAddress(e.address) === normalizeAddress(ecuAddress));
     if (targets.length === 0) {
       toast({
         title: "Pro značku nejsou dostupné ECU",
