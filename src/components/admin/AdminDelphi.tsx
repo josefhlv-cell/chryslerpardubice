@@ -1893,18 +1893,34 @@ export default function AdminDelphi() {
 
                 {openPanel === "dtc" && (
                   <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <Button
                         onClick={scanAllFaults}
                         disabled={fullScanRunning || fullClearRunning || !transportReady}
                         className="bg-blue-700 hover:bg-blue-600"
                       >
-                        {fullScanRunning ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Načíst všechny chyby
+                        {fullScanRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                        {ecuAddress === "__all" ? "Načíst všechny chyby" : "Načíst vybranou ECU"}
+                      </Button>
+
+                      <Button
+                        onClick={() => selectedEcu ? rescanEcu(selectedEcu) : scanAllFaults()}
+                        disabled={fullScanRunning || fullClearRunning || !transportReady || !!busyEcu}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Rescan
+                      </Button>
+
+                      <Button
+                        onClick={saveDtcReport}
+                        disabled={scanResults.length === 0}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Uložit report
                       </Button>
 
                       <Button
@@ -1912,14 +1928,14 @@ export default function AdminDelphi() {
                         disabled={fullScanRunning || fullClearRunning || !transportReady}
                         variant="destructive"
                       >
-                        {fullClearRunning ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Eraser className="mr-2 h-4 w-4" />
-                        )}
+                        {fullClearRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
                         Smazat všechny chyby
                       </Button>
                     </div>
+
+                    <p className="text-[11px] text-slate-500">
+                      Scan probíhá po jednotkách. Vybraná ECU nahoře přepíná mezi „všechny“ / jedna. Po smazání se automaticky spustí kontrolní scan; kódy, které se vrátily, jsou označené žlutě.
+                    </p>
 
                     {(fullScanRunning || fullClearRunning) && (
                       <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
