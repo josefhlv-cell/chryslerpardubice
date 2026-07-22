@@ -500,6 +500,15 @@ export default function AdminDelphi() {
     }
   }, [profile, brandKey]);
 
+  // Vehicle or ECU changed → clear scan/selected/result and signal Live panel to stop & reset samples.
+  useEffect(() => {
+    setScanResults([]);
+    setSelected(null);
+    setResult(null);
+    setPreviousCodesByEcu({});
+    setLiveResetKey((k) => k + 1);
+  }, [profileId, ecuAddress, brandKey]);
+
   const brand = useMemo(
     () => brands.find((item) => item.key === brandKey),
     [brands, brandKey],
