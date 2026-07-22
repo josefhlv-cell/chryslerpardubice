@@ -2259,10 +2259,17 @@ export default function AdminDelphi() {
                     <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
                       <div className="flex items-start gap-2">
                         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                        <p>
-                          Všechny katalogové funkce jsou viditelné a spustitelné.
-                          Neověřená funkce před spuštěním zobrazí varování.
-                        </p>
+                        <div>
+                          <p>
+                            Zobrazeny jsou pouze ověřené funkce pro vybrané vozidlo a ECU.
+                            Destruktivní / neověřené funkce jsou skryté a dostupné až po aktivaci Vývojářského režimu.
+                          </p>
+                          {hiddenUnverifiedCount > 0 && (
+                            <p className="mt-1 font-bold">
+                              Skryto {hiddenUnverifiedCount} neověřených funkcí — důvod: nejsou potvrzené pro tuto SW variantu ECU.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
