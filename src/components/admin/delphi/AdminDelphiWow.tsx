@@ -495,17 +495,17 @@ function VehicleContextBridge({ ctx }: { ctx?: WowVehicleContext | null }) {
 }
 
 export default function AdminDelphiWow(props: Props = {}) {
-  const hasParentVehicle = !!(
-    props.vehicleContext && (props.vehicleContext.make || props.vehicleContext.brandLabel)
-  );
+  // When embedded in the Delphi workspace (parent always passes a ctx object, even empty),
+  // the main Delphi vehicle selector is the single source of truth — never render our own.
+  const embedded = props.vehicleContext !== undefined;
   return (
     <WowVehicleProvider>
       <VehicleContextBridge ctx={props.vehicleContext} />
       <div
         className="flex flex-col gap-3 pb-[env(safe-area-inset-bottom)]"
-        data-shared-vehicle={hasParentVehicle ? "parent" : "local"}
+        data-shared-vehicle={embedded ? "parent" : "local"}
       >
-        {!hasParentVehicle ? <WowVehicleSelector /> : null}
+        {!embedded ? <WowVehicleSelector /> : null}
         <AdminDelphiWowInner {...props} />
       </div>
     </WowVehicleProvider>
