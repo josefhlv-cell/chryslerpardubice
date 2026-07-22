@@ -2071,10 +2071,13 @@ export default function AdminDelphi() {
                 openPanel === "service") && (
                 <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
                   {openPanel === "live" && (
-                    <LiveDashboard
+                    <LiveDataPanel
                       liveFunctions={liveFunctions}
                       activeContext={activeContext}
                       transportReady={transportReady}
+                      vehicleSelected={!!profile}
+                      ecuSelected={ecuAddress !== "__all"}
+                      resetKey={liveResetKey}
                     />
                   )}
                   <div className="relative">
