@@ -2080,20 +2080,27 @@ export default function AdminDelphi() {
                                 ) : (
                                   allCodes.map((entry, index) => {
                                     const info = resolveDTCInfo(entry.code);
+                                    const addr = normalizeAddress(item.ecu.address);
+                                    const returned = (previousCodesByEcu[addr] || []).includes(entry.code);
                                     return (
                                       <div
                                         key={`${entry.type}-${entry.code}-${index}`}
-                                        className="rounded border border-red-300 bg-red-50 p-3"
+                                        className={`rounded border p-3 ${returned ? "border-amber-400 bg-amber-50" : "border-red-300 bg-red-50"}`}
                                       >
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="min-w-0 flex-1">
-                                            <strong className="font-mono text-red-900">
+                                            <strong className={`font-mono ${returned ? "text-amber-900" : "text-red-900"}`}>
                                               {entry.code}
                                             </strong>
-                                            <p className="mt-1 text-sm font-semibold text-red-950">
+                                            <p className={`mt-1 text-sm font-semibold ${returned ? "text-amber-950" : "text-red-950"}`}>
                                               {info.description || "Popis chyby není v databázi dostupný."}
                                             </p>
                                             <div className="mt-2 flex flex-wrap gap-1">
+                                              {returned && (
+                                                <Badge variant="outline" className="border-amber-500 text-amber-800">
+                                                  Vrátila se po smazání
+                                                </Badge>
+                                              )}
                                               {info.category && (
                                                 <Badge variant="outline" className="border-red-300 text-red-700">
                                                   {info.category}
@@ -2113,6 +2120,7 @@ export default function AdminDelphi() {
                                       </div>
                                     );
                                   })
+
                                 )}
 
                                 <details className="rounded border border-slate-300 bg-white">
