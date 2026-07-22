@@ -572,14 +572,30 @@ export default function AdminDelphi() {
     [functions],
   );
 
-  const actuatorFunctions = useMemo(
+  const allActuatorFunctions = useMemo(
     () => functions.filter((fn) => fn.kind === "actuator_test"),
     [functions],
   );
 
-  const serviceFunctions = useMemo(
+  const allServiceFunctions = useMemo(
     () => functions.filter((fn) => fn.kind === "routine"),
     [functions],
+  );
+
+  // In normal mode we hide destructive/unverified write functions. Developer mode reveals them.
+  const actuatorFunctions = useMemo(
+    () => devActive ? allActuatorFunctions : allActuatorFunctions.filter((fn) => !fn.destructive),
+    [allActuatorFunctions, devActive],
+  );
+
+  const serviceFunctions = useMemo(
+    () => devActive ? allServiceFunctions : allServiceFunctions.filter((fn) => !fn.destructive),
+    [allServiceFunctions, devActive],
+  );
+
+  const hiddenUnverifiedCount = useMemo(
+    () => devActive ? 0 : (allActuatorFunctions.length - actuatorFunctions.length) + (allServiceFunctions.length - serviceFunctions.length),
+    [devActive, allActuatorFunctions, actuatorFunctions, allServiceFunctions, serviceFunctions],
   );
 
   const functionGroups = useMemo(() => {
