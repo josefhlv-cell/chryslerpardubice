@@ -43,7 +43,8 @@ import { bleManager } from "@/lib/obd/ble-manager";
 import { elmQueue } from "@/lib/obd/adapter/elm-queue";
 import { applyElmProfile } from "@/lib/obd/adapter/elm-init";
 import { resolveDTCInfo } from "@/lib/obd/dtc-engine";
-import { LiveDashboard } from "@/components/admin/delphi/LiveDashboard";
+import { LiveDataPanel } from "@/components/admin/delphi/LiveDataPanel";
+import { Download } from "lucide-react";
 import {
   findBrandForVin,
   listBrands,
@@ -271,6 +272,13 @@ export default function AdminDelphi() {
   const [detectedEcus, setDetectedEcus] = useState<Set<string>>(new Set());
   const [probedEcus, setProbedEcus] = useState<Set<string>>(new Set());
 
+  // Reset key increments whenever the active vehicle or ECU changes; consumed by LiveDataPanel to stop polling and clear samples.
+  const [liveResetKey, setLiveResetKey] = useState(0);
+  // Per-ECU history of previous DTC codes, so we can flag codes that returned after clearing.
+  const [previousCodesByEcu, setPreviousCodesByEcu] = useState<Record<string, string[]>>({});
+  // Single-ECU busy tracker for per-ECU rescan / clear controls.
+  const [busyEcu, setBusyEcu] = useState<string | null>(null);
+
   // Developer Mode (session-only unlock, klíč 1607).
   const [devActive, setDevActive] = useState(isDeveloperModeActive());
   const [devConfirm, setDevConfirm] = useState<DevConfirmDetails | null>(null);
@@ -492,6 +500,15 @@ export default function AdminDelphi() {
     }
   }, [profile, brandKey]);
 
+  // Vehicle or ECU changed → clear scan/selected/result and signal Live panel to stop & reset samples.
+  useEffect(() => {
+    setScanResults([]);
+    setSelected(null);
+    setResult(null);
+    setPreviousCodesByEcu({});
+    setLiveResetKey((k) => k + 1);
+  }, [profileId, ecuAddress, brandKey]);
+
   const brand = useMemo(
     () => brands.find((item) => item.key === brandKey),
     [brands, brandKey],
@@ -555,14 +572,30 @@ export default function AdminDelphi() {
     [functions],
   );
 
-  const actuatorFunctions = useMemo(
+  const allActuatorFunctions = useMemo(
     () => functions.filter((fn) => fn.kind === "actuator_test"),
     [functions],
   );
 
-  const serviceFunctions = useMemo(
+  const allServiceFunctions = useMemo(
     () => functions.filter((fn) => fn.kind === "routine"),
     [functions],
+  );
+
+  // In normal mode we hide destructive/unverified write functions. Developer mode reveals them.
+  const actuatorFunctions = useMemo(
+    () => devActive ? allActuatorFunctions : allActuatorFunctions.filter((fn) => !fn.destructive),
+    [allActuatorFunctions, devActive],
+  );
+
+  const serviceFunctions = useMemo(
+    () => devActive ? allServiceFunctions : allServiceFunctions.filter((fn) => !fn.destructive),
+    [allServiceFunctions, devActive],
+  );
+
+  const hiddenUnverifiedCount = useMemo(
+    () => devActive ? 0 : (allActuatorFunctions.length - actuatorFunctions.length) + (allServiceFunctions.length - serviceFunctions.length),
+    [devActive, allActuatorFunctions, actuatorFunctions, allServiceFunctions, serviceFunctions],
   );
 
   const functionGroups = useMemo(() => {
@@ -1089,7 +1122,7 @@ export default function AdminDelphi() {
       return;
     }
 
-    const targets = availableEcus;
+    const targets = ecuAddress === "__all" ? availableEcus : availableEcus.filter((e) => normalizeAddress(e.address) === normalizeAddress(ecuAddress));
     if (targets.length === 0) {
       toast({
         title: "Pro značku nejsou dostupné ECU",
@@ -1214,6 +1247,92 @@ export default function AdminDelphi() {
       setFullClearRunning(false);
       setScanProgress("");
     }
+  }
+
+  async function rescanEcu(target: EcuOption) {
+    if (!transportReady || !storedDtcFn) return;
+    const addr = normalizeAddress(target.address);
+    setBusyEcu(addr);
+    try {
+      const ctx = contextForEcu(target);
+      const stored = await runThroughSelectedTransport(storedDtcFn, ctx);
+      const pending = pendingDtcFn ? await runThroughSelectedTransport(pendingDtcFn, ctx) : null;
+      const permanent = permanentDtcFn ? await runThroughSelectedTransport(permanentDtcFn, ctx) : null;
+      const row: EcuScanResult = { ecu: target, stored, pending, permanent };
+      setScanResults((prev) => {
+        const idx = prev.findIndex((r) => normalizeAddress(r.ecu.address) === addr);
+        if (idx === -1) return [...prev, row];
+        const next = prev.slice();
+        next[idx] = { ...row, clear: prev[idx].clear };
+        return next;
+      });
+    } finally {
+      setBusyEcu(null);
+    }
+  }
+
+  async function clearEcuFaults(target: EcuOption) {
+    if (!transportReady) return;
+    const addr = normalizeAddress(target.address);
+    const confirmed = window.confirm(
+      `SMAZAT CHYBY V JEDNOTCE ${target.common || target.name} [${addr}]?\n\nZapalování ON, motor podle podmínek výrobce.\nPo vymazání proběhne automatické znovunačtení.`
+    );
+    if (!confirmed) return;
+    setBusyEcu(addr);
+    try {
+      const prevCodes = collectCodes(scanResults.find((r) => normalizeAddress(r.ecu.address) === addr)?.stored || null);
+      setPreviousCodesByEcu((m) => ({ ...m, [addr]: prevCodes }));
+      const ctx = contextForEcu(target);
+      const clear = await runRawThroughSelectedTransport("04", ctx, true);
+      const stored = storedDtcFn ? await runThroughSelectedTransport(storedDtcFn, ctx) : null;
+      const pending = pendingDtcFn ? await runThroughSelectedTransport(pendingDtcFn, ctx) : null;
+      const permanent = permanentDtcFn ? await runThroughSelectedTransport(permanentDtcFn, ctx) : null;
+      setScanResults((prev) => {
+        const idx = prev.findIndex((r) => normalizeAddress(r.ecu.address) === addr);
+        const row: EcuScanResult = { ecu: target, stored, pending, permanent, clear };
+        if (idx === -1) return [...prev, row];
+        const next = prev.slice();
+        next[idx] = row;
+        return next;
+      });
+      toast({ title: `Mazání v ECU ${target.common || target.name} dokončeno` });
+    } finally {
+      setBusyEcu(null);
+    }
+  }
+
+  function saveDtcReport() {
+    if (scanResults.length === 0) {
+      toast({ title: "Není co uložit", description: "Nejdřív načti chyby.", variant: "destructive" });
+      return;
+    }
+    const report = {
+      generatedAt: new Date().toISOString(),
+      vehicle: profile ? { make: profile.make, model: profile.model, generation: profile.generation, year, engine: profile.engine, engineCode: profile.engineCode } : null,
+      vin: vin || null,
+      brand: brand?.display_name || brandKey,
+      transport: usingLocalTransport ? "local-ble" : usingRemoteTransport ? `remote:${selectedRemoteSession?.profile_name || ""}` : "unknown",
+      totalEcus: scanResults.length,
+      totalDtc,
+      ecus: scanResults.map((row) => ({
+        address: normalizeAddress(row.ecu.address),
+        name: row.ecu.common || row.ecu.name,
+        storedStatus: row.stored?.status || null,
+        stored: collectCodes(row.stored),
+        pending: collectCodes(row.pending),
+        permanent: collectCodes(row.permanent),
+        clear: row.clear ? { status: row.clear.status, response: row.clear.rawResponse } : null,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.download = `delphi-dtc-report-${stamp}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Report uložen" });
   }
 
   async function executeSelected() {
@@ -1790,18 +1909,34 @@ export default function AdminDelphi() {
 
                 {openPanel === "dtc" && (
                   <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <Button
                         onClick={scanAllFaults}
                         disabled={fullScanRunning || fullClearRunning || !transportReady}
                         className="bg-blue-700 hover:bg-blue-600"
                       >
-                        {fullScanRunning ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Načíst všechny chyby
+                        {fullScanRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                        {ecuAddress === "__all" ? "Načíst všechny chyby" : "Načíst vybranou ECU"}
+                      </Button>
+
+                      <Button
+                        onClick={() => selectedEcu ? rescanEcu(selectedEcu) : scanAllFaults()}
+                        disabled={fullScanRunning || fullClearRunning || !transportReady || !!busyEcu}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Rescan
+                      </Button>
+
+                      <Button
+                        onClick={saveDtcReport}
+                        disabled={scanResults.length === 0}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Uložit report
                       </Button>
 
                       <Button
@@ -1809,14 +1944,14 @@ export default function AdminDelphi() {
                         disabled={fullScanRunning || fullClearRunning || !transportReady}
                         variant="destructive"
                       >
-                        {fullClearRunning ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Eraser className="mr-2 h-4 w-4" />
-                        )}
+                        {fullClearRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eraser className="mr-2 h-4 w-4" />}
                         Smazat všechny chyby
                       </Button>
                     </div>
+
+                    <p className="text-[11px] text-slate-500">
+                      Scan probíhá po jednotkách. Vybraná ECU nahoře přepíná mezi „všechny“ / jedna. Po smazání se automaticky spustí kontrolní scan; kódy, které se vrátily, jsou označené žlutě.
+                    </p>
 
                     {(fullScanRunning || fullClearRunning) && (
                       <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
@@ -1909,11 +2044,34 @@ export default function AdminDelphi() {
                               </summary>
 
                               <div className="space-y-2 border-t border-slate-300 bg-slate-50 p-3">
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-slate-500"
+                                    onClick={() => rescanEcu(item.ecu)}
+                                    disabled={fullScanRunning || fullClearRunning || !transportReady || busyEcu === normalizeAddress(item.ecu.address)}
+                                  >
+                                    {busyEcu === normalizeAddress(item.ecu.address) ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+                                    Rescan této ECU
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => clearEcuFaults(item.ecu)}
+                                    disabled={fullScanRunning || fullClearRunning || !transportReady || busyEcu === normalizeAddress(item.ecu.address)}
+                                  >
+                                    <Eraser className="mr-1 h-3 w-3" />
+                                    Smazat chyby této ECU
+                                  </Button>
+                                </div>
+
                                 {item.clear && (
                                   <p className="text-xs text-slate-600">
                                     Mazání: <strong>{resultText(item.clear)}</strong>
                                   </p>
                                 )}
+
 
                                 {allCodes.length === 0 && respondedOk ? (
                                   <p className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -1938,20 +2096,27 @@ export default function AdminDelphi() {
                                 ) : (
                                   allCodes.map((entry, index) => {
                                     const info = resolveDTCInfo(entry.code);
+                                    const addr = normalizeAddress(item.ecu.address);
+                                    const returned = (previousCodesByEcu[addr] || []).includes(entry.code);
                                     return (
                                       <div
                                         key={`${entry.type}-${entry.code}-${index}`}
-                                        className="rounded border border-red-300 bg-red-50 p-3"
+                                        className={`rounded border p-3 ${returned ? "border-amber-400 bg-amber-50" : "border-red-300 bg-red-50"}`}
                                       >
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="min-w-0 flex-1">
-                                            <strong className="font-mono text-red-900">
+                                            <strong className={`font-mono ${returned ? "text-amber-900" : "text-red-900"}`}>
                                               {entry.code}
                                             </strong>
-                                            <p className="mt-1 text-sm font-semibold text-red-950">
+                                            <p className={`mt-1 text-sm font-semibold ${returned ? "text-amber-950" : "text-red-950"}`}>
                                               {info.description || "Popis chyby není v databázi dostupný."}
                                             </p>
                                             <div className="mt-2 flex flex-wrap gap-1">
+                                              {returned && (
+                                                <Badge variant="outline" className="border-amber-500 text-amber-800">
+                                                  Vrátila se po smazání
+                                                </Badge>
+                                              )}
                                               {info.category && (
                                                 <Badge variant="outline" className="border-red-300 text-red-700">
                                                   {info.category}
@@ -1971,6 +2136,7 @@ export default function AdminDelphi() {
                                       </div>
                                     );
                                   })
+
                                 )}
 
                                 <details className="rounded border border-slate-300 bg-white">
@@ -2070,10 +2236,13 @@ export default function AdminDelphi() {
                 openPanel === "service") && (
                 <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
                   {openPanel === "live" && (
-                    <LiveDashboard
+                    <LiveDataPanel
                       liveFunctions={liveFunctions}
                       activeContext={activeContext}
                       transportReady={transportReady}
+                      vehicleSelected={!!profile}
+                      ecuSelected={ecuAddress !== "__all"}
+                      resetKey={liveResetKey}
                     />
                   )}
                   <div className="relative">
@@ -2090,10 +2259,17 @@ export default function AdminDelphi() {
                     <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
                       <div className="flex items-start gap-2">
                         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                        <p>
-                          Všechny katalogové funkce jsou viditelné a spustitelné.
-                          Neověřená funkce před spuštěním zobrazí varování.
-                        </p>
+                        <div>
+                          <p>
+                            Zobrazeny jsou pouze ověřené funkce pro vybrané vozidlo a ECU.
+                            Destruktivní / neověřené funkce jsou skryté a dostupné až po aktivaci Vývojářského režimu.
+                          </p>
+                          {hiddenUnverifiedCount > 0 && (
+                            <p className="mt-1 font-bold">
+                              Skryto {hiddenUnverifiedCount} neověřených funkcí — důvod: nejsou potvrzené pro tuto SW variantu ECU.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
