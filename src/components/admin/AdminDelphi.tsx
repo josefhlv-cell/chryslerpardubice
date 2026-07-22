@@ -272,6 +272,13 @@ export default function AdminDelphi() {
   const [detectedEcus, setDetectedEcus] = useState<Set<string>>(new Set());
   const [probedEcus, setProbedEcus] = useState<Set<string>>(new Set());
 
+  // Reset key increments whenever the active vehicle or ECU changes; consumed by LiveDataPanel to stop polling and clear samples.
+  const [liveResetKey, setLiveResetKey] = useState(0);
+  // Per-ECU history of previous DTC codes, so we can flag codes that returned after clearing.
+  const [previousCodesByEcu, setPreviousCodesByEcu] = useState<Record<string, string[]>>({});
+  // Single-ECU busy tracker for per-ECU rescan / clear controls.
+  const [busyEcu, setBusyEcu] = useState<string | null>(null);
+
   // Developer Mode (session-only unlock, klíč 1607).
   const [devActive, setDevActive] = useState(isDeveloperModeActive());
   const [devConfirm, setDevConfirm] = useState<DevConfirmDetails | null>(null);
