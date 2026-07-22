@@ -2028,11 +2028,34 @@ export default function AdminDelphi() {
                               </summary>
 
                               <div className="space-y-2 border-t border-slate-300 bg-slate-50 p-3">
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-slate-500"
+                                    onClick={() => rescanEcu(item.ecu)}
+                                    disabled={fullScanRunning || fullClearRunning || !transportReady || busyEcu === normalizeAddress(item.ecu.address)}
+                                  >
+                                    {busyEcu === normalizeAddress(item.ecu.address) ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1 h-3 w-3" />}
+                                    Rescan této ECU
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => clearEcuFaults(item.ecu)}
+                                    disabled={fullScanRunning || fullClearRunning || !transportReady || busyEcu === normalizeAddress(item.ecu.address)}
+                                  >
+                                    <Eraser className="mr-1 h-3 w-3" />
+                                    Smazat chyby této ECU
+                                  </Button>
+                                </div>
+
                                 {item.clear && (
                                   <p className="text-xs text-slate-600">
                                     Mazání: <strong>{resultText(item.clear)}</strong>
                                   </p>
                                 )}
+
 
                                 {allCodes.length === 0 && respondedOk ? (
                                   <p className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-800">
