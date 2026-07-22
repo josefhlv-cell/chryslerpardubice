@@ -1233,6 +1233,92 @@ export default function AdminDelphi() {
     }
   }
 
+  async function rescanEcu(target: EcuOption) {
+    if (!transportReady || !storedDtcFn) return;
+    const addr = normalizeAddress(target.address);
+    setBusyEcu(addr);
+    try {
+      const ctx = contextForEcu(target);
+      const stored = await runThroughSelectedTransport(storedDtcFn, ctx);
+      const pending = pendingDtcFn ? await runThroughSelectedTransport(pendingDtcFn, ctx) : null;
+      const permanent = permanentDtcFn ? await runThroughSelectedTransport(permanentDtcFn, ctx) : null;
+      const row: EcuScanResult = { ecu: target, stored, pending, permanent };
+      setScanResults((prev) => {
+        const idx = prev.findIndex((r) => normalizeAddress(r.ecu.address) === addr);
+        if (idx === -1) return [...prev, row];
+        const next = prev.slice();
+        next[idx] = { ...row, clear: prev[idx].clear };
+        return next;
+      });
+    } finally {
+      setBusyEcu(null);
+    }
+  }
+
+  async function clearEcuFaults(target: EcuOption) {
+    if (!transportReady) return;
+    const addr = normalizeAddress(target.address);
+    const confirmed = window.confirm(
+      `SMAZAT CHYBY V JEDNOTCE ${target.common || target.name} [${addr}]?\n\nZapalování ON, motor podle podmínek výrobce.\nPo vymazání proběhne automatické znovunačtení.`
+    );
+    if (!confirmed) return;
+    setBusyEcu(addr);
+    try {
+      const prevCodes = collectCodes(scanResults.find((r) => normalizeAddress(r.ecu.address) === addr)?.stored || null);
+      setPreviousCodesByEcu((m) => ({ ...m, [addr]: prevCodes }));
+      const ctx = contextForEcu(target);
+      const clear = await runRawThroughSelectedTransport("04", ctx, true);
+      const stored = storedDtcFn ? await runThroughSelectedTransport(storedDtcFn, ctx) : null;
+      const pending = pendingDtcFn ? await runThroughSelectedTransport(pendingDtcFn, ctx) : null;
+      const permanent = permanentDtcFn ? await runThroughSelectedTransport(permanentDtcFn, ctx) : null;
+      setScanResults((prev) => {
+        const idx = prev.findIndex((r) => normalizeAddress(r.ecu.address) === addr);
+        const row: EcuScanResult = { ecu: target, stored, pending, permanent, clear };
+        if (idx === -1) return [...prev, row];
+        const next = prev.slice();
+        next[idx] = row;
+        return next;
+      });
+      toast({ title: `Mazání v ECU ${target.common || target.name} dokončeno` });
+    } finally {
+      setBusyEcu(null);
+    }
+  }
+
+  function saveDtcReport() {
+    if (scanResults.length === 0) {
+      toast({ title: "Není co uložit", description: "Nejdřív načti chyby.", variant: "destructive" });
+      return;
+    }
+    const report = {
+      generatedAt: new Date().toISOString(),
+      vehicle: profile ? { make: profile.make, model: profile.model, generation: profile.generation, year, engine: profile.engine, engineCode: profile.engineCode } : null,
+      vin: vin || null,
+      brand: brand?.display_name || brandKey,
+      transport: usingLocalTransport ? "local-ble" : usingRemoteTransport ? `remote:${selectedRemoteSession?.profile_name || ""}` : "unknown",
+      totalEcus: scanResults.length,
+      totalDtc,
+      ecus: scanResults.map((row) => ({
+        address: normalizeAddress(row.ecu.address),
+        name: row.ecu.common || row.ecu.name,
+        storedStatus: row.stored?.status || null,
+        stored: collectCodes(row.stored),
+        pending: collectCodes(row.pending),
+        permanent: collectCodes(row.permanent),
+        clear: row.clear ? { status: row.clear.status, response: row.clear.rawResponse } : null,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.download = `delphi-dtc-report-${stamp}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Report uložen" });
+  }
+
   async function executeSelected() {
     if (!selected) return;
     setRunning(true);
