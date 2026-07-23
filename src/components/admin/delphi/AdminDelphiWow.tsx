@@ -377,21 +377,23 @@ function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
 
       {/* Sections */}
       <Tabs value={section} onValueChange={(v) => setSection(v as SectionKey)} className="w-full">
-        <TabsList className="flex w-full flex-wrap gap-1 bg-slate-100 p-1">
-          {(Object.keys(SECTION_LABEL) as SectionKey[]).map((k) => {
-            const count = k === "protocols" ? filteredProtocols.length : (vehicleScoped ? vehicleScoped[k].length : categorized[k].length);
-            return (
-              <TabsTrigger key={k} value={k} className="flex-1 min-w-[110px] text-xs">
-                <span className="inline-flex items-center gap-1">
-                  {SECTION_ICON[k]}
-                  <span className="hidden sm:inline">{SECTION_LABEL[k]}</span>
-                  <span className="sm:hidden">{SECTION_LABEL[k].split(" ")[0]}</span>
-                  <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{count}</Badge>
-                </span>
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto px-1">
+          <TabsList className="inline-flex h-auto w-max min-w-full items-stretch gap-1 bg-slate-100 p-1">
+            {(Object.keys(SECTION_LABEL) as SectionKey[]).map((k) => {
+              const count = k === "protocols" ? filteredProtocols.length : (vehicleScoped ? vehicleScoped[k].length : categorized[k].length);
+              return (
+                <TabsTrigger key={k} value={k} className="h-9 shrink-0 whitespace-nowrap px-3 text-xs">
+                  <span className="inline-flex items-center gap-1">
+                    {SECTION_ICON[k]}
+                    <span className="hidden sm:inline">{SECTION_LABEL[k]}</span>
+                    <span className="sm:hidden">{SECTION_LABEL[k].split(" ")[0]}</span>
+                    <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">{count}</Badge>
+                  </span>
+                </TabsTrigger>
+              );
+            })}
+          </TabsList>
+        </div>
 
         {(Object.keys(SECTION_LABEL) as SectionKey[]).map((k) => (
           <TabsContent key={k} value={k} className="mt-2">
