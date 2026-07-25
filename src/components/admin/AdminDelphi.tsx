@@ -299,6 +299,8 @@ export default function AdminDelphi() {
       const el = document.querySelector<HTMLElement>(`[data-vehicle-field="${key}"]`);
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("delphi-field-flash");
+        window.setTimeout(() => el.classList.remove("delphi-field-flash"), 2000);
         const trigger = el.querySelector<HTMLElement>("button, input, [role='combobox']");
         trigger?.focus();
       }
