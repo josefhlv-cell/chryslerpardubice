@@ -1816,7 +1816,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div>
+                <div data-vehicle-field="generation">
                   <Label className="text-xs font-bold text-slate-700">Generace</Label>
                   <Select
                     value={generation}
