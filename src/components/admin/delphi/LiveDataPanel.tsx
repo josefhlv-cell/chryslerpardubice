@@ -251,24 +251,24 @@ export function LiveDataPanel({
         className="border-slate-400 bg-white text-slate-950"
       />
 
-      <Group
-        title="OEM parametry (výrobce)"
-        color="border-blue-400 bg-blue-50 text-blue-900"
-        fns={groupOem}
-        selected={selected}
-        samples={samples}
-        onToggle={toggle}
-        onSelectAll={() => selectAll(groupOem)}
-      />
-      <Group
-        title="Obecné OBD-II parametry"
-        color="border-emerald-400 bg-emerald-50 text-emerald-900"
-        fns={groupGeneric}
-        selected={selected}
-        samples={samples}
-        onToggle={toggle}
-        onSelectAll={() => selectAll(groupGeneric)}
-      />
+      {groupedBySystem.length === 0 ? (
+        <p className="rounded border border-slate-300 bg-slate-50 p-3 text-center text-xs text-slate-600">
+          Pro tuto ECU nejsou v katalogu žádné živé parametry.
+        </p>
+      ) : (
+        groupedBySystem.map((g) => (
+          <Group
+            key={g.key}
+            title={g.label}
+            color="border-blue-400 bg-blue-50 text-blue-900"
+            fns={g.fns}
+            selected={selected}
+            samples={samples}
+            onToggle={toggle}
+            onSelectAll={() => selectAll(g.fns)}
+          />
+        ))
+      )}
 
       {running && (
         <p className="flex items-center gap-2 text-xs text-slate-600">
