@@ -1825,9 +1825,13 @@ export default function AdminDelphi() {
               </div>
             </div>
           </section>
+          )}
 
+          {/* PRACOVNÍ PLOCHA — systém + funkce vedle sebe (jako v Autocom DS150). */}
+          <div className="grid gap-3 lg:grid-cols-[minmax(260px,340px)_1fr]">
           {/* 2. VÝBĚR SYSTÉMU */}
           <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+
             <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
               2. Vyber systém
             </div>
