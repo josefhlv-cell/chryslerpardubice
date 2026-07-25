@@ -687,7 +687,10 @@ export default function AdminDelphi() {
     serviceFunctions,
     search,
     ecuAddress,
+    profile,
+    recommendedEcuAddresses,
   ]);
+
 
   const totalDtc = useMemo(
     () =>
