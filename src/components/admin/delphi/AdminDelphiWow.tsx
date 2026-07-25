@@ -35,6 +35,7 @@ import { partitionByApplicability } from "@/lib/delphi/wow/applicability";
 import { WowVehicleProvider, useWowVehicle } from "@/lib/delphi/wow/vehicle-context";
 import { WowVehicleSelector } from "./WowVehicleSelector";
 import { WowDocumentTree } from "./WowDocumentTree";
+import { translateLabel } from "@/lib/delphi/i18n";
 
 
 export type WowVehicleContext = {
@@ -152,10 +153,21 @@ function DocumentViewer({ record, onClose }: { record: WowContentRecord; onClose
     setLoading(true);
     setError(null);
     fetch(record.url)
-      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`))))
-      .then((raw) => {
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))
+      .then((buf) => {
         if (cancelled) return;
-        // Sanitize: strip <script>, on* handlers, external navigation, and rebase relative asset URLs
+        // WOW files often use windows-1252 → utf-8 gives � for °, ±, etc.
+        let raw: string;
+        try {
+          raw = new TextDecoder("windows-1252").decode(buf);
+        } catch {
+          raw = new TextDecoder("utf-8").decode(buf);
+        }
+        // If it still looks broken (contains U+FFFD), fall back to utf-8.
+        if (raw.includes("\uFFFD")) {
+          try { raw = new TextDecoder("utf-8").decode(buf); } catch {}
+        }
+        // Sanitize + rebase relative asset URLs
         const baseDir = record.url.replace(/[^/]+$/, "");
         let out = raw
           .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -165,8 +177,9 @@ function DocumentViewer({ record, onClose }: { record: WowContentRecord; onClose
           .replace(/\ssrc\s*=\s*"(?!https?:|data:|\/)([^"]+)"/gi, ` src="${baseDir}$1"`)
           .replace(/\ssrc\s*=\s*'(?!https?:|data:|\/)([^']+)'/gi, ` src='${baseDir}$1'`)
           .replace(/\shref\s*=\s*'(?!https?:|mailto:|#|\/)([^']+)'/gi, ` href='${baseDir}$1'`);
-        // Wrap for readable style
-        out = `<!doctype html><html><head><meta charset="utf-8"><base href="${baseDir}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+        // CZ translation on text nodes only (skip inside tags/attributes)
+        out = out.replace(/>([^<]+)</g, (_m, txt) => `>${translateLabel(txt)}<`);
+        out = `<!doctype html><html lang="cs"><head><meta charset="utf-8"><base href="${baseDir}"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
           body{font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a;background:#fff;padding:12px;margin:0;word-wrap:break-word}
           img,video{max-width:100%;height:auto}
           a{color:#2563eb;pointer-events:none;text-decoration:underline}
@@ -187,7 +200,7 @@ function DocumentViewer({ record, onClose }: { record: WowContentRecord; onClose
       <div className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between gap-2 border-b bg-slate-100 px-3 py-2">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{record.title}</div>
+            <div className="truncate text-sm font-semibold">{translateLabel(record.title)}</div>
             <div className="truncate text-[11px] text-slate-500">{record.url}</div>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Zavřít">
@@ -439,8 +452,8 @@ function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
                                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                               )}
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-medium">{r.title}</div>
-                                {r.excerpt ? <div className="line-clamp-2 text-xs text-slate-500">{r.excerpt}</div> : null}
+                                <div className="truncate text-sm font-medium">{translateLabel(r.title)}</div>
+                                {r.excerpt ? <div className="line-clamp-2 text-xs text-slate-500">{translateLabel(r.excerpt)}</div> : null}
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
                                   <span>{r.fileName}</span>
                                   <span>·</span>
