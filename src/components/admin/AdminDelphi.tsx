@@ -57,6 +57,11 @@ import {
   runRawCommand,
   uniqueSorted,
   VEHICLE_PROFILES,
+  translateLabel,
+  translateCategory,
+  resolveSystemGroup,
+  SYSTEM_GROUP_ORDER,
+  type SystemGroupKey,
 } from "@/lib/delphi";
 import type {
   ActiveDiagContext,
