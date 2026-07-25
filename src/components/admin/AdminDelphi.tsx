@@ -503,6 +503,11 @@ export default function AdminDelphi() {
     }
   }, [profile, brandKey]);
 
+  // Když je profil kompletní, breadcrumb převezme řízení a formulář se sbalí.
+  useEffect(() => {
+    if (profile) setEditingVehicle(false);
+  }, [profile]);
+
   // Vehicle or ECU changed → clear scan/selected/result and signal Live panel to stop & reset samples.
   useEffect(() => {
     setScanResults([]);
