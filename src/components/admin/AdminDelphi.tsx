@@ -2441,10 +2441,45 @@ export default function AdminDelphi() {
                     </p>
                   ) : (
                     <div className="space-y-3">
+                      {/* Ikonová lišta systémů — rychlá navigace + zvýraznění aktivního */}
+                      <div
+                        className="delphi-system-rail sticky top-0 z-10 -mx-1 flex gap-2 overflow-x-auto rounded-lg border border-slate-400 bg-white/95 px-2 py-2 backdrop-blur"
+                        role="tablist"
+                        aria-label="Systémy vozidla"
+                      >
+                        {functionGroups.map((sg) => {
+                          const isActive = activeSystemKey === sg.key;
+                          return (
+                            <button
+                              key={`rail-${sg.key}`}
+                              type="button"
+                              role="tab"
+                              aria-selected={isActive}
+                              onClick={() => focusSystemGroup(sg.key)}
+                              className={`flex shrink-0 snap-start items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-bold transition-colors ${
+                                isActive
+                                  ? "border-amber-400 bg-amber-100 text-blue-950 shadow"
+                                  : "border-slate-400 bg-slate-50 text-slate-800 hover:bg-slate-100"
+                              }`}
+                              title={`${sg.label} — ${sg.totalCount} funkcí`}
+                            >
+                              <Wrench className="h-3.5 w-3.5" />
+                              <span className="max-w-[10rem] truncate">{sg.label}</span>
+                              <span className="rounded-full bg-blue-900 px-1.5 py-0.5 text-[10px] text-white">
+                                {sg.totalCount}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
                       {functionGroups.map((systemGroup) => (
                         <details
                           key={systemGroup.key}
-                          className="overflow-hidden rounded-lg border-2 border-blue-800 bg-white"
+                          data-system-key={systemGroup.key}
+                          className={`overflow-hidden rounded-lg border-2 border-blue-800 bg-white ${
+                            activeSystemKey === systemGroup.key ? "delphi-system-active" : ""
+                          }`}
                           open
                         >
                           <summary className="flex cursor-pointer list-none items-center gap-3 bg-blue-900 px-3 py-3 text-white">
