@@ -2283,12 +2283,22 @@ export default function AdminDelphi() {
                                   </p>
                                   <p className="text-xs text-slate-500">
                                     ECU {normalizeAddress(item.ecu.address)} · {allCodes.length} DTC
+                                    {item.stored?.timestamp && (
+                                      <> · {new Date(item.stored.timestamp).toLocaleTimeString("cs-CZ")}</>
+                                    )}
                                   </p>
+                                  {item.stored?.nrc && (
+                                    <p className="mt-0.5 truncate text-[11px] text-amber-800">
+                                      NRC {item.stored.nrc.code}
+                                      {item.stored.nrc.description ? ` — ${item.stored.nrc.description}` : ""}
+                                    </p>
+                                  )}
                                 </div>
                                 <Badge variant="outline" className={badgeClass}>
                                   {badgeLabel}
                                 </Badge>
                               </summary>
+
 
                               <div className="space-y-2 border-t border-slate-300 bg-slate-50 p-3">
                                 <div className="flex flex-wrap gap-2">
