@@ -32,11 +32,11 @@ function formatValue(value: unknown): { value: string; unit: string } {
   return { value: String(value), unit: "" };
 }
 
-/** Czech label from catalog description (already localized in most cases) with sensible fallback. */
+/** Czech label from catalog (name + description), translated if English. */
 function czechLabel(fn: DiagFunction): string {
   const desc = (fn.description || "").trim();
-  if (desc && !/^[A-Z0-9_]+$/.test(desc)) return desc;
-  return fn.name;
+  const base = desc && !/^[A-Z0-9_]+$/.test(desc) ? desc : fn.name;
+  return translateLabel(base);
 }
 
 export function LiveDataPanel({
