@@ -609,13 +609,18 @@ export default function AdminDelphi() {
             : [];
 
     const query = search.trim().toLocaleLowerCase("cs");
+    const hasProfile = Boolean(profile);
+    const compatibleSet = recommendedEcuAddresses;
     const filtered = source.filter((fn) => {
-      if (
-        ecuAddress !== "__all" &&
-        fn.ecuAddress &&
-        normalizeAddress(fn.ecuAddress) !== normalizeAddress(ecuAddress)
-      ) {
-        return false;
+      const fnAddr = fn.ecuAddress ? normalizeAddress(fn.ecuAddress) : "";
+
+      if (ecuAddress !== "__all") {
+        // Konkrétní ECU: povol jen funkce vázané na tuto adresu.
+        if (!fnAddr || fnAddr !== normalizeAddress(ecuAddress)) return false;
+      } else if (hasProfile && fnAddr && compatibleSet.size > 0) {
+        // "Všechny ECU" + zvolený profil vozidla: vypusť funkce vázané na ECU,
+        // které v tomto vozidle podle profilu vůbec nejsou.
+        if (!compatibleSet.has(fnAddr)) return false;
       }
 
       if (!query) return true;
@@ -633,6 +638,7 @@ export default function AdminDelphi() {
         .toLocaleLowerCase("cs")
         .includes(query);
     });
+
 
     const ecuGroups = new Map<
       string,
@@ -681,7 +687,10 @@ export default function AdminDelphi() {
     serviceFunctions,
     search,
     ecuAddress,
+    profile,
+    recommendedEcuAddresses,
   ]);
+
 
   const totalDtc = useMemo(
     () =>
@@ -1122,7 +1131,13 @@ export default function AdminDelphi() {
       return;
     }
 
-    const targets = ecuAddress === "__all" ? availableEcus : availableEcus.filter((e) => normalizeAddress(e.address) === normalizeAddress(ecuAddress));
+    const compatibleOnly = profile && recommendedEcuAddresses.size > 0
+      ? availableEcus.filter((e) => recommendedEcuAddresses.has(normalizeAddress(e.address)))
+      : availableEcus;
+    const targets = ecuAddress === "__all"
+      ? compatibleOnly
+      : availableEcus.filter((e) => normalizeAddress(e.address) === normalizeAddress(ecuAddress));
+
     if (targets.length === 0) {
       toast({
         title: "Pro značku nejsou dostupné ECU",
