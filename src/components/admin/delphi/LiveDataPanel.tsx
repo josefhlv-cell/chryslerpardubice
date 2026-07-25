@@ -98,8 +98,19 @@ export function LiveDataPanel({
     });
   }, [liveFunctions, ecuAddr, filter]);
 
-  const groupGeneric = useMemo(() => applicable.filter((fn) => !fn.isOem), [applicable]);
-  const groupOem = useMemo(() => applicable.filter((fn) => fn.isOem), [applicable]);
+  const groupedBySystem = useMemo(() => {
+    const map = new Map<SystemGroupKey, { label: string; order: number; fns: DiagFunction[] }>();
+    for (const fn of applicable) {
+      const g = resolveSystemGroup(fn);
+      const bucket = map.get(g.key) || { label: g.label, order: g.order, fns: [] };
+      bucket.fns.push(fn);
+      map.set(g.key, bucket);
+    }
+    const orderIndex = new Map(SYSTEM_GROUP_ORDER.map((k, i) => [k, i]));
+    return [...map.entries()]
+      .sort(([a], [b]) => (orderIndex.get(a) ?? 99) - (orderIndex.get(b) ?? 99))
+      .map(([key, v]) => ({ key, label: v.label, fns: v.fns }));
+  }, [applicable]);
 
   const canOperate = vehicleSelected && ecuSelected && transportReady;
   const disabledReason = !vehicleSelected
