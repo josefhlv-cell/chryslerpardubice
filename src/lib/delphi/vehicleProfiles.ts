@@ -16,8 +16,8 @@ export type VehicleProfile = {
 
 export const COMMON_VEHICLE_MAKES: string[] = [
   "Alfa Romeo", "Audi", "BMW", "Chevrolet", "Chrysler", "Citroën", "Cupra",
-  "Dacia", "Dodge", "Fiat", "Ford", "Honda", "Hyundai", "Iveco", "Jaguar",
-  "Jeep", "Kia", "Lancia", "Land Rover", "Lexus", "Mazda", "Mercedes-Benz", "MINI",
+  "Cadillac", "Dacia", "Dodge", "Fiat", "Ford", "Honda", "Hyundai", "Iveco", "Jaguar",
+  "Jeep", "Kia", "Lancia", "Land Rover", "Lexus", "Lincoln", "Mazda", "Mercedes-Benz", "MINI",
   "Mitsubishi", "Nissan", "Opel", "Peugeot", "Porsche", "RAM", "Renault",
   "SEAT", "Škoda", "Smart", "Subaru", "Suzuki", "Tesla", "Toyota",
   "Volkswagen", "Volvo",
@@ -26,6 +26,10 @@ export const COMMON_VEHICLE_MAKES: string[] = [
 const vagEcu = ["EDC16", "EDC17", "MD1", "MED17", "MG1", "Simos", "Engine ECU", "Motor"];
 const fcaEcu = ["PCM", "ECM", "TCM", "ABS", "RCM", "BCM", "SGW", "IPC", "HVAC", "EPB", "PSCM", "SCCM", "TPMS", "Engine Control", "Powertrain Control", "Motor", "Transmission"];
 const fcaDieselEcu = ["CRD ECU", "EDC16", "EDC17", ...fcaEcu];
+const bmwEcu = ["DME", "DDE", "EGS", "DSC", "CAS", "FEM", "BDC", "FRM", "IHKA", "KOMBI", "ACSM", "EPS", "Motor"];
+const mbEcu = ["ME", "CDI", "CR", "EZS", "SAM", "ESP", "ETC", "IC", "PSE", "AAM", "Motor"];
+const gmEcu = ["ECM", "PCM", "TCM", "EBCM", "BCM", "IPC", "SDM", "EPS", "HVAC", "Motor"];
+const volvoEcu = ["ECM", "TCM", "BCM", "CEM", "DIM", "SRS", "ABS/DSTC", "PSM", "SWM", "Motor"];
 const fordEcu = ["PCM", "ECM", "Powertrain Control Module", "Engine Control Module", "TCM", "ABS", "RCM", "BCM", "GWM", "IPC", "HVAC", "PSCM", "SCCM", "APIM", "Ford"];
 
 function profile(
@@ -191,7 +195,92 @@ export const VEHICLE_PROFILES: VehicleProfile[] = [
   profile("ram-1500-ds-exf","STLA","RAM","1500","DS",2014,2018,"3.0 EcoDiesel","EXF","Diesel",fcaDieselEcu),
   profile("ram-1500-dt-exf","STLA","RAM","1500","DT",2020,2023,"3.0 EcoDiesel","EXF","Diesel",fcaDieselEcu),
   profile("ram-2500-dj-cummins","STLA","RAM","2500","DJ",2013,2026,"6.7 Cummins","ISB6.7","Diesel",[...fcaDieselEcu,"Cummins"]),
+
+  // ============= VLNA 1: VW SKUPINA (doplnění benzín / novější) =============
+  profile("vw-golf-7-cjza","VAG","Volkswagen","Golf","VII (5G)",2012,2019,"1.2 TSI 63 kW","CJZA","Benzín",["MED17.5.5",...vagEcu]),
+  profile("vw-golf-7-cxsa","VAG","Volkswagen","Golf","VII (5G)",2013,2019,"1.4 TSI 90 kW","CXSA","Benzín",["MED17.5.5",...vagEcu]),
+  profile("vw-golf-8-dpca","VAG","Volkswagen","Golf","VIII (CD)",2020,2026,"1.5 TSI 96 kW","DPCA","Benzín",["MG1CS111",...vagEcu]),
+  profile("vw-tiguan-ad1-dfga","VAG","Volkswagen","Tiguan","II (AD1)",2016,2023,"2.0 TDI 110 kW","DFGA","Diesel",["EDC17C74",...vagEcu]),
+  profile("vw-tiguan-ad1-dkza","VAG","Volkswagen","Tiguan","II (AD1)",2018,2023,"1.5 TSI 110 kW","DPCA","Benzín",["MG1CS011",...vagEcu]),
+  profile("vw-polo-aw-dkla","VAG","Volkswagen","Polo","VI (AW)",2017,2026,"1.0 TSI 70 kW","DKLA","Benzín",["MG1CS011",...vagEcu]),
+  profile("vw-touareg-7p-crca","VAG","Volkswagen","Touareg","II (7P)",2010,2018,"3.0 TDI 180 kW","CRCA","Diesel",["EDC17CP44",...vagEcu]),
+  profile("skoda-fabia-nj-czca","VAG","Škoda","Fabia","III (NJ)",2014,2021,"1.0 TSI 70 kW","CHZC","Benzín",["MED17.5.25",...vagEcu]),
+  profile("skoda-octavia-4-dttc","VAG","Škoda","Octavia","IV (NX)",2020,2026,"2.0 TDI 110 kW","DTTC","Diesel",["MD1TD100",...vagEcu]),
+  profile("skoda-karoq-nu-dfga","VAG","Škoda","Karoq","NU",2017,2026,"2.0 TDI 110 kW","DFGA","Diesel",["EDC17C74",...vagEcu]),
+  profile("audi-a4-b9-dety","VAG","Audi","A4","B9 (8W)",2015,2023,"2.0 TDI 140 kW","DETA","Diesel",["MD1TD100",...vagEcu]),
+  profile("audi-q5-fy-dety","VAG","Audi","Q5","FY",2017,2026,"2.0 TDI 140 kW","DETA","Diesel",["MD1TD100",...vagEcu]),
+  profile("seat-ateca-kh7-dfga","VAG","SEAT","Ateca","KH7",2016,2026,"2.0 TDI 110 kW","DFGA","Diesel",["EDC17C74",...vagEcu]),
+  profile("porsche-cayenne-92a-diesel","PORSCHE","Porsche","Cayenne","92A",2010,2017,"3.0 V6 TDI","CRCA","Diesel",["EDC17CP44",...vagEcu]),
+
+  // ============= VLNA 1: BMW / MINI =============
+  profile("bmw-3-f30-n47","BMW","BMW","3 (F30)","F30",2011,2019,"320d 2.0 135 kW","N47D20","Diesel",[...bmwEcu,"DDE7","DDE"]),
+  profile("bmw-3-f30-b47","BMW","BMW","3 (F30)","F30",2015,2019,"320d 2.0 140 kW","B47D20","Diesel",[...bmwEcu,"DDE8"]),
+  profile("bmw-3-g20-b48","BMW","BMW","3 (G20)","G20",2019,2026,"330i 2.0 190 kW","B48B20","Benzín",[...bmwEcu,"DME MEVD"]),
+  profile("bmw-5-f10-n57","BMW","BMW","5 (F10)","F10",2010,2017,"530d 3.0 190 kW","N57D30","Diesel",[...bmwEcu,"DDE7"]),
+  profile("bmw-5-g30-b57","BMW","BMW","5 (G30)","G30",2017,2024,"530d 3.0 195 kW","B57D30","Diesel",[...bmwEcu,"DDE8"]),
+  profile("bmw-x3-f25-n47","BMW","BMW","X3 (F25)","F25",2011,2017,"20d 2.0 135 kW","N47D20","Diesel",bmwEcu),
+  profile("bmw-x5-f15-n57","BMW","BMW","X5 (F15)","F15",2013,2018,"30d 3.0 190 kW","N57D30","Diesel",bmwEcu),
+  profile("bmw-1-f20-n13","BMW","BMW","1 (F20)","F20",2011,2019,"118i 1.6 100 kW","N13B16","Benzín",bmwEcu),
+  profile("mini-cooper-f56-b38","MINI","MINI","Cooper","F56",2014,2026,"1.5 100 kW","B38A15","Benzín",bmwEcu),
+  profile("mini-countryman-r60-n47","MINI","MINI","Countryman","R60",2010,2016,"Cooper D 2.0","N47C20","Diesel",bmwEcu),
+
+  // ============= VLNA 1: MERCEDES-BENZ =============
+  profile("mb-c-w204-om651","MB","Mercedes-Benz","C (W204)","W204",2007,2014,"C220 CDI 2.1","OM651","Diesel",[...mbEcu,"CDI4","OM651"]),
+  profile("mb-c-w205-om654","MB","Mercedes-Benz","C (W205)","W205",2014,2021,"C220d 2.0","OM654","Diesel",[...mbEcu,"CDI6"]),
+  profile("mb-e-w212-om642","MB","Mercedes-Benz","E (W212)","W212",2009,2016,"E350 CDI 3.0 V6","OM642","Diesel",[...mbEcu,"CDI3"]),
+  profile("mb-e-w213-om654","MB","Mercedes-Benz","E (W213)","W213",2016,2023,"E220d 2.0","OM654","Diesel",mbEcu),
+  profile("mb-sprinter-w906-om651","MB","Mercedes-Benz","Sprinter","W906",2009,2018,"2.1 CDI","OM651","Diesel",mbEcu),
+  profile("mb-sprinter-w907-om654","MB","Mercedes-Benz","Sprinter","W907/910",2018,2026,"2.0 CDI","OM654","Diesel",mbEcu),
+  profile("mb-vito-w447-om651","MB","Mercedes-Benz","Vito","W447",2014,2026,"2.1 CDI","OM651","Diesel",mbEcu),
+  profile("mb-glc-x253-om654","MB","Mercedes-Benz","GLC","X253",2015,2022,"220d 2.0","OM654","Diesel",mbEcu),
+
+  // ============= VLNA 1: FORD / LINCOLN =============
+  profile("ford-focus-mk3-15tdci","FORD","Ford","Focus","Mk3",2011,2018,"1.5 TDCi 88 kW","XWDA","Diesel",fordEcu),
+  profile("ford-focus-mk4-10ecoboost","FORD","Ford","Focus","Mk4",2018,2026,"1.0 EcoBoost 92 kW","B7DA","Benzín",fordEcu),
+  profile("ford-mondeo-mk5-20tdci","FORD","Ford","Mondeo","Mk5",2014,2022,"2.0 TDCi 110 kW","T7CJ","Diesel",fordEcu),
+  profile("ford-kuga-mk2-20tdci","FORD","Ford","Kuga","Mk2",2012,2019,"2.0 TDCi 110 kW","TXDA","Diesel",fordEcu),
+  profile("ford-transit-custom-20ecoblue","FORD","Ford","Transit Custom","V362",2016,2026,"2.0 EcoBlue 96 kW","YMF6","Diesel",fordEcu),
+  profile("ford-ranger-t6-32tdci","FORD","Ford","Ranger","T6",2011,2022,"3.2 TDCi 147 kW","SAFA","Diesel",fordEcu),
+  profile("ford-f150-p552-27ecoboost","FORD","Ford","F-150","P552",2015,2020,"2.7 EcoBoost V6","2.7L EB","Benzín",fordEcu),
+  profile("ford-f150-p702-50","FORD","Ford","F-150","P702",2021,2026,"5.0 V8 Coyote","5.0L","Benzín",fordEcu),
+  profile("ford-explorer-u625-30ecoboost","FORD","Ford","Explorer","U625",2020,2026,"3.0 EcoBoost V6","3.0L EB","Benzín",fordEcu),
+  profile("lincoln-navigator-u554-35ecoboost","FORD","Lincoln","Navigator","U554",2015,2017,"3.5 EcoBoost V6","3.5L EB","Benzín",fordEcu),
+  profile("lincoln-navigator-u554-2018","FORD","Lincoln","Navigator","U554 (IV)",2018,2026,"3.5 EcoBoost V6","3.5L EB","Benzín",fordEcu),
+  profile("lincoln-mkz-cd4-20ecoboost","FORD","Lincoln","MKZ","CD4",2013,2020,"2.0 EcoBoost","2.0L EB","Benzín",fordEcu),
+  profile("lincoln-mkx-cd4-37","FORD","Lincoln","MKX","CD4",2016,2018,"3.7 V6","3.7L","Benzín",fordEcu),
+  profile("lincoln-aviator-cd6-30","FORD","Lincoln","Aviator","CD6",2020,2026,"3.0 V6 Twin-Turbo","3.0L TT","Benzín",fordEcu),
+
+  // ============= VLNA 1: OPEL (GM éra) + Stellantis éra =============
+  profile("opel-astra-j-a17dtj","GM","Opel","Astra","J",2009,2015,"1.7 CDTI 81 kW","A17DTJ","Diesel",gmEcu),
+  profile("opel-astra-j-a14net","GM","Opel","Astra","J",2009,2015,"1.4 Turbo 103 kW","A14NET","Benzín",gmEcu),
+  profile("opel-astra-k-b16dth","GM","Opel","Astra","K",2015,2021,"1.6 CDTI 100 kW","B16DTH","Diesel",gmEcu),
+  profile("opel-insignia-a-a20dth","GM","Opel","Insignia","A",2008,2017,"2.0 CDTI 120 kW","A20DTH","Diesel",gmEcu),
+  profile("opel-insignia-b-b20dth","GM","Opel","Insignia","B",2017,2022,"2.0 CDTI 125 kW","B20DTH","Diesel",gmEcu),
+  profile("opel-corsa-e-b14xer","GM","Opel","Corsa","E",2014,2019,"1.4 66 kW","B14XER","Benzín",gmEcu),
+  profile("opel-corsa-f-eb2","STLA","Opel","Corsa","F",2019,2026,"1.2 PureTech 74 kW","EB2ADTS","Benzín",fcaEcu),
+  profile("opel-mokka-b-dv5","STLA","Opel","Mokka","B",2021,2026,"1.5 BlueHDi 81 kW","DV5RC","Diesel",fcaDieselEcu),
+  profile("opel-vivaro-c-dw10","STLA","Opel","Vivaro","C",2019,2026,"2.0 BlueHDi 90 kW","DW10FE","Diesel",fcaDieselEcu),
+
+  // ============= VLNA 1: CADILLAC (GM) =============
+  profile("cadillac-cts-gmx322-36","GM","Cadillac","CTS","II (GMX322)",2008,2013,"3.6 V6 SIDI","LLT","Benzín",gmEcu),
+  profile("cadillac-cts-gmx320-30","GM","Cadillac","CTS","III",2014,2019,"3.6 V6","LFX","Benzín",gmEcu),
+  profile("cadillac-srx-gmt265-36","GM","Cadillac","SRX","II",2010,2016,"3.6 V6","LFX","Benzín",gmEcu),
+  profile("cadillac-escalade-gmt900-62","GM","Cadillac","Escalade","GMT900",2007,2014,"6.2 V8","L94","Benzín",gmEcu),
+  profile("cadillac-escalade-k2xx-62","GM","Cadillac","Escalade","K2XX",2015,2020,"6.2 V8","L86","Benzín",gmEcu),
+  profile("cadillac-escalade-t1xx-62","GM","Cadillac","Escalade","T1XX",2021,2026,"6.2 V8","L87","Benzín",gmEcu),
+  profile("cadillac-xt5-c1xx-36","GM","Cadillac","XT5","C1XX",2017,2026,"3.6 V6","LGX","Benzín",gmEcu),
+  profile("cadillac-ats-alpha-20t","GM","Cadillac","ATS","Alpha",2013,2019,"2.0 Turbo","LTG","Benzín",gmEcu),
+
+  // ============= VLNA 1: VOLVO =============
+  profile("volvo-xc60-1g-d5244t","VOLVO","Volvo","XC60","I",2008,2017,"D5 2.4 158 kW","D5244T","Diesel",volvoEcu),
+  profile("volvo-xc60-2g-d4204t","VOLVO","Volvo","XC60","II (SPA)",2017,2026,"D4 2.0 140 kW","D4204T","Diesel",volvoEcu),
+  profile("volvo-xc90-2g-b4204t","VOLVO","Volvo","XC90","II (SPA)",2015,2026,"T6 2.0 235 kW","B4204T","Benzín",volvoEcu),
+  profile("volvo-v60-1g-d4162t","VOLVO","Volvo","V60","I",2010,2018,"D2 1.6 84 kW","D4162T","Diesel",volvoEcu),
+  profile("volvo-v40-d4204t","VOLVO","Volvo","V40","P1",2012,2019,"D2/D3 2.0","D4204T","Diesel",volvoEcu),
+  profile("volvo-s60-3g-b4204t","VOLVO","Volvo","S60","III (SPA)",2018,2026,"T5 2.0 184 kW","B4204T","Benzín",volvoEcu),
+  profile("volvo-v70-3g-d5244t","VOLVO","Volvo","V70","III",2007,2016,"D5 2.4","D5244T","Diesel",volvoEcu),
 ];
+
 
 export function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))]
