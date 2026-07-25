@@ -57,6 +57,11 @@ import {
   runRawCommand,
   uniqueSorted,
   VEHICLE_PROFILES,
+  translateLabel,
+  translateCategory,
+  resolveSystemGroup,
+  SYSTEM_GROUP_ORDER,
+  type SystemGroupKey,
 } from "@/lib/delphi";
 import type {
   ActiveDiagContext,
@@ -648,46 +653,86 @@ export default function AdminDelphi() {
     });
 
 
-    const ecuGroups = new Map<
-      string,
-      {
-        ecuLabel: string;
-        ecuAddress: string;
-        categories: Map<string, DiagFunction[]>;
-      }
-    >();
+    type CategoryBucket = { category: string; items: DiagFunction[] };
+    type EcuBucket = {
+      ecuLabel: string;
+      ecuAddress: string;
+      categories: Map<string, DiagFunction[]>;
+    };
+    type SystemBucket = {
+      key: SystemGroupKey;
+      label: string;
+      order: number;
+      ecus: Map<string, EcuBucket>;
+    };
+
+    const systemBuckets = new Map<SystemGroupKey, SystemBucket>();
 
     for (const fn of filtered) {
+      const sys = resolveSystemGroup(fn);
+      const sysBucket =
+        systemBuckets.get(sys.key) ||
+        {
+          key: sys.key,
+          label: sys.label,
+          order: sys.order,
+          ecus: new Map<string, EcuBucket>(),
+        };
+
       const address = normalizeAddress(fn.ecuAddress) || "GENERAL";
       const ecuLabel =
         fn.ecuCommonName ||
         fn.ecu ||
         (address === "GENERAL" ? "Obecné OBD-II funkce" : `ECU ${address}`);
-      const category = fn.category || "Ostatní";
+      const category = translateCategory(fn.category);
 
-      const existing = ecuGroups.get(address) || {
-        ecuLabel,
-        ecuAddress: address,
-        categories: new Map<string, DiagFunction[]>(),
-      };
+      const ecuBucket =
+        sysBucket.ecus.get(address) ||
+        {
+          ecuLabel,
+          ecuAddress: address,
+          categories: new Map<string, DiagFunction[]>(),
+        };
 
-      const categoryFunctions = existing.categories.get(category) || [];
-      categoryFunctions.push(fn);
-      existing.categories.set(category, categoryFunctions);
-      ecuGroups.set(address, existing);
+      const list = ecuBucket.categories.get(category) || [];
+      list.push(fn);
+      ecuBucket.categories.set(category, list);
+      sysBucket.ecus.set(address, ecuBucket);
+      systemBuckets.set(sys.key, sysBucket);
     }
 
-    return [...ecuGroups.values()]
-      .map((group) => ({
-        ...group,
-        categories: [...group.categories.entries()]
-          .map(([category, items]) => ({
-            category,
-            items: items.sort((a, b) => a.name.localeCompare(b.name, "cs")),
+    const orderIndex = new Map(SYSTEM_GROUP_ORDER.map((k, i) => [k, i]));
+    return [...systemBuckets.values()]
+      .sort(
+        (a, b) =>
+          (orderIndex.get(a.key) ?? 999) - (orderIndex.get(b.key) ?? 999),
+      )
+      .map((system) => ({
+        key: system.key,
+        label: system.label,
+        ecus: [...system.ecus.values()]
+          .map((group) => ({
+            ecuLabel: group.ecuLabel,
+            ecuAddress: group.ecuAddress,
+            totalCount: [...group.categories.values()].reduce(
+              (sum, items) => sum + items.length,
+              0,
+            ),
+            categories: [...group.categories.entries()]
+              .map<CategoryBucket>(([category, items]) => ({
+                category,
+                items: items.sort((a, b) =>
+                  translateLabel(a.name).localeCompare(translateLabel(b.name), "cs"),
+                ),
+              }))
+              .sort((a, b) => a.category.localeCompare(b.category, "cs")),
           }))
-          .sort((a, b) => a.category.localeCompare(b.category, "cs")),
+          .sort((a, b) => a.ecuLabel.localeCompare(b.ecuLabel, "cs")),
       }))
-      .sort((a, b) => a.ecuLabel.localeCompare(b.ecuLabel, "cs"));
+      .map((system) => ({
+        ...system,
+        totalCount: system.ecus.reduce((sum, e) => sum + e.totalCount, 0),
+      }));
   }, [
     openPanel,
     liveFunctions,
@@ -1671,8 +1716,24 @@ export default function AdminDelphi() {
                 <button
                   key={pill.key}
                   type="button"
-                  onClick={() => setEditingVehicle(true)}
+                  onClick={() => {
+                    setEditingVehicle(true);
+                    // Delay so the section actually renders before we scroll to the field.
+                    setTimeout(() => {
+                      const el = document.querySelector<HTMLElement>(
+                        `[data-vehicle-field="${pill.key}"]`,
+                      );
+                      if (el) {
+                        el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        const trigger = el.querySelector<HTMLElement>(
+                          "button, input, [role='combobox']",
+                        );
+                        trigger?.focus();
+                      }
+                    }, 60);
+                  }}
                   className="rounded-md border border-blue-300/40 bg-blue-100 px-3 py-1 text-xs font-bold text-blue-950 shadow-sm hover:bg-white"
+                  title={`Upravit ${pill.label}`}
                 >
                   {pill.label}
                 </button>
@@ -1714,7 +1775,7 @@ export default function AdminDelphi() {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
+                <div data-vehicle-field="make">
                   <Label className="text-xs font-bold text-slate-700">Značka</Label>
                   <Select
                     value={make}
@@ -1734,7 +1795,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div>
+                <div data-vehicle-field="model">
                   <Label className="text-xs font-bold text-slate-700">Model</Label>
                   <Select
                     value={model}
@@ -1755,7 +1816,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div>
+                <div data-vehicle-field="generation">
                   <Label className="text-xs font-bold text-slate-700">Generace</Label>
                   <Select
                     value={generation}
@@ -1776,7 +1837,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div>
+                <div data-vehicle-field="year">
                   <Label className="text-xs font-bold text-slate-700">Modelový rok</Label>
                   <Select
                     value={year}
@@ -1797,7 +1858,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2" data-vehicle-field="engine">
                   <Label className="text-xs font-bold text-slate-700">Motor</Label>
                   <Select
                     value={profileId}
@@ -1828,9 +1889,9 @@ export default function AdminDelphi() {
           )}
 
           {/* PRACOVNÍ PLOCHA — systém + funkce vedle sebe (jako v Autocom DS150). */}
-          <div className="grid gap-3 lg:grid-cols-[minmax(260px,340px)_1fr]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
           {/* 2. VÝBĚR SYSTÉMU */}
-          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+          <section className="min-w-0 overflow-hidden rounded-xl border border-slate-500 bg-white">
 
             <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
               2. Vyber systém
@@ -1945,7 +2006,7 @@ export default function AdminDelphi() {
           </section>
 
           {/* 3. DIAGNOSTICKÉ FUNKCE */}
-          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+          <section className="min-w-0 overflow-hidden rounded-xl border border-slate-500 bg-white">
             <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
               3. Diagnostické funkce
             </div>
@@ -2349,84 +2410,109 @@ export default function AdminDelphi() {
                       Pro tento výběr nejsou v katalogu žádné položky.
                     </p>
                   ) : (
-                    <div className="space-y-2">
-                      {functionGroups.map((ecuGroup) => (
+                    <div className="space-y-3">
+                      {functionGroups.map((systemGroup) => (
                         <details
-                          key={ecuGroup.ecuAddress}
-                          className="overflow-hidden rounded-lg border border-slate-500 bg-white"
-                          open={ecuAddress !== "__all"}
+                          key={systemGroup.key}
+                          className="overflow-hidden rounded-lg border-2 border-blue-800 bg-white"
+                          open
                         >
-                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-200 px-3 py-3">
-                            <Cpu className="h-5 w-5 shrink-0 text-blue-800" />
+                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-blue-900 px-3 py-3 text-white">
+                            <Wrench className="h-5 w-5 shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-black text-slate-950">
-                                {ecuGroup.ecuLabel}
+                              <p className="truncate text-sm font-black uppercase tracking-wide">
+                                {systemGroup.label}
                               </p>
-                              <p className="text-[11px] text-slate-600">
-                                {ecuGroup.ecuAddress === "GENERAL"
-                                  ? "Obecné funkce"
-                                  : `Adresa ${ecuGroup.ecuAddress}`}
+                              <p className="text-[11px] text-blue-100">
+                                {systemGroup.ecus.length} jednotek · {systemGroup.totalCount} funkcí
                               </p>
                             </div>
-                            <Badge variant="outline" className="border-slate-500 text-slate-800">
-                              {ecuGroup.categories.reduce(
-                                (sum, category) => sum + category.items.length,
-                                0,
-                              )}
+                            <Badge className="bg-white text-blue-900 hover:bg-white">
+                              {systemGroup.totalCount}
                             </Badge>
-                            <ChevronDown className="h-4 w-4 text-slate-600" />
+                            <ChevronDown className="h-4 w-4" />
                           </summary>
 
-                          <div className="space-y-2 border-t border-slate-400 bg-slate-50 p-2">
-                            {ecuGroup.categories.map((categoryGroup) => (
+                          <div className="space-y-2 border-t border-blue-800 bg-slate-100 p-2">
+                            {systemGroup.ecus.map((ecuGroup) => (
                               <details
-                                key={`${ecuGroup.ecuAddress}:${categoryGroup.category}`}
-                                className="overflow-hidden rounded-lg border border-slate-300 bg-white"
+                                key={`${systemGroup.key}:${ecuGroup.ecuAddress}`}
+                                className="overflow-hidden rounded-lg border border-slate-500 bg-white"
+                                open={ecuAddress !== "__all" || systemGroup.ecus.length === 1}
                               >
-                                <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
-                                  <ClipboardList className="h-4 w-4 shrink-0 text-blue-700" />
-                                  <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
-                                    {categoryGroup.category}
-                                  </span>
-                                  <Badge variant="outline" className="border-slate-400 text-slate-700">
-                                    {categoryGroup.items.length}
+                                <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-200 px-3 py-3">
+                                  <Cpu className="h-5 w-5 shrink-0 text-blue-800" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-black text-slate-950">
+                                      {ecuGroup.ecuLabel}
+                                    </p>
+                                    <p className="text-[11px] text-slate-600">
+                                      {ecuGroup.ecuAddress === "GENERAL"
+                                        ? "Obecné funkce"
+                                        : `Adresa ${ecuGroup.ecuAddress}`}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className="border-slate-500 text-slate-800">
+                                    {ecuGroup.totalCount}
                                   </Badge>
                                   <ChevronDown className="h-4 w-4 text-slate-600" />
                                 </summary>
 
-                                <div className="divide-y divide-slate-200 border-t border-slate-300">
-                                  {categoryGroup.items.map((fn) => (
-                                    <button
-                                      type="button"
-                                      key={fn.id}
-                                      onClick={() => {
-                                        setSelected(fn);
-                                        setResult(null);
-                                      }}
-                                      className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
-                                        selected?.id === fn.id
-                                          ? "bg-blue-50"
-                                          : "bg-white hover:bg-slate-50"
-                                      }`}
+                                <div className="space-y-2 border-t border-slate-400 bg-slate-50 p-2">
+                                  {ecuGroup.categories.map((categoryGroup) => (
+                                    <details
+                                      key={`${systemGroup.key}:${ecuGroup.ecuAddress}:${categoryGroup.category}`}
+                                      className="overflow-hidden rounded-lg border border-slate-300 bg-white"
                                     >
-                                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <p className="font-bold text-slate-950">{fn.name}</p>
-                                          {isWriteFunction(fn) && (
-                                            <Badge
-                                              variant="outline"
-                                              className="border-amber-400 text-[10px] text-amber-800"
-                                            >
-                                              ODBORNÝ REŽIM
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <p className="mt-1 text-xs text-slate-600">
-                                          {fn.description || "Bez dalšího popisu v katalogu."}
-                                        </p>
+                                      <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
+                                        <ClipboardList className="h-4 w-4 shrink-0 text-blue-700" />
+                                        <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
+                                          {categoryGroup.category}
+                                        </span>
+                                        <Badge variant="outline" className="border-slate-400 text-slate-700">
+                                          {categoryGroup.items.length}
+                                        </Badge>
+                                        <ChevronDown className="h-4 w-4 text-slate-600" />
+                                      </summary>
+
+                                      <div className="divide-y divide-slate-200 border-t border-slate-300">
+                                        {categoryGroup.items.map((fn) => (
+                                          <button
+                                            type="button"
+                                            key={fn.id}
+                                            onClick={() => {
+                                              setSelected(fn);
+                                              setResult(null);
+                                            }}
+                                            className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
+                                              selected?.id === fn.id
+                                                ? "bg-blue-50"
+                                                : "bg-white hover:bg-slate-50"
+                                            }`}
+                                          >
+                                            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <p className="font-bold text-slate-950">
+                                                  {translateLabel(fn.name)}
+                                                </p>
+                                                {isWriteFunction(fn) && (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="border-amber-400 text-[10px] text-amber-800"
+                                                  >
+                                                    ODBORNÝ REŽIM
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              <p className="mt-1 text-xs text-slate-600">
+                                                {translateLabel(fn.description) || "Bez dalšího popisu v katalogu."}
+                                              </p>
+                                            </div>
+                                          </button>
+                                        ))}
                                       </div>
-                                    </button>
+                                    </details>
                                   ))}
                                 </div>
                               </details>

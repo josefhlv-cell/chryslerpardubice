@@ -3,7 +3,7 @@ import { Activity, Gauge, Loader2, Pause, Play, Square, StopCircle } from "lucid
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { runDiagFunction } from "@/lib/delphi";
+import { runDiagFunction, translateLabel } from "@/lib/delphi";
 import type { ActiveDiagContext, DiagFunction } from "@/lib/delphi";
 
 type Status = "idle" | "ok" | "no_data" | "error" | "timeout" | "nrc";
@@ -32,11 +32,11 @@ function formatValue(value: unknown): { value: string; unit: string } {
   return { value: String(value), unit: "" };
 }
 
-/** Czech label from catalog description (already localized in most cases) with sensible fallback. */
+/** Czech label from catalog (name + description), translated if English. */
 function czechLabel(fn: DiagFunction): string {
   const desc = (fn.description || "").trim();
-  if (desc && !/^[A-Z0-9_]+$/.test(desc)) return desc;
-  return fn.name;
+  const base = desc && !/^[A-Z0-9_]+$/.test(desc) ? desc : fn.name;
+  return translateLabel(base);
 }
 
 export function LiveDataPanel({
