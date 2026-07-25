@@ -1775,7 +1775,7 @@ export default function AdminDelphi() {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <div>
+                <div data-vehicle-field="make">
                   <Label className="text-xs font-bold text-slate-700">Značka</Label>
                   <Select
                     value={make}
