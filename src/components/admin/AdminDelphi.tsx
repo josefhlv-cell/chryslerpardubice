@@ -1858,7 +1858,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2" data-vehicle-field="engine">
                   <Label className="text-xs font-bold text-slate-700">Motor</Label>
                   <Select
                     value={profileId}
