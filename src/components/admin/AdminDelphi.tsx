@@ -1131,7 +1131,13 @@ export default function AdminDelphi() {
       return;
     }
 
-    const targets = ecuAddress === "__all" ? availableEcus : availableEcus.filter((e) => normalizeAddress(e.address) === normalizeAddress(ecuAddress));
+    const compatibleOnly = profile && recommendedEcuAddresses.size > 0
+      ? availableEcus.filter((e) => recommendedEcuAddresses.has(normalizeAddress(e.address)))
+      : availableEcus;
+    const targets = ecuAddress === "__all"
+      ? compatibleOnly
+      : availableEcus.filter((e) => normalizeAddress(e.address) === normalizeAddress(ecuAddress));
+
     if (targets.length === 0) {
       toast({
         title: "Pro značku nejsou dostupné ECU",
