@@ -2065,7 +2065,7 @@ export default function AdminDelphi() {
 
                 {openPanel === "dtc" && (
                   <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                       <Button
                         onClick={scanAllFaults}
                         disabled={fullScanRunning || fullClearRunning || !transportReady}
@@ -2092,8 +2092,19 @@ export default function AdminDelphi() {
                         className="border-slate-500"
                       >
                         <Download className="mr-2 h-4 w-4" />
-                        Uložit report
+                        Uložit JSON
                       </Button>
+
+                      <Button
+                        onClick={saveDtcReportCsv}
+                        disabled={scanResults.length === 0}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Uložit CSV
+                      </Button>
+
 
                       <Button
                         onClick={clearAllFaults}
