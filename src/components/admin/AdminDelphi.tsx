@@ -2394,84 +2394,109 @@ export default function AdminDelphi() {
                       Pro tento výběr nejsou v katalogu žádné položky.
                     </p>
                   ) : (
-                    <div className="space-y-2">
-                      {functionGroups.map((ecuGroup) => (
+                    <div className="space-y-3">
+                      {functionGroups.map((systemGroup) => (
                         <details
-                          key={ecuGroup.ecuAddress}
-                          className="overflow-hidden rounded-lg border border-slate-500 bg-white"
-                          open={ecuAddress !== "__all"}
+                          key={systemGroup.key}
+                          className="overflow-hidden rounded-lg border-2 border-blue-800 bg-white"
+                          open
                         >
-                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-200 px-3 py-3">
-                            <Cpu className="h-5 w-5 shrink-0 text-blue-800" />
+                          <summary className="flex cursor-pointer list-none items-center gap-3 bg-blue-900 px-3 py-3 text-white">
+                            <Wrench className="h-5 w-5 shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-black text-slate-950">
-                                {ecuGroup.ecuLabel}
+                              <p className="truncate text-sm font-black uppercase tracking-wide">
+                                {systemGroup.label}
                               </p>
-                              <p className="text-[11px] text-slate-600">
-                                {ecuGroup.ecuAddress === "GENERAL"
-                                  ? "Obecné funkce"
-                                  : `Adresa ${ecuGroup.ecuAddress}`}
+                              <p className="text-[11px] text-blue-100">
+                                {systemGroup.ecus.length} jednotek · {systemGroup.totalCount} funkcí
                               </p>
                             </div>
-                            <Badge variant="outline" className="border-slate-500 text-slate-800">
-                              {ecuGroup.categories.reduce(
-                                (sum, category) => sum + category.items.length,
-                                0,
-                              )}
+                            <Badge className="bg-white text-blue-900 hover:bg-white">
+                              {systemGroup.totalCount}
                             </Badge>
-                            <ChevronDown className="h-4 w-4 text-slate-600" />
+                            <ChevronDown className="h-4 w-4" />
                           </summary>
 
-                          <div className="space-y-2 border-t border-slate-400 bg-slate-50 p-2">
-                            {ecuGroup.categories.map((categoryGroup) => (
+                          <div className="space-y-2 border-t border-blue-800 bg-slate-100 p-2">
+                            {systemGroup.ecus.map((ecuGroup) => (
                               <details
-                                key={`${ecuGroup.ecuAddress}:${categoryGroup.category}`}
-                                className="overflow-hidden rounded-lg border border-slate-300 bg-white"
+                                key={`${systemGroup.key}:${ecuGroup.ecuAddress}`}
+                                className="overflow-hidden rounded-lg border border-slate-500 bg-white"
+                                open={ecuAddress !== "__all" || systemGroup.ecus.length === 1}
                               >
-                                <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
-                                  <ClipboardList className="h-4 w-4 shrink-0 text-blue-700" />
-                                  <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
-                                    {categoryGroup.category}
-                                  </span>
-                                  <Badge variant="outline" className="border-slate-400 text-slate-700">
-                                    {categoryGroup.items.length}
+                                <summary className="flex cursor-pointer list-none items-center gap-3 bg-slate-200 px-3 py-3">
+                                  <Cpu className="h-5 w-5 shrink-0 text-blue-800" />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate font-black text-slate-950">
+                                      {ecuGroup.ecuLabel}
+                                    </p>
+                                    <p className="text-[11px] text-slate-600">
+                                      {ecuGroup.ecuAddress === "GENERAL"
+                                        ? "Obecné funkce"
+                                        : `Adresa ${ecuGroup.ecuAddress}`}
+                                    </p>
+                                  </div>
+                                  <Badge variant="outline" className="border-slate-500 text-slate-800">
+                                    {ecuGroup.totalCount}
                                   </Badge>
                                   <ChevronDown className="h-4 w-4 text-slate-600" />
                                 </summary>
 
-                                <div className="divide-y divide-slate-200 border-t border-slate-300">
-                                  {categoryGroup.items.map((fn) => (
-                                    <button
-                                      type="button"
-                                      key={fn.id}
-                                      onClick={() => {
-                                        setSelected(fn);
-                                        setResult(null);
-                                      }}
-                                      className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
-                                        selected?.id === fn.id
-                                          ? "bg-blue-50"
-                                          : "bg-white hover:bg-slate-50"
-                                      }`}
+                                <div className="space-y-2 border-t border-slate-400 bg-slate-50 p-2">
+                                  {ecuGroup.categories.map((categoryGroup) => (
+                                    <details
+                                      key={`${systemGroup.key}:${ecuGroup.ecuAddress}:${categoryGroup.category}`}
+                                      className="overflow-hidden rounded-lg border border-slate-300 bg-white"
                                     >
-                                      <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <p className="font-bold text-slate-950">{fn.name}</p>
-                                          {isWriteFunction(fn) && (
-                                            <Badge
-                                              variant="outline"
-                                              className="border-amber-400 text-[10px] text-amber-800"
-                                            >
-                                              ODBORNÝ REŽIM
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <p className="mt-1 text-xs text-slate-600">
-                                          {fn.description || "Bez dalšího popisu v katalogu."}
-                                        </p>
+                                      <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3">
+                                        <ClipboardList className="h-4 w-4 shrink-0 text-blue-700" />
+                                        <span className="min-w-0 flex-1 truncate font-bold text-slate-950">
+                                          {categoryGroup.category}
+                                        </span>
+                                        <Badge variant="outline" className="border-slate-400 text-slate-700">
+                                          {categoryGroup.items.length}
+                                        </Badge>
+                                        <ChevronDown className="h-4 w-4 text-slate-600" />
+                                      </summary>
+
+                                      <div className="divide-y divide-slate-200 border-t border-slate-300">
+                                        {categoryGroup.items.map((fn) => (
+                                          <button
+                                            type="button"
+                                            key={fn.id}
+                                            onClick={() => {
+                                              setSelected(fn);
+                                              setResult(null);
+                                            }}
+                                            className={`flex w-full items-start gap-3 px-3 py-3 text-left ${
+                                              selected?.id === fn.id
+                                                ? "bg-blue-50"
+                                                : "bg-white hover:bg-slate-50"
+                                            }`}
+                                          >
+                                            <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-500" />
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                <p className="font-bold text-slate-950">
+                                                  {translateLabel(fn.name)}
+                                                </p>
+                                                {isWriteFunction(fn) && (
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="border-amber-400 text-[10px] text-amber-800"
+                                                  >
+                                                    ODBORNÝ REŽIM
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              <p className="mt-1 text-xs text-slate-600">
+                                                {translateLabel(fn.description) || "Bez dalšího popisu v katalogu."}
+                                              </p>
+                                            </div>
+                                          </button>
+                                        ))}
                                       </div>
-                                    </button>
+                                    </details>
                                   ))}
                                 </div>
                               </details>
