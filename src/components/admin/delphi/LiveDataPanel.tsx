@@ -3,7 +3,7 @@ import { Activity, Gauge, Loader2, Pause, Play, Square, StopCircle } from "lucid
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { runDiagFunction } from "@/lib/delphi";
+import { runDiagFunction, translateLabel } from "@/lib/delphi";
 import type { ActiveDiagContext, DiagFunction } from "@/lib/delphi";
 
 type Status = "idle" | "ok" | "no_data" | "error" | "timeout" | "nrc";
