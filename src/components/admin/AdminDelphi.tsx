@@ -70,6 +70,7 @@ import type {
   DiagRunResult,
   VehicleProfile,
 } from "@/lib/delphi";
+import { resolveAdapterRequirement, adapterBadgeClass } from "@/lib/delphi/adapter-requirements";
 
 type EcuOption = { address: string; name: string; common?: string };
 
