@@ -2628,8 +2628,10 @@ export default function AdminDelphi() {
               )}
             </div>
           </section>
+          </div>
 
           {/* WOW/Würth katalog – pouze metadata a nápověda, viz src/components/admin/delphi/AdminDelphiWow.tsx */}
+
           <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
             <button
               type="button"
