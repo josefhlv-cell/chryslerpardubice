@@ -2515,15 +2515,23 @@ export default function AdminDelphi() {
                   </div>
 
                   {(openPanel === "actuators" || openPanel === "service") && (
-                    <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
+                    <div className={`rounded-lg border p-3 text-xs ${devActive ? "border-emerald-400 bg-emerald-50 text-emerald-900" : "border-amber-400 bg-amber-50 text-amber-900"}`}>
                       <div className="flex items-start gap-2">
                         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
                         <div>
-                          <p>
-                            Zobrazeny jsou pouze ověřené funkce pro vybrané vozidlo a ECU.
-                            Destruktivní / neověřené funkce jsou skryté a dostupné až po aktivaci Vývojářského režimu.
-                          </p>
-                          {hiddenUnverifiedCount > 0 && (
+                          {devActive ? (
+                            <p>
+                              <strong>Vývojářský režim aktivní.</strong> Zobrazeny jsou VŠECHNY funkce z katalogu značky
+                              — včetně destruktivních, neověřených a funkcí vázaných na ECU, které nejsou v profilu vozidla.
+                              Spuštění vyžaduje druhé potvrzení.
+                            </p>
+                          ) : (
+                            <p>
+                              Zobrazeny jsou pouze ověřené funkce pro vybrané vozidlo a ECU.
+                              Destruktivní / neověřené funkce jsou skryté a dostupné až po aktivaci Vývojářského režimu.
+                            </p>
+                          )}
+                          {!devActive && hiddenUnverifiedCount > 0 && (
                             <p className="mt-1 font-bold">
                               Skryto {hiddenUnverifiedCount} neověřených funkcí — důvod: nejsou potvrzené pro tuto SW variantu ECU.
                             </p>
