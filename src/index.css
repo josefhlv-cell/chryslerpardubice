@@ -325,3 +325,20 @@
   .print-presentation { background: white !important; }
   @page { size: A4 portrait; margin: 12mm; }
 }
+
+/* Delphi — breadcrumb field flash + active system-group ring */
+@keyframes delphi-field-flash-kf {
+  0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); background-color: transparent; }
+  20%  { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.55); background-color: rgba(254, 243, 199, 0.55); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); background-color: transparent; }
+}
+.delphi-field-flash {
+  border-radius: 0.5rem;
+  animation: delphi-field-flash-kf 1.8s ease-out;
+}
+.delphi-system-active {
+  outline: 3px solid #f59e0b;
+  outline-offset: 2px;
+}
+.delphi-system-rail::-webkit-scrollbar { height: 6px; }
+.delphi-system-rail::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 999px; }
