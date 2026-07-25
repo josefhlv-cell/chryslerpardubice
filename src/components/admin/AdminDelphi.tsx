@@ -1754,24 +1754,14 @@ export default function AdminDelphi() {
                 <button
                   key={pill.key}
                   type="button"
-                  onClick={() => {
-                    setEditingVehicle(true);
-                    // Delay so the section actually renders before we scroll to the field.
-                    setTimeout(() => {
-                      const el = document.querySelector<HTMLElement>(
-                        `[data-vehicle-field="${pill.key}"]`,
-                      );
-                      if (el) {
-                        el.scrollIntoView({ behavior: "smooth", block: "center" });
-                        const trigger = el.querySelector<HTMLElement>(
-                          "button, input, [role='combobox']",
-                        );
-                        trigger?.focus();
-                      }
-                    }, 60);
-                  }}
-                  className="rounded-md border border-blue-300/40 bg-blue-100 px-3 py-1 text-xs font-bold text-blue-950 shadow-sm hover:bg-white"
+                  onClick={() => focusVehicleField(pill.key)}
+                  className={`rounded-md border px-3 py-1 text-xs font-bold shadow-sm transition-all ${
+                    highlightedField === pill.key
+                      ? "border-amber-300 bg-amber-300 text-blue-950 ring-2 ring-amber-200"
+                      : "border-blue-300/40 bg-blue-100 text-blue-950 hover:bg-white"
+                  }`}
                   title={`Upravit ${pill.label}`}
+                  aria-pressed={highlightedField === pill.key}
                 >
                   {pill.label}
                 </button>
