@@ -1837,7 +1837,7 @@ export default function AdminDelphi() {
                   </Select>
                 </div>
 
-                <div>
+                <div data-vehicle-field="year">
                   <Label className="text-xs font-bold text-slate-700">Modelový rok</Label>
                   <Select
                     value={year}
