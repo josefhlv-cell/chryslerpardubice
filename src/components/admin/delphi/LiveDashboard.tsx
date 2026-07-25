@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Pause, Play, Gauge, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { runDiagFunction } from "@/lib/delphi";
+import { runDiagFunction, translateLabel } from "@/lib/delphi";
 import type { ActiveDiagContext, DiagFunction } from "@/lib/delphi";
 
 type Sample = {
