@@ -397,7 +397,15 @@ function readUint(bytes: number[], size: number, signed: boolean): number | null
 }
 
 export function decodeValue(fn: DiagFunction, bytes: number[]): DecodedValue[] {
-  const dec: Decoder | undefined = fn.decoder;
+  let dec: Decoder | undefined = fn.decoder;
+
+  // OEM overlay: Chrysler/Mopar UDS Mode 22 DIDs — dopočet dekodéru
+  // pro DIDy, které katalog nechal bez `decoder`. Zamezí zobrazování
+  // syrových hex bytů v UI a produkuje reálné hodnoty (°C, kPa, V, …).
+  if (!dec && fn.kind === "did" && isChryslerBrand(fn.brandKey)) {
+    const overlay = chryslerDecoderForDid(fn.did);
+    if (overlay) dec = overlay;
+  }
 
   if (!dec) {
     return [{
