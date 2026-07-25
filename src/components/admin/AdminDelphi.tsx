@@ -653,46 +653,86 @@ export default function AdminDelphi() {
     });
 
 
-    const ecuGroups = new Map<
-      string,
-      {
-        ecuLabel: string;
-        ecuAddress: string;
-        categories: Map<string, DiagFunction[]>;
-      }
-    >();
+    type CategoryBucket = { category: string; items: DiagFunction[] };
+    type EcuBucket = {
+      ecuLabel: string;
+      ecuAddress: string;
+      categories: Map<string, DiagFunction[]>;
+    };
+    type SystemBucket = {
+      key: SystemGroupKey;
+      label: string;
+      order: number;
+      ecus: Map<string, EcuBucket>;
+    };
+
+    const systemBuckets = new Map<SystemGroupKey, SystemBucket>();
 
     for (const fn of filtered) {
+      const sys = resolveSystemGroup(fn);
+      const sysBucket =
+        systemBuckets.get(sys.key) ||
+        {
+          key: sys.key,
+          label: sys.label,
+          order: sys.order,
+          ecus: new Map<string, EcuBucket>(),
+        };
+
       const address = normalizeAddress(fn.ecuAddress) || "GENERAL";
       const ecuLabel =
         fn.ecuCommonName ||
         fn.ecu ||
         (address === "GENERAL" ? "Obecné OBD-II funkce" : `ECU ${address}`);
-      const category = fn.category || "Ostatní";
+      const category = translateCategory(fn.category);
 
-      const existing = ecuGroups.get(address) || {
-        ecuLabel,
-        ecuAddress: address,
-        categories: new Map<string, DiagFunction[]>(),
-      };
+      const ecuBucket =
+        sysBucket.ecus.get(address) ||
+        {
+          ecuLabel,
+          ecuAddress: address,
+          categories: new Map<string, DiagFunction[]>(),
+        };
 
-      const categoryFunctions = existing.categories.get(category) || [];
-      categoryFunctions.push(fn);
-      existing.categories.set(category, categoryFunctions);
-      ecuGroups.set(address, existing);
+      const list = ecuBucket.categories.get(category) || [];
+      list.push(fn);
+      ecuBucket.categories.set(category, list);
+      sysBucket.ecus.set(address, ecuBucket);
+      systemBuckets.set(sys.key, sysBucket);
     }
 
-    return [...ecuGroups.values()]
-      .map((group) => ({
-        ...group,
-        categories: [...group.categories.entries()]
-          .map(([category, items]) => ({
-            category,
-            items: items.sort((a, b) => a.name.localeCompare(b.name, "cs")),
+    const orderIndex = new Map(SYSTEM_GROUP_ORDER.map((k, i) => [k, i]));
+    return [...systemBuckets.values()]
+      .sort(
+        (a, b) =>
+          (orderIndex.get(a.key) ?? 999) - (orderIndex.get(b.key) ?? 999),
+      )
+      .map((system) => ({
+        key: system.key,
+        label: system.label,
+        ecus: [...system.ecus.values()]
+          .map((group) => ({
+            ecuLabel: group.ecuLabel,
+            ecuAddress: group.ecuAddress,
+            totalCount: [...group.categories.values()].reduce(
+              (sum, items) => sum + items.length,
+              0,
+            ),
+            categories: [...group.categories.entries()]
+              .map<CategoryBucket>(([category, items]) => ({
+                category,
+                items: items.sort((a, b) =>
+                  translateLabel(a.name).localeCompare(translateLabel(b.name), "cs"),
+                ),
+              }))
+              .sort((a, b) => a.category.localeCompare(b.category, "cs")),
           }))
-          .sort((a, b) => a.category.localeCompare(b.category, "cs")),
+          .sort((a, b) => a.ecuLabel.localeCompare(b.ecuLabel, "cs")),
       }))
-      .sort((a, b) => a.ecuLabel.localeCompare(b.ecuLabel, "cs"));
+      .map((system) => ({
+        ...system,
+        totalCount: system.ecus.reduce((sum, e) => sum + e.totalCount, 0),
+      }));
   }, [
     openPanel,
     liveFunctions,
