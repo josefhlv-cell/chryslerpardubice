@@ -26,6 +26,10 @@ export const COMMON_VEHICLE_MAKES: string[] = [
 const vagEcu = ["EDC16", "EDC17", "MD1", "MED17", "MG1", "Simos", "Engine ECU", "Motor"];
 const fcaEcu = ["PCM", "ECM", "TCM", "ABS", "RCM", "BCM", "SGW", "IPC", "HVAC", "EPB", "PSCM", "SCCM", "TPMS", "Engine Control", "Powertrain Control", "Motor", "Transmission"];
 const fcaDieselEcu = ["CRD ECU", "EDC16", "EDC17", ...fcaEcu];
+const bmwEcu = ["DME", "DDE", "EGS", "DSC", "CAS", "FEM", "BDC", "FRM", "IHKA", "KOMBI", "ACSM", "EPS", "Motor"];
+const mbEcu = ["ME", "CDI", "CR", "EZS", "SAM", "ESP", "ETC", "IC", "PSE", "AAM", "Motor"];
+const gmEcu = ["ECM", "PCM", "TCM", "EBCM", "BCM", "IPC", "SDM", "EPS", "HVAC", "Motor"];
+const volvoEcu = ["ECM", "TCM", "BCM", "CEM", "DIM", "SRS", "ABS/DSTC", "PSM", "SWM", "Motor"];
 const fordEcu = ["PCM", "ECM", "Powertrain Control Module", "Engine Control Module", "TCM", "ABS", "RCM", "BCM", "GWM", "IPC", "HVAC", "PSCM", "SCCM", "APIM", "Ford"];
 
 function profile(
