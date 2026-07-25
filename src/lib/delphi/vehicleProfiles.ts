@@ -16,8 +16,8 @@ export type VehicleProfile = {
 
 export const COMMON_VEHICLE_MAKES: string[] = [
   "Alfa Romeo", "Audi", "BMW", "Chevrolet", "Chrysler", "Citroën", "Cupra",
-  "Dacia", "Dodge", "Fiat", "Ford", "Honda", "Hyundai", "Iveco", "Jaguar",
-  "Jeep", "Kia", "Lancia", "Land Rover", "Lexus", "Mazda", "Mercedes-Benz", "MINI",
+  "Cadillac", "Dacia", "Dodge", "Fiat", "Ford", "Honda", "Hyundai", "Iveco", "Jaguar",
+  "Jeep", "Kia", "Lancia", "Land Rover", "Lexus", "Lincoln", "Mazda", "Mercedes-Benz", "MINI",
   "Mitsubishi", "Nissan", "Opel", "Peugeot", "Porsche", "RAM", "Renault",
   "SEAT", "Škoda", "Smart", "Subaru", "Suzuki", "Tesla", "Toyota",
   "Volkswagen", "Volvo",
