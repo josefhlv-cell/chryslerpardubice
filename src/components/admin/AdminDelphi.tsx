@@ -1647,11 +1647,49 @@ export default function AdminDelphi() {
             </div>
           </section>
 
-          {/* 1. VÝBĚR VOZIDLA */}
+          {/* BREADCRUMB VOZIDLA — inspirace Autocom / Delphi DS150 */}
+          <section className="overflow-hidden rounded-xl border border-slate-500 bg-gradient-to-b from-blue-900 to-blue-950 text-white">
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setEditingVehicle((v) => !v)}
+                className="rounded-md border border-blue-300/40 bg-blue-800/70 px-2 py-1 text-xs font-bold hover:bg-blue-700"
+                title={editingVehicle ? "Zavřít výběr" : "Upravit vozidlo"}
+              >
+                {editingVehicle ? "<" : "Upravit"}
+              </button>
+              {[
+                { key: "make", label: profile?.make || make || "Značka" },
+                { key: "model", label: profile?.model || model || "Model" },
+                { key: "generation", label: profile?.generation || generation || "Generace" },
+                { key: "year", label: year || "Rok" },
+                {
+                  key: "engine",
+                  label: profile ? `${profile.engine} · ${profile.engineCode}` : "Motor",
+                },
+              ].map((pill) => (
+                <button
+                  key={pill.key}
+                  type="button"
+                  onClick={() => setEditingVehicle(true)}
+                  className="rounded-md border border-blue-300/40 bg-blue-100 px-3 py-1 text-xs font-bold text-blue-950 shadow-sm hover:bg-white"
+                >
+                  {pill.label}
+                </button>
+              ))}
+              <div className="ml-auto rounded-md border border-white/30 bg-white/10 px-2 py-1 text-[11px] uppercase tracking-widest">
+                {profile ? "Vozidlo aktivní" : "Vyber vozidlo"}
+              </div>
+            </div>
+          </section>
+
+          {/* 1. VÝBĚR VOZIDLA — plný formulář, sbalí se po výběru profilu */}
+          {editingVehicle && (
           <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
             <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
               1. Vyber vozidlo
             </div>
+
 
             <div className="space-y-3 p-3">
               <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
