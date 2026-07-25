@@ -254,6 +254,9 @@ export default function AdminDelphi() {
   const [generation, setGeneration] = useState("");
   const [year, setYear] = useState("");
   const [profileId, setProfileId] = useState("");
+  // Vozidlo se v UI zobrazuje jako breadcrumb (jako v Autocom/Delphi DS150).
+  // Sekce „1. Vyber vozidlo“ je viditelná jen dokud není profil vybraný — pak se sbalí do pilulek.
+  const [editingVehicle, setEditingVehicle] = useState(true);
 
   const [openPanel, setOpenPanel] = useState<PanelKey | null>("dtc");
   const [search, setSearch] = useState("");
