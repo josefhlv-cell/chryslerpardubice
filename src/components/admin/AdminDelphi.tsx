@@ -2740,6 +2740,34 @@ export default function AdminDelphi() {
                           <InfoRow label="Příkaz" value={selected.command || "—"} mono />
                         </div>
 
+                        {(() => {
+                          const req = resolveAdapterRequirement(selected);
+                          return (
+                            <div
+                              className={`rounded-lg border p-3 text-sm ${
+                                req.tier === "elm"
+                                  ? "border-emerald-400 bg-emerald-50 text-emerald-900"
+                                  : req.tier === "elm_limited"
+                                    ? "border-amber-400 bg-amber-50 text-amber-900"
+                                    : "border-red-400 bg-red-50 text-red-900"
+                              }`}
+                            >
+                              <p className="font-bold">
+                                Požadavek na adaptér: {req.label}
+                              </p>
+                              <p className="mt-1 text-xs">{req.explanation}</p>
+                              {!req.elmCapable && (
+                                <p className="mt-1 text-xs font-bold">
+                                  Tvůj Vgate/ELM327 tuto funkci nespustí — chybí mu zápisové a
+                                  bezpečnostní služby (Security Access, flash, gateway odemčení).
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })()}
+
+
+
                         {isWriteFunction(selected) && (
                           <div className="rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
                             <p className="font-bold">Podmínky před spuštěním</p>
