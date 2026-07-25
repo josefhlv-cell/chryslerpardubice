@@ -287,6 +287,44 @@ export default function AdminDelphi() {
   // Single-ECU busy tracker for per-ECU rescan / clear controls.
   const [busyEcu, setBusyEcu] = useState<string | null>(null);
 
+  // Highlighting: which vehicle field / system group is currently focused (breadcrumb / rail).
+  const [highlightedField, setHighlightedField] = useState<string | null>(null);
+  const [activeSystemKey, setActiveSystemKey] = useState<SystemGroupKey | null>(null);
+
+  /** Open vehicle form, scroll to a field, focus it and highlight it for ~2s. */
+  const focusVehicleField = (key: string) => {
+    setEditingVehicle(true);
+    setHighlightedField(key);
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-vehicle-field="${key}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const trigger = el.querySelector<HTMLElement>("button, input, [role='combobox']");
+        trigger?.focus();
+      }
+    }, 80);
+    window.setTimeout(() => setHighlightedField((current) => (current === key ? null : current)), 2200);
+  };
+
+  /** Scroll tree to a system group and mark it active for ~2s. */
+  const focusSystemGroup = (key: SystemGroupKey) => {
+    setActiveSystemKey(key);
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-system-key="${key}"]`);
+      if (el) {
+        // Otevři <details>, pokud je zavřený, aby uživatel viděl obsah.
+        if (el.tagName.toLowerCase() === "details") {
+          (el as HTMLDetailsElement).open = true;
+        }
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 60);
+    window.setTimeout(
+      () => setActiveSystemKey((current) => (current === key ? null : current)),
+      2500,
+    );
+  };
+
   // Developer Mode (session-only unlock, klíč 1607).
   const [devActive, setDevActive] = useState(isDeveloperModeActive());
   const [devConfirm, setDevConfirm] = useState<DevConfirmDetails | null>(null);
