@@ -2006,7 +2006,7 @@ export default function AdminDelphi() {
           </section>
 
           {/* 3. DIAGNOSTICKÉ FUNKCE */}
-          <section className="overflow-hidden rounded-xl border border-slate-500 bg-white">
+          <section className="min-w-0 overflow-hidden rounded-xl border border-slate-500 bg-white">
             <div className="border-b border-slate-400 bg-slate-200 px-3 py-2 text-sm font-bold">
               3. Diagnostické funkce
             </div>
