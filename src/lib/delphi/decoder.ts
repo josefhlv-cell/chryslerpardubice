@@ -13,6 +13,7 @@
 
 import type { Decoder, DecodedValue, DiagFunction, RunStatus } from "./types";
 import type { UdsNrcCatalog } from "./types";
+import { chryslerDecoderForDid, isChryslerBrand } from "./chrysler-decoders";
 
 export interface CleanedResponse {
   cleanedHex: string;        // canonical payload, e.g. "62 10 52 5B" or "7F 31 7F"
