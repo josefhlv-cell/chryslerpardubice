@@ -670,9 +670,10 @@ export default function AdminDelphi() {
       if (ecuAddress !== "__all") {
         // Konkrétní ECU: povol jen funkce vázané na tuto adresu.
         if (!fnAddr || fnAddr !== normalizeAddress(ecuAddress)) return false;
-      } else if (hasProfile && fnAddr && compatibleSet.size > 0) {
+      } else if (!devActive && hasProfile && fnAddr && compatibleSet.size > 0) {
         // "Všechny ECU" + zvolený profil vozidla: vypusť funkce vázané na ECU,
         // které v tomto vozidle podle profilu vůbec nejsou.
+        // Ve Vývojářském režimu tento filtr obcházíme — zobrazí se vše.
         if (!compatibleSet.has(fnAddr)) return false;
       }
 
