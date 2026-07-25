@@ -2672,6 +2672,13 @@ export default function AdminDelphi() {
                                                 <p className="font-bold text-slate-950">
                                                   {translateLabel(fn.name)}
                                                 </p>
+                                                <Badge
+                                                  variant="outline"
+                                                  className={`text-[10px] ${adapterBadgeClass(resolveAdapterRequirement(fn).tier)}`}
+                                                  title={resolveAdapterRequirement(fn).explanation}
+                                                >
+                                                  {resolveAdapterRequirement(fn).label}
+                                                </Badge>
                                                 {isWriteFunction(fn) && (
                                                   <Badge
                                                     variant="outline"
@@ -2681,6 +2688,7 @@ export default function AdminDelphi() {
                                                   </Badge>
                                                 )}
                                               </div>
+
                                               <p className="mt-1 text-xs text-slate-600">
                                                 {translateLabel(fn.description) || "Bez dalšího popisu v katalogu."}
                                               </p>
