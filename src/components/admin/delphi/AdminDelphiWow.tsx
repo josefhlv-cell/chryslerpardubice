@@ -35,6 +35,7 @@ import { partitionByApplicability } from "@/lib/delphi/wow/applicability";
 import { WowVehicleProvider, useWowVehicle } from "@/lib/delphi/wow/vehicle-context";
 import { WowVehicleSelector } from "./WowVehicleSelector";
 import { WowDocumentTree } from "./WowDocumentTree";
+import { translateLabel } from "@/lib/delphi/i18n";
 
 
 export type WowVehicleContext = {
