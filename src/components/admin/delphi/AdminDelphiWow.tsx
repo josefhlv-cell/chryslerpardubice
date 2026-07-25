@@ -452,8 +452,8 @@ function AdminDelphiWowInner({ vehicleContext }: Props = {}) {
                                 <FileText className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                               )}
                               <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm font-medium">{r.title}</div>
-                                {r.excerpt ? <div className="line-clamp-2 text-xs text-slate-500">{r.excerpt}</div> : null}
+                                <div className="truncate text-sm font-medium">{translateLabel(r.title)}</div>
+                                {r.excerpt ? <div className="line-clamp-2 text-xs text-slate-500">{translateLabel(r.excerpt)}</div> : null}
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-slate-400">
                                   <span>{r.fileName}</span>
                                   <span>·</span>
