@@ -57,7 +57,7 @@ function pickTopFunctions(liveFunctions: DiagFunction[]) {
     if (chosen.length >= 8) break;
     if (used.has(fn.id)) continue;
     used.add(fn.id);
-    chosen.push({ fn, label: fn.name });
+    chosen.push({ fn, label: translateLabel(fn.name) });
   }
 
   return chosen.slice(0, 8);
