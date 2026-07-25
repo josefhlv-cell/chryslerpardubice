@@ -3,7 +3,13 @@ import { Activity, Gauge, Loader2, Pause, Play, Square, StopCircle } from "lucid
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { runDiagFunction, translateLabel } from "@/lib/delphi";
+import {
+  runDiagFunction,
+  translateLabel,
+  resolveSystemGroup,
+  SYSTEM_GROUP_ORDER,
+  type SystemGroupKey,
+} from "@/lib/delphi";
 import type { ActiveDiagContext, DiagFunction } from "@/lib/delphi";
 
 type Status = "idle" | "ok" | "no_data" | "error" | "timeout" | "nrc";
@@ -92,8 +98,19 @@ export function LiveDataPanel({
     });
   }, [liveFunctions, ecuAddr, filter]);
 
-  const groupGeneric = useMemo(() => applicable.filter((fn) => !fn.isOem), [applicable]);
-  const groupOem = useMemo(() => applicable.filter((fn) => fn.isOem), [applicable]);
+  const groupedBySystem = useMemo(() => {
+    const map = new Map<SystemGroupKey, { label: string; order: number; fns: DiagFunction[] }>();
+    for (const fn of applicable) {
+      const g = resolveSystemGroup(fn);
+      const bucket = map.get(g.key) || { label: g.label, order: g.order, fns: [] };
+      bucket.fns.push(fn);
+      map.set(g.key, bucket);
+    }
+    const orderIndex = new Map(SYSTEM_GROUP_ORDER.map((k, i) => [k, i]));
+    return [...map.entries()]
+      .sort(([a], [b]) => (orderIndex.get(a) ?? 99) - (orderIndex.get(b) ?? 99))
+      .map(([key, v]) => ({ key, label: v.label, fns: v.fns }));
+  }, [applicable]);
 
   const canOperate = vehicleSelected && ecuSelected && transportReady;
   const disabledReason = !vehicleSelected
@@ -234,24 +251,24 @@ export function LiveDataPanel({
         className="border-slate-400 bg-white text-slate-950"
       />
 
-      <Group
-        title="OEM parametry (výrobce)"
-        color="border-blue-400 bg-blue-50 text-blue-900"
-        fns={groupOem}
-        selected={selected}
-        samples={samples}
-        onToggle={toggle}
-        onSelectAll={() => selectAll(groupOem)}
-      />
-      <Group
-        title="Obecné OBD-II parametry"
-        color="border-emerald-400 bg-emerald-50 text-emerald-900"
-        fns={groupGeneric}
-        selected={selected}
-        samples={samples}
-        onToggle={toggle}
-        onSelectAll={() => selectAll(groupGeneric)}
-      />
+      {groupedBySystem.length === 0 ? (
+        <p className="rounded border border-slate-300 bg-slate-50 p-3 text-center text-xs text-slate-600">
+          Pro tuto ECU nejsou v katalogu žádné živé parametry.
+        </p>
+      ) : (
+        groupedBySystem.map((g) => (
+          <Group
+            key={g.key}
+            title={g.label}
+            color="border-blue-400 bg-blue-50 text-blue-900"
+            fns={g.fns}
+            selected={selected}
+            samples={samples}
+            onToggle={toggle}
+            onSelectAll={() => selectAll(g.fns)}
+          />
+        ))
+      )}
 
       {running && (
         <p className="flex items-center gap-2 text-xs text-slate-600">
