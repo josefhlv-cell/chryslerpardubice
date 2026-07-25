@@ -1409,39 +1409,119 @@ export default function AdminDelphi() {
     }
   }
 
-  function saveDtcReport() {
-    if (scanResults.length === 0) {
-      toast({ title: "Není co uložit", description: "Nejdřív načti chyby.", variant: "destructive" });
-      return;
-    }
-    const report = {
-      generatedAt: new Date().toISOString(),
+  function buildDtcReport() {
+    const nowIso = new Date().toISOString();
+    return {
+      generatedAt: nowIso,
       vehicle: profile ? { make: profile.make, model: profile.model, generation: profile.generation, year, engine: profile.engine, engineCode: profile.engineCode } : null,
       vin: vin || null,
       brand: brand?.display_name || brandKey,
       transport: usingLocalTransport ? "local-ble" : usingRemoteTransport ? `remote:${selectedRemoteSession?.profile_name || ""}` : "unknown",
       totalEcus: scanResults.length,
       totalDtc,
-      ecus: scanResults.map((row) => ({
-        address: normalizeAddress(row.ecu.address),
-        name: row.ecu.common || row.ecu.name,
-        storedStatus: row.stored?.status || null,
-        stored: collectCodes(row.stored),
-        pending: collectCodes(row.pending),
-        permanent: collectCodes(row.permanent),
-        clear: row.clear ? { status: row.clear.status, response: row.clear.rawResponse } : null,
-      })),
+      ecus: scanResults.map((row) => {
+        const stored = row.stored;
+        const pending = row.pending;
+        const permanent = row.permanent;
+        const scannedAt = stored?.timestamp || pending?.timestamp || permanent?.timestamp || nowIso;
+        const nrc = stored?.nrc || pending?.nrc || permanent?.nrc || null;
+        const enrich = (codes: string[], type: string) => codes.map((code) => {
+          const info = resolveDTCInfo(code);
+          return {
+            code,
+            type,
+            description: info.description || null,
+            severity: info.severity || null,
+            cause: info.cause || null,
+            source: info.source || null,
+          };
+        });
+        return {
+          address: normalizeAddress(row.ecu.address),
+          name: row.ecu.common || row.ecu.name,
+          scannedAt,
+          storedStatus: stored?.status || null,
+          nrc: nrc ? { code: nrc.code, sid: nrc.sid, description: nrc.description || null } : null,
+          durationMs: stored?.durationMs ?? null,
+          warnings: stored?.warnings || [],
+          stored: enrich(collectCodes(stored), "Uložená"),
+          pending: enrich(collectCodes(pending), "Čekající"),
+          permanent: enrich(collectCodes(permanent), "Trvalá"),
+          clear: row.clear ? { status: row.clear.status, response: row.clear.rawResponse, at: row.clear.timestamp } : null,
+        };
+      }),
     };
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+  }
+
+  function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    link.download = `delphi-dtc-report-${stamp}.json`;
+    link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
-    toast({ title: "Report uložen" });
   }
+
+  function saveDtcReport() {
+    if (scanResults.length === 0) {
+      toast({ title: "Není co uložit", description: "Nejdřív načti chyby.", variant: "destructive" });
+      return;
+    }
+    const report = buildDtcReport();
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadBlob(blob, `delphi-dtc-report-${stamp}.json`);
+    toast({ title: "Report uložen (JSON)" });
+  }
+
+  function csvEscape(v: unknown): string {
+    const s = v === null || v === undefined ? "" : String(v);
+    if (/[",;\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  }
+
+  function saveDtcReportCsv() {
+    if (scanResults.length === 0) {
+      toast({ title: "Není co uložit", description: "Nejdřív načti chyby.", variant: "destructive" });
+      return;
+    }
+    const report = buildDtcReport();
+    const header = [
+      "generatedAt", "vehicle", "vin", "brand",
+      "ecu_address", "ecu_name", "scannedAt", "ecu_status", "nrc_code", "nrc_description",
+      "dtc_code", "dtc_type", "dtc_description", "dtc_severity", "dtc_source", "dtc_cause",
+    ];
+    const rows: string[] = [header.join(";")];
+    const vehicleLabel = report.vehicle
+      ? `${report.vehicle.make} ${report.vehicle.model} ${report.vehicle.year || ""} ${report.vehicle.engine || ""}`.trim()
+      : "";
+    for (const ecu of report.ecus) {
+      const codes = [...ecu.stored, ...ecu.pending, ...ecu.permanent];
+      if (codes.length === 0) {
+        rows.push([
+          report.generatedAt, vehicleLabel, report.vin || "", report.brand || "",
+          ecu.address, ecu.name, ecu.scannedAt, ecu.storedStatus || "",
+          ecu.nrc?.code || "", ecu.nrc?.description || "",
+          "", "", "Bez chyb", "", "", "",
+        ].map(csvEscape).join(";"));
+        continue;
+      }
+      for (const c of codes) {
+        rows.push([
+          report.generatedAt, vehicleLabel, report.vin || "", report.brand || "",
+          ecu.address, ecu.name, ecu.scannedAt, ecu.storedStatus || "",
+          ecu.nrc?.code || "", ecu.nrc?.description || "",
+          c.code, c.type, c.description || "", c.severity || "", c.source || "", c.cause || "",
+        ].map(csvEscape).join(";"));
+      }
+    }
+    // BOM for Excel UTF-8 compatibility
+    const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    downloadBlob(blob, `delphi-dtc-report-${stamp}.csv`);
+    toast({ title: "Report uložen (CSV)" });
+  }
+
 
   async function executeSelected() {
     if (!selected) return;
@@ -2065,7 +2145,7 @@ export default function AdminDelphi() {
 
                 {openPanel === "dtc" && (
                   <div className="space-y-3 border-t border-slate-300 bg-slate-50 p-3">
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
                       <Button
                         onClick={scanAllFaults}
                         disabled={fullScanRunning || fullClearRunning || !transportReady}
@@ -2092,8 +2172,19 @@ export default function AdminDelphi() {
                         className="border-slate-500"
                       >
                         <Download className="mr-2 h-4 w-4" />
-                        Uložit report
+                        Uložit JSON
                       </Button>
+
+                      <Button
+                        onClick={saveDtcReportCsv}
+                        disabled={scanResults.length === 0}
+                        variant="outline"
+                        className="border-slate-500"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Uložit CSV
+                      </Button>
+
 
                       <Button
                         onClick={clearAllFaults}
@@ -2192,12 +2283,22 @@ export default function AdminDelphi() {
                                   </p>
                                   <p className="text-xs text-slate-500">
                                     ECU {normalizeAddress(item.ecu.address)} · {allCodes.length} DTC
+                                    {item.stored?.timestamp && (
+                                      <> · {new Date(item.stored.timestamp).toLocaleTimeString("cs-CZ")}</>
+                                    )}
                                   </p>
+                                  {item.stored?.nrc && (
+                                    <p className="mt-0.5 truncate text-[11px] text-amber-800">
+                                      NRC {item.stored.nrc.code}
+                                      {item.stored.nrc.description ? ` — ${item.stored.nrc.description}` : ""}
+                                    </p>
+                                  )}
                                 </div>
                                 <Badge variant="outline" className={badgeClass}>
                                   {badgeLabel}
                                 </Badge>
                               </summary>
+
 
                               <div className="space-y-2 border-t border-slate-300 bg-slate-50 p-3">
                                 <div className="flex flex-wrap gap-2">
