@@ -4,6 +4,7 @@ export * from "./decoder";
 export * from "./runner";
 export * from "./vehicleProfiles";
 export * from "./transport";
+export * from "./i18n";
 
 export function uniqueSorted(values: string[]) {
   return [...new Set(values)].sort((a, b) =>
