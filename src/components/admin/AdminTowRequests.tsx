@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, MapPin, Phone, Users } from "lucide-react";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
+import { CollapsibleAdminSection } from "@/components/admin/common/CollapsibleAdminSection";
 
 type Row = {
   id: string;
@@ -43,6 +45,7 @@ const AdminTowRequests = () => {
     const { data } = await supabase
       .from("tow_requests")
       .select("*")
+      .is("archived_at", null)
       .order("created_at", { ascending: false });
     const list = (data as Row[]) || [];
     const ids = [...new Set(list.map((r) => r.user_id))];
@@ -87,27 +90,40 @@ const AdminTowRequests = () => {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold">Žádosti o odtah</h2>
-      {rows.length === 0 && <p className="text-sm text-muted-foreground">Žádné žádosti</p>}
-      {rows.map((r) => (
-        <Card key={r.id} className="cursor-pointer hover:border-primary/40" onClick={() => openEdit(r)}>
-          <CardContent className="p-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-sm truncate">{r.vehicle_info}</p>
-              <p className="text-xs text-primary">{r.profile_name || "—"} · {r.profile_email || "—"}</p>
-              <p className="text-xs text-muted-foreground truncate">{r.problem_type}</p>
-              <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground mt-1">
-                <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {r.phone}</span>
-                <span className="inline-flex items-center gap-1"><Users className="w-3 h-3" /> {r.passengers}</span>
-                {r.latitude != null && r.longitude != null && (
-                  <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {r.latitude.toFixed(4)}, {r.longitude.toFixed(4)}</span>
-                )}
+      <CollapsibleAdminSection
+        title="Aktivní žádosti"
+        count={rows.length}
+        icon={<MapPin className="h-4 w-4" />}
+        description="Rozklikni pro detail, úpravu stavu/poznámky a archivaci."
+      >
+        {rows.length === 0 && <p className="text-sm text-muted-foreground">Žádné žádosti</p>}
+        {rows.map((r) => (
+          <Card key={r.id} className="cursor-pointer hover:border-primary/40" onClick={() => openEdit(r)}>
+            <CardContent className="p-4 flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm truncate">{r.vehicle_info}</p>
+                <p className="text-xs text-primary truncate">{r.profile_name || "—"} · {r.profile_email || "—"}</p>
+                <p className="text-xs text-muted-foreground truncate">{r.problem_type}</p>
+                <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground mt-1">
+                  <span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" /> {r.phone}</span>
+                  <span className="inline-flex items-center gap-1"><Users className="w-3 h-3" /> {r.passengers}</span>
+                  {r.latitude != null && r.longitude != null && (
+                    <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" /> {r.latitude.toFixed(4)}, {r.longitude.toFixed(4)}</span>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
-            </div>
-            <Badge>{r.status}</Badge>
-          </CardContent>
-        </Card>
-      ))}
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <Badge>{r.status}</Badge>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+                  Detail
+                </Button>
+                <ArchiveInlineButton table="tow_requests" id={r.id} onDone={fetchAll} />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </CollapsibleAdminSection>
 
       <Dialog open={!!edit} onOpenChange={(o) => !o && closeEdit()}>
         <DialogContent>
@@ -143,6 +159,7 @@ const AdminTowRequests = () => {
             </div>
           )}
           <DialogFooter>
+            {edit && <ArchiveInlineButton table="tow_requests" id={edit.id} onDone={() => { closeEdit(); fetchAll(); }} />}
             <Button variant="outline" onClick={closeEdit}>Zavřít</Button>
             <Button onClick={save}>Uložit</Button>
           </DialogFooter>

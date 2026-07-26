@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { ArrowDownUp, Plane, RefreshCw, Car, Loader2 } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
 import SyncProgressOverlay, { SyncStep } from "@/components/admin/SyncProgressOverlay";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
 
 type BuybackRow = {
   id: string;
@@ -95,8 +96,8 @@ const AdminVehicleOffers = () => {
   const fetchData = async () => {
     setLoading(true);
     const [bRes, iRes] = await Promise.all([
-      supabase.from("vehicle_buyback_requests" as any).select("*").order("created_at", { ascending: false }),
-      supabase.from("vehicle_import_requests" as any).select("*").order("created_at", { ascending: false }),
+      supabase.from("vehicle_buyback_requests" as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
+      supabase.from("vehicle_import_requests" as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
     ]);
     setBuybacks((bRes.data as unknown as BuybackRow[]) || []);
     setImports((iRes.data as unknown as ImportRow[]) || []);
@@ -320,6 +321,12 @@ const AdminVehicleOffers = () => {
                       </p>
                       {b.note && <p className="text-xs text-muted-foreground italic mt-1">"{b.note}"</p>}
                       <p className="text-[10px] text-muted-foreground mt-1">{fmtDate(b.created_at)}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openBuybackEdit(b); }}>
+                          Upravit
+                        </Button>
+                        <ArchiveInlineButton table="vehicle_buyback_requests" id={b.id} onDone={fetchData} />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -354,6 +361,12 @@ const AdminVehicleOffers = () => {
                       {i.extras && <p className="text-xs text-muted-foreground italic mt-1">Výbava: {i.extras}</p>}
                       {i.note && <p className="text-xs text-muted-foreground italic">"{i.note}"</p>}
                       <p className="text-[10px] text-muted-foreground mt-1">{fmtDate(i.created_at)}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openImportEdit(i); }}>
+                          Upravit
+                        </Button>
+                        <ArchiveInlineButton table="vehicle_import_requests" id={i.id} onDone={fetchData} />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -393,6 +406,7 @@ const AdminVehicleOffers = () => {
             </div>
           )}
           <DialogFooter>
+            {editBuyback && <ArchiveInlineButton table="vehicle_buyback_requests" id={editBuyback.id} onDone={() => { setEditBuyback(null); fetchData(); }} />}
             <Button variant="outline" onClick={() => setEditBuyback(null)}>Zrušit</Button>
             <Button onClick={saveBuyback}>Uložit</Button>
           </DialogFooter>
@@ -433,6 +447,7 @@ const AdminVehicleOffers = () => {
             </div>
           )}
           <DialogFooter>
+            {editImport && <ArchiveInlineButton table="vehicle_import_requests" id={editImport.id} onDone={() => { setEditImport(null); fetchData(); }} />}
             <Button variant="outline" onClick={() => setEditImport(null)}>Zrušit</Button>
             <Button onClick={saveImport}>Uložit</Button>
           </DialogFooter>

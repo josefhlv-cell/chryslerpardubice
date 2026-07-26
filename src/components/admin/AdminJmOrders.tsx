@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw, Send } from "lucide-react";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
 
 interface JmOrder {
   id: string;
@@ -38,6 +39,7 @@ export default function AdminJmOrders() {
     const { data, error } = await supabase
       .from("jm_orders")
       .select("*")
+      .is("archived_at", null)
       .order("created_at", { ascending: false })
       .limit(50);
     if (error) toast({ title: "Chyba", description: error.message, variant: "destructive" });
@@ -118,6 +120,7 @@ export default function AdminJmOrders() {
                       {Number(r.total_price).toLocaleString("cs-CZ")} Kč
                     </span>
                   )}
+                  <ArchiveInlineButton table="jm_orders" id={r.id} onDone={load} />
                 </div>
                 <div className="text-[10px] text-muted-foreground flex items-center gap-3">
                   <span>order: {r.order_id.slice(0, 8)}…</span>
