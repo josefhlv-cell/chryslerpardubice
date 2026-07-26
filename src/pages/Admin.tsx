@@ -104,7 +104,21 @@ const AdminArchive = lazy(() => import("@/components/admin/AdminArchive"));
 type Profile = { id: string; user_id: string; full_name: string | null; email: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; status: string; discount_percent: number; created_at: string; };
 type OrderRow = { id: string; user_id: string; part_id: string | null; part_name: string | null; oem_number: string | null; order_type: string; quantity: number; unit_price: number | null; discount_percent: number | null; discounted_price: number | null; price_with_vat: number | null; status: string; admin_note: string | null; customer_note: string | null; catalog_source: string | null; created_at: string; profile_name?: string | null; profile_email?: string | null; };
 type Booking = { id: string; vehicle_brand: string | null; vehicle_model: string | null; service_type: string; preferred_date: string; confirmed_date: string | null; note: string | null; wants_replacement_vehicle: boolean; replacement_vehicle_confirmed: boolean | null; status: string; admin_note: string | null; estimated_price: number | null; discount_amount: number | null; final_price: number | null; user_id: string; created_at: string; profile_name?: string | null; profile_email?: string | null; profile_phone?: string | null; };
-type Inquiry = { id: string; vehicle_id: string; name: string | null; email: string | null; phone: string | null; message: string | null; status: string; user_id: string | null; created_at: string; };
+type Inquiry = {
+  id: string;
+  vehicle_id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  status: string;
+  user_id: string | null;
+  created_at: string;
+  vehicle_label?: string | null;
+  vehicle_price?: number | null;
+  vehicle_vin?: string | null;
+  vehicle_mileage?: number | null;
+};
 
 const statusColors: Record<string, string> = {
   pending: "bg-warning/15 text-warning border-warning/30", confirmed: "bg-primary/15 text-primary border-primary/30",
@@ -189,10 +203,15 @@ const Admin = () => {
   const [orderTypeFilter, setOrderTypeFilter] = useState<"all" | "new" | "used">("all");
   const [editOrder, setEditOrder] = useState<OrderRow | null>(null);
   const [editBooking, setEditBooking] = useState<Booking | null>(null);
+  const [editInquiry, setEditInquiry] = useState<Inquiry | null>(null);
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
   const [formNote, setFormNote] = useState("");
   const [formStatus, setFormStatus] = useState("");
   const [formDiscount, setFormDiscount] = useState("");
+  const [formInquiryName, setFormInquiryName] = useState("");
+  const [formInquiryEmail, setFormInquiryEmail] = useState("");
+  const [formInquiryPhone, setFormInquiryPhone] = useState("");
+  const [formInquiryMessage, setFormInquiryMessage] = useState("");
   const [formConfirmedDate, setFormConfirmedDate] = useState("");
   const [formEstimatedPrice, setFormEstimatedPrice] = useState("");
   const [formFinalPrice, setFormFinalPrice] = useState("");
@@ -212,7 +231,7 @@ const Admin = () => {
     ]);
     setPendingProfiles((profilesRes.data as Profile[]) || []);
     const rawOrders = (ordersRes.data as OrderRow[]) || [];
-    setInquiries((inquiriesRes.data as Inquiry[]) || []);
+    const rawInquiries = (inquiriesRes.data as Inquiry[]) || [];
     const rawBookings = (bookingsRes.data as Booking[]) || [];
     const allUserIds = [...new Set([...rawOrders.map((o) => o.user_id), ...rawBookings.map((b) => b.user_id)])];
     const profileMap = new Map<string, any>();
@@ -222,6 +241,25 @@ const Admin = () => {
     }
     setOrders(rawOrders.map((o) => ({ ...o, profile_name: profileMap.get(o.user_id)?.full_name || null, profile_email: profileMap.get(o.user_id)?.email || null })));
     setBookings(rawBookings.map((b) => ({ ...b, profile_name: profileMap.get(b.user_id)?.full_name || null, profile_email: profileMap.get(b.user_id)?.email || null, profile_phone: profileMap.get(b.user_id)?.phone || null })));
+    const vehicleIds = [...new Set(rawInquiries.map((i) => i.vehicle_id).filter(Boolean))];
+    const vehicleMap = new Map<string, any>();
+    if (vehicleIds.length > 0) {
+      const { data: vehicles } = await supabase
+        .from("vehicles")
+        .select("id, brand, model, year, price, mileage, vin")
+        .in("id", vehicleIds);
+      (vehicles || []).forEach((v: any) => vehicleMap.set(v.id, v));
+    }
+    setInquiries(rawInquiries.map((i) => {
+      const v = vehicleMap.get(i.vehicle_id);
+      return {
+        ...i,
+        vehicle_label: v ? `${v.brand} ${v.model} ${v.year || ""}`.trim() : null,
+        vehicle_price: v?.price ?? null,
+        vehicle_vin: v?.vin ?? null,
+        vehicle_mileage: v?.mileage ?? null,
+      };
+    }));
     setLoading(false);
   };
 
@@ -236,9 +274,12 @@ const Admin = () => {
     } else if (section === "service-bookings" || section === "service") {
       const b = bookings.find((x) => x.id === focusId);
       if (b) openBookingEdit(b);
+    } else if (section === "vehicles-inquiries" || section === "vehicles") {
+      const i = inquiries.find((x) => x.id === focusId);
+      if (i) openInquiryEdit(i);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusId, section, orders.length, bookings.length]);
+  }, [focusId, section, orders.length, bookings.length, inquiries.length]);
 
   const approveProfile = async (id: string, discount: number) => {
     const { error } = await supabase.from("profiles").update({ status: "active", discount_percent: discount }).eq("id", id);
@@ -263,6 +304,28 @@ const Admin = () => {
     setFormConfirmedDate(b.confirmed_date || ""); setFormEstimatedPrice(b.estimated_price?.toString() || "");
     setFormFinalPrice(b.final_price?.toString() || "");
     setFormReplacementConfirmed(b.replacement_vehicle_confirmed === null ? "" : b.replacement_vehicle_confirmed ? "yes" : "no");
+  };
+  const openInquiryEdit = (i: Inquiry) => {
+    setEditInquiry(i);
+    setFormStatus(i.status || "new");
+    setFormInquiryName(i.name || "");
+    setFormInquiryEmail(i.email || "");
+    setFormInquiryPhone(i.phone || "");
+    setFormInquiryMessage(i.message || "");
+  };
+  const saveInquiry = async () => {
+    if (!editInquiry) return;
+    const { error } = await (supabase.from("vehicle_inquiries") as any).update({
+      status: formStatus,
+      name: formInquiryName || null,
+      email: formInquiryEmail || null,
+      phone: formInquiryPhone || null,
+      message: formInquiryMessage || null,
+    }).eq("id", editInquiry.id);
+    if (error) return toast({ title: "Chyba", description: error.message, variant: "destructive" });
+    toast({ title: "Poptávka uložena" });
+    setEditInquiry(null);
+    fetchAll();
   };
   const saveBooking = async () => {
     if (!editBooking) return;
@@ -459,9 +522,7 @@ const Admin = () => {
                     <div className="text-right flex flex-col items-end gap-1 shrink-0">
                       <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
                       {b.final_price && <p className="text-sm font-semibold">{b.final_price.toLocaleString("cs")} Kč</p>}
-                      {(b.status === "completed" || b.status === "cancelled") && (
-                        <ArchiveInlineButton table="service_bookings" id={b.id} onDone={fetchAll} />
-                      )}
+                      <ArchiveInlineButton table="service_bookings" id={b.id} onDone={fetchAll} />
                     </div>
                   </CardContent>
                 </Card>
@@ -517,9 +578,7 @@ const Admin = () => {
                     <div className="text-right flex flex-col items-end gap-1 shrink-0">
                       <Badge className={statusColors[o.status] || ""}>{statusLabel[o.status] || o.status}</Badge>
                       {o.price_with_vat != null && <p className="text-sm font-semibold">{o.price_with_vat.toLocaleString("cs")} Kč</p>}
-                      {["vyrizena","dorucena","zrusena","cancelled","delivered","completed"].includes(o.status) && (
-                        <ArchiveInlineButton table="orders" id={o.id} onDone={fetchAll} />
-                      )}
+                      <ArchiveInlineButton table="orders" id={o.id} onDone={fetchAll} />
                     </div>
                   </CardContent>
                 </Card>
@@ -534,20 +593,34 @@ const Admin = () => {
         return (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">Poptávky vozidel</h2>
-            {inquiries.length === 0 && <p className="text-sm text-muted-foreground">Žádné poptávky</p>}
-            {inquiries.map((i) => (
-              <Card key={i.id}>
-                <CardContent className="p-4 flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-sm">{i.name || "Bez jména"}</p>
-                    <p className="text-xs text-muted-foreground">{i.email} · {i.phone}</p>
-                    {i.message && <p className="text-xs italic mt-1">"{i.message}"</p>}
-                    <p className="text-xs text-muted-foreground mt-1">{fmtDate(i.created_at)}</p>
-                  </div>
-                  <Badge className={statusColors[i.status] || ""}>{statusLabel[i.status] || i.status}</Badge>
-                </CardContent>
-              </Card>
-            ))}
+            <CollapsibleAdminSection
+              title="Aktivní poptávky"
+              count={inquiries.length}
+              icon={<Car className="h-4 w-4" />}
+              description="Rozklikni pro detail, úpravu kontaktu/stavu a archivaci do Vyřízené."
+            >
+              {inquiries.length === 0 && <p className="text-sm text-muted-foreground">Žádné poptávky</p>}
+              {inquiries.map((i) => (
+                <Card key={i.id} className="cursor-pointer hover:border-primary/40" onClick={() => openInquiryEdit(i)}>
+                  <CardContent className="p-4 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm truncate">{i.name || "Bez jména"}</p>
+                      <p className="text-xs text-primary truncate">{i.email || "—"} · {i.phone || "—"}</p>
+                      <p className="text-xs text-muted-foreground truncate">Vůz: {i.vehicle_label || i.vehicle_id}</p>
+                      {i.message && <p className="text-xs italic mt-1 line-clamp-2">"{i.message}"</p>}
+                      <p className="text-xs text-muted-foreground mt-1">{fmtDate(i.created_at)}</p>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                      <Badge className={statusColors[i.status] || ""}>{statusLabel[i.status] || i.status}</Badge>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openInquiryEdit(i); }}>
+                        <FileText className="w-3 h-3 mr-1" /> Detail
+                      </Button>
+                      <ArchiveInlineButton table="vehicle_inquiries" id={i.id} onDone={fetchAll} />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </CollapsibleAdminSection>
           </div>
         );
       case "vehicles-listings": return <Suspense fallback={<Loader />}><AdminVehicleListings /></Suspense>;
@@ -713,6 +786,59 @@ const Admin = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditBooking(null)}>Zrušit</Button>
             <Button onClick={saveBooking}>Uložit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editInquiry} onOpenChange={() => setEditInquiry(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Poptávka vozidla — detail a úprava</DialogTitle></DialogHeader>
+          {editInquiry && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-border/60 p-3 text-sm space-y-1">
+                <p><span className="text-muted-foreground">Vůz:</span> {editInquiry.vehicle_label || editInquiry.vehicle_id}</p>
+                {editInquiry.vehicle_price != null && <p><span className="text-muted-foreground">Cena:</span> {Number(editInquiry.vehicle_price).toLocaleString("cs-CZ")} Kč</p>}
+                {editInquiry.vehicle_mileage != null && <p><span className="text-muted-foreground">Nájezd:</span> {Number(editInquiry.vehicle_mileage).toLocaleString("cs-CZ")} km</p>}
+                {editInquiry.vehicle_vin && <p className="break-all"><span className="text-muted-foreground">VIN:</span> {editInquiry.vehicle_vin}</p>}
+                <p><span className="text-muted-foreground">Vytvořeno:</span> {new Date(editInquiry.created_at).toLocaleString("cs-CZ")}</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Jméno</label>
+                  <Input value={formInquiryName} onChange={(e) => setFormInquiryName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Telefon</label>
+                  <Input value={formInquiryPhone} onChange={(e) => setFormInquiryPhone(e.target.value)} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs text-muted-foreground">E-mail</label>
+                  <Input value={formInquiryEmail} onChange={(e) => setFormInquiryEmail(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Stav</label>
+                <Select value={formStatus} onValueChange={setFormStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">Nový</SelectItem>
+                    <SelectItem value="contacted">Kontaktován</SelectItem>
+                    <SelectItem value="offer_sent">Nabídka odeslána</SelectItem>
+                    <SelectItem value="completed">Dokončeno</SelectItem>
+                    <SelectItem value="cancelled">Zrušeno</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Zpráva / poznámka poptávky</label>
+                <Textarea value={formInquiryMessage} onChange={(e) => setFormInquiryMessage(e.target.value)} rows={4} />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            {editInquiry && <ArchiveInlineButton table="vehicle_inquiries" id={editInquiry.id} onDone={() => { setEditInquiry(null); fetchAll(); }} />}
+            <Button variant="outline" onClick={() => setEditInquiry(null)}>Zavřít</Button>
+            <Button onClick={saveInquiry}>Uložit změny</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
