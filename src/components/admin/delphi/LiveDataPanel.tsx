@@ -59,6 +59,7 @@ export function LiveDataPanel({
   const [paused, setPaused] = useState(false);
   const [loopCount, setLoopCount] = useState(0);
   const [filter, setFilter] = useState("");
+  const [openGroup, setOpenGroup] = useState<SystemGroupKey | null>(null);
   const stopRef = useRef(false);
   const pauseRef = useRef(false);
 
