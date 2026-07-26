@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle, Phone, Eye, User } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
 
 type FaultReport = {
   id: string;
@@ -55,7 +56,7 @@ const AdminFaultReports = () => {
 
   const fetchReports = async () => {
     setLoading(true);
-    const { data } = await supabase.from("fault_reports" as any).select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("fault_reports" as any).select("*").is("archived_at", null).order("created_at", { ascending: false });
     const reportsRaw = (data as any as FaultReport[]) || [];
     
     // Fetch profile info for each unique user_id
@@ -137,7 +138,13 @@ const AdminFaultReports = () => {
                 )}
               </div>
               </div>
-              <Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>
+                  Detail
+                </Button>
+                <ArchiveInlineButton table="fault_reports" id={r.id} onDone={fetchReports} />
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -219,6 +226,7 @@ const AdminFaultReports = () => {
             </div>
           )}
           <DialogFooter>
+            {selected && <ArchiveInlineButton table="fault_reports" id={selected.id} onDone={() => { setSelected(null); fetchReports(); }} />}
             <Button variant="outline" onClick={() => setSelected(null)}>Zavřít</Button>
             <Button onClick={save}>Uložit</Button>
           </DialogFooter>

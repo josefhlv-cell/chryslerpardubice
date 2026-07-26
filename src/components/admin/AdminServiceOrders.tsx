@@ -11,6 +11,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, Plus, Wrench, ChevronRight } from "lucide-react";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import ServiceOrderDetail from "@/components/service/ServiceOrderDetail";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
 
 type Vehicle = { id: string; brand: string; model: string; year: number | null; license_plate: string | null; user_id: string };
 type ProfileInfo = { user_id: string; full_name: string | null; email: string | null; phone: string | null };
@@ -65,7 +66,7 @@ const AdminServiceOrders = () => {
   const fetchOrders = async () => {
     setLoading(true);
     const [ordersRes, vehiclesRes] = await Promise.all([
-      supabase.from("service_orders").select("*").order("created_at", { ascending: false }),
+      (supabase.from("service_orders") as any).select("*").is("archived_at", null).order("created_at", { ascending: false }),
       supabase.from("user_vehicles").select("*"),
     ]);
     const rawOrders = (ordersRes.data as ServiceOrder[]) || [];
@@ -173,6 +174,7 @@ const AdminServiceOrders = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className={STATUS_COLORS[o.status] || ""}>{STATUS_LABELS[o.status] || o.status}</Badge>
+                  <ArchiveInlineButton table="service_orders" id={o.id} onDone={fetchOrders} />
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </div>
               </div>

@@ -49,14 +49,14 @@ const CONFIGS: ArchiveSectionConfig[] = [
     key: "service_orders",
     title: "Servisní zakázky",
     icon: <Wrench className="h-4 w-4" />,
-    columns: "id, order_number, customer_name, vehicle_brand, vehicle_model, status, total_price, archived_at, created_at",
+    columns: "id, description, planned_work, status, total_price, archived_at, created_at",
     render: (r) => (
       <>
         <div className="font-medium text-sm">
-          #{r.order_number || r.id.slice(0, 8)} · {r.customer_name || "—"}
+          Servis #{r.id.slice(0, 8)}
         </div>
         <div className="text-xs text-muted-foreground">
-          {r.vehicle_brand || ""} {r.vehicle_model || ""} · {r.total_price ?? 0} Kč
+          {r.description || r.planned_work || "—"} · {r.total_price ?? 0} Kč
         </div>
       </>
     ),
@@ -200,11 +200,11 @@ const CONFIGS: ArchiveSectionConfig[] = [
     key: "jm_orders",
     title: "Odeslané do J+M",
     icon: <Package className="h-4 w-4" />,
-    columns: "id, order_id, jm_order_number, status, archived_at, created_at",
+    columns: "id, order_id, nextis_order_id, status, archived_at, created_at",
     render: (r) => (
       <>
         <div className="font-medium text-sm">
-          J+M #{r.jm_order_number || r.id.slice(0, 8)}
+          J+M #{r.nextis_order_id || r.id.slice(0, 8)}
         </div>
         <div className="text-xs text-muted-foreground">Interní: {r.order_id || "—"}</div>
       </>

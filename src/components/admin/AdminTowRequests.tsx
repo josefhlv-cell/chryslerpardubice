@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, MapPin, Phone, Users } from "lucide-react";
+import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
 
 type Row = {
   id: string;
@@ -43,6 +44,7 @@ const AdminTowRequests = () => {
     const { data } = await supabase
       .from("tow_requests")
       .select("*")
+      .is("archived_at", null)
       .order("created_at", { ascending: false });
     const list = (data as Row[]) || [];
     const ids = [...new Set(list.map((r) => r.user_id))];
@@ -104,7 +106,13 @@ const AdminTowRequests = () => {
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
             </div>
-            <Badge>{r.status}</Badge>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <Badge>{r.status}</Badge>
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>
+                Detail
+              </Button>
+              <ArchiveInlineButton table="tow_requests" id={r.id} onDone={fetchAll} />
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -143,6 +151,7 @@ const AdminTowRequests = () => {
             </div>
           )}
           <DialogFooter>
+            {edit && <ArchiveInlineButton table="tow_requests" id={edit.id} onDone={() => { closeEdit(); fetchAll(); }} />}
             <Button variant="outline" onClick={closeEdit}>Zavřít</Button>
             <Button onClick={save}>Uložit</Button>
           </DialogFooter>
