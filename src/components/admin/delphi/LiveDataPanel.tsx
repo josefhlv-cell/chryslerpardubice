@@ -113,6 +113,11 @@ export function LiveDataPanel({
       .map(([key, v]) => ({ key, label: v.label, fns: v.fns }));
   }, [applicable]);
 
+  const selectedFns = useMemo(
+    () => liveFunctions.filter((fn) => selected.has(fn.id)),
+    [liveFunctions, selected],
+  );
+
   const canOperate = vehicleSelected && ecuSelected && transportReady;
   const disabledReason = !vehicleSelected
     ? "Nejdřív vyber vozidlo (značka → model → rok → motor)."
