@@ -280,16 +280,12 @@ export function LiveDataPanel({
       )}
 
       {selectedFns.length > 0 && (
-        <div className="rounded-lg border border-blue-300 bg-blue-50/60 p-2">
-          <p className="mb-2 text-[11px] font-bold uppercase text-blue-900">
-            Vybrané parametry · {selectedFns.length}
-          </p>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {selectedFns.map((fn) => (
-              <ParamCard key={fn.id} fn={fn} isSel sample={samples.get(fn.id)} onToggle={toggle} />
-            ))}
-          </div>
-        </div>
+        <SelectedSummary
+          selectedFns={selectedFns}
+          samples={samples}
+          running={running}
+          onToggle={toggle}
+        />
       )}
 
       {running && (
