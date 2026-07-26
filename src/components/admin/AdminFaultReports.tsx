@@ -10,6 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle, Phone, Eye, User } from "lucide-react";
 import CarIcon from "@/components/CarIcon";
 import { ArchiveInlineButton } from "@/components/admin/common/ArchiveInlineButton";
+import { CollapsibleAdminSection } from "@/components/admin/common/CollapsibleAdminSection";
 
 type FaultReport = {
   id: string;
@@ -101,54 +102,61 @@ const AdminFaultReports = () => {
         <span className="text-sm font-medium">Hlášení poruch ({reports.length})</span>
       </div>
 
-      {reports.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádná hlášení</p>}
+      <CollapsibleAdminSection
+        title="Aktivní hlášení"
+        count={reports.length}
+        icon={<AlertTriangle className="h-4 w-4" />}
+        description="Rozklikni pro kompletní detail, fotografie, poznámku, stav a archivaci."
+      >
+        {reports.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">Žádná hlášení</p>}
 
-      {reports.map(r => (
-        <Card key={r.id} className={`cursor-pointer hover:border-primary/40 transition-colors ${r.ai_risk_level === "high" ? "border-destructive/50" : ""}`} onClick={() => openDetail(r)}>
-          <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex gap-3 min-w-0 flex-1">
-                {r.vehicle_brand && r.vehicle_model && (
-                  <CarIcon car={{ brand: r.vehicle_brand, model: r.vehicle_model, year: r.vehicle_year }} size="sm" />
-                )}
-                <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  {r.ai_risk_level === "high" && <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />}
-                  <p className="font-semibold text-sm truncate">
-                    {r.vehicle_brand} {r.vehicle_model} {r.vehicle_year || ""}
-                  </p>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
-                {r.vin && <p className="text-[10px] text-muted-foreground mt-1">VIN: {r.vin}</p>}
-                 <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
-                 {(r.profile_name || r.profile_email) && (
-                   <p className="text-xs text-primary mt-1 flex items-center gap-1">
-                     <User className="w-3 h-3" />
-                     {r.profile_name || "–"} · {r.profile_email || "–"}
-                     {r.profile_phone && ` · ${r.profile_phone}`}
-                   </p>
-                 )}
-                {r.photos?.length > 0 && (
-                  <div className="flex gap-1 mt-1.5">
-                    {r.photos.slice(0, 3).map((url, i) => (
-                      <img key={i} src={url} alt="" className="w-10 h-10 rounded object-cover border" />
-                    ))}
-                    {r.photos.length > 3 && <span className="text-xs text-muted-foreground self-center">+{r.photos.length - 3}</span>}
+        {reports.map(r => (
+          <Card key={r.id} className={`cursor-pointer hover:border-primary/40 transition-colors ${r.ai_risk_level === "high" ? "border-destructive/50" : ""}`} onClick={() => openDetail(r)}>
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex gap-3 min-w-0 flex-1">
+                  {r.vehicle_brand && r.vehicle_model && (
+                    <CarIcon car={{ brand: r.vehicle_brand, model: r.vehicle_model, year: r.vehicle_year }} size="sm" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    {r.ai_risk_level === "high" && <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />}
+                    <p className="font-semibold text-sm truncate">
+                      {r.vehicle_brand} {r.vehicle_model} {r.vehicle_year || ""}
+                    </p>
                   </div>
-                )}
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
+                  {r.vin && <p className="text-[10px] text-muted-foreground mt-1">VIN: {r.vin}</p>}
+                   <p className="text-[10px] text-muted-foreground mt-1">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
+                   {(r.profile_name || r.profile_email) && (
+                     <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                       <User className="w-3 h-3" />
+                       {r.profile_name || "–"} · {r.profile_email || "–"}
+                       {r.profile_phone && ` · ${r.profile_phone}`}
+                     </p>
+                   )}
+                  {r.photos?.length > 0 && (
+                    <div className="flex gap-1 mt-1.5">
+                      {r.photos.slice(0, 3).map((url, i) => (
+                        <img key={i} src={url} alt="Fotografie hlášení závady" className="w-10 h-10 rounded object-cover border" />
+                      ))}
+                      {r.photos.length > 3 && <span className="text-xs text-muted-foreground self-center">+{r.photos.length - 3}</span>}
+                    </div>
+                  )}
+                </div>
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>
+                    Detail
+                  </Button>
+                  <ArchiveInlineButton table="fault_reports" id={r.id} onDone={fetchReports} />
+                </div>
               </div>
-              </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <Badge className={statusColors[r.status] || ""}>{statusLabels[r.status] || r.status}</Badge>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>
-                  Detail
-                </Button>
-                <ArchiveInlineButton table="fault_reports" id={r.id} onDone={fetchReports} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        ))}
+      </CollapsibleAdminSection>
 
       {/* Detail dialog */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
