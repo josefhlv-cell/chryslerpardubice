@@ -256,18 +256,34 @@ export function LiveDataPanel({
           Pro tuto ECU nejsou v katalogu žádné živé parametry.
         </p>
       ) : (
-        groupedBySystem.map((g) => (
-          <Group
-            key={g.key}
-            title={g.label}
-            color="border-blue-400 bg-blue-50 text-blue-900"
-            fns={g.fns}
-            selected={selected}
-            samples={samples}
-            onToggle={toggle}
-            onSelectAll={() => selectAll(g.fns)}
-          />
-        ))
+        <div className="space-y-1.5">
+          {groupedBySystem.map((g) => (
+            <Group
+              key={g.key}
+              title={g.label}
+              fns={g.fns}
+              open={openGroup === g.key}
+              onOpenChange={(v) => setOpenGroup(v ? g.key : null)}
+              selected={selected}
+              samples={samples}
+              onToggle={toggle}
+              onSelectAll={() => selectAll(g.fns)}
+            />
+          ))}
+        </div>
+      )}
+
+      {selectedFns.length > 0 && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50/60 p-2">
+          <p className="mb-2 text-[11px] font-bold uppercase text-blue-900">
+            Vybrané parametry · {selectedFns.length}
+          </p>
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+            {selectedFns.map((fn) => (
+              <ParamCard key={fn.id} fn={fn} isSel sample={samples.get(fn.id)} onToggle={toggle} />
+            ))}
+          </div>
+        </div>
       )}
 
       {running && (
@@ -280,54 +296,79 @@ export function LiveDataPanel({
 }
 
 function Group({
-  title, color, fns, selected, samples, onToggle, onSelectAll,
+  title, fns, open, onOpenChange, selected, samples, onToggle, onSelectAll,
 }: {
-  title: string; color: string; fns: DiagFunction[]; selected: Set<string>; samples: Map<string, Sample>;
+  title: string; fns: DiagFunction[]; open: boolean; onOpenChange: (v: boolean) => void;
+  selected: Set<string>; samples: Map<string, Sample>;
   onToggle: (id: string) => void; onSelectAll: () => void;
 }) {
   if (fns.length === 0) return null;
+  const selCount = fns.filter((f) => selected.has(f.id)).length;
   return (
-    <div className="rounded-lg border border-slate-300 bg-slate-50 p-2">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-bold ${color}`}>{title} · {fns.length}</p>
-        <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={onSelectAll}>Přidat vše (limit)</Button>
-      </div>
-      <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-        {fns.map((fn) => {
-          const isSel = selected.has(fn.id);
-          const s = samples.get(fn.id);
-          const stale = s?.updatedAt ? Date.now() - s.updatedAt > 4000 : false;
-          const bad = s?.status === "no_data" || s?.status === "error" || s?.status === "timeout" || s?.status === "nrc";
-          return (
-            <button
-              type="button"
-              key={fn.id}
-              onClick={() => onToggle(fn.id)}
-              className={`flex min-w-0 items-start gap-2 rounded border p-2 text-left transition ${
-                isSel ? "border-blue-600 bg-white ring-1 ring-blue-500" : "border-slate-300 bg-white hover:bg-slate-50"
-              }`}
-            >
-              <input type="checkbox" checked={isSel} readOnly className="mt-1 accent-blue-600" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[11px] font-bold uppercase text-slate-700">{czechLabel(fn)}</p>
-                <p className="mt-1 flex items-baseline gap-1">
-                  <span className={`text-lg font-black tabular-nums ${bad ? "text-amber-800" : stale ? "text-slate-500" : "text-slate-950"}`}>
-                    {s?.value ?? "—"}
-                  </span>
-                  {s?.unit && <span className="text-xs font-bold text-slate-700">{s.unit}</span>}
-                </p>
-                <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
-                  <span className="inline-flex items-center gap-1">
-                    <Activity className="h-3 w-3" />
-                    {s?.durationMs ? `${s.durationMs} ms` : "—"}
-                  </span>
-                  <span className="uppercase">{s?.status ?? "idle"}</span>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+    <div className="overflow-hidden rounded-lg border border-blue-800">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className="flex w-full items-center justify-between gap-2 bg-blue-900 px-3 py-2 text-left text-white"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <Gauge className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 truncate text-sm font-black uppercase">{title}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          {selCount > 0 && (
+            <span className="rounded-full bg-emerald-500 px-2 text-[11px] font-bold text-white">{selCount}</span>
+          )}
+          <span className="rounded-full bg-white px-2 text-[11px] font-black text-blue-900">{fns.length}</span>
+          <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+
+      {open && (
+        <div className="bg-slate-50 p-2">
+          <div className="mb-2 flex justify-end">
+            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={onSelectAll}>Přidat vše (limit)</Button>
+          </div>
+          <div className="max-h-[50vh] space-y-1.5 overflow-y-auto pr-1">
+            {fns.map((fn) => (
+              <ParamCard key={fn.id} fn={fn} isSel={selected.has(fn.id)} sample={samples.get(fn.id)} onToggle={onToggle} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+function ParamCard({
+  fn, isSel, sample: s, onToggle,
+}: { fn: DiagFunction; isSel: boolean; sample?: Sample; onToggle: (id: string) => void }) {
+  const stale = s?.updatedAt ? Date.now() - s.updatedAt > 4000 : false;
+  const bad = s?.status === "no_data" || s?.status === "error" || s?.status === "timeout" || s?.status === "nrc";
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(fn.id)}
+      className={`flex w-full min-w-0 items-center gap-2 rounded border p-2 text-left transition ${
+        isSel ? "border-blue-600 bg-white ring-1 ring-blue-500" : "border-slate-300 bg-white hover:bg-slate-100"
+      }`}
+    >
+      <input type="checkbox" checked={isSel} readOnly className="accent-blue-600" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-bold uppercase text-slate-700">{czechLabel(fn)}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="flex items-baseline gap-1">
+            <span className={`text-base font-black tabular-nums ${bad ? "text-amber-800" : stale ? "text-slate-500" : "text-slate-950"}`}>
+              {s?.value ?? "—"}
+            </span>
+            {s?.unit && <span className="text-xs font-bold text-slate-700">{s.unit}</span>}
+          </p>
+          <span className="shrink-0 text-[10px] uppercase text-slate-500">
+            {s?.durationMs ? `${s.durationMs} ms · ` : ""}{s?.status ?? "idle"}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
