@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ChevronDown, Gauge, Loader2, Pause, Play, Square, StopCircle } from "lucide-react";
+import { Activity, ChevronDown, Clock, Gauge, Loader2, Pause, Play, Square, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -280,16 +280,12 @@ export function LiveDataPanel({
       )}
 
       {selectedFns.length > 0 && (
-        <div className="rounded-lg border border-blue-300 bg-blue-50/60 p-2">
-          <p className="mb-2 text-[11px] font-bold uppercase text-blue-900">
-            Vybrané parametry · {selectedFns.length}
-          </p>
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {selectedFns.map((fn) => (
-              <ParamCard key={fn.id} fn={fn} isSel sample={samples.get(fn.id)} onToggle={toggle} />
-            ))}
-          </div>
-        </div>
+        <SelectedSummary
+          selectedFns={selectedFns}
+          samples={samples}
+          running={running}
+          onToggle={toggle}
+        />
       )}
 
       {running && (
@@ -343,6 +339,96 @@ function Group({
         </div>
       )}
     </div>
+  );
+}
+
+function SelectedSummary({
+  selectedFns,
+  samples,
+  running,
+  onToggle,
+}: {
+  selectedFns: DiagFunction[];
+  samples: Map<string, Sample>;
+  running: boolean;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-blue-300 bg-blue-50/70 p-2">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase text-blue-900">
+          Vybrané parametry · {selectedFns.length}/{MAX_SELECTED}
+        </p>
+        <p className="text-[10px] text-blue-800">
+          {running ? "Aktivní polling" : "Polling zastaven"}
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {selectedFns.map((fn) => (
+          <SummaryCard key={fn.id} fn={fn} sample={samples.get(fn.id)} onToggle={onToggle} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function formatAge(ts: number | null): string {
+  if (!ts) return "—";
+  const ms = Date.now() - ts;
+  if (ms < 1000) return "teď";
+  if (ms < 60_000) return `${Math.round(ms / 1000)} s`;
+  return `${Math.round(ms / 60_000)} min`;
+}
+
+function SummaryCard({
+  fn,
+  sample: s,
+  onToggle,
+}: {
+  fn: DiagFunction;
+  sample?: Sample;
+  onToggle: (id: string) => void;
+}) {
+  const stale = s?.updatedAt ? Date.now() - s.updatedAt > 4000 : false;
+  const bad = s?.status === "no_data" || s?.status === "error" || s?.status === "timeout" || s?.status === "nrc";
+  const statusLabel = s?.status === "ok" ? "OK" : s?.status === "no_data" ? "bez dat" : s?.status === "error" ? "chyba" : s?.status === "timeout" ? "timeout" : s?.status === "nrc" ? "NRC" : "čeká";
+
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(fn.id)}
+      className="flex w-full min-w-0 items-start gap-2 rounded border border-blue-200 bg-white p-2 text-left ring-inset transition hover:ring-1 hover:ring-blue-400"
+      title="Kliknutím odstraníš z výběru"
+    >
+      <input type="checkbox" checked readOnly className="mt-0.5 accent-blue-600" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-bold uppercase text-slate-700">{czechLabel(fn)}</p>
+        <div className="mt-1 flex items-baseline gap-1">
+          <span className={`text-xl font-black tabular-nums ${bad ? "text-amber-800" : stale ? "text-slate-500" : "text-slate-950"}`}>
+            {s?.value ?? "—"}
+          </span>
+          {s?.unit && <span className="text-sm font-bold text-slate-600">{s.unit}</span>}
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-1 text-[10px]">
+          <span className="flex items-center gap-1 text-slate-500">
+            <Clock className="h-3 w-3" />
+            {formatAge(s?.updatedAt ?? null)}
+          </span>
+          <span className="flex items-center gap-1">
+            <Activity className="h-3 w-3 text-slate-400" />
+            {s?.durationMs ? `${s.durationMs} ms` : "—"}
+          </span>
+          <Badge
+            variant="outline"
+            className={`px-1 py-0 text-[10px] ${
+              bad ? "border-amber-400 text-amber-800" : s?.status === "ok" ? "border-emerald-500 text-emerald-700" : "border-slate-300 text-slate-500"
+            }`}
+          >
+            {statusLabel}
+          </Badge>
+        </div>
+      </div>
+    </button>
   );
 }
 
