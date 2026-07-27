@@ -69,8 +69,8 @@ async function initPushNotifications() {
         description: "Objednávky, servis, chat a upozornění",
         importance: 5,
         visibility: 1,
-made: undefined as never,
       } as any);
+
     } catch (e) {
       console.warn("[push] channel create failed", e);
     }
