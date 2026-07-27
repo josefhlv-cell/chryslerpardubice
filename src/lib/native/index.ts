@@ -60,7 +60,24 @@ async function initPushNotifications() {
     return;
   }
 
+  // Android: kanál "default" musí existovat, jinak se notifikace nezobrazí
+  if (Capacitor.getPlatform() === "android") {
+    try {
+      await PushNotifications.createChannel({
+        id: "default",
+        name: "CHDP Garage",
+        description: "Objednávky, servis, chat a upozornění",
+        importance: 5,
+        visibility: 1,
+made: undefined as never,
+      } as any);
+    } catch (e) {
+      console.warn("[push] channel create failed", e);
+    }
+  }
+
   await PushNotifications.register();
+
 
   PushNotifications.addListener("registration", async (token) => {
     try {
