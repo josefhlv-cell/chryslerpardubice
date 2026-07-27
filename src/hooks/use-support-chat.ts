@@ -21,7 +21,9 @@ export function useSupportChat() {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [unread, setUnread] = useState(0);
   const channelRef = useRef<any>(null);
+
 
   // Load or create conversation
   useEffect(() => {
