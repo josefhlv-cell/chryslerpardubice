@@ -235,7 +235,7 @@ function filterDisabledSources(parts: CatalogPart[]): CatalogPart[] {
 
 function deduplicateParts(parts: CatalogPart[]): CatalogPart[] {
   const seen = new Map();
-  const sorted = parts.sort((a, b) => {
+  const sorted = [...parts].sort((a, b) => {
     if (a.rank !== b.rank) return a.rank - b.rank;
     const aPrice = a.final_price || 999999;
     const bPrice = b.final_price || 999999;
