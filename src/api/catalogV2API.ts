@@ -359,10 +359,13 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
   const { data, error } = await supabase
     .from("catalog_categories")
     .select("id, parent_id, slug, name_cs, node_type, is_global, sort_order, vehicle_brand, vehicle_model, vehicle_engine, year_from, year_to, power_kw")
-    .eq("node_type", "category")   // OPRAVA: jen kategorie dílů, ne brand/model uzly
+    // FIX: dříve zde byl `.eq("node_type","category")`, což odfiltrovalo i globální
+    // podkategorie → strom neměl nikdy potomky. Bereme kategorie i podkategorie.
+    .in("node_type", ["category", "subcategory"])
     .eq("is_global", true)
     .order("sort_order", { ascending: true });
   if (error || !data) return [];
+
 
   const scoped = data.filter((n: any) => {
     if (opts.brand && n.vehicle_brand && n.vehicle_brand.toLowerCase() !== opts.brand.toLowerCase()) return false;
