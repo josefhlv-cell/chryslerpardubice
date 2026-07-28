@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "664857966963",
+    "project_id": "chdp-6d27a",
+    "storage_bucket": "chdp-6d27a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:664857966963:android:78c9e624b378d1ca832d06",
+        "android_client_info": {
+          "package_name": "app.lovable.c6d932101224420590deeec3ccc6923f"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8ly5IUlEv2jQse8K8KmPB3M8V10KFhek"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
