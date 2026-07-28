@@ -37,19 +37,14 @@ export async function initNative() {
     console.warn("[native] init failed", e);
   }
 
-  // Push notifications — SKIPPED on Android when Firebase (google-services.json)
-  // is not configured, because @capacitor/push-notifications v8 crashes the app
-  // during FirebaseMessagingService init if google-services.json is missing.
-  // iOS uses APNs directly and is safe. Enable Android push once Firebase is set up.
-  const platform = Capacitor.getPlatform();
-  if (platform === "ios") {
-    initPushNotifications().catch((e) =>
-      console.warn("[native] push init failed", e)
-    );
-  } else {
-    console.info("[native] push notifications disabled on Android (no Firebase config)");
-  }
+  // Push notifications — iOS přes APNs, Android přes FCM.
+  // Registrace je obalená try/catch: pokud na Androidu chybí google-services.json,
+  // plugin vyhodí chybu, kterou zachytíme a aplikace poběží dál bez pushů.
+  initPushNotifications().catch((e) =>
+    console.warn("[native] push init failed", e)
+  );
 }
+
 
 
 async function initPushNotifications() {
@@ -65,7 +60,24 @@ async function initPushNotifications() {
     return;
   }
 
+  // Android: kanál "default" musí existovat, jinak se notifikace nezobrazí
+  if (Capacitor.getPlatform() === "android") {
+    try {
+      await PushNotifications.createChannel({
+        id: "default",
+        name: "CHDP Garage",
+        description: "Objednávky, servis, chat a upozornění",
+        importance: 5,
+        visibility: 1,
+      } as any);
+
+    } catch (e) {
+      console.warn("[push] channel create failed", e);
+    }
+  }
+
   await PushNotifications.register();
+
 
   PushNotifications.addListener("registration", async (token) => {
     try {

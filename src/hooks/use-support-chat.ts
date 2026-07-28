@@ -21,7 +21,9 @@ export function useSupportChat() {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [unread, setUnread] = useState(0);
   const channelRef = useRef<any>(null);
+
 
   // Load or create conversation
   useEffect(() => {
@@ -53,19 +55,11 @@ export function useSupportChat() {
           .select("*")
           .eq("conversation_id", convId)
           .order("created_at", { ascending: true });
-        if (!cancelled) setMessages((msgs as any) || []);
-
-        // Mark admin msgs as read
-        await supabase
-          .from("support_messages" as any)
-          .update({ read_at: new Date().toISOString() } as any)
-          .eq("conversation_id", convId)
-          .eq("is_from_admin", true)
-          .is("read_at", null);
-        await supabase
-          .from("support_conversations" as any)
-          .update({ unread_customer_count: 0 } as any)
-          .eq("id", convId);
+        if (!cancelled) {
+          const list = ((msgs as any) || []) as SupportMessage[];
+          setMessages(list);
+          setUnread(list.filter((m) => m.is_from_admin && !m.read_at).length);
+        }
       }
       setLoading(false);
     })();
@@ -83,11 +77,28 @@ export function useSupportChat() {
         table: "support_messages",
         filter: `conversation_id=eq.${conversationId}`,
       }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as SupportMessage]);
+        const msg = payload.new as SupportMessage;
+        setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+        if (msg.is_from_admin && !msg.read_at) setUnread((n) => n + 1);
       })
       .subscribe();
     channelRef.current = ch;
     return () => { supabase.removeChannel(ch); };
+  }, [conversationId]);
+
+  const markRead = useCallback(async () => {
+    if (!conversationId) return;
+    setUnread(0);
+    await supabase
+      .from("support_messages" as any)
+      .update({ read_at: new Date().toISOString() } as any)
+      .eq("conversation_id", conversationId)
+      .eq("is_from_admin", true)
+      .is("read_at", null);
+    await supabase
+      .from("support_conversations" as any)
+      .update({ unread_customer_count: 0 } as any)
+      .eq("id", conversationId);
   }, [conversationId]);
 
   const send = useCallback(async (text: string, isFromAdmin = false) => {
@@ -103,5 +114,6 @@ export function useSupportChat() {
     if (error) throw error;
   }, [user, conversationId]);
 
-  return { conversationId, messages, loading, sending, send };
+  return { conversationId, messages, loading, sending, send, unread, markRead };
+
 }

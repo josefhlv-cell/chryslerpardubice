@@ -1,8 +1,10 @@
 /**
- * Plovoucí widget live chatu pro zákazníka. Skryje se, když je feature flag vypnutý
- * nebo uživatel není přihlášený.
+ * Plovoucí widget live chatu pro zákazníka.
+ * Ikona je vždy vidět vpravo dole (poloprůhledná), skrývá se jen pro adminy
+ * nebo když je feature flag live chatu vypnutý.
  */
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MessageCircle, Send, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,16 +15,18 @@ import { useSupportChat } from "@/hooks/use-support-chat";
 
 export default function SupportChatWidget() {
   const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const { flags, loading: flagsLoading } = useFeatureFlags();
   const enabled = flags["live_chat_enabled"] ?? true;
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { messages, loading, sending, send } = useSupportChat();
+  const { messages, loading, sending, send, unread, markRead } = useSupportChat();
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, open]);
+  useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, open]);
+  useEffect(() => { if (open && unread > 0) markRead(); }, [open, unread, markRead]);
 
-  if (!user || isAdmin || flagsLoading || !enabled) return null;
+  if (isAdmin || flagsLoading || !enabled) return null;
 
   const handleSend = async () => {
     const t = text.trim();
@@ -31,19 +35,30 @@ export default function SupportChatWidget() {
     try { await send(t, false); } catch { setText(t); }
   };
 
+  const openChat = () => {
+    if (!user) { navigate("/auth"); return; }
+    setOpen(true);
+  };
+
   return (
     <>
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:scale-105 transition"
+          onClick={openChat}
+          className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-primary/40 hover:bg-primary/80 text-primary-foreground backdrop-blur-md border border-primary/50 shadow-lg flex items-center justify-center transition-all hover:scale-105 opacity-80 hover:opacity-100"
           aria-label="Otevřít chat se servisem"
         >
           <MessageCircle className="w-6 h-6" />
+          {unread > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
         </button>
       )}
       {open && (
-        <Card className="fixed bottom-20 right-4 z-40 w-[92vw] max-w-sm h-[70vh] max-h-[500px] flex flex-col shadow-xl border-primary/30">
+        <Card className="fixed bottom-20 right-4 z-40 w-[92vw] max-w-sm h-[70vh] max-h-[500px] flex flex-col shadow-xl border-primary/30 bg-card/95 backdrop-blur-md">
+
           <div className="flex items-center justify-between p-3 border-b bg-primary/10">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-primary" />
