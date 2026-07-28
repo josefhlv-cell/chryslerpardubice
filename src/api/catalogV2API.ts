@@ -394,33 +394,19 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
       .ilike("engine", opts.engine)
       .maybeSingle();
     if (vRow?.id) {
-      // FIX: embedded join `parts_new!inner(...)` vracel pro zákazníka 0 řádků,
-      // protože parts_new je pod RLS dostupná jen adminům → počty vždy spadly na
-      // globální fallback (počet u kategorie ≠ zobrazené díly). Čteme přes
-      // parts_new_public, tedy přesně ten zdroj, ze kterého čte i listing.
-      const { data: compatRows } = await supabase
+      const { data: scopedRows } = await supabase
         .from("catalog_vehicle_compatibility")
-        .select("part_id")
+        .select("part_id, parts_new!inner(name, category)")
         .eq("nextis_vehicle_id", vRow.id)
         .limit(20000);
-      const partIds = [...new Set((compatRows || []).map((r: any) => r.part_id).filter(Boolean))];
-      const CHUNK = 400;
-      const chunks: string[][] = [];
-      for (let i = 0; i < partIds.length; i += CHUNK) chunks.push(partIds.slice(i, i + CHUNK));
-      const results = await Promise.all(
-        chunks.map((ids) =>
-          supabase.from("parts_new_public").select("name, category").in("id", ids)
-        )
-      );
-      for (const res of results) {
-        for (const row of (res.data || []) as any[]) {
-          const cat = String(row?.category || "Ostatní");
-          const name = String(row?.name || "");
-          partsForCount.push({ name, category: cat });
-          canonicalCounts.set(cat, (canonicalCounts.get(cat) || 0) + 1);
-        }
+      for (const row of (scopedRows || []) as any[]) {
+        const cat = String(row?.parts_new?.category || "Ostatní");
+        const name = String(row?.parts_new?.name || "");
+        partsForCount.push({ name, category: cat });
+        canonicalCounts.set(cat, (canonicalCounts.get(cat) || 0) + 1);
       }
     }
+
   }
 
   if (partsForCount.length === 0) {
