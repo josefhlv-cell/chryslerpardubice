@@ -447,16 +447,10 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
     return partsHaystack.filter(hay => keywords.some(k => hay.includes(k))).length;
   };
 
-  const nodeCounts = new Map<string, number>();
-  const { data: mappedRows } = await supabase
-    .from("catalog_part_categories")
-    .select("category_id")
-    .limit(10000);
-  for (const row of mappedRows || []) {
-    const key = String((row as any).category_id || "");
-    if (key) nodeCounts.set(key, (nodeCounts.get(key) || 0) + 1);
-  }
-
+  // FIX: dřívější globální dotaz do catalog_part_categories (limit 10000 z 52k řádků)
+  // vracel počty, které nebyly scopované na vybrané vozidlo ani na filtr listingu →
+  // číslo u kategorie nikdy neodpovídalo zobrazeným dílům. Počty nyní počítáme ze
+  // STEJNÉ množiny dílů, ze které čte listing (vehicle-scoped / parts_new_public).
   const globalRoots = (byParent.get(null) || []).filter((n: any) => n.node_type === 'category' && n.is_global);
   if (globalRoots.length > 0) {
     const buildGlobal = (parentId: string, path: string[]): CatalogCategoryNode[] => {
@@ -466,11 +460,12 @@ async function fetchLocalCategoryTree(opts: { brand?: string; model?: string; en
         label: k.name_cs,
         path: [...path, k.slug],
         keywords: [k.name_cs],
-        count: nodeCounts.get(k.id) ?? countForSubcategoryLabel(k.name_cs),
+        count: countForSubcategoryLabel(k.name_cs),
         sectionId: null,
         children: buildGlobal(k.id, [...path, k.slug]),
       }));
     };
+
     return globalRoots
       .sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0))
       .map((n: any) => {
