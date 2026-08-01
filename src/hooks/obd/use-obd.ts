@@ -227,7 +227,7 @@ export function useLiveData(active: boolean) {
         }
         customPidTriedRef.current.add(key);
       }
-    };
+    });
 
     const poll = async () => {
       if (pollingRef.current) return;
