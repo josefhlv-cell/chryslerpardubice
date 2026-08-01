@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
         .from("parts_new")
         .select("id, oem_number")
         .eq("catalog_source", "jm_oem")
-        .order("created_at", { ascending: true })
+        .order("oem_number", { ascending: true })
         .range(offset, offset + Math.max(limit, 100) - 1);
       const { data: parts, error } = await q;
       if (error) throw error;
