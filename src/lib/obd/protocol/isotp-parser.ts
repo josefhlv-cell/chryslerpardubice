@@ -175,7 +175,10 @@ export function parseIsoTp(cleaned: string): IsoTpMessage {
   let expected = 1;
   for (const cf of cfs) {
     if (cf.seq !== expected) {
-      warnings.push(`ISO-TP sequence mismatch: expected ${expected}, got ${cf.seq}`);
+      // Ztracený / přeházený consecutive frame — dál už nelze skládat,
+      // jinak by se do payloadu dostaly bajty na špatných pozicích.
+      warnings.push(`ISO-TP sequence mismatch: expected ${expected}, got ${cf.seq} — message truncated`);
+      break;
     }
     payload.push(...cf.payload);
     expected = (expected + 1) & 0x0f;
