@@ -66,11 +66,14 @@ Deno.serve(async (req) => {
     if (action === "match-jm-oem") {
       // Dedicated branch: jm_oem parts only — derives compat via jm-proxy.searchByCode
       const onlyMissing: boolean = body.onlyMissing !== false;
+      const sync: boolean = body.sync === true;
+      const offset: number = Number(body.offset || 0);
       let q = supabase
         .from("parts_new")
         .select("id, oem_number")
         .eq("catalog_source", "jm_oem")
-        .limit(limit);
+        .order("created_at", { ascending: true })
+        .range(offset, offset + Math.max(limit, 100) - 1);
       const { data: parts, error } = await q;
       if (error) throw error;
       let scope = parts || [];
@@ -84,6 +87,22 @@ Deno.serve(async (req) => {
         scope = scope.filter((p: any) => !have.has(p.id));
       }
       const bgScope = scope.slice(0, limit);
+
+      if (sync) {
+        // Synchronous, bounded batch — background tasks get killed on shutdown,
+        // so callers that need guaranteed progress use this mode and loop.
+        let inserted = 0, failed = 0;
+        const reasons: Record<string, number> = {};
+        for (const p of bgScope) {
+          try {
+            const r: any = await matchJmOemPart(supabase, p.id, p.oem_number);
+            if (r?.ok) inserted += r.inserted || 0;
+            else { failed++; reasons[r?.reason || "unknown"] = (reasons[r?.reason || "unknown"] || 0) + 1; }
+          } catch (_) { failed++; }
+        }
+        return json({ ok: true, sync: true, processed: bgScope.length, inserted, failed, reasons, candidates: parts?.length || 0 });
+      }
+
       const work = (async () => {
         for (const p of bgScope) {
           try { await matchJmOemPart(supabase, p.id, p.oem_number); } catch (_) { /* swallow */ }
@@ -96,6 +115,7 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true, background: true, queued: bgScope.length, candidates: parts?.length || 0 });
     }
+
 
     if (action === "match-all") {
       // Optional scope filters
