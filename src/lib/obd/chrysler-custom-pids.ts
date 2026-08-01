@@ -296,6 +296,11 @@ export async function testChryslerCustomPid(
         reason: "Adaptér nebyl po předchozím dotazu klidný – PID se přeskočil.",
       };
     }
+    // Flow-control hlavička musí odpovídat cílovému ECU, jinak se u multi-frame
+    // odpovědí (Mode 22 s >7 bajty, např. 2130) ztratí consecutive framy.
+    await elmQueue
+      .send(`ATFCSH${definition.header}`, { timeoutMs: 650, commandType: "stellantis_did" })
+      .catch(() => undefined);
     const res = await elmQueue.send(definition.command, { timeoutMs: 1200, commandType: "stellantis_did" });
     const raw = res.raw;
 

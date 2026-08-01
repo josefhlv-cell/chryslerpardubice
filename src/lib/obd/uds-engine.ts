@@ -2,7 +2,8 @@
 // Read-only diagnostic services: Session Control (0x10), ReadDataByID (0x22), TesterPresent (0x3E)
 
 import { elm327 } from '@/lib/obd/elm327-engine';
-import { isotpTransport } from '@/lib/obd/isotp-transport';
+import { parseIsoTp } from '@/lib/obd/protocol/isotp-parser';
+import { cleanElmResponse } from '@/lib/obd/protocol/response-cleaner';
 import { getDIDDef, SIMULATED_DID_RESPONSES, type DIDDefinition, type DIDScaling, type BitfieldDef } from '@/lib/obd/chrysler-dids';
 
 // ─── UDS Service IDs ───
@@ -368,8 +369,12 @@ class UDSEngine {
     if (!this.isNative) {
       return this.simulateUDS(hexPayload);
     }
-    // On native: send via ELM327 with ISO-TP framing
+    // On native: send via ELM327 and reassemble ISO-TP (multi-frame DIDs!)
     const response = await elm327.sendCommand(hexPayload, 'high');
+    const msg = parseIsoTp(cleanElmResponse(response, hexPayload));
+    if (msg.payload.length > 0) {
+      return msg.payload.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+    }
     return response.replace(/\s/g, '');
   }
 
