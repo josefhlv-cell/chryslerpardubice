@@ -368,8 +368,12 @@ class UDSEngine {
     if (!this.isNative) {
       return this.simulateUDS(hexPayload);
     }
-    // On native: send via ELM327 with ISO-TP framing
+    // On native: send via ELM327 and reassemble ISO-TP (multi-frame DIDs!)
     const response = await elm327.sendCommand(hexPayload, 'high');
+    const msg = parseIsoTp(cleanElmResponse(response, hexPayload));
+    if (msg.payload.length > 0) {
+      return msg.payload.map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+    }
     return response.replace(/\s/g, '');
   }
 
