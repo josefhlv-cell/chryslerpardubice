@@ -179,7 +179,9 @@ export function useLiveData(active: boolean) {
       void writeSession(dataRef.current, true);
     }, 5000);
 
-    const pollChryslerCustom = async () => {
+    // Exkluzivně: testChryslerCustomPid přepíná ATSH/ATFCSH hlavičky, které
+    // by jinak kolidovaly s běžným live pollingem / DTC scanem na stejné frontě.
+    const pollChryslerCustom = async () => elmQueue.runExclusive(async () => {
       // Try each definition once; remember the first supported one per key.
       const keys: ChryslerCustomPidKey[] = ['transmissionOilTemp', 'oilPressure'];
       for (const key of keys) {
