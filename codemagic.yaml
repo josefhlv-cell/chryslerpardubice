@@ -1,4 +1,9 @@
 workflows:
+
+  # ============================================================
+  # ANDROID
+  # ============================================================
+
   android-workflow:
     name: Android Build (APK + AAB)
     max_build_duration: 60
@@ -11,51 +16,72 @@ workflows:
         PACKAGE_NAME: "app.lovable.c6d932101224420590deeec3ccc6923f"
 
     scripts:
-      - name: Install npm dependencies clean
+
+      - name: Install npm dependencies
         script: |
           set -e
           npm --version
-          npm ci --legacy-peer-deps --no-audit --no-fund || {
-            echo "npm ci failed, retrying with npm install"
-            npm install --legacy-peer-deps --no-audit --no-fund
-          }
+          npm ci --legacy-peer-deps --no-audit --no-fund || npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Install required Android SDK packages
+      - name: Install Android SDK
         script: |
           set -e
+
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+
           if [ ! -x "$SDKMANAGER" ]; then
             SDKMANAGER="$(command -v sdkmanager)"
           fi
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Build web assets Vite
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      - name: Build web application
         script: |
           set -e
           npm run build
 
-      - name: Generate Capacitor icons
+      - name: Generate Android icons
         script: |
           set -e
+
           npm install @capacitor/assets --save-dev
+
           npx capacitor-assets generate --android
 
       - name: Sync Capacitor Android
         script: |
           set -e
+
           npx cap sync android
 
       - name: Validate Android project
         script: |
           set -e
-          chmod +x android/gradlew
-          ./android/gradlew -p android :app:tasks --no-daemon --stacktrace
 
-      - name: Build Android Debug APK and Release AAB
+          chmod +x android/gradlew
+
+          ./android/gradlew \
+            -p android \
+            :app:tasks \
+            --no-daemon \
+            --stacktrace
+
+      - name: Build Android APK and AAB
         script: |
           set -e
-          ./android/gradlew -p android :app:assembleDebug :app:bundleRelease --no-daemon --stacktrace --warning-mode all
+
+          ./android/gradlew \
+            -p android \
+            :app:assembleDebug \
+            :app:bundleRelease \
+            --no-daemon \
+            --stacktrace \
+            --warning-mode all
 
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
@@ -63,394 +89,771 @@ workflows:
       - android/app/build/outputs/**/mapping.txt
       - android/app/build/reports/**/*
 
+
+  # ============================================================
+  # IOS / TESTFLIGHT
+  # ============================================================
+
   ios-testflight-workflow:
-    name: iOS TestFlight Build signed
+
+    name: iOS TestFlight Build
+
     max_build_duration: 90
+
     instance_type: mac_mini_m2
 
     integrations:
       app_store_connect: "Garáž CHDP"
 
     environment:
+
       xcode: latest
+
       node: 22
+
+      # ========================================================
+      # IMPORTANT:
+      # DO NOT specify CHDP_DIST_PUSH here.
+      #
+      # Codemagic will select the matching App Store
+      # distribution certificate and provisioning profile
+      # for this Bundle ID.
+      # ========================================================
+
       ios_signing:
-        certificates:
-          - CHDP_DIST_PUSH
-        provisioning_profiles:
-          - CHDP_GARAGE_APPLOVABLE_PROFILE
+        distribution_type: app_store
+        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
+
 
     scripts:
-      - name: Install npm dependencies clean
-        script: |
-          set -e
-          npm --version
-          npm ci --legacy-peer-deps --no-audit --no-fund || {
-            echo "npm ci failed, retrying with npm install"
-            npm install --legacy-peer-deps --no-audit --no-fund
-          }
 
-      - name: Build web assets Vite
+      # ========================================================
+      # DEPENDENCIES
+      # ========================================================
+
+      - name: Install npm dependencies
         script: |
           set -e
+
+          npm --version
+
+          npm ci \
+            --legacy-peer-deps \
+            --no-audit \
+            --no-fund \
+            || npm install \
+            --legacy-peer-deps \
+            --no-audit \
+            --no-fund
+
+
+      # ========================================================
+      # BUILD WEB
+      # ========================================================
+
+      - name: Build web application
+        script: |
+          set -e
+
           npm run build
 
-      - name: Generate Capacitor icons
-        script: |
-          set -e
-          npm install @capacitor/assets --save-dev
-          npx capacitor-assets generate --ios
 
-      - name: Add iOS platform if missing SPM
+      # ========================================================
+      # CAPACITOR ASSETS
+      # ========================================================
+
+      - name: Generate iOS icons
         script: |
           set -e
+
+          npm install @capacitor/assets --save-dev
+
+          npx capacitor-assets generate \
+            --ios \
+            --assetPath resources
+
+
+      # ========================================================
+      # CREATE IOS PLATFORM IF MISSING
+      # ========================================================
+
+      - name: Ensure iOS platform exists
+        script: |
+          set -e
+
           if [ ! -d "ios/App/App.xcodeproj" ]; then
-            echo "iOS project missing — creating fresh project"
+
+            echo "iOS project missing."
+            echo "Creating iOS project..."
+
             rm -rf ios
+
             npx cap add ios --packagemanager SPM
+
           else
-            echo "iOS project already exists"
+
+            echo "Existing iOS project found."
+
           fi
+
+
+      # ========================================================
+      # CAPACITOR SYNC
+      # ========================================================
 
       - name: Sync Capacitor iOS
         script: |
           set -e
+
           npx cap sync ios
 
-      - name: Force regenerate iOS CHDP icons after sync
+
+      # ========================================================
+      # VERIFY ICONS
+      # ========================================================
+
+      - name: Verify iOS AppIcon
         script: |
           set -e
 
-          echo "Checking CHDP icon sources..."
+          echo "Checking resources..."
+
           ls -lah resources || true
+
+          echo "Checking source icons..."
+
           file resources/icon.png || true
           file resources/icon-only.png || true
 
-          echo "Installing capacitor assets..."
-          npm install @capacitor/assets --save-dev
+          echo "Checking generated AppIcon..."
 
-          echo "Regenerating iOS AppIcon.appiconset from resources/icon.png..."
-          npx capacitor-assets generate --ios --assetPath resources
+          APPICON="ios/App/App/Assets.xcassets/AppIcon.appiconset"
 
-          echo "Generated AppIcon.appiconset:"
-          ls -lah ios/App/App/Assets.xcassets/AppIcon.appiconset
+          if [ ! -d "$APPICON" ]; then
+            echo "ERROR: AppIcon.appiconset not found"
+            exit 1
+          fi
 
-          echo "Checking Contents.json:"
-          cat ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json
+          ls -lah "$APPICON"
 
-          echo "Checking generated png icons:"
-          find ios/App/App/Assets.xcassets/AppIcon.appiconset -maxdepth 1 -iname "*.png" -print
-      - name: Patch iOS AppDelegate for APNs callbacks
+          echo "Contents.json:"
 
+          cat "$APPICON/Contents.json"
+
+          echo "Generated PNG files:"
+
+          find "$APPICON" \
+            -maxdepth 1 \
+            -iname "*.png" \
+            -print
+
+
+      # ========================================================
+      # APNs CALLBACKS
+      # ========================================================
+
+      - name: Patch AppDelegate for APNs callbacks
         script: |
           set -e
 
           APP_DELEGATE="ios/App/App/AppDelegate.swift"
 
-          echo "Patching $APP_DELEGATE for Capacitor Push Notifications callbacks..."
+          echo "Checking AppDelegate..."
 
-          if grep -q "capacitorDidRegisterForRemoteNotifications" "$APP_DELEGATE"; then
-            echo "APNs callbacks already present"
-            cat "$APP_DELEGATE"
-            exit 0
+          if [ ! -f "$APP_DELEGATE" ]; then
+            echo "ERROR: AppDelegate.swift not found"
+            exit 1
           fi
 
-          python3 <<'PY'
+          if grep -q "capacitorDidRegisterForRemoteNotifications" "$APP_DELEGATE"; then
+
+            echo "APNs callbacks already present."
+
+          else
+
+            python3 <<'PY'
+
           from pathlib import Path
 
           path = Path("ios/App/App/AppDelegate.swift")
+
           text = path.read_text()
 
           insert = '''
-              
-              func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-                  NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+
+              func application(
+                  _ application: UIApplication,
+                  didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+              ) {
+                  NotificationCenter.default.post(
+                      name: .capacitorDidRegisterForRemoteNotifications,
+                      object: deviceToken
+                  )
               }
 
-              func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-                  NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+              func application(
+                  _ application: UIApplication,
+                  didFailToRegisterForRemoteNotificationsWithError error: Error
+              ) {
+                  NotificationCenter.default.post(
+                      name: .capacitorDidFailToRegisterForRemoteNotifications,
+                      object: error
+                  )
               }
           '''
 
           if "capacitorDidRegisterForRemoteNotifications" not in text:
+
               idx = text.rfind("}")
+
               if idx == -1:
-                  raise SystemExit("Cannot find final class closing brace in AppDelegate.swift")
+                  raise SystemExit(
+                      "Cannot find final closing brace in AppDelegate.swift"
+                  )
+
               text = text[:idx] + insert + text[idx:]
 
-          path.write_text(text)
+              path.write_text(text)
+
           PY
 
-          echo "Patched AppDelegate.swift:"
-          cat "$APP_DELEGATE"
-
-      - name: Force iOS Bundle ID
-        script: |
-          set -e
-
-          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
-
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
-
-          echo "Bundle ID after patch:"
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" || true
-
-      - name: Patch iOS Push Entitlements
-        script: |
-          set -e
-
-          echo "Creating App.entitlements with APNs production environment..."
-
-          printf '%s\n' \
-          '<?xml version="1.0" encoding="UTF-8"?>' \
-          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
-          '<plist version="1.0">' \
-          '<dict>' \
-          '    <key>aps-environment</key>' \
-          '    <string>production</string>' \
-          '</dict>' \
-          '</plist>' \
-          > ios/App/App/App.entitlements
-
-          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
-
-          sed -i '' 's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PBXPROJ" || true
-
-          if ! grep -q "CODE_SIGN_ENTITLEMENTS" "$PBXPROJ"; then
-            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
-                    CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
-            ' "$PBXPROJ"
           fi
 
-          echo "Entitlements file:"
-          cat ios/App/App/App.entitlements
+          echo "Final AppDelegate.swift:"
 
-      - name: Patch iOS Info.plist permissions
+          cat "$APP_DELEGATE"
+
+
+      # ========================================================
+      # FORCE BUNDLE ID ONLY
+      #
+      # DO NOT FORCE CERTIFICATE
+      # DO NOT FORCE PROVISIONING PROFILE
+      # DO NOT FORCE CODE SIGN STYLE
+      #
+      # xcode-project use-profiles handles signing.
+      # ========================================================
+
+      - name: Verify and normalize Bundle ID
+        script: |
+          set -e
+
+          PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
+
+          BUNDLE_ID="app.lovable.c6d932101224420590deeec3ccc6923f"
+
+          echo "Setting Bundle ID to:"
+          echo "$BUNDLE_ID"
+
+          sed -i '' \
+            "s/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/g" \
+            "$PBXPROJ"
+
+          echo ""
+          echo "Bundle IDs in project:"
+          grep -n "PRODUCT_BUNDLE_IDENTIFIER" "$PBXPROJ" || true
+
+
+      # ========================================================
+      # INFO.PLIST
+      # ========================================================
+
+      - name: Configure iOS permissions
         script: |
           set -e
 
           PLIST="ios/App/App/Info.plist"
 
-          echo "Patching $PLIST"
+          echo "Configuring Info.plist..."
 
-          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName 'CHDP Garage'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string 'CHDP Garage'" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleName 'CHDP Garage'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :CFBundleName string 'CHDP Garage'" "$PLIST"
+          /usr/libexec/PlistBuddy \
+            -c "Set :CFBundleDisplayName 'CHDP Garage'" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :CFBundleDisplayName string 'CHDP Garage'" \
+            "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSBluetoothAlwaysUsageDescription 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru ve vozidle.'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru ve vozidle.'" "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSBluetoothPeripheralUsageDescription 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth Low Energy.'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth Low Energy.'" "$PLIST"
+          /usr/libexec/PlistBuddy \
+            -c "Set :CFBundleName 'CHDP Garage'" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :CFBundleName string 'CHDP Garage'" \
+            "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription 'Aplikace používá polohu pro servisní služby, diagnostiku a bezpečnost účtu.'" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string 'Aplikace používá polohu pro servisní služby, diagnostiku a bezpečnost účtu.'" "$PLIST"
+          /usr/libexec/PlistBuddy \
+            -c "Set :NSBluetoothAlwaysUsageDescription 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru ve vozidle.'" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSBluetoothAlwaysUsageDescription string 'Aplikace používá Bluetooth pro připojení k OBD2 adaptéru ve vozidle.'" \
+            "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string bluetooth-central" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:1 string remote-notification" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST" 2>/dev/null || \
-          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST"
 
-          echo "Info.plist patched successfully"
+          /usr/libexec/PlistBuddy \
+            -c "Set :NSBluetoothPeripheralUsageDescription 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth Low Energy.'" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSBluetoothPeripheralUsageDescription string 'Aplikace komunikuje s OBD2 adaptérem přes Bluetooth Low Energy.'" \
+            "$PLIST"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Set :NSCameraUsageDescription 'Kamera se používá pro OCR skenování VIN a SPZ.'" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSCameraUsageDescription string 'Kamera se používá pro OCR skenování VIN a SPZ.'" \
+            "$PLIST"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Set :NSLocationWhenInUseUsageDescription 'Aplikace používá polohu pro servisní služby, diagnostiku a bezpečnost účtu.'" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSLocationWhenInUseUsageDescription string 'Aplikace používá polohu pro servisní služby, diagnostiku a bezpečnost účtu.'" \
+            "$PLIST"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Delete :UIBackgroundModes" \
+            "$PLIST" 2>/dev/null || true
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Add :UIBackgroundModes array" \
+            "$PLIST"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Add :UIBackgroundModes:0 string bluetooth-central" \
+            "$PLIST"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Add :UIBackgroundModes:1 string remote-notification" \
+            "$PLIST"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Set :ITSAppUsesNonExemptEncryption false" \
+            "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy \
+            -c "Add :ITSAppUsesNonExemptEncryption bool false" \
+            "$PLIST"
+
+
+          echo ""
+          echo "Final Info.plist:"
+
           plutil -p "$PLIST"
 
-      - name: Set up code signing
+
+      # ========================================================
+      # APNs ENTITLEMENTS
+      #
+      # This only defines the app capability.
+      # The actual signing profile is selected by Codemagic.
+      # ========================================================
+
+      - name: Configure APNs entitlements
         script: |
           set -e
-          keychain initialize
-          keychain add-certificates
-          xcode-project use-profiles
 
-      - name: Force Xcode manual signing settings
+          ENTITLEMENTS="ios/App/App/App.entitlements"
+
+          echo "Creating APNs entitlements..."
+
+          cat > "$ENTITLEMENTS" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>aps-environment</key>
+              <string>production</string>
+          </dict>
+          </plist>
+          EOF
+
+          echo ""
+          echo "Entitlements:"
+
+          cat "$ENTITLEMENTS"
+
+
+      # ========================================================
+      # LINK ENTITLEMENTS TO XCODE PROJECT
+      # ========================================================
+
+      - name: Link APNs entitlements
         script: |
           set -e
 
           PBXPROJ="ios/App/App.xcodeproj/project.pbxproj"
-          PROFILE_NAME="CHDP Garage App Store app.lovable PUSH"
 
-          echo "Forcing manual signing settings with profile: $PROFILE_NAME"
+          echo "Linking App.entitlements..."
 
-          sed -i '' 's/PRODUCT_BUNDLE_IDENTIFIER = [^;]*;/PRODUCT_BUNDLE_IDENTIFIER = app.lovable.c6d932101224420590deeec3ccc6923f;/g' "$PBXPROJ"
+          if grep -q "CODE_SIGN_ENTITLEMENTS" "$PBXPROJ"; then
 
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
-          sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+            sed -i '' \
+              's|CODE_SIGN_ENTITLEMENTS = .*;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' \
+              "$PBXPROJ"
 
-          sed -i '' '/PROVISIONING_PROFILE_SPECIFIER =/d' "$PBXPROJ" || true
-          sed -i '' '/PROVISIONING_PROFILE =/d' "$PBXPROJ" || true
-
-          if grep -q "DEVELOPMENT_TEAM = " "$PBXPROJ"; then
-            sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = 7353KNVBCK;/g' "$PBXPROJ"
           else
-            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
-                    DEVELOPMENT_TEAM = 7353KNVBCK;
-            ' "$PBXPROJ"
+
+            sed -i '' \
+              '/PRODUCT_BUNDLE_IDENTIFIER =/a\
+                  CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\
+            ' \
+              "$PBXPROJ"
+
           fi
 
-          if grep -q "CODE_SIGN_IDENTITY = " "$PBXPROJ"; then
-            sed -i '' 's/CODE_SIGN_IDENTITY = [^;]*;/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
-          else
-            sed -i '' '/PRODUCT_BUNDLE_IDENTIFIER =/a\
-                    CODE_SIGN_IDENTITY = "Apple Distribution";
-            ' "$PBXPROJ"
-          fi
+          echo ""
+          echo "Entitlements settings:"
 
-          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = [^;]*;/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Distribution";/g' "$PBXPROJ" || true
+          grep -n \
+            "CODE_SIGN_ENTITLEMENTS" \
+            "$PBXPROJ" || true
 
-          sed -i '' "/PRODUCT_BUNDLE_IDENTIFIER =/a\\
-                  PROVISIONING_PROFILE_SPECIFIER = \"$PROFILE_NAME\";
-          " "$PBXPROJ"
 
-          echo "Manual signing settings after patch:"
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" "$PBXPROJ" || true
+      # ========================================================
+      # IMPORTANT SIGNING STEP
+      #
+      # This is the critical replacement for the old
+      # CHDP_DIST_PUSH configuration.
+      #
+      # Codemagic automatically applies the matching
+      # App Store distribution certificate and provisioning
+      # profile for the Bundle ID.
+      # ========================================================
 
-      - name: Verify iOS signing and entitlements
+      - name: Configure automatic Codemagic iOS signing
         script: |
           set -e
 
-          echo "Checking Bundle ID..."
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER" ios/App/App.xcodeproj/project.pbxproj || true
+          echo "Configuring iOS code signing..."
 
-          echo "Checking signing settings..."
-          grep -n "CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" ios/App/App.xcodeproj/project.pbxproj || true
+          xcode-project use-profiles \
+            --project ios/App/App.xcodeproj
 
-          echo "Checking App.entitlements..."
+          echo ""
+          echo "Signing configuration after use-profiles:"
+
+          grep -n \
+            "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" \
+            ios/App/App.xcodeproj/project.pbxproj || true
+
+
+      # ========================================================
+      # VERIFY SIGNING FILES
+      # ========================================================
+
+      - name: Verify iOS signing environment
+        script: |
+          set -e
+
+          echo "=========================================="
+          echo "IOS SIGNING VERIFICATION"
+          echo "=========================================="
+
+          echo ""
+          echo "Bundle ID:"
+
+          grep -n \
+            "PRODUCT_BUNDLE_IDENTIFIER" \
+            ios/App/App.xcodeproj/project.pbxproj || true
+
+
+          echo ""
+          echo "Signing configuration:"
+
+          grep -n \
+            "CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" \
+            ios/App/App.xcodeproj/project.pbxproj || true
+
+
+          echo ""
+          echo "Provisioning profiles installed:"
+
+          ls -lah \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/" \
+            || true
+
+
+          echo ""
+          echo "Certificates available to codesign:"
+
+          security find-identity \
+            -v \
+            -p codesigning \
+            || true
+
+
+          echo ""
+          echo "APNs entitlements:"
+
           cat ios/App/App/App.entitlements
 
-          echo "Checking aps-environment..."
-          grep -n "aps-environment" ios/App/App/App.entitlements || {
-            echo "ERROR: aps-environment missing"
-            exit 1
-          }
 
-          echo "Checking production APNs environment..."
-          grep -n "production" ios/App/App/App.entitlements || {
-            echo "ERROR: aps-environment production missing"
-            exit 1
-          }
+          echo ""
+          echo "=========================================="
+          echo "SIGNING VERIFICATION COMPLETE"
+          echo "=========================================="
 
-          echo "Checking Info.plist background modes..."
-          plutil -p ios/App/App/Info.plist | grep -A8 UIBackgroundModes || true
 
-      - name: Increment iOS build number
+      # ========================================================
+      # BUILD NUMBER
+      # ========================================================
+
+      - name: Set unique iOS build number
         script: |
           set -e
+
           cd ios/App
 
           IOS_BUILD_NUMBER="$(date +%Y%m%d%H%M)"
-          echo "Setting unique iOS build number to $IOS_BUILD_NUMBER"
+
+          echo "Using iOS build number:"
+          echo "$IOS_BUILD_NUMBER"
 
           agvtool new-version -all "$IOS_BUILD_NUMBER"
 
-          echo "Current Info.plist versions:"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" App/Info.plist || true
-          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" App/Info.plist || true
+          echo ""
+          echo "Current versions:"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleVersion" \
+            App/Info.plist \
+            || true
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleShortVersionString" \
+            App/Info.plist \
+            || true
+
+
+      # ========================================================
+      # BUILD IPA
+      # ========================================================
 
       - name: Build signed IPA
         script: |
           set -e
+
           cd ios/App
 
-          echo "Cleaning old Xcode logs..."
+          echo "=========================================="
+          echo "STARTING SIGNED IPA BUILD"
+          echo "=========================================="
+
+
           rm -rf /tmp/xcodebuild_logs || true
+
           mkdir -p /tmp/xcodebuild_logs
 
-          echo "Current signing settings before archive:"
-          grep -n "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" App.xcodeproj/project.pbxproj || true
 
-          echo "Available provisioning profiles:"
-          ls -la "$HOME/Library/MobileDevice/Provisioning Profiles/" || true
+          echo ""
+          echo "Final project signing settings:"
 
-          echo "Starting IPA build..."
+          grep -n \
+            "PRODUCT_BUNDLE_IDENTIFIER\|CODE_SIGN_STYLE\|DEVELOPMENT_TEAM\|CODE_SIGN_IDENTITY\|PROVISIONING_PROFILE\|CODE_SIGN_ENTITLEMENTS" \
+            App.xcodeproj/project.pbxproj \
+            || true
+
+
+          echo ""
+          echo "Starting xcode-project build-ipa..."
+
 
           set +e
+
           xcode-project build-ipa \
             --project App.xcodeproj \
             --scheme App
 
           BUILD_EXIT=$?
+
           set -e
 
+
           if [ "$BUILD_EXIT" -ne 0 ]; then
+
+            echo ""
             echo "=========================================="
-            echo "XCODE BUILD FAILED — PRINTING FULL LOGS"
+            echo "XCODE BUILD FAILED"
             echo "=========================================="
 
-            echo "Logs in /tmp/xcodebuild_logs:"
-            find /tmp/xcodebuild_logs -maxdepth 3 -type f -print || true
 
-            for log in /tmp/xcodebuild_logs/*.log; do
-              if [ -f "$log" ]; then
+            echo ""
+            echo "Available Xcode logs:"
+
+            find \
+              /tmp/xcodebuild_logs \
+              -maxdepth 3 \
+              -type f \
+              -print \
+              || true
+
+
+            for LOG in /tmp/xcodebuild_logs/*.log; do
+
+              if [ -f "$LOG" ]; then
+
+                echo ""
                 echo "=========================================="
-                echo "LOG FILE: $log"
+                echo "LOG: $LOG"
                 echo "=========================================="
-                cat "$log"
+
+                cat "$LOG"
+
               fi
+
             done
 
+
+            echo ""
             echo "=========================================="
-            echo "END OF XCODE LOGS"
+            echo "END XCODE LOGS"
             echo "=========================================="
+
 
             exit "$BUILD_EXIT"
+
           fi
 
-          echo "IPA build completed successfully"
 
-      - name: Verify built IPA APNs entitlement
+          echo ""
+          echo "IPA build completed successfully."
+
+
+      # ========================================================
+      # VERIFY IPA
+      # ========================================================
+
+      - name: Verify final IPA signing and APNs
         script: |
           set -e
 
           IPA_PATH="$(ls ios/App/build/ios/ipa/*.ipa | head -1)"
-          echo "IPA: $IPA_PATH"
+
+          if [ -z "$IPA_PATH" ]; then
+            echo "ERROR: IPA was not generated"
+            exit 1
+          fi
+
+          echo "IPA:"
+          echo "$IPA_PATH"
+
 
           TMP_DIR="$(mktemp -d)"
-          unzip -q "$IPA_PATH" -d "$TMP_DIR"
+
+
+          unzip -q \
+            "$IPA_PATH" \
+            -d "$TMP_DIR"
+
 
           APP_PATH="$(find "$TMP_DIR/Payload" -name "*.app" -type d | head -1)"
-          echo "APP: $APP_PATH"
 
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Signed .app not found inside IPA"
+            exit 1
+          fi
+
+
+          echo ""
+          echo "APP:"
+          echo "$APP_PATH"
+
+
+          echo ""
           echo "Embedded provisioning profile:"
-          security cms -D -i "$APP_PATH/embedded.mobileprovision" > "$TMP_DIR/profile.plist"
 
-          /usr/libexec/PlistBuddy -c "Print :Name" "$TMP_DIR/profile.plist" || true
-          /usr/libexec/PlistBuddy -c "Print :Entitlements:application-identifier" "$TMP_DIR/profile.plist" || true
-          /usr/libexec/PlistBuddy -c "Print :Entitlements:aps-environment" "$TMP_DIR/profile.plist" || {
-            echo "ERROR: aps-environment missing in embedded provisioning profile"
-            exit 1
-          }
 
-          echo "Signed app entitlements:"
-          codesign -d --entitlements :- "$APP_PATH" > "$TMP_DIR/entitlements.plist" 2>/dev/null || {
-            echo "ERROR: Cannot read signed entitlements"
-            exit 1
-          }
+          security cms \
+            -D \
+            -i "$APP_PATH/embedded.mobileprovision" \
+            > "$TMP_DIR/profile.plist"
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Name" \
+            "$TMP_DIR/profile.plist" \
+            || true
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:application-identifier" \
+            "$TMP_DIR/profile.plist" \
+            || true
+
+
+          echo ""
+          echo "Checking APNs environment in provisioning profile..."
+
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :Entitlements:aps-environment" \
+            "$TMP_DIR/profile.plist"
+
+
+          echo ""
+          echo "Signed application entitlements:"
+
+
+          codesign \
+            -d \
+            --entitlements :- \
+            "$APP_PATH" \
+            > "$TMP_DIR/entitlements.plist" \
+            2>/dev/null
+
 
           cat "$TMP_DIR/entitlements.plist"
 
-          grep -q "aps-environment" "$TMP_DIR/entitlements.plist" || {
-            echo "ERROR: aps-environment missing in signed app"
-            exit 1
-          }
 
-          grep -q "production" "$TMP_DIR/entitlements.plist" || {
-            echo "ERROR: aps-environment is not production"
-            exit 1
-          }
+          echo ""
+          echo "Checking aps-environment..."
 
-          echo "APNs entitlement OK"
+
+          grep -q \
+            "aps-environment" \
+            "$TMP_DIR/entitlements.plist" \
+            || {
+              echo "ERROR: aps-environment missing from signed application"
+              exit 1
+            }
+
+
+          grep -q \
+            "production" \
+            "$TMP_DIR/entitlements.plist" \
+            || {
+              echo "ERROR: aps-environment is not production"
+              exit 1
+            }
+
+
+          echo ""
+          echo "=========================================="
+          echo "FINAL IPA SIGNING VERIFICATION: OK"
+          echo "=========================================="
+
 
     artifacts:
+
       - ios/App/build/ios/ipa/*.ipa
+
       - /tmp/xcodebuild_logs/*.log
+
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
+
     publishing:
+
       app_store_connect:
+
         auth: integration
+
         submit_to_testflight: true
