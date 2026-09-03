@@ -31,36 +31,43 @@ workflows:
           set -e
           npx cap sync ios
 
-      - name: Verify iOS project
+      - name: Verify Bundle ID
         script: |
           set -e
 
-          echo "=========================================="
-          echo "CHDP GARAGE iOS BUILD"
-          echo "=========================================="
-
-          echo "Node:"
-          node --version
-
-          echo "npm:"
-          npm --version
-
-          echo "Bundle ID:"
-          echo "app.lovable.c6d93210122420590deec3ccc6923f"
-
-          echo "Distribution:"
-          echo "AD HOC"
-
-          echo "Xcode:"
-          xcodebuild -version
-
-          echo "iOS project:"
-          test -d ios
-          echo "OK"
+          EXPECTED_BUNDLE_ID="app.lovable.c6d93210122420590deec3ccc6923f"
 
           echo "=========================================="
-          echo "CONFIGURATION OK"
+          echo "CHDP GARAGE iOS AD HOC BUILD"
           echo "=========================================="
+          echo "Expected Bundle ID:"
+          echo "$EXPECTED_BUNDLE_ID"
+
+          if [ ! -d "ios" ]; then
+            echo "ERROR: ios directory does not exist."
+            exit 1
+          fi
+
+          PROJECT_FILE=$(find ios -name "project.pbxproj" -type f | head -1)
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "ERROR: Xcode project not found."
+            exit 1
+          fi
+
+          echo "Xcode project:"
+          echo "$PROJECT_FILE"
+
+          if ! grep -q "$EXPECTED_BUNDLE_ID" "$PROJECT_FILE"; then
+            echo "ERROR: Bundle ID does not match."
+            echo "Expected:"
+            echo "$EXPECTED_BUNDLE_ID"
+            exit 1
+          fi
+
+          echo "Bundle ID verified successfully."
+          echo "Distribution type: AD HOC"
+          echo "Configuration OK."
 
       - name: Build IPA
         script: |
