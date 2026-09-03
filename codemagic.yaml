@@ -16,20 +16,46 @@ workflows:
         bundle_identifier: "app.lovable.c6d93210122420590deec3ccc6923f"
 
     scripts:
+
       - name: Install dependencies
         script: |
           set -e
+
+          echo "=========================================="
+          echo "INSTALL DEPENDENCIES"
+          echo "=========================================="
+
           npm ci
 
       - name: Build web application
         script: |
           set -e
+
+          echo "=========================================="
+          echo "BUILD WEB APPLICATION"
+          echo "=========================================="
+
           npm run build
 
       - name: Sync Capacitor iOS
         script: |
           set -e
+
+          echo "=========================================="
+          echo "SYNC CAPACITOR IOS"
+          echo "=========================================="
+
           npx cap sync ios
+
+      - name: Configure iOS signing
+        script: |
+          set -e
+
+          echo "=========================================="
+          echo "CONFIGURE IOS SIGNING"
+          echo "=========================================="
+
+          xcode-project use-profiles
 
       - name: Verify Bundle ID
         script: |
@@ -38,8 +64,9 @@ workflows:
           EXPECTED_BUNDLE_ID="app.lovable.c6d93210122420590deec3ccc6923f"
 
           echo "=========================================="
-          echo "CHDP GARAGE iOS AD HOC BUILD"
+          echo "CHDP GARAGE IOS AD HOC BUILD"
           echo "=========================================="
+
           echo "Expected Bundle ID:"
           echo "$EXPECTED_BUNDLE_ID"
 
@@ -58,6 +85,8 @@ workflows:
           echo "Xcode project:"
           echo "$PROJECT_FILE"
 
+          echo "Checking Bundle ID..."
+
           if ! grep -q "$EXPECTED_BUNDLE_ID" "$PROJECT_FILE"; then
             echo "ERROR: Bundle ID does not match."
             echo "Expected:"
@@ -67,17 +96,23 @@ workflows:
 
           echo "Bundle ID verified successfully."
           echo "Distribution type: AD HOC"
-          echo "Configuration OK."
+          echo "Signing configuration verified."
 
       - name: Build IPA
         script: |
           set -e
 
-          cd ios/App
+          echo "=========================================="
+          echo "BUILD IOS AD HOC IPA"
+          echo "=========================================="
 
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
+            --workspace "ios/App/App.xcworkspace" \
             --scheme "App"
+
+          echo "=========================================="
+          echo "IPA BUILD FINISHED"
+          echo "=========================================="
 
     artifacts:
       - build/ios/ipa/*.ipa
