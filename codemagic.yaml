@@ -1,33 +1,77 @@
 workflows:
   ios-test:
-    name: CHDP iOS Test
+    name: CHDP Garage iOS Ad Hoc
     max_build_duration: 60
     instance_type: mac_mini_m2
+
     integrations:
       app_store_connect: "Garáž CHDP"
+
     environment:
       xcode: latest
       node: 22
+
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
+        distribution_type: ad_hoc
+        bundle_identifier: "app.lovable.c6d93210122420590deec3ccc6923f"
+
     scripts:
-      - name: Verify Codemagic configuration
+      - name: Install dependencies
         script: |
           set -e
+          npm ci
+
+      - name: Build web application
+        script: |
+          set -e
+          npm run build
+
+      - name: Sync Capacitor iOS
+        script: |
+          set -e
+          npx cap sync ios
+
+      - name: Verify iOS project
+        script: |
+          set -e
+
           echo "=========================================="
-          echo "CHDP CODEMAGIC CONFIGURATION TEST"
+          echo "CHDP GARAGE iOS BUILD"
           echo "=========================================="
+
           echo "Node:"
           node --version
+
           echo "npm:"
           npm --version
-          echo "Build directory:"
-          pwd
+
           echo "Bundle ID:"
-          echo "app.lovable.c6d932101224420590deeec3ccc6923f"
-          echo "App Store Connect integration:"
-          echo "Garáž CHDP"
-          echo "CODEMAGIC CONFIGURATION OK"
+          echo "app.lovable.c6d93210122420590deec3ccc6923f"
+
+          echo "Distribution:"
+          echo "AD HOC"
+
+          echo "Xcode:"
+          xcodebuild -version
+
+          echo "iOS project:"
+          test -d ios
+          echo "OK"
+
+          echo "=========================================="
+          echo "CONFIGURATION OK"
+          echo "=========================================="
+
+      - name: Build IPA
+        script: |
+          set -e
+
+          cd ios/App
+
+          xcode-project build-ipa \
+            --workspace "App.xcworkspace" \
+            --scheme "App"
+
     artifacts:
+      - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
