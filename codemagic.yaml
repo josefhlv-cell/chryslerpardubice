@@ -10,7 +10,8 @@ workflows:
     environment:
       xcode: latest
       node: 22
-
+      vars:
+        BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
       ios_signing:
         distribution_type: ad_hoc
         bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
@@ -20,99 +21,46 @@ workflows:
       - name: Install dependencies
         script: |
           set -e
-
-          echo "=========================================="
-          echo "INSTALL DEPENDENCIES"
-          echo "=========================================="
-
           npm ci
 
       - name: Build web application
         script: |
           set -e
-
-          echo "=========================================="
-          echo "BUILD WEB APPLICATION"
-          echo "=========================================="
-
           npm run build
 
       - name: Sync Capacitor iOS
         script: |
           set -e
-
-          echo "=========================================="
-          echo "SYNC CAPACITOR IOS"
-          echo "=========================================="
-
           npx cap sync ios
+
+      - name: Set up keychain
+        script: |
+          set -e
+          keychain initialize
+
+      - name: Fetch signing files
+        script: |
+          set -e
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_ADHOC \
+            --create
+
+      - name: Set up signing certificate
+        script: |
+          set -e
+          keychain add-certificates
 
       - name: Configure iOS signing
         script: |
           set -e
-
-          echo "=========================================="
-          echo "CONFIGURE IOS SIGNING"
-          echo "=========================================="
-
           xcode-project use-profiles
-
-      - name: Verify Bundle ID
-        script: |
-          set -e
-
-          EXPECTED_BUNDLE_ID="app.loveable.c6d93210122420590deeec3ccc6923f"
-
-          echo "=========================================="
-          echo "CHDP GARAGE IOS AD HOC BUILD"
-          echo "=========================================="
-
-          echo "Expected Bundle ID:"
-          echo "$EXPECTED_BUNDLE_ID"
-
-          if [ ! -d "ios" ]; then
-            echo "ERROR: ios directory does not exist."
-            exit 1
-          fi
-
-          PROJECT_FILE=$(find ios -name "project.pbxproj" -type f | head -1)
-
-          if [ -z "$PROJECT_FILE" ]; then
-            echo "ERROR: Xcode project not found."
-            exit 1
-          fi
-
-          echo "Xcode project:"
-          echo "$PROJECT_FILE"
-
-          echo "Checking Bundle ID..."
-
-          if ! grep -q "$EXPECTED_BUNDLE_ID" "$PROJECT_FILE"; then
-            echo "ERROR: Bundle ID does not match."
-            echo "Expected:"
-            echo "$EXPECTED_BUNDLE_ID"
-            exit 1
-          fi
-
-          echo "Bundle ID verified successfully."
-          echo "Distribution type: AD HOC"
-          echo "Signing configuration verified."
 
       - name: Build IPA
         script: |
           set -e
-
-          echo "=========================================="
-          echo "BUILD IOS AD HOC IPA"
-          echo "=========================================="
-
           xcode-project build-ipa \
             --workspace "ios/App/App.xcworkspace" \
             --scheme "App"
-
-          echo "=========================================="
-          echo "IPA BUILD FINISHED"
-          echo "=========================================="
 
     artifacts:
       - build/ios/ipa/*.ipa
