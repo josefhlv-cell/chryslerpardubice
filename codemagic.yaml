@@ -12,9 +12,6 @@ workflows:
       node: 22
       vars:
         BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
 
     scripts:
 
