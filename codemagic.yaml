@@ -13,7 +13,7 @@ workflows:
 
       ios_signing:
         distribution_type: ad_hoc
-        bundle_identifier: "app.lovable.c6d93210122420590deec3ccc6923f"
+        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
 
     scripts:
 
@@ -61,7 +61,7 @@ workflows:
         script: |
           set -e
 
-          EXPECTED_BUNDLE_ID="app.lovable.c6d93210122420590deec3ccc6923f"
+          EXPECTED_BUNDLE_ID="app.loveable.c6d93210122420590deeec3ccc6923f"
 
           echo "=========================================="
           echo "CHDP GARAGE IOS AD HOC BUILD"
@@ -116,5 +116,3 @@ workflows:
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-    
