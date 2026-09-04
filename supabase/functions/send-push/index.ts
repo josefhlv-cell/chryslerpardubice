@@ -19,7 +19,7 @@ const FCM_SA = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON"); // JSON s private_key +
 const APNS_KEY = Deno.env.get("APNS_AUTH_KEY"); // .p8 obsah
 const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID");
 const APNS_TEAM_ID = Deno.env.get("APNS_TEAM_ID");
-const APNS_BUNDLE_ID = Deno.env.get("APNS_BUNDLE_ID") ?? "app.lovable.c6d932101224420590deeec3ccc6923f";
+const APNS_BUNDLE_ID = Deno.env.get("APNS_BUNDLE_ID") ?? "cz.chryslerpardubice.chdpgarage";
 const APNS_HOST = Deno.env.get("APNS_HOST") ?? "api.push.apple.com"; // prod; sandbox: api.sandbox.push.apple.com
 
 interface Payload {

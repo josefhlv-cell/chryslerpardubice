@@ -25,7 +25,7 @@ Codemagic sám udělá `xcode-project use-profiles` – používá provisioning 
 
 ## 2) Apple Developer Portal (ručně, jednorázově)
 
-1. **Identifiers → App IDs** – u App ID `app.lovable.c6d932101224420590deeec3ccc6923f`
+1. **Identifiers → App IDs** – u App ID `cz.chryslerpardubice.chdpgarage`
    zapněte capability **Push Notifications**.
 2. **Keys** – vytvořte APNs klíč (.p8), poznamenejte Key ID a Team ID.
 3. **Profiles** – vygenerujte **App Store** i **Ad Hoc** provisioning profile,
