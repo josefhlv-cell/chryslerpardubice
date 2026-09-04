@@ -205,6 +205,7 @@ workflows:
       - *install_deps
       - *build_web
       - *prepare_ios
+      - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
       - *fetch_app_store_signing
@@ -238,6 +239,7 @@ workflows:
       - *install_deps
       - *build_web
       - *prepare_ios
+      - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
       - *fetch_adhoc_signing
