@@ -25,13 +25,37 @@ definitions:
           npx cap add ios
         fi
         npx cap sync ios
-        # Capacitor sync nemusí spustit pod install -> workspace by pak chyběl
-        if [ ! -d "ios/App/App.xcworkspace" ]; then
+        # Capacitor 8 používá Swift Package Manager – Podfile/workspace nemusí existovat.
+        # CocoaPods spustíme jen pokud Podfile skutečně je.
+        if [ -f "ios/App/Podfile" ]; then
           cd ios/App
           pod install --repo-update
           cd -
+        else
+          echo "Podfile nenalezen – Capacitor používá SPM, buduje se přes .xcodeproj"
         fi
         ls -la ios/App
+
+    - &patch_info_plist
+      name: Patch Info.plist (permissions)
+      script: |
+        set -e
+        PLIST="ios/App/App/Info.plist"
+        set_str() {
+          /usr/libexec/PlistBuddy -c "Delete :$1" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$PLIST"
+        }
+        set_str NSBluetoothAlwaysUsageDescription "Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla."
+        set_str NSBluetoothPeripheralUsageDescription "Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla."
+        set_str NSCameraUsageDescription "Fotoaparát se používá pro skenování VIN a SPZ."
+        set_str NSLocationWhenInUseUsageDescription "Poloha je potřeba pro Bluetooth skenování a servisní služby."
+        /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST"
+        /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string remote-notification" "$PLIST"
+        plutil -lint "$PLIST"
+
+
+
 
 
     - &set_bundle_id
@@ -181,6 +205,7 @@ workflows:
       - *install_deps
       - *build_web
       - *prepare_ios
+      - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
       - *fetch_app_store_signing
@@ -214,6 +239,7 @@ workflows:
       - *install_deps
       - *build_web
       - *prepare_ios
+      - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
       - *fetch_adhoc_signing
