@@ -121,3 +121,33 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+
+  ios-test:
+    name: CHDP iOS Test
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: "Chdp Lukovna"
+
+    environment:
+      <<: *env_versions
+      vars:
+        BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
+
+    scripts:
+      - name: Verify Codemagic configuration
+        script: |
+          set -e
+          echo "CHDP CODEMAGIC CONFIGURATION TEST"
+          node --version
+          npm --version
+          pwd
+          echo "Bundle ID: $BUNDLE_ID"
+          echo "CODEMAGIC CONFIGURATION OK"
+
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log
