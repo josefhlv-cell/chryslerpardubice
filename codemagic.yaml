@@ -5,10 +5,23 @@ definitions:
     cocoapods: default
 
 workflows:
+
   ios-appstore:
-    name: CHDP Garage iOS App Store
+    name: CHDP Garage iOS App Store / TestFlight
     max_build_duration: 90
     instance_type: mac_mini_m2
+
+    # ============================================================
+    # APP STORE CONNECT API INTEGRATION
+    # ============================================================
+    #
+    # !!! DŮLEŽITÉ !!!
+    # "CHDP App Store Connect" musí být PŘESNÝ název
+    # App Store Connect API key integration, kterou máš
+    # nastavenou v Codemagic.
+    #
+    integrations:
+      app_store_connect: CHDP App Store Connect
 
     environment:
       <<: *env_versions
@@ -22,39 +35,82 @@ workflows:
         distribution_type: app_store
         bundle_identifier: "cz.chryslerpardubice.chdpgarage"
 
+    # ============================================================
+    # BUILD SCRIPTS
+    # ============================================================
+
     scripts:
 
+      # ----------------------------------------------------------
+      # 1. NPM DEPENDENCIES
+      # ----------------------------------------------------------
       - name: Install dependencies
         script: |
           set -e
+
+          echo "======================================"
+          echo "INSTALL DEPENDENCIES"
+          echo "======================================"
+
           npm ci
 
+      # ----------------------------------------------------------
+      # 2. BUILD WEB APPLICATION
+      # ----------------------------------------------------------
       - name: Build web application
         script: |
           set -e
+
+          echo "======================================"
+          echo "BUILD WEB APPLICATION"
+          echo "======================================"
+
           npm run build
 
+      # ----------------------------------------------------------
+      # 3. PREPARE CAPACITOR IOS
+      # ----------------------------------------------------------
       - name: Prepare iOS project
         script: |
           set -e
 
+          echo "======================================"
+          echo "PREPARE IOS PROJECT"
+          echo "======================================"
+
           if [ ! -d "ios" ]; then
+            echo "iOS project does not exist."
+            echo "Creating Capacitor iOS project..."
+
             npx cap add ios
+          else
+            echo "iOS project already exists."
           fi
+
+          echo "Running Capacitor sync..."
 
           npx cap sync ios
 
           if [ -f "ios/App/Podfile" ]; then
+            echo "Installing CocoaPods..."
+
             cd ios/App
             pod install
             cd -
           fi
 
+      # ----------------------------------------------------------
+      # 4. VERIFY IOS PROJECT
+      # ----------------------------------------------------------
       - name: Verify iOS project
         script: |
           set -e
 
           PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
+
+          echo "======================================"
+          echo "VERIFY IOS PROJECT"
+          echo "======================================"
 
           if [ ! -f "$PROJECT_FILE" ]; then
             echo "ERROR: Xcode project not found:"
@@ -62,78 +118,161 @@ workflows:
             exit 1
           fi
 
-          echo "======================================"
-          echo "CHDP GARAGE iOS BUILD"
-          echo "======================================"
+          echo ""
           echo "Bundle ID:"
           echo "$BUNDLE_ID"
-          echo ""
 
+          echo ""
+          echo "Apple App ID:"
+          echo "$APP_STORE_APPLE_ID"
+
+          echo ""
           echo "Xcode Bundle IDs:"
           grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" || true
+
           echo ""
 
-          if ! grep -q "cz.chryslerpardubice.chdpgarage" "$PROJECT_FILE"; then
-            echo "ERROR: Bundle ID cz.chryslerpardubice.chdpgarage was not found."
+          if ! grep -q "$BUNDLE_ID" "$PROJECT_FILE"; then
+            echo "ERROR: Bundle ID was not found in Xcode project."
+            echo "Expected:"
+            echo "$BUNDLE_ID"
             exit 1
           fi
 
           echo "Bundle ID verification: OK"
 
+      # ----------------------------------------------------------
+      # 5. CONFIGURE IOS SIGNING
+      # ----------------------------------------------------------
       - name: Configure iOS signing
         script: |
           set -e
 
-          echo "Applying Codemagic managed iOS signing..."
+          echo "======================================"
+          echo "CONFIGURE IOS SIGNING"
+          echo "======================================"
 
           xcode-project use-profiles
 
+          echo ""
           echo "Signing configuration completed."
 
+      # ----------------------------------------------------------
+      # 6. CONFIGURE INFO.PLIST
+      # ----------------------------------------------------------
       - name: Configure Info.plist
         script: |
           set -e
 
           PLIST="ios/App/App/Info.plist"
 
+          echo "======================================"
+          echo "CONFIGURE INFO.PLIST"
+          echo "======================================"
+
           if [ ! -f "$PLIST" ]; then
-            echo "ERROR: Info.plist not found."
+            echo "ERROR: Info.plist not found:"
+            echo "$PLIST"
             exit 1
           fi
 
-          /usr/libexec/PlistBuddy -c "Delete :NSCameraUsageDescription" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string Aplikace používá fotoaparát pro skenování VIN a SPZ." "$PLIST"
+          # Camera
+          /usr/libexec/PlistBuddy \
+            -c "Delete :NSCameraUsageDescription" \
+            "$PLIST" 2>/dev/null || true
 
-          /usr/libexec/PlistBuddy -c "Delete :NSBluetoothAlwaysUsageDescription" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." "$PLIST"
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSCameraUsageDescription string Aplikace používá fotoaparát pro skenování VIN a SPZ." \
+            "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Delete :NSBluetoothPeripheralUsageDescription" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." "$PLIST"
+          # Bluetooth
+          /usr/libexec/PlistBuddy \
+            -c "Delete :NSBluetoothAlwaysUsageDescription" \
+            "$PLIST" 2>/dev/null || true
 
-          /usr/libexec/PlistBuddy -c "Delete :NSLocationWhenInUseUsageDescription" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST"
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSBluetoothAlwaysUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." \
+            "$PLIST"
+
+          # Legacy Bluetooth permission
+          /usr/libexec/PlistBuddy \
+            -c "Delete :NSBluetoothPeripheralUsageDescription" \
+            "$PLIST" 2>/dev/null || true
+
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSBluetoothPeripheralUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." \
+            "$PLIST"
+
+          # Location
+          /usr/libexec/PlistBuddy \
+            -c "Delete :NSLocationWhenInUseUsageDescription" \
+            "$PLIST" 2>/dev/null || true
+
+          /usr/libexec/PlistBuddy \
+            -c "Add :NSLocationWhenInUseUsageDescription string Poloha je potřeba pro Bluetooth a servisní služby." \
+            "$PLIST"
+
+          echo ""
+          echo "Checking plist..."
 
           plutil -lint "$PLIST"
 
+          echo ""
           echo "Info.plist verification: OK"
 
-      - name: Set application version
+      # ----------------------------------------------------------
+      # 7. VERSION + AUTOMATIC BUILD NUMBER
+      # ----------------------------------------------------------
+      - name: Set application version and build number
         script: |
           set -e
 
+          echo "======================================"
+          echo "SET VERSION"
+          echo "======================================"
+
           cd ios/App
 
-          echo "Marketing version: ${MARKETING_VERSION}"
+          echo "Marketing version:"
+          echo "$MARKETING_VERSION"
 
-          agvtool new-marketing-version "${MARKETING_VERSION}"
+          agvtool new-marketing-version "$MARKETING_VERSION"
 
-          if [ -n "${BUILD_NUMBER:-}" ]; then
-            echo "Build number: ${BUILD_NUMBER}"
-            agvtool new-version -all "${BUILD_NUMBER}"
+          cd "$CM_BUILD_DIR"
+
+          echo ""
+          echo "Getting latest App Store Connect build number..."
+
+          LATEST_BUILD_NUMBER=$(
+            app-store-connect get-latest-app-store-build-number \
+              "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0"
+          )
+
+          if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+            LATEST_BUILD_NUMBER=0
           fi
 
-          cd -
+          NEXT_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
 
+          echo ""
+          echo "Latest App Store Connect build:"
+          echo "$LATEST_BUILD_NUMBER"
+
+          echo "New build number:"
+          echo "$NEXT_BUILD_NUMBER"
+
+          cd ios/App
+
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+
+          echo ""
+          echo "Version configuration completed."
+
+          cd "$CM_BUILD_DIR"
+
+      # ----------------------------------------------------------
+      # 8. FINAL SIGNING VERIFICATION
+      # ----------------------------------------------------------
       - name: Final signing verification
         script: |
           set -e
@@ -141,10 +280,15 @@ workflows:
           PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
 
           echo "======================================"
-          echo "FINAL VERIFICATION"
+          echo "FINAL SIGNING VERIFICATION"
           echo "======================================"
 
-          echo "Bundle ID:"
+          echo ""
+          echo "Expected Bundle ID:"
+          echo "$BUNDLE_ID"
+
+          echo ""
+          echo "Xcode Bundle IDs:"
           grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" || true
 
           echo ""
@@ -152,13 +296,15 @@ workflows:
           grep "CODE_SIGN" "$PROJECT_FILE" || true
 
           echo ""
-          echo "Entitlements references:"
+          echo "Entitlements:"
           grep "CODE_SIGN_ENTITLEMENTS" "$PROJECT_FILE" || true
 
           echo ""
-          echo "Expected Bundle ID:"
-          echo "$BUNDLE_ID"
+          echo "Signing verification completed."
 
+      # ----------------------------------------------------------
+      # 9. BUILD IPA
+      # ----------------------------------------------------------
       - name: Build IPA
         script: |
           set -e
@@ -192,8 +338,36 @@ workflows:
 
           fi
 
-          echo "IPA BUILD FINISHED."
+          echo ""
+          echo "======================================"
+          echo "IPA BUILD FINISHED"
+          echo "======================================"
+
+    # ============================================================
+    # ARTIFACTS
+    # ============================================================
 
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+
+    # ============================================================
+    # APP STORE CONNECT / TESTFLIGHT
+    # ============================================================
+
+    publishing:
+
+      app_store_connect:
+
+        # Use the App Store Connect API integration
+        # configured above.
+        auth: integration
+
+        # Upload generated IPA to App Store Connect
+        # and make it available in TestFlight.
+        submit_to_testflight: true
+
+        # IMPORTANT:
+        # Do not put submit_to_app_store: true here.
+        # This workflow is for TestFlight only.
+        submit_to_app_store: false
