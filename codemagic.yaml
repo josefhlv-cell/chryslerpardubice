@@ -67,15 +67,15 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "Cdp Lukovna"
+      app_store_connect: "Chdp Lukovna"
 
     environment:
       <<: *env_versions
       vars:
-        BUNDLE_ID: "app.loveable.c6d932101224420590deeec3ccc6923f"
+        BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: "app.loveable.c6d932101224420590deeec3ccc6923f"
+        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
 
     scripts:
       - *install_deps
@@ -100,15 +100,15 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "Cdp Lukovna"
+      app_store_connect: "Chdp Lukovna"
 
     environment:
       <<: *env_versions
       vars:
-        BUNDLE_ID: "app.loveable.c6d932101224420590deeec3ccc6923f"
+        BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
       ios_signing:
         distribution_type: ad_hoc
-        bundle_identifier: "app.loveable.c6d932101224420590deeec3ccc6923f"
+        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
 
     scripts:
       - *install_deps
