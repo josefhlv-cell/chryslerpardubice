@@ -158,7 +158,7 @@ workflows:
     environment:
       <<: *env_versions
       vars:
-        BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
+        BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
         MARKETING_VERSION: "1.0.0"
 
     scripts:
@@ -191,7 +191,7 @@ workflows:
     environment:
       <<: *env_versions
       vars:
-        BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
+        BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
         MARKETING_VERSION: "1.0.0"
 
     scripts:
@@ -216,7 +216,7 @@ workflows:
     environment:
       <<: *env_versions
       vars:
-        BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
+        BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
         MARKETING_VERSION: "1.0.0"
 
     scripts:
