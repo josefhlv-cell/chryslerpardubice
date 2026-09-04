@@ -86,8 +86,19 @@ definitions:
       script: |
         set -e
         keychain initialize
+        # Bez privátního klíče nelze uložit distribuční certifikát.
+        # Použijeme klíč ze secrets (CERTIFICATE_PRIVATE_KEY), jinak vygenerujeme nový.
+        KEY_PATH=/tmp/cm_cert_key.pem
+        if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+          printf '%s' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
+        else
+          ssh-keygen -t rsa -b 2048 -m PEM -f "$KEY_PATH" -q -N "" <<< y >/dev/null
+          rm -f "$KEY_PATH.pub"
+        fi
+        chmod 600 "$KEY_PATH"
         app-store-connect fetch-signing-files "$BUNDLE_ID" \
           --type IOS_APP_STORE \
+          --certificate-key "@file:$KEY_PATH" \
           --create
         keychain add-certificates
 
@@ -96,10 +107,20 @@ definitions:
       script: |
         set -e
         keychain initialize
+        KEY_PATH=/tmp/cm_cert_key.pem
+        if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+          printf '%s' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
+        else
+          ssh-keygen -t rsa -b 2048 -m PEM -f "$KEY_PATH" -q -N "" <<< y >/dev/null
+          rm -f "$KEY_PATH.pub"
+        fi
+        chmod 600 "$KEY_PATH"
         app-store-connect fetch-signing-files "$BUNDLE_ID" \
           --type IOS_ADHOC \
+          --certificate-key "@file:$KEY_PATH" \
           --create
         keychain add-certificates
+
 
     - &build_ipa
       name: Build IPA
