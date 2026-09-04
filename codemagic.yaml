@@ -5,13 +5,10 @@ definitions:
     cocoapods: default
 
 workflows:
-  ios-testflight:
-    name: CHDP Garage iOS TestFlight
+  ios-appstore:
+    name: CHDP Garage iOS App Store
     max_build_duration: 90
     instance_type: mac_mini_m2
-
-    integrations:
-      app_store_connect: "Chdp Lukovna"
 
     environment:
       <<: *env_versions
@@ -53,7 +50,7 @@ workflows:
             cd -
           fi
 
-      - name: Verify Bundle ID
+      - name: Verify iOS project
         script: |
           set -e
 
@@ -65,83 +62,115 @@ workflows:
             exit 1
           fi
 
-          echo "=== Bundle ID check ==="
+          echo "======================================"
+          echo "CHDP GARAGE iOS BUILD"
+          echo "======================================"
+          echo "Bundle ID:"
+          echo "$BUNDLE_ID"
+          echo ""
 
+          echo "Xcode Bundle IDs:"
           grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" || true
+          echo ""
 
           if ! grep -q "cz.chryslerpardubice.chdpgarage" "$PROJECT_FILE"; then
-            echo "ERROR: Expected Bundle ID was not found."
+            echo "ERROR: Bundle ID cz.chryslerpardubice.chdpgarage was not found."
             exit 1
           fi
 
-          echo "Bundle ID OK:"
-          echo "$BUNDLE_ID"
+          echo "Bundle ID verification: OK"
 
-      - name: Configure iOS code signing
+      - name: Configure iOS signing
         script: |
           set -e
 
-          echo "Configuring iOS signing through Codemagic..."
+          echo "Applying Codemagic managed iOS signing..."
 
           xcode-project use-profiles
 
-      - name: Configure Info.plist permissions
+          echo "Signing configuration completed."
+
+      - name: Configure Info.plist
         script: |
           set -e
 
           PLIST="ios/App/App/Info.plist"
 
           if [ ! -f "$PLIST" ]; then
-            echo "ERROR: Info.plist not found:"
-            echo "$PLIST"
+            echo "ERROR: Info.plist not found."
             exit 1
           fi
 
-          /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription Aplikace používá fotoaparát pro skenování VIN a SPZ." "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Delete :NSCameraUsageDescription" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string Aplikace používá fotoaparát pro skenování VIN a SPZ." "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSBluetoothAlwaysUsageDescription Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Delete :NSBluetoothAlwaysUsageDescription" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSBluetoothAlwaysUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSBluetoothPeripheralUsageDescription Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Delete :NSBluetoothPeripheralUsageDescription" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSBluetoothPeripheralUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." "$PLIST"
 
-          /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST" 2>/dev/null || \
+          /usr/libexec/PlistBuddy -c "Delete :NSLocationWhenInUseUsageDescription" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST"
 
           plutil -lint "$PLIST"
 
-          echo "Info.plist OK."
+          echo "Info.plist verification: OK"
 
-      - name: Set version
+      - name: Set application version
         script: |
           set -e
 
           cd ios/App
 
-          echo "Setting marketing version: ${MARKETING_VERSION}"
+          echo "Marketing version: ${MARKETING_VERSION}"
 
           agvtool new-marketing-version "${MARKETING_VERSION}"
 
           if [ -n "${BUILD_NUMBER:-}" ]; then
-            echo "Setting build number: ${BUILD_NUMBER}"
+            echo "Build number: ${BUILD_NUMBER}"
             agvtool new-version -all "${BUILD_NUMBER}"
           fi
 
           cd -
 
+      - name: Final signing verification
+        script: |
+          set -e
+
+          PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
+
+          echo "======================================"
+          echo "FINAL VERIFICATION"
+          echo "======================================"
+
+          echo "Bundle ID:"
+          grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" || true
+
+          echo ""
+          echo "Code signing:"
+          grep "CODE_SIGN" "$PROJECT_FILE" || true
+
+          echo ""
+          echo "Entitlements references:"
+          grep "CODE_SIGN_ENTITLEMENTS" "$PROJECT_FILE" || true
+
+          echo ""
+          echo "Expected Bundle ID:"
+          echo "$BUNDLE_ID"
+
       - name: Build IPA
         script: |
           set -e
 
-          echo "=== Building CHDP Garage IPA ==="
-          echo "Bundle ID: ${BUNDLE_ID}"
-          echo "Version: ${MARKETING_VERSION}"
-          echo "Apple ID: ${APP_STORE_APPLE_ID}"
+          echo "======================================"
+          echo "BUILDING CHDP GARAGE IPA"
+          echo "======================================"
 
           if [ -d "ios/App/App.xcworkspace" ]; then
 
-            echo "Using App.xcworkspace"
+            echo "Using workspace:"
+            echo "ios/App/App.xcworkspace"
 
             xcode-project build-ipa \
               --workspace "ios/App/App.xcworkspace" \
@@ -149,7 +178,8 @@ workflows:
 
           elif [ -d "ios/App/App.xcodeproj" ]; then
 
-            echo "Using App.xcodeproj"
+            echo "Using project:"
+            echo "ios/App/App.xcodeproj"
 
             xcode-project build-ipa \
               --project "ios/App/App.xcodeproj" \
@@ -157,16 +187,13 @@ workflows:
 
           else
 
-            echo "ERROR: Neither App.xcworkspace nor App.xcodeproj exists."
+            echo "ERROR: iOS Xcode project not found."
             exit 1
 
           fi
 
+          echo "IPA BUILD FINISHED."
+
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
