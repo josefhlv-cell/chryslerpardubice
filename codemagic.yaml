@@ -51,7 +51,17 @@ definitions:
       name: Build IPA
       script: |
         set -e
-        BUILD_NUMBER=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0) + 1))
+        # Codemagic vždy poskytuje inkrementální BUILD_NUMBER; ASC dotaz je jen doplněk
+        if [ -n "$APP_STORE_APPLE_ID" ]; then
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
+        else
+          LATEST=0
+        fi
+        NEXT=$((LATEST + 1))
+        if [ -n "$BUILD_NUMBER" ] && [ "$BUILD_NUMBER" -gt "$NEXT" ]; then
+          NEXT=$BUILD_NUMBER
+        fi
+        BUILD_NUMBER=$NEXT
         echo "Using build number $BUILD_NUMBER"
         cd ios/App
         agvtool new-version -all "$BUILD_NUMBER" || true
