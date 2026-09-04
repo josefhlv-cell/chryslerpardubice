@@ -25,8 +25,6 @@ definitions:
           npx cap add ios
         fi
         npx cap sync ios
-        # Capacitor 8 používá Swift Package Manager – Podfile/workspace nemusí existovat.
-        # CocoaPods spustíme jen pokud Podfile skutečně je.
         if [ -f "ios/App/Podfile" ]; then
           cd ios/App
           pod install --repo-update
@@ -54,10 +52,6 @@ definitions:
         /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string remote-notification" "$PLIST"
         plutil -lint "$PLIST"
 
-
-
-
-
     - &set_bundle_id
       name: Apply bundle identifier
       script: |
@@ -68,7 +62,6 @@ definitions:
           echo "ERROR: Xcode project not found."
           exit 1
         fi
-        # Normalise any previously generated identifier to the signed one
         sed -i '' -E "s/PRODUCT_BUNDLE_IDENTIFIER = [^;]+;/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/g" "$PROJECT_FILE"
         grep -c "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;" "$PROJECT_FILE"
         echo "Bundle ID applied."
@@ -106,100 +99,21 @@ definitions:
         echo "aps-environment = $APS"
         grep -c "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;" "$PROJECT_FILE"
 
-
     - &use_profiles
       name: Configure iOS signing
       script: |
         set -e
         xcode-project use-profiles
 
-    - &signing_common
-      name: Prepare distribution certificate
-      script: |
-        set -e
-        keychain initialize
-        KEY_PATH=/tmp/cm_cert_key.pem
-        if [ -n "$CM_CERTIFICATE" ]; then
-          # Varianta A: hotový .p12 (base64) ze secrets -> nejspolehlivější
-          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/cm_cert.p12
-          keychain add-certificates \
-            --certificate /tmp/cm_cert.p12 \
-            --certificate-password "$CM_CERTIFICATE_PASSWORD"
-          echo "USE_EXISTING_CERT=1" > /tmp/cm_signing_mode
-        elif [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
-          # Varianta B: privátní klíč existujícího distribučního certifikátu
-          printf '%s' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
-          chmod 600 "$KEY_PATH"
-          echo "USE_KEY=1" > /tmp/cm_signing_mode
-        else
-          echo "=============================================================="
-          echo "CHYBA: Apple už má vydaný distribuční certifikát (HTTP 409),"
-          echo "ale v Codemagic secrets není jeho privátní klíč."
-          echo "Nový certifikát proto nelze vytvořit a stávající nelze použít."
-          echo ""
-          echo "Řešení (jedno z nich):"
-          echo " 1) Nahraj .p12 distribučního certifikátu do secrets jako"
-          echo "    CM_CERTIFICATE (base64) + CM_CERTIFICATE_PASSWORD."
-          echo " 2) Nahraj privátní klíč (PEM) jako CERTIFICATE_PRIVATE_KEY."
-          echo " 3) V Apple Developer > Certificates zneplatni (Revoke)"
-          echo "    starý Apple Distribution certifikát a spusť build znovu."
-          echo "=============================================================="
-          exit 1
-        fi
-
-    - &fetch_app_store_signing
-      name: Create or fetch App Store signing files
-      script: |
-        set -e
-        if [ -f /tmp/cm_cert_key.pem ]; then
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --certificate-key "@file:/tmp/cm_cert_key.pem" \
-            --create
-          keychain add-certificates
-        else
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-        fi
-
-    - &fetch_adhoc_signing
-      name: Create or fetch Ad Hoc signing files
-      script: |
-        set -e
-        if [ -f /tmp/cm_cert_key.pem ]; then
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_ADHOC \
-            --certificate-key "@file:/tmp/cm_cert_key.pem" \
-            --create
-          keychain add-certificates
-        else
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_ADHOC \
-            --create
-        fi
-
-
-
     - &build_ipa
       name: Build IPA
       script: |
         set -e
-        # Codemagic vždy poskytuje inkrementální BUILD_NUMBER; ASC dotaz je jen doplněk
-        if [ -n "$APP_STORE_APPLE_ID" ]; then
-          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || echo 0)
-        else
-          LATEST=0
-        fi
-        NEXT=$((LATEST + 1))
-        if [ -n "$BUILD_NUMBER" ] && [ "$BUILD_NUMBER" -gt "$NEXT" ]; then
-          NEXT=$BUILD_NUMBER
-        fi
-        BUILD_NUMBER=$NEXT
-        echo "Using build number $BUILD_NUMBER"
         cd ios/App
         agvtool new-marketing-version "${MARKETING_VERSION:-1.0.0}" || true
-        agvtool new-version -all "$BUILD_NUMBER" || true
+        if [ -n "$BUILD_NUMBER" ]; then
+          agvtool new-version -all "$BUILD_NUMBER" || true
+        fi
         cd -
         if [ -d "ios/App/App.xcworkspace" ]; then
           xcode-project build-ipa \
@@ -212,8 +126,35 @@ definitions:
             --scheme "App"
         fi
 
-
 workflows:
+  ios-adhoc:
+    name: CHDP Garage iOS Ad Hoc
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    environment:
+      <<: *env_versions
+      vars:
+        BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
+        MARKETING_VERSION: "1.0.0"
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
+
+    scripts:
+      - *install_deps
+      - *build_web
+      - *prepare_ios
+      - *patch_info_plist
+      - *set_bundle_id
+      - *push_entitlements
+      - *use_profiles
+      - *build_ipa
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
   ios-testflight:
     name: CHDP Garage iOS TestFlight
     max_build_duration: 90
@@ -225,8 +166,12 @@ workflows:
     environment:
       <<: *env_versions
       vars:
-        BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
+        BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
         MARKETING_VERSION: "1.0.0"
+        APP_STORE_APPLE_ID: "6807151165"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
 
     scripts:
       - *install_deps
@@ -235,8 +180,6 @@ workflows:
       - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
-      - *signing_common
-      - *fetch_app_store_signing
       - *use_profiles
       - *build_ipa
 
@@ -248,58 +191,3 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
-
-  ios-adhoc:
-    name: CHDP Garage iOS Ad Hoc
-    max_build_duration: 90
-    instance_type: mac_mini_m2
-
-    integrations:
-      app_store_connect: "Chdp Lukovna"
-
-    environment:
-      <<: *env_versions
-      vars:
-        BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
-        MARKETING_VERSION: "1.0.0"
-
-    scripts:
-      - *install_deps
-      - *build_web
-      - *prepare_ios
-      - *patch_info_plist
-      - *set_bundle_id
-      - *push_entitlements
-      - *signing_common
-      - *fetch_adhoc_signing
-      - *use_profiles
-      - *build_ipa
-
-    artifacts:
-      - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
-
-  ios-test:
-    name: CHDP iOS Test
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-
-    environment:
-      <<: *env_versions
-      vars:
-        BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
-        MARKETING_VERSION: "1.0.0"
-
-    scripts:
-      - name: Verify Codemagic configuration
-        script: |
-          set -e
-          echo "CHDP CODEMAGIC CONFIGURATION TEST"
-          node --version
-          npm --version
-          pwd
-          echo "Bundle ID: $BUNDLE_ID"
-          echo "CODEMAGIC CONFIGURATION OK"
-
-    artifacts:
-      - /tmp/xcodebuild_logs/*.log
