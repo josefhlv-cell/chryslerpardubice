@@ -265,15 +265,15 @@ workflows:
           echo "Synchronizing Capacitor..."
           npx cap sync ios
 
-          echo "Installing CocoaPods..."
+            echo "Installing CocoaPods..."
           if [ -f "ios/App/Podfile" ]; then
             cd ios/App
             pod install
             cd "$CM_BUILD_DIR"
           else
-            echo "ERROR: ios/App/Podfile not found."
-            exit 1
+            echo "Podfile not found — Capacitor uses Swift Package Manager, continuing without CocoaPods."
           fi
+
 
           echo "Capacitor iOS preparation: OK"
 
