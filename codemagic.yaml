@@ -5,23 +5,16 @@ definitions:
     cocoapods: default
 
 workflows:
-
   ios-appstore:
-    name: CHDP Garage iOS App Store / TestFlight
+    name: CHDP Garage iOS App Store
     max_build_duration: 90
     instance_type: mac_mini_m2
 
-    # ============================================================
-    # APP STORE CONNECT API INTEGRATION
-    # ============================================================
-    #
-    # !!! DŮLEŽITÉ !!!
-    # "CHDP App Store Connect" musí být PŘESNÝ název
-    # App Store Connect API key integration, kterou máš
-    # nastavenou v Codemagic.
-    #
+    # =========================================================
+    # APP STORE CONNECT INTEGRATION
+    # =========================================================
     integrations:
-      app_store_connect: CHDP App Store Connect
+      app_store_connect: codemagic
 
     environment:
       <<: *env_versions
@@ -35,73 +28,61 @@ workflows:
         distribution_type: app_store
         bundle_identifier: "cz.chryslerpardubice.chdpgarage"
 
-    # ============================================================
+    # =========================================================
     # BUILD SCRIPTS
-    # ============================================================
-
+    # =========================================================
     scripts:
 
-      # ----------------------------------------------------------
-      # 1. NPM DEPENDENCIES
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 1. Install dependencies
+      # -------------------------------------------------------
       - name: Install dependencies
         script: |
           set -e
 
-          echo "======================================"
-          echo "INSTALL DEPENDENCIES"
-          echo "======================================"
-
+          echo "Installing npm dependencies..."
           npm ci
 
-      # ----------------------------------------------------------
-      # 2. BUILD WEB APPLICATION
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 2. Build web application
+      # -------------------------------------------------------
       - name: Build web application
         script: |
           set -e
 
-          echo "======================================"
-          echo "BUILD WEB APPLICATION"
-          echo "======================================"
-
+          echo "Building web application..."
           npm run build
 
-      # ----------------------------------------------------------
-      # 3. PREPARE CAPACITOR IOS
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 3. Prepare Capacitor iOS project
+      # -------------------------------------------------------
       - name: Prepare iOS project
         script: |
           set -e
 
-          echo "======================================"
-          echo "PREPARE IOS PROJECT"
-          echo "======================================"
+          echo "Preparing iOS project..."
 
           if [ ! -d "ios" ]; then
-            echo "iOS project does not exist."
-            echo "Creating Capacitor iOS project..."
-
+            echo "iOS directory does not exist - creating..."
             npx cap add ios
-          else
-            echo "iOS project already exists."
           fi
 
-          echo "Running Capacitor sync..."
-
+          echo "Synchronizing Capacitor..."
           npx cap sync ios
 
-          if [ -f "ios/App/Podfile" ]; then
-            echo "Installing CocoaPods..."
+          echo "Installing CocoaPods..."
 
+          if [ -f "ios/App/Podfile" ]; then
             cd ios/App
             pod install
             cd -
+          else
+            echo "WARNING: ios/App/Podfile not found."
           fi
 
-      # ----------------------------------------------------------
-      # 4. VERIFY IOS PROJECT
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 4. Verify Xcode project
+      # -------------------------------------------------------
       - name: Verify iOS project
         script: |
           set -e
@@ -109,7 +90,7 @@ workflows:
           PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
 
           echo "======================================"
-          echo "VERIFY IOS PROJECT"
+          echo "CHDP GARAGE iOS BUILD"
           echo "======================================"
 
           if [ ! -f "$PROJECT_FILE" ]; then
@@ -119,37 +100,31 @@ workflows:
           fi
 
           echo ""
-          echo "Bundle ID:"
+          echo "Bundle ID expected:"
           echo "$BUNDLE_ID"
 
           echo ""
-          echo "Apple App ID:"
-          echo "$APP_STORE_APPLE_ID"
-
-          echo ""
-          echo "Xcode Bundle IDs:"
+          echo "Bundle IDs found in Xcode project:"
           grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" || true
 
           echo ""
 
-          if ! grep -q "$BUNDLE_ID" "$PROJECT_FILE"; then
-            echo "ERROR: Bundle ID was not found in Xcode project."
-            echo "Expected:"
-            echo "$BUNDLE_ID"
+          if ! grep -q "cz.chryslerpardubice.chdpgarage" "$PROJECT_FILE"; then
+            echo "ERROR: Expected Bundle ID was not found."
             exit 1
           fi
 
           echo "Bundle ID verification: OK"
 
-      # ----------------------------------------------------------
-      # 5. CONFIGURE IOS SIGNING
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 5. Configure signing
+      # -------------------------------------------------------
       - name: Configure iOS signing
         script: |
           set -e
 
           echo "======================================"
-          echo "CONFIGURE IOS SIGNING"
+          echo "CONFIGURING CODE SIGNING"
           echo "======================================"
 
           xcode-project use-profiles
@@ -157,18 +132,16 @@ workflows:
           echo ""
           echo "Signing configuration completed."
 
-      # ----------------------------------------------------------
-      # 6. CONFIGURE INFO.PLIST
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 6. Configure Info.plist
+      # -------------------------------------------------------
       - name: Configure Info.plist
         script: |
           set -e
 
           PLIST="ios/App/App/Info.plist"
 
-          echo "======================================"
-          echo "CONFIGURE INFO.PLIST"
-          echo "======================================"
+          echo "Configuring Info.plist..."
 
           if [ ! -f "$PLIST" ]; then
             echo "ERROR: Info.plist not found:"
@@ -194,7 +167,6 @@ workflows:
             -c "Add :NSBluetoothAlwaysUsageDescription string Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla." \
             "$PLIST"
 
-          # Legacy Bluetooth permission
           /usr/libexec/PlistBuddy \
             -c "Delete :NSBluetoothPeripheralUsageDescription" \
             "$PLIST" 2>/dev/null || true
@@ -213,66 +185,64 @@ workflows:
             "$PLIST"
 
           echo ""
-          echo "Checking plist..."
+          echo "Checking Info.plist..."
 
           plutil -lint "$PLIST"
 
-          echo ""
           echo "Info.plist verification: OK"
 
-      # ----------------------------------------------------------
-      # 7. VERSION + AUTOMATIC BUILD NUMBER
-      # ----------------------------------------------------------
-      - name: Set application version and build number
+      # -------------------------------------------------------
+      # 7. Set application version
+      # -------------------------------------------------------
+      - name: Set application version
         script: |
           set -e
-
-          echo "======================================"
-          echo "SET VERSION"
-          echo "======================================"
 
           cd ios/App
 
           echo "Marketing version:"
-          echo "$MARKETING_VERSION"
+          echo "${MARKETING_VERSION}"
 
-          agvtool new-marketing-version "$MARKETING_VERSION"
+          agvtool new-marketing-version "${MARKETING_VERSION}"
 
-          cd "$CM_BUILD_DIR"
+          cd -
 
-          echo ""
-          echo "Getting latest App Store Connect build number..."
+      # -------------------------------------------------------
+      # 8. Set automatic build number
+      # -------------------------------------------------------
+      - name: Set build number
+        script: |
+          set -e
+
+          cd ios/App
+
+          echo "Getting latest App Store build number..."
 
           LATEST_BUILD_NUMBER=$(
             app-store-connect get-latest-app-store-build-number \
-              "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0"
+              "$APP_STORE_APPLE_ID" \
+              2>/dev/null || echo "0"
           )
 
           if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
             LATEST_BUILD_NUMBER=0
           fi
 
-          NEXT_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
 
-          echo ""
-          echo "Latest App Store Connect build:"
+          echo "Latest build number:"
           echo "$LATEST_BUILD_NUMBER"
 
           echo "New build number:"
-          echo "$NEXT_BUILD_NUMBER"
+          echo "$NEW_BUILD_NUMBER"
 
-          cd ios/App
+          agvtool new-version -all "$NEW_BUILD_NUMBER"
 
-          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+          cd -
 
-          echo ""
-          echo "Version configuration completed."
-
-          cd "$CM_BUILD_DIR"
-
-      # ----------------------------------------------------------
-      # 8. FINAL SIGNING VERIFICATION
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 9. Final signing verification
+      # -------------------------------------------------------
       - name: Final signing verification
         script: |
           set -e
@@ -280,15 +250,11 @@ workflows:
           PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
 
           echo "======================================"
-          echo "FINAL SIGNING VERIFICATION"
+          echo "FINAL VERIFICATION"
           echo "======================================"
 
           echo ""
-          echo "Expected Bundle ID:"
-          echo "$BUNDLE_ID"
-
-          echo ""
-          echo "Xcode Bundle IDs:"
+          echo "Bundle ID:"
           grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" || true
 
           echo ""
@@ -300,11 +266,12 @@ workflows:
           grep "CODE_SIGN_ENTITLEMENTS" "$PROJECT_FILE" || true
 
           echo ""
-          echo "Signing verification completed."
+          echo "Expected Bundle ID:"
+          echo "$BUNDLE_ID"
 
-      # ----------------------------------------------------------
-      # 9. BUILD IPA
-      # ----------------------------------------------------------
+      # -------------------------------------------------------
+      # 10. Build IPA
+      # -------------------------------------------------------
       - name: Build IPA
         script: |
           set -e
@@ -313,7 +280,7 @@ workflows:
           echo "BUILDING CHDP GARAGE IPA"
           echo "======================================"
 
-          if [ -d "ios/App/App.xcworkspace" ]; then
+          if [ -f "ios/App/App.xcworkspace" ]; then
 
             echo "Using workspace:"
             echo "ios/App/App.xcworkspace"
@@ -322,7 +289,7 @@ workflows:
               --workspace "ios/App/App.xcworkspace" \
               --scheme "App"
 
-          elif [ -d "ios/App/App.xcodeproj" ]; then
+          elif [ -f "ios/App/App.xcodeproj/project.pbxproj" ]; then
 
             echo "Using project:"
             echo "ios/App/App.xcodeproj"
@@ -339,35 +306,29 @@ workflows:
           fi
 
           echo ""
-          echo "======================================"
-          echo "IPA BUILD FINISHED"
-          echo "======================================"
+          echo "IPA BUILD FINISHED."
 
-    # ============================================================
+    # =========================================================
     # ARTIFACTS
-    # ============================================================
-
+    # =========================================================
     artifacts:
       - build/ios/ipa/*.ipa
-      - /tmp/xcodebuild_logs/*.log
 
-    # ============================================================
+    # =========================================================
     # APP STORE CONNECT / TESTFLIGHT
-    # ============================================================
-
+    # =========================================================
     publishing:
 
       app_store_connect:
 
-        # Use the App Store Connect API integration
-        # configured above.
+        # Použije App Store Connect API integraci
+        # nastavenou nahoře:
+        # integrations:
+        #   app_store_connect: codemagic
         auth: integration
 
-        # Upload generated IPA to App Store Connect
-        # and make it available in TestFlight.
+        # Nahraje vytvořené IPA do App Store Connect
         submit_to_testflight: true
 
-        # IMPORTANT:
-        # Do not put submit_to_app_store: true here.
-        # This workflow is for TestFlight only.
+        # NEPOSÍLAT automaticky do App Store Review
         submit_to_app_store: false
