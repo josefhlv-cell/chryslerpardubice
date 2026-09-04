@@ -81,6 +81,26 @@ definitions:
         set -e
         xcode-project use-profiles
 
+    - &fetch_app_store_signing
+      name: Create or fetch App Store signing files
+      script: |
+        set -e
+        keychain initialize
+        app-store-connect fetch-signing-files "$BUNDLE_ID" \
+          --type IOS_APP_STORE \
+          --create
+        keychain add-certificates
+
+    - &fetch_adhoc_signing
+      name: Create or fetch Ad Hoc signing files
+      script: |
+        set -e
+        keychain initialize
+        app-store-connect fetch-signing-files "$BUNDLE_ID" \
+          --type IOS_ADHOC \
+          --create
+        keychain add-certificates
+
     - &build_ipa
       name: Build IPA
       script: |
@@ -119,9 +139,6 @@ workflows:
       vars:
         BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
         MARKETING_VERSION: "1.0.0"
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
 
     scripts:
       - *install_deps
@@ -129,6 +146,7 @@ workflows:
       - *prepare_ios
       - *set_bundle_id
       - *push_entitlements
+      - *fetch_app_store_signing
       - *use_profiles
       - *build_ipa
 
@@ -154,9 +172,6 @@ workflows:
       vars:
         BUNDLE_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
         MARKETING_VERSION: "1.0.0"
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: "app.lovable.c6d932101224420590deeec3ccc6923f"
 
     scripts:
       - *install_deps
@@ -164,6 +179,7 @@ workflows:
       - *prepare_ios
       - *set_bundle_id
       - *push_entitlements
+      - *fetch_adhoc_signing
       - *use_profiles
       - *build_ipa
 
