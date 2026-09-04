@@ -4,17 +4,14 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
 
-    integrations:
-      app_store_connect: "Chdp Lukovna"
-
     environment:
       xcode: latest
       node: 22
-      vars:
-        BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
 
     scripts:
-
       - name: Install dependencies
         script: |
           set -e
@@ -37,23 +34,6 @@ workflows:
           set -e
           npx cap sync ios
 
-      - name: Set up keychain
-        script: |
-          set -e
-          keychain initialize
-
-      - name: Fetch signing files
-        script: |
-          set -e
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_ADHOC \
-            --create
-
-      - name: Set up signing certificate
-        script: |
-          set -e
-          keychain add-certificates
-
       - name: Configure iOS signing
         script: |
           set -e
@@ -63,7 +43,6 @@ workflows:
         script: |
           set -e
           cd ios/App
-
           xcode-project build-ipa \
             --workspace "App.xcworkspace" \
             --scheme "App"
