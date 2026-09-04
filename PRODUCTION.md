@@ -34,7 +34,7 @@ npx cap open ios       # → Xcode: Signing & Capabilities → Push Notification
 ## 4. Push notifikace — co je potřeba doplnit mimo kód
 
 **Android (FCM):**
-1. Vytvoř Firebase projekt → Add Android app s package id `cz.chryslerpardubice.chdpgarage`.
+1. Vytvoř Firebase projekt → Add Android app s package id `app.lovable.c6d932101224420590deeec3ccc6923f`.
 2. Stáhni `google-services.json` a vlož do `android/app/google-services.json` (build.gradle ho auto-detekuje).
 3. V Firebase Console → Cloud Messaging si poznamenej **Server key / Service account JSON** pro odesílací edge function.
 
