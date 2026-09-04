@@ -36,6 +36,26 @@ definitions:
         fi
         ls -la ios/App
 
+    - &patch_info_plist
+      name: Patch Info.plist (permissions)
+      script: |
+        set -e
+        PLIST="ios/App/App/Info.plist"
+        set_str() {
+          /usr/libexec/PlistBuddy -c "Delete :$1" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :$1 string $2" "$PLIST"
+        }
+        set_str NSBluetoothAlwaysUsageDescription "Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla."
+        set_str NSBluetoothPeripheralUsageDescription "Aplikace používá Bluetooth pro připojení k OBD adaptéru vozidla."
+        set_str NSCameraUsageDescription "Fotoaparát se používá pro skenování VIN a SPZ."
+        set_str NSLocationWhenInUseUsageDescription "Poloha je potřeba pro Bluetooth skenování a servisní služby."
+        /usr/libexec/PlistBuddy -c "Delete :UIBackgroundModes" "$PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes array" "$PLIST"
+        /usr/libexec/PlistBuddy -c "Add :UIBackgroundModes:0 string remote-notification" "$PLIST"
+        plutil -lint "$PLIST"
+
+
+
 
 
     - &set_bundle_id
