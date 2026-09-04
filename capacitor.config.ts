@@ -5,7 +5,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const useLiveReload = process.env.CAP_LIVE_RELOAD === '1';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.c6d932101224420590deeec3ccc6923f',
+  appId: 'app.loveable.c6d932101224420590deeec3ccc6923f',
   appName: 'CHDP Garage',
   webDir: 'dist',
   ...(useLiveReload
