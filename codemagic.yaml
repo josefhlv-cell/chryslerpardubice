@@ -235,6 +235,7 @@ workflows:
       - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
+      - *signing_common
       - *fetch_app_store_signing
       - *use_profiles
       - *build_ipa
@@ -269,6 +270,7 @@ workflows:
       - *patch_info_plist
       - *set_bundle_id
       - *push_entitlements
+      - *signing_common
       - *fetch_adhoc_signing
       - *use_profiles
       - *build_ipa
