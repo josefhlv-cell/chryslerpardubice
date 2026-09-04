@@ -130,6 +130,7 @@ workflows:
       - *build_web
       - *prepare_ios
       - *set_bundle_id
+      - *push_entitlements
       - *use_profiles
       - *build_ipa
 
@@ -164,6 +165,7 @@ workflows:
       - *build_web
       - *prepare_ios
       - *set_bundle_id
+      - *push_entitlements
       - *use_profiles
       - *build_ipa
 
