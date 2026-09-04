@@ -4,60 +4,36 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
 
-    integrations:
-      app_store_connect: "Chdp Lukovna"
-
     environment:
       xcode: latest
       node: 22
-      vars:
-        BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
 
     scripts:
       - name: Install dependencies
         script: |
           set -e
           npm ci
-
       - name: Build web application
         script: |
           set -e
           npm run build
-
       - name: Add iOS platform if missing
         script: |
           set -e
           if [ ! -d "ios" ]; then
             npx cap add ios
           fi
-
       - name: Sync Capacitor iOS
         script: |
           set -e
           npx cap sync ios
-
-      - name: Set up keychain
-        script: |
-          set -e
-          keychain initialize
-
-      - name: Fetch signing files
-        script: |
-          set -e
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_ADHOC \
-            --create
-
-      - name: Set up signing certificate
-        script: |
-          set -e
-          keychain add-certificates
-
       - name: Configure iOS signing
         script: |
           set -e
           xcode-project use-profiles
-
       - name: Build IPA
         script: |
           set -e
