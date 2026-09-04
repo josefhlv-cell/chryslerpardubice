@@ -25,6 +25,13 @@ workflows:
           set -e
           npm run build
 
+      - name: Add iOS platform if missing
+        script: |
+          set -e
+          if [ ! -d "ios" ]; then
+            npx cap add ios
+          fi
+
       - name: Sync Capacitor iOS
         script: |
           set -e
