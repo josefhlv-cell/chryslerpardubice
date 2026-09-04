@@ -41,6 +41,40 @@ definitions:
         grep -c "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;" "$PROJECT_FILE"
         echo "Bundle ID applied."
 
+    - &push_entitlements
+      name: Enable Push Notifications entitlement
+      script: |
+        set -e
+        PROJECT_FILE=$(find ios -name "project.pbxproj" -type f | head -1)
+        APP_DIR=$(dirname "$(dirname "$PROJECT_FILE")")/App
+        ENT="$APP_DIR/App.entitlements"
+        if [ "$APS_ENVIRONMENT" = "development" ]; then
+          APS="development"
+        else
+          APS="production"
+        fi
+        if [ ! -f "$ENT" ]; then
+          cat > "$ENT" <<PLIST
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+        </dict>
+        </plist>
+        PLIST
+        fi
+        /usr/libexec/PlistBuddy -c "Delete :aps-environment" "$ENT" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :aps-environment string $APS" "$ENT"
+        plutil -lint "$ENT"
+        if ! grep -q "CODE_SIGN_ENTITLEMENTS" "$PROJECT_FILE"; then
+          perl -0pi -e "s{PRODUCT_BUNDLE_IDENTIFIER = \Q$BUNDLE_ID\E;}{CODE_SIGN_ENTITLEMENTS = App/App.entitlements;\n\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;}g" "$PROJECT_FILE"
+        else
+          sed -i '' -E "s|CODE_SIGN_ENTITLEMENTS = [^;]+;|CODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g" "$PROJECT_FILE"
+        fi
+        echo "aps-environment = $APS"
+        grep -c "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;" "$PROJECT_FILE"
+
+
     - &use_profiles
       name: Configure iOS signing
       script: |
@@ -94,6 +128,7 @@ workflows:
       - *build_web
       - *prepare_ios
       - *set_bundle_id
+      - *push_entitlements
       - *use_profiles
       - *build_ipa
 
@@ -128,6 +163,7 @@ workflows:
       - *build_web
       - *prepare_ios
       - *set_bundle_id
+      - *push_entitlements
       - *use_profiles
       - *build_ipa
 
