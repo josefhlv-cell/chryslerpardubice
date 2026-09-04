@@ -113,45 +113,72 @@ definitions:
         set -e
         xcode-project use-profiles
 
+    - &signing_common
+      name: Prepare distribution certificate
+      script: |
+        set -e
+        keychain initialize
+        KEY_PATH=/tmp/cm_cert_key.pem
+        if [ -n "$CM_CERTIFICATE" ]; then
+          # Varianta A: hotový .p12 (base64) ze secrets -> nejspolehlivější
+          echo "$CM_CERTIFICATE" | base64 --decode > /tmp/cm_cert.p12
+          keychain add-certificates \
+            --certificate /tmp/cm_cert.p12 \
+            --certificate-password "$CM_CERTIFICATE_PASSWORD"
+          echo "USE_EXISTING_CERT=1" > /tmp/cm_signing_mode
+        elif [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+          # Varianta B: privátní klíč existujícího distribučního certifikátu
+          printf '%s' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "USE_KEY=1" > /tmp/cm_signing_mode
+        else
+          echo "=============================================================="
+          echo "CHYBA: Apple už má vydaný distribuční certifikát (HTTP 409),"
+          echo "ale v Codemagic secrets není jeho privátní klíč."
+          echo "Nový certifikát proto nelze vytvořit a stávající nelze použít."
+          echo ""
+          echo "Řešení (jedno z nich):"
+          echo " 1) Nahraj .p12 distribučního certifikátu do secrets jako"
+          echo "    CM_CERTIFICATE (base64) + CM_CERTIFICATE_PASSWORD."
+          echo " 2) Nahraj privátní klíč (PEM) jako CERTIFICATE_PRIVATE_KEY."
+          echo " 3) V Apple Developer > Certificates zneplatni (Revoke)"
+          echo "    starý Apple Distribution certifikát a spusť build znovu."
+          echo "=============================================================="
+          exit 1
+        fi
+
     - &fetch_app_store_signing
       name: Create or fetch App Store signing files
       script: |
         set -e
-        keychain initialize
-        # Bez privátního klíče nelze uložit distribuční certifikát.
-        # Použijeme klíč ze secrets (CERTIFICATE_PRIVATE_KEY), jinak vygenerujeme nový.
-        KEY_PATH=/tmp/cm_cert_key.pem
-        if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
-          printf '%s' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
+        if [ -f /tmp/cm_cert_key.pem ]; then
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key "@file:/tmp/cm_cert_key.pem" \
+            --create
+          keychain add-certificates
         else
-          ssh-keygen -t rsa -b 2048 -m PEM -f "$KEY_PATH" -q -N "" <<< y >/dev/null
-          rm -f "$KEY_PATH.pub"
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
         fi
-        chmod 600 "$KEY_PATH"
-        app-store-connect fetch-signing-files "$BUNDLE_ID" \
-          --type IOS_APP_STORE \
-          --certificate-key "@file:$KEY_PATH" \
-          --create
-        keychain add-certificates
 
     - &fetch_adhoc_signing
       name: Create or fetch Ad Hoc signing files
       script: |
         set -e
-        keychain initialize
-        KEY_PATH=/tmp/cm_cert_key.pem
-        if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
-          printf '%s' "$CERTIFICATE_PRIVATE_KEY" > "$KEY_PATH"
+        if [ -f /tmp/cm_cert_key.pem ]; then
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_ADHOC \
+            --certificate-key "@file:/tmp/cm_cert_key.pem" \
+            --create
+          keychain add-certificates
         else
-          ssh-keygen -t rsa -b 2048 -m PEM -f "$KEY_PATH" -q -N "" <<< y >/dev/null
-          rm -f "$KEY_PATH.pub"
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_ADHOC \
+            --create
         fi
-        chmod 600 "$KEY_PATH"
-        app-store-connect fetch-signing-files "$BUNDLE_ID" \
-          --type IOS_ADHOC \
-          --certificate-key "@file:$KEY_PATH" \
-          --create
-        keychain add-certificates
+
 
 
     - &build_ipa
