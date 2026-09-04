@@ -4,43 +4,89 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
 
+    integrations:
+      app_store_connect: "Chdp Lukovna"
+
     environment:
       xcode: latest
       node: 22
+
       ios_signing:
         distribution_type: ad_hoc
-        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
+        bundle_identifier: "app.lovable.c6d93210122420590deec3ccc6923f"
 
     scripts:
+
       - name: Install dependencies
         script: |
           set -e
           npm ci
+
       - name: Build web application
         script: |
           set -e
           npm run build
+
       - name: Add iOS platform if missing
         script: |
           set -e
+
           if [ ! -d "ios" ]; then
             npx cap add ios
           fi
+
       - name: Sync Capacitor iOS
         script: |
           set -e
           npx cap sync ios
+
+      - name: Verify Bundle ID
+        script: |
+          set -e
+
+          EXPECTED_BUNDLE_ID="app.lovable.c6d93210122420590deec3ccc6923f"
+
+          echo "=========================================="
+          echo "CHDP GARAGE iOS AD HOC BUILD"
+          echo "=========================================="
+          echo "Expected Bundle ID:"
+          echo "$EXPECTED_BUNDLE_ID"
+
+          PROJECT_FILE=$(find ios -name "project.pbxproj" -type f | head -1)
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "ERROR: Xcode project not found."
+            exit 1
+          fi
+
+          if ! grep -q "$EXPECTED_BUNDLE_ID" "$PROJECT_FILE"; then
+            echo "ERROR: Bundle ID does not match."
+            echo "Expected:"
+            echo "$EXPECTED_BUNDLE_ID"
+            exit 1
+          fi
+
+          echo "Bundle ID verified successfully."
+
       - name: Configure iOS signing
         script: |
           set -e
+
+          echo "Applying Apple signing profiles..."
           xcode-project use-profiles
+
+          echo "Signing profiles applied successfully."
+
       - name: Build IPA
         script: |
           set -e
+
           cd ios/App
+
           xcode-project build-ipa \
             --workspace "App.xcworkspace" \
             --scheme "App"
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
