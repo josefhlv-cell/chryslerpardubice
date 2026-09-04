@@ -25,6 +25,14 @@ definitions:
           npx cap add ios
         fi
         npx cap sync ios
+        # Capacitor sync nemusí spustit pod install -> workspace by pak chyběl
+        if [ ! -d "ios/App/App.xcworkspace" ]; then
+          cd ios/App
+          pod install --repo-update
+          cd -
+        fi
+        ls -la ios/App
+
 
     - &set_bundle_id
       name: Apply bundle identifier
