@@ -64,6 +64,7 @@ definitions:
         BUILD_NUMBER=$NEXT
         echo "Using build number $BUILD_NUMBER"
         cd ios/App
+        agvtool new-marketing-version "${MARKETING_VERSION:-1.0.0}" || true
         agvtool new-version -all "$BUILD_NUMBER" || true
         cd -
         xcode-project build-ipa \
