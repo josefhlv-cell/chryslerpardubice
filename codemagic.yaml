@@ -10,9 +10,8 @@ workflows:
     environment:
       xcode: latest
       node: 22
-      ios_signing:
-        distribution_type: ad_hoc
-        bundle_identifier: "app.loveable.c6d93210122420590deeec3ccc6923f"
+      vars:
+        BUNDLE_ID: "app.loveable.c6d93210122420590deeec3ccc6923f"
 
     scripts:
       - name: Install dependencies
@@ -36,6 +35,23 @@ workflows:
         script: |
           set -e
           npx cap sync ios
+
+      - name: Set up keychain
+        script: |
+          set -e
+          keychain initialize
+
+      - name: Fetch signing files
+        script: |
+          set -e
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_ADHOC \
+            --create
+
+      - name: Set up signing certificate
+        script: |
+          set -e
+          keychain add-certificates
 
       - name: Configure iOS signing
         script: |
