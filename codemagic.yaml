@@ -83,7 +83,7 @@ workflows:
           echo "Checking for Podfile..."
           if [ ! -f "ios/App/Podfile" ]; then
             echo "Podfile not found - creating it..."
-            cat > ios/App/Podfile << 'EOF'
+            tee ios/App/Podfile > /dev/null << 'PODFILE_EOF'
 platform :ios, '13.0'
 
 target 'App' do
@@ -101,12 +101,10 @@ post_install do |installer|
 end
 
 def cap_pods
-  # Capacitor core pods
 end
 
 def assertDeploymentTarget(installer)
   installer.pods_project.targets.each do |target|
-    flutter_additional_ios_build_settings(target)
     assertDeploymentTargetForPods(target)
   end
 end
@@ -120,7 +118,7 @@ def assertDeploymentTargetForPods(target)
     end
   end
 end
-EOF
+PODFILE_EOF
             echo "✓ Podfile created"
           else
             echo "✓ Podfile already exists"
@@ -398,7 +396,7 @@ EOF
           echo "Checking for Podfile..."
           if [ ! -f "ios/App/Podfile" ]; then
             echo "Podfile not found - creating it..."
-            cat > ios/App/Podfile << 'EOF'
+            tee ios/App/Podfile > /dev/null << 'PODFILE_EOF'
 platform :ios, '13.0'
 
 target 'App' do
@@ -416,12 +414,10 @@ post_install do |installer|
 end
 
 def cap_pods
-  # Capacitor core pods
 end
 
 def assertDeploymentTarget(installer)
   installer.pods_project.targets.each do |target|
-    flutter_additional_ios_build_settings(target)
     assertDeploymentTargetForPods(target)
   end
 end
@@ -435,7 +431,7 @@ def assertDeploymentTargetForPods(target)
     end
   end
 end
-EOF
+PODFILE_EOF
             echo "✓ Podfile created"
           else
             echo "✓ Podfile already exists"
