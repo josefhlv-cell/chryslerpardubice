@@ -39,28 +39,25 @@ workflows:
           echo "======================================"
           npm run build
 
-      - name: Debug iOS structure
+      - name: Debug iOS structure BEFORE
         script: |
           set -e
           echo "======================================"
-          echo "DEBUG: iOS DIRECTORY STRUCTURE"
+          echo "DEBUG: iOS DIRECTORY STRUCTURE (BEFORE SYNC)"
           echo "======================================"
           echo ""
-          echo "Contents of current directory:"
-          ls -la
+          echo "Current directory:"
+          pwd
           echo ""
-          echo "iOS directory contents:"
+          echo "Root contents:"
+          ls -la | head -20
+          echo ""
+          echo "Looking for ios directory:"
           if [ -d "ios" ]; then
-            find ios/ -type f \( -name "*.pbxproj" -o -name "Podfile" \) | head -20
+            echo "✓ iOS directory EXISTS"
+            find ios -type d | head -20
           else
-            echo "iOS directory neexistuje!"
-          fi
-          echo ""
-          echo "Workspace check:"
-          if [ -d "ios/App/App.xcworkspace" ]; then
-            ls -la ios/App/App.xcworkspace/
-          else
-            echo "Workspace neexistuje"
+            echo "✗ iOS directory DOES NOT EXIST"
           fi
 
       - name: Prepare Capacitor iOS project
@@ -74,21 +71,53 @@ workflows:
             echo "iOS directory does not exist."
             echo "Creating Capacitor iOS project..."
             npx cap add ios
+          else
+            echo "iOS directory already exists, skipping cap add."
           fi
 
+          echo ""
           echo "Synchronizing Capacitor..."
           npx cap sync ios
 
-          echo "Installing CocoaPods..."
+          echo ""
+          echo "Installing CocoaPods dependencies..."
           if [ -f "ios/App/Podfile" ]; then
+            echo "Podfile found, running pod install..."
             cd ios/App
-            pod install
+            pod install --repo-update
             cd "$CM_BUILD_DIR"
           else
-            echo "Podfile not found — Capacitor uses Swift Package Manager, continuing without CocoaPods."
+            echo "Podfile not found — Capacitor may use Swift Package Manager"
           fi
 
+          echo ""
           echo "Capacitor iOS preparation: OK"
+
+      - name: Debug iOS structure AFTER
+        script: |
+          set -e
+          echo "======================================"
+          echo "DEBUG: iOS DIRECTORY STRUCTURE (AFTER SYNC)"
+          echo "======================================"
+          echo ""
+          echo "iOS directory contents:"
+          if [ -d "ios" ]; then
+            find ios -type f \( -name "*.pbxproj" -o -name "Podfile" \) -o -type d -name "*.xcworkspace"
+            echo ""
+            echo "Workspace status:"
+            if [ -d "ios/App/App.xcworkspace" ]; then
+              echo "✓ Workspace EXISTS"
+              ls -la ios/App/App.xcworkspace/
+            else
+              echo "✗ Workspace DOES NOT EXIST - Creating it with pod install..."
+              cd ios/App
+              pod install --repo-update
+              cd "$CM_BUILD_DIR"
+            fi
+          else
+            echo "✗ ERROR: iOS directory still does not exist!"
+            exit 1
+          fi
 
       - name: Generate app icons
         script: |
@@ -117,7 +146,16 @@ workflows:
           if [ ! -d "$WORKSPACE_FILE" ]; then
             echo "ERROR: Xcode workspace not found:"
             echo "$WORKSPACE_FILE"
-            exit 1
+            echo ""
+            echo "Attempting to create workspace by running pod install again..."
+            cd ios/App
+            pod install --repo-update
+            cd "$CM_BUILD_DIR"
+            
+            if [ ! -d "$WORKSPACE_FILE" ]; then
+              echo "ERROR: Failed to create workspace"
+              exit 1
+            fi
           fi
 
           echo ""
@@ -139,7 +177,7 @@ workflows:
           fi
 
           echo ""
-          echo "Xcode project verification: OK"
+          echo "✓ Xcode project verification: OK"
 
       - name: Configure iOS signing
         script: |
@@ -150,7 +188,7 @@ workflows:
           xcode-project use-profiles \
             --project "ios/App/App.xcodeproj"
           echo ""
-          echo "Code signing configuration: OK"
+          echo "✓ Code signing configuration: OK"
 
       - name: Configure Info.plist
         script: |
@@ -183,7 +221,7 @@ workflows:
           echo "Validating Info.plist..."
           plutil -lint "$PLIST"
           echo ""
-          echo "Info.plist verification: OK"
+          echo "✓ Info.plist verification: OK"
 
       - name: Set marketing version
         script: |
@@ -195,8 +233,7 @@ workflows:
           agvtool new-marketing-version "$MARKETING_VERSION"
           cd "$CM_BUILD_DIR"
           echo ""
-          echo "Marketing version:"
-          echo "$MARKETING_VERSION"
+          echo "Marketing version: $MARKETING_VERSION"
 
       - name: Set build number
         script: |
@@ -205,8 +242,7 @@ workflows:
           echo "SETTING BUILD NUMBER (timestamp-based)"
           echo "======================================"
           NEW_BUILD_NUMBER=$(date +%Y%m%d%H%M)
-          echo "New build number:"
-          echo "$NEW_BUILD_NUMBER"
+          echo "New build number: $NEW_BUILD_NUMBER"
           cd ios/App
           agvtool new-version -all "$NEW_BUILD_NUMBER"
           cd "$CM_BUILD_DIR"
@@ -278,28 +314,25 @@ workflows:
           echo "======================================"
           npm run build
 
-      - name: Debug iOS structure
+      - name: Debug iOS structure BEFORE
         script: |
           set -e
           echo "======================================"
-          echo "DEBUG: iOS DIRECTORY STRUCTURE"
+          echo "DEBUG: iOS DIRECTORY STRUCTURE (BEFORE SYNC)"
           echo "======================================"
           echo ""
-          echo "Contents of current directory:"
-          ls -la
+          echo "Current directory:"
+          pwd
           echo ""
-          echo "iOS directory contents:"
+          echo "Root contents:"
+          ls -la | head -20
+          echo ""
+          echo "Looking for ios directory:"
           if [ -d "ios" ]; then
-            find ios/ -type f \( -name "*.pbxproj" -o -name "Podfile" \) | head -20
+            echo "✓ iOS directory EXISTS"
+            find ios -type d | head -20
           else
-            echo "iOS directory neexistuje!"
-          fi
-          echo ""
-          echo "Workspace check:"
-          if [ -d "ios/App/App.xcworkspace" ]; then
-            ls -la ios/App/App.xcworkspace/
-          else
-            echo "Workspace neexistuje"
+            echo "✗ iOS directory DOES NOT EXIST"
           fi
 
       - name: Prepare Capacitor iOS project
@@ -313,21 +346,53 @@ workflows:
             echo "iOS directory does not exist."
             echo "Creating Capacitor iOS project..."
             npx cap add ios
+          else
+            echo "iOS directory already exists, skipping cap add."
           fi
 
+          echo ""
           echo "Synchronizing Capacitor..."
           npx cap sync ios
 
-          echo "Installing CocoaPods..."
+          echo ""
+          echo "Installing CocoaPods dependencies..."
           if [ -f "ios/App/Podfile" ]; then
+            echo "Podfile found, running pod install..."
             cd ios/App
-            pod install
+            pod install --repo-update
             cd "$CM_BUILD_DIR"
           else
-            echo "Podfile not found — Capacitor uses Swift Package Manager, continuing without CocoaPods."
+            echo "Podfile not found — Capacitor may use Swift Package Manager"
           fi
 
+          echo ""
           echo "Capacitor iOS preparation: OK"
+
+      - name: Debug iOS structure AFTER
+        script: |
+          set -e
+          echo "======================================"
+          echo "DEBUG: iOS DIRECTORY STRUCTURE (AFTER SYNC)"
+          echo "======================================"
+          echo ""
+          echo "iOS directory contents:"
+          if [ -d "ios" ]; then
+            find ios -type f \( -name "*.pbxproj" -o -name "Podfile" \) -o -type d -name "*.xcworkspace"
+            echo ""
+            echo "Workspace status:"
+            if [ -d "ios/App/App.xcworkspace" ]; then
+              echo "✓ Workspace EXISTS"
+              ls -la ios/App/App.xcworkspace/
+            else
+              echo "✗ Workspace DOES NOT EXIST - Creating it with pod install..."
+              cd ios/App
+              pod install --repo-update
+              cd "$CM_BUILD_DIR"
+            fi
+          else
+            echo "✗ ERROR: iOS directory still does not exist!"
+            exit 1
+          fi
 
       - name: Generate app icons
         script: |
@@ -356,7 +421,16 @@ workflows:
           if [ ! -d "$WORKSPACE_FILE" ]; then
             echo "ERROR: Xcode workspace not found:"
             echo "$WORKSPACE_FILE"
-            exit 1
+            echo ""
+            echo "Attempting to create workspace by running pod install again..."
+            cd ios/App
+            pod install --repo-update
+            cd "$CM_BUILD_DIR"
+            
+            if [ ! -d "$WORKSPACE_FILE" ]; then
+              echo "ERROR: Failed to create workspace"
+              exit 1
+            fi
           fi
 
           echo ""
@@ -378,7 +452,7 @@ workflows:
           fi
 
           echo ""
-          echo "Xcode project verification: OK"
+          echo "✓ Xcode project verification: OK"
 
       - name: Configure iOS signing
         script: |
@@ -389,7 +463,7 @@ workflows:
           xcode-project use-profiles \
             --project "ios/App/App.xcodeproj"
           echo ""
-          echo "Code signing configuration: OK"
+          echo "✓ Code signing configuration: OK"
 
       - name: Configure Info.plist
         script: |
@@ -422,7 +496,7 @@ workflows:
           echo "Validating Info.plist..."
           plutil -lint "$PLIST"
           echo ""
-          echo "Info.plist verification: OK"
+          echo "✓ Info.plist verification: OK"
 
       - name: Set application version
         script: |
@@ -434,8 +508,7 @@ workflows:
           agvtool new-marketing-version "$MARKETING_VERSION"
           cd "$CM_BUILD_DIR"
           echo ""
-          echo "Marketing version:"
-          echo "$MARKETING_VERSION"
+          echo "Marketing version: $MARKETING_VERSION"
 
       - name: Set automatic build number
         script: |
@@ -464,7 +537,7 @@ workflows:
           cd "$CM_BUILD_DIR"
 
           echo ""
-          echo "Build number configured successfully."
+          echo "✓ Build number configured successfully."
 
       - name: Final signing and version verification
         script: |
@@ -496,7 +569,7 @@ workflows:
           echo "$MARKETING_VERSION"
 
           echo ""
-          echo "Verification completed."
+          echo "✓ Verification completed."
 
       - name: Build IPA
         script: |
