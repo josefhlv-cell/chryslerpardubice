@@ -404,32 +404,44 @@ workflows:
       - name: Set automatic build number
         script: |
           set -e
+
           echo "======================================"
           echo "SETTING BUILD NUMBER"
           echo "======================================"
 
+          echo "Reading latest build number from App Store Connect..."
+
           LATEST_BUILD_NUMBER=$(
             app-store-connect get-latest-app-store-build-number \
-              "$APP_STORE_APPLE_ID" 2>/dev/null || echo "0"
+              "$APP_STORE_APPLE_ID" \
+              --platform IOS
           )
 
           if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
-            LATEST_BUILD_NUMBER=0
+            echo "ERROR: Could not determine latest App Store build number."
+            echo "Returned value: $LATEST_BUILD_NUMBER"
+            exit 1
           fi
 
           NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
 
           echo ""
-          echo "Latest build number: $LATEST_BUILD_NUMBER"
+          echo "Latest App Store build: $LATEST_BUILD_NUMBER"
           echo "New build number: $NEW_BUILD_NUMBER"
+          echo ""
 
           cd ios/App
+
           agvtool new-version -all "$NEW_BUILD_NUMBER"
+
+          echo ""
+          echo "Verifying CFBundleVersion..."
+          agvtool what-version -terse
+
           cd "$CM_BUILD_DIR"
 
           echo ""
           echo "✓ Build number configured successfully."
-
       - name: Final signing and version verification
         script: |
           set -e
