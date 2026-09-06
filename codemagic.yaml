@@ -39,27 +39,6 @@ workflows:
           echo "======================================"
           npm run build
 
-      - name: Debug iOS structure BEFORE
-        script: |
-          set -e
-          echo "======================================"
-          echo "DEBUG: iOS DIRECTORY STRUCTURE (BEFORE SYNC)"
-          echo "======================================"
-          echo ""
-          echo "Current directory:"
-          pwd
-          echo ""
-          echo "Root contents:"
-          ls -la | head -20
-          echo ""
-          echo "Looking for ios directory:"
-          if [ -d "ios" ]; then
-            echo "✓ iOS directory EXISTS"
-            find ios -type d | head -20
-          else
-            echo "✗ iOS directory DOES NOT EXIST"
-          fi
-
       - name: Prepare Capacitor iOS project
         script: |
           set -e
@@ -80,59 +59,32 @@ workflows:
           npx cap sync ios
 
           echo ""
-          echo "Checking for Podfile..."
-          if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile not found - copying template..."
-            if [ -f "scripts/Podfile.template" ]; then
-              cp scripts/Podfile.template ios/App/Podfile
-              echo "✓ Podfile copied from template"
-            else
-              echo "ERROR: Podfile template not found at scripts/Podfile.template"
-              exit 1
-            fi
+          if [ -f "ios/App/Podfile" ]; then
+            echo "Podfile found - installing CocoaPods dependencies..."
+            cd ios/App
+            pod install --repo-update
+            cd "$CM_BUILD_DIR"
+            echo "✓ CocoaPods installed"
           else
-            echo "✓ Podfile already exists"
+            echo "Podfile not found — Capacitor uses Swift Package Manager, continuing without CocoaPods."
           fi
-
-          echo ""
-          echo "Installing CocoaPods dependencies..."
-          cd ios/App
-          pod install --repo-update
-          cd "$CM_BUILD_DIR"
 
           echo ""
           echo "✓ Capacitor iOS preparation: OK"
 
-      - name: Debug iOS structure AFTER
+      - name: Verify iOS workspace
         script: |
           set -e
           echo "======================================"
-          echo "DEBUG: iOS DIRECTORY STRUCTURE (AFTER SYNC)"
+          echo "VERIFYING IOS WORKSPACE"
           echo "======================================"
-          echo ""
-          echo "iOS directory contents:"
-          if [ -d "ios" ]; then
-            find ios -type f \( -name "*.pbxproj" -o -name "Podfile" \) -o -type d -name "*.xcworkspace"
-            echo ""
-            echo "Workspace status:"
-            if [ -d "ios/App/App.xcworkspace" ]; then
-              echo "✓ Workspace EXISTS"
-              ls -la ios/App/App.xcworkspace/
-            else
-              echo "✗ Workspace DOES NOT EXIST - Running pod install again..."
-              cd ios/App
-              pod install --repo-update
-              cd "$CM_BUILD_DIR"
-              
-              if [ -d "ios/App/App.xcworkspace" ]; then
-                echo "✓ Workspace created successfully"
-              else
-                echo "✗ Failed to create workspace"
-                exit 1
-              fi
-            fi
+
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            echo "✓ Workspace EXISTS: ios/App/App.xcworkspace"
           else
-            echo "✗ ERROR: iOS directory still does not exist!"
+            echo "ERROR: ios/App/App.xcworkspace not found."
+            echo "Listing ios/App contents:"
+            ls -la ios/App || true
             exit 1
           fi
 
@@ -322,27 +274,6 @@ workflows:
           echo "======================================"
           npm run build
 
-      - name: Debug iOS structure BEFORE
-        script: |
-          set -e
-          echo "======================================"
-          echo "DEBUG: iOS DIRECTORY STRUCTURE (BEFORE SYNC)"
-          echo "======================================"
-          echo ""
-          echo "Current directory:"
-          pwd
-          echo ""
-          echo "Root contents:"
-          ls -la | head -20
-          echo ""
-          echo "Looking for ios directory:"
-          if [ -d "ios" ]; then
-            echo "✓ iOS directory EXISTS"
-            find ios -type d | head -20
-          else
-            echo "✗ iOS directory DOES NOT EXIST"
-          fi
-
       - name: Prepare Capacitor iOS project
         script: |
           set -e
@@ -363,59 +294,32 @@ workflows:
           npx cap sync ios
 
           echo ""
-          echo "Checking for Podfile..."
-          if [ ! -f "ios/App/Podfile" ]; then
-            echo "Podfile not found - copying template..."
-            if [ -f "scripts/Podfile.template" ]; then
-              cp scripts/Podfile.template ios/App/Podfile
-              echo "✓ Podfile copied from template"
-            else
-              echo "ERROR: Podfile template not found at scripts/Podfile.template"
-              exit 1
-            fi
+          if [ -f "ios/App/Podfile" ]; then
+            echo "Podfile found - installing CocoaPods dependencies..."
+            cd ios/App
+            pod install --repo-update
+            cd "$CM_BUILD_DIR"
+            echo "✓ CocoaPods installed"
           else
-            echo "✓ Podfile already exists"
+            echo "Podfile not found — Capacitor uses Swift Package Manager, continuing without CocoaPods."
           fi
-
-          echo ""
-          echo "Installing CocoaPods dependencies..."
-          cd ios/App
-          pod install --repo-update
-          cd "$CM_BUILD_DIR"
 
           echo ""
           echo "✓ Capacitor iOS preparation: OK"
 
-      - name: Debug iOS structure AFTER
+      - name: Verify iOS workspace
         script: |
           set -e
           echo "======================================"
-          echo "DEBUG: iOS DIRECTORY STRUCTURE (AFTER SYNC)"
+          echo "VERIFYING IOS WORKSPACE"
           echo "======================================"
-          echo ""
-          echo "iOS directory contents:"
-          if [ -d "ios" ]; then
-            find ios -type f \( -name "*.pbxproj" -o -name "Podfile" \) -o -type d -name "*.xcworkspace"
-            echo ""
-            echo "Workspace status:"
-            if [ -d "ios/App/App.xcworkspace" ]; then
-              echo "✓ Workspace EXISTS"
-              ls -la ios/App/App.xcworkspace/
-            else
-              echo "✗ Workspace DOES NOT EXIST - Running pod install again..."
-              cd ios/App
-              pod install --repo-update
-              cd "$CM_BUILD_DIR"
-              
-              if [ -d "ios/App/App.xcworkspace" ]; then
-                echo "✓ Workspace created successfully"
-              else
-                echo "✗ Failed to create workspace"
-                exit 1
-              fi
-            fi
+
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            echo "✓ Workspace EXISTS: ios/App/App.xcworkspace"
           else
-            echo "✗ ERROR: iOS directory still does not exist!"
+            echo "ERROR: ios/App/App.xcworkspace not found."
+            echo "Listing ios/App contents:"
+            ls -la ios/App || true
             exit 1
           fi
 
