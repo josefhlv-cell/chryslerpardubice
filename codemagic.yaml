@@ -427,7 +427,7 @@ workflows:
           echo "SETTING BUILD NUMBER"
           echo "======================================"
 
-          NEW_BUILD_NUMBER=2
+          NEW_BUILD_NUMBER=3
 
           echo "New build number: $NEW_BUILD_NUMBER"
 
