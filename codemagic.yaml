@@ -72,22 +72,6 @@ workflows:
           echo ""
           echo "✓ Capacitor iOS preparation: OK"
 
-      - name: Verify iOS workspace
-        script: |
-          set -e
-          echo "======================================"
-          echo "VERIFYING IOS WORKSPACE"
-          echo "======================================"
-
-          if [ -d "ios/App/App.xcworkspace" ]; then
-            echo "✓ Workspace EXISTS: ios/App/App.xcworkspace"
-          else
-            echo "ERROR: ios/App/App.xcworkspace not found."
-            echo "Listing ios/App contents:"
-            ls -la ios/App || true
-            exit 1
-          fi
-
       - name: Generate app icons
         script: |
           set -e
@@ -100,7 +84,6 @@ workflows:
         script: |
           set -e
           PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
-          WORKSPACE_FILE="ios/App/App.xcworkspace"
 
           echo "======================================"
           echo "VERIFYING IOS PROJECT"
@@ -112,10 +95,12 @@ workflows:
             exit 1
           fi
 
-          if [ ! -d "$WORKSPACE_FILE" ]; then
-            echo "ERROR: Xcode workspace not found:"
-            echo "$WORKSPACE_FILE"
-            exit 1
+          echo ""
+          echo "Workspace present:"
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            echo "✓ ios/App/App.xcworkspace (will use --workspace)"
+          else
+            echo "Not present — SPM-only project (will use --project)"
           fi
 
           echo ""
@@ -214,18 +199,19 @@ workflows:
           echo "BUILDING CHDP GARAGE IPA (AD HOC)"
           echo "======================================"
 
-          WORKSPACE="ios/App/App.xcworkspace"
           SCHEME="App"
 
-          if [ ! -d "$WORKSPACE" ]; then
-            echo "ERROR: Workspace not found:"
-            echo "$WORKSPACE"
-            exit 1
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            echo "Using workspace build."
+            xcode-project build-ipa \
+              --workspace "$CM_BUILD_DIR/ios/App/App.xcworkspace" \
+              --scheme "$SCHEME"
+          else
+            echo "No workspace found — building from .xcodeproj (SPM-only project)."
+            xcode-project build-ipa \
+              --project "$CM_BUILD_DIR/ios/App/App.xcodeproj" \
+              --scheme "$SCHEME"
           fi
-
-          xcode-project build-ipa \
-            --workspace "$CM_BUILD_DIR/$WORKSPACE" \
-            --scheme "$SCHEME"
 
           echo ""
           echo "======================================"
@@ -307,22 +293,6 @@ workflows:
           echo ""
           echo "✓ Capacitor iOS preparation: OK"
 
-      - name: Verify iOS workspace
-        script: |
-          set -e
-          echo "======================================"
-          echo "VERIFYING IOS WORKSPACE"
-          echo "======================================"
-
-          if [ -d "ios/App/App.xcworkspace" ]; then
-            echo "✓ Workspace EXISTS: ios/App/App.xcworkspace"
-          else
-            echo "ERROR: ios/App/App.xcworkspace not found."
-            echo "Listing ios/App contents:"
-            ls -la ios/App || true
-            exit 1
-          fi
-
       - name: Generate app icons
         script: |
           set -e
@@ -335,7 +305,6 @@ workflows:
         script: |
           set -e
           PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
-          WORKSPACE_FILE="ios/App/App.xcworkspace"
 
           echo "======================================"
           echo "VERIFYING IOS PROJECT"
@@ -347,10 +316,12 @@ workflows:
             exit 1
           fi
 
-          if [ ! -d "$WORKSPACE_FILE" ]; then
-            echo "ERROR: Xcode workspace not found:"
-            echo "$WORKSPACE_FILE"
-            exit 1
+          echo ""
+          echo "Workspace present:"
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            echo "✓ ios/App/App.xcworkspace (will use --workspace)"
+          else
+            echo "Not present — SPM-only project (will use --project)"
           fi
 
           echo ""
@@ -498,26 +469,19 @@ workflows:
           echo "BUILDING CHDP GARAGE IPA"
           echo "======================================"
 
-          WORKSPACE="ios/App/App.xcworkspace"
           SCHEME="App"
 
-          if [ ! -d "$WORKSPACE" ]; then
-            echo "ERROR: Workspace not found:"
-            echo "$WORKSPACE"
-            exit 1
+          if [ -d "ios/App/App.xcworkspace" ]; then
+            echo "Using workspace build."
+            xcode-project build-ipa \
+              --workspace "$CM_BUILD_DIR/ios/App/App.xcworkspace" \
+              --scheme "$SCHEME"
+          else
+            echo "No workspace found — building from .xcodeproj (SPM-only project)."
+            xcode-project build-ipa \
+              --project "$CM_BUILD_DIR/ios/App/App.xcodeproj" \
+              --scheme "$SCHEME"
           fi
-
-          echo ""
-          echo "Workspace:"
-          echo "$WORKSPACE"
-
-          echo ""
-          echo "Scheme:"
-          echo "$SCHEME"
-
-          xcode-project build-ipa \
-            --workspace "$CM_BUILD_DIR/$WORKSPACE" \
-            --scheme "$SCHEME"
 
           echo ""
           echo "======================================"
