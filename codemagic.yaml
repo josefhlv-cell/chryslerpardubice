@@ -401,11 +401,11 @@ workflows:
           echo ""
           echo "Marketing version: $MARKETING_VERSION"
 
-         - name: Set build number
+      - name: Set build number
         script: |
           set -e
 
-              - name: Nastavit verzi aplikace
+      - name: Nastavit verzi aplikace
         script: |
           set -e
 
