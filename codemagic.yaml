@@ -401,16 +401,27 @@ workflows:
           echo ""
           echo "Marketing version: $MARKETING_VERSION"
 
-      - name: Set automatic build number
+         - name: Set build number
         script: |
           set -e
+
+          NEW_BUILD_NUMBER=3
 
           echo "======================================"
           echo "SETTING BUILD NUMBER"
           echo "======================================"
+          echo "New build number: $NEW_BUILD_NUMBER"
 
-          echo "Reading latest build number from App Store Connect..."
+          cd ios/App
+          agvtool new-version -all "$NEW_BUILD_NUMBER"
 
+          echo ""
+          echo "Final build number:"
+          agvtool what-version -terse
+
+          cd "$CM_BUILD_DIR"
+
+          echo "✓ Build number configured: $NEW_BUILD_NUMBER"
           LATEST_BUILD_NUMBER=$(
             app-store-connect get-latest-app-store-build-number \
               "$APP_STORE_APPLE_ID" \
