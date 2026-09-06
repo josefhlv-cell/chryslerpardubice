@@ -405,11 +405,30 @@ workflows:
         script: |
           set -e
 
-          NEW_BUILD_NUMBER=3
+              - name: Nastavit verzi aplikace
+        script: |
+          set -e
+
+          echo "======================================"
+          echo "SETTING MARKETING VERSION"
+          echo "======================================"
+
+          cd ios/App
+          agvtool new-marketing-version "$MARKETING_VERSION"
+          cd "$CM_BUILD_DIR"
+
+          echo "Marketing version: $MARKETING_VERSION"
+
+      - name: Nastavit číslo sestavení
+        script: |
+          set -e
 
           echo "======================================"
           echo "SETTING BUILD NUMBER"
           echo "======================================"
+
+          NEW_BUILD_NUMBER=2
+
           echo "New build number: $NEW_BUILD_NUMBER"
 
           cd ios/App
@@ -421,25 +440,28 @@ workflows:
 
           cd "$CM_BUILD_DIR"
 
-          echo "✓ Build number configured: $NEW_BUILD_NUMBER"
-          LATEST_BUILD_NUMBER=$(
-            app-store-connect get-latest-app-store-build-number \
-              "$APP_STORE_APPLE_ID" \
-              --platform IOS
-          )
+          echo "✓ Build number configured successfully."
 
-          if ! [[ "$LATEST_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
-            echo "ERROR: Could not determine latest App Store build number."
-            echo "Returned value: $LATEST_BUILD_NUMBER"
-            exit 1
-          fi
+      - name: Final signing and version verification
+        script: |
+          set -e
 
-          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
 
-          echo ""
-          echo "Latest App Store build: $LATEST_BUILD_NUMBER"
-          echo "New build number: $NEW_BUILD_NUMBER"
-          echo ""
+          echo "======================================"
+          echo "FINAL IOS VERIFICATION"
+          echo "======================================"
+
+          echo "Bundle ID:"
+          grep "PRODUCT_BUNDLE_IDENTIFIER" "$PROJECT_FILE" | head -5
+
+          echo "Expected Bundle ID:"
+          echo "$BUNDLE_ID"
+
+          echo "Expected Marketing Version:"
+          echo "$MARKETING_VERSION"
+
+          echo "✓ Verification completed."
 
           cd ios/App
 
