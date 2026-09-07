@@ -124,6 +124,31 @@ workflows:
           echo ""
           echo "✓ Xcode project verification: OK"
 
+      - name: Restrict app to iPhone only
+        script: |
+          set -e
+          echo "======================================"
+          echo "RESTRICTING APP TO IPHONE ONLY"
+          echo "======================================"
+
+          PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
+
+          if [ ! -f "$PROJECT_FILE" ]; then
+            echo "ERROR: Xcode project not found:"
+            echo "$PROJECT_FILE"
+            exit 1
+          fi
+
+          # iPhone only — exclude iPad
+          perl -0pi -e 's/TARGETED_DEVICE_FAMILY\s*=\s*[^;]+;/TARGETED_DEVICE_FAMILY = 1;/g' "$PROJECT_FILE"
+
+          echo ""
+          echo "Targeted device family:"
+          grep "TARGETED_DEVICE_FAMILY" "$PROJECT_FILE" || true
+
+          echo ""
+          echo "✓ App restricted to iPhone only"
+
       - name: Configure iOS signing
         script: |
           set -e
@@ -345,6 +370,31 @@ workflows:
           echo ""
           echo "✓ Xcode project verification: OK"
 
+      - name: Restrict app to iPhone only
+        script: |
+          set -e
+          echo "======================================"
+          echo "RESTRICTING APP TO IPHONE ONLY"
+          echo "======================================"
+
+          PROJECT_FILE="ios/App/App.xcodeproj/project.pbxproj"
+
+          if [ ! -f "$PROJECT_FILE" ]; then
+            echo "ERROR: Xcode project not found:"
+            echo "$PROJECT_FILE"
+            exit 1
+          fi
+
+          # iPhone only — exclude iPad
+          perl -0pi -e 's/TARGETED_DEVICE_FAMILY\s*=\s*[^;]+;/TARGETED_DEVICE_FAMILY = 1;/g' "$PROJECT_FILE"
+
+          echo ""
+          echo "Targeted device family:"
+          grep "TARGETED_DEVICE_FAMILY" "$PROJECT_FILE" || true
+
+          echo ""
+          echo "✓ App restricted to iPhone only"
+
       - name: Configure iOS signing
         script: |
           set -e
@@ -475,6 +525,7 @@ workflows:
 
           echo ""
           echo "✓ Build number configured successfully."
+
       - name: Final signing and version verification
         script: |
           set -e
