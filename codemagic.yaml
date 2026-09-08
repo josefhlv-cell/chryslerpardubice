@@ -191,8 +191,14 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
+        # Nahrání do App Store Connect + TestFlight je plně automatické.
         submit_to_testflight: true
-        submit_to_app_store: true
+        # App Store review se NEODESÍLÁ automaticky.
+        # Důvod: pokud pro verzi 1.0.0 už existuje otevřené review submission,
+        # Apple vrací 409 a celá stavba spadne, i když build i TestFlight prošly.
+        # Review se spouští ručně v App Store Connect (tlačítko "Add for Review").
+        submit_to_app_store: false
+
 
   ios-test:
     name: CHDP iOS Configuration Test
