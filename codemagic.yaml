@@ -130,11 +130,23 @@ workflows:
       - name: Set version and automatic build number
         script: |
           set -euo pipefail
-          LATEST_BUILD_NUMBER="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || printf '0')"
-          case "$LATEST_BUILD_NUMBER" in
-            ''|*[!0-9]*) LATEST_BUILD_NUMBER=4 ;;
-          esac
+          # Take the highest build number from BOTH App Store and TestFlight.
+          # get-latest-app-store-build-number alone ignores TestFlight-only
+          # builds, which caused the duplicate CFBundleVersion=4 upload error.
+          LATEST_APP_STORE="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || printf '0')"
+          LATEST_TESTFLIGHT="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || printf '0')"
+          case "$LATEST_APP_STORE" in ''|*[!0-9]*) LATEST_APP_STORE=0 ;; esac
+          case "$LATEST_TESTFLIGHT" in ''|*[!0-9]*) LATEST_TESTFLIGHT=0 ;; esac
+          if [ "$LATEST_TESTFLIGHT" -gt "$LATEST_APP_STORE" ]; then
+            LATEST_BUILD_NUMBER="$LATEST_TESTFLIGHT"
+          else
+            LATEST_BUILD_NUMBER="$LATEST_APP_STORE"
+          fi
+          # Safety floor: never go below already-used build 4.
+          if [ "$LATEST_BUILD_NUMBER" -lt 4 ]; then LATEST_BUILD_NUMBER=4; fi
           NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          echo "Latest App Store build: $LATEST_APP_STORE"
+          echo "Latest TestFlight build: $LATEST_TESTFLIGHT"
 
           cd "$CM_BUILD_DIR/ios/App"
           agvtool new-marketing-version "$MARKETING_VERSION"
