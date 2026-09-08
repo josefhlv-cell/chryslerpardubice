@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
+      // Registration is handled explicitly in src/lib/pwa/register-sw.ts so
+      // native Capacitor WKWebViews can never register the web service worker.
+      injectRegister: null,
       devOptions: {
         enabled: false,
       },
