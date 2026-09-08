@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 /**
  * Single, guarded service-worker registration point.
  *
@@ -9,17 +11,7 @@
 
 function isNativeCapacitor(): boolean {
   if (typeof window === "undefined") return false;
-  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; platform?: string } }).Capacitor;
-  if (cap) {
-    if (typeof cap.isNativePlatform === "function") {
-      try {
-        if (cap.isNativePlatform()) return true;
-      } catch {
-        /* ignore */
-      }
-    }
-    if (cap.platform && cap.platform !== "web") return true;
-  }
+  if (Capacitor.isNativePlatform()) return true;
   // Capacitor serves the app from a custom scheme / localhost origin
   const proto = window.location.protocol;
   if (proto === "capacitor:" || proto === "ionic:") return true;
