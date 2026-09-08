@@ -17,7 +17,7 @@ workflows:
     instance_type: mac_mini_m2
 
     integrations:
-      app_store_connect: "Chdp Lukovna"
+      app_store_connect: chdpgarage
 
     environment:
       <<: *ios_environment
