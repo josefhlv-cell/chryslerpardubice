@@ -132,7 +132,7 @@ workflows:
           set -euo pipefail
           LATEST_BUILD_NUMBER="$(app-store-connect get-latest-app-store-build-number "$APP_STORE_APPLE_ID" 2>/dev/null || printf '0')"
           case "$LATEST_BUILD_NUMBER" in
-            ''|*[!0-9]*) LATEST_BUILD_NUMBER=0 ;;
+            ''|*[!0-9]*) LATEST_BUILD_NUMBER=4 ;;
           esac
           NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
 
