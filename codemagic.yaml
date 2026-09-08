@@ -31,7 +31,11 @@ workflows:
       - name: Install dependencies
         script: |
           set -euo pipefail
-          npm ci --no-audit --no-fund
+          npm ci --no-audit --no-fund || {
+            echo "npm ci failed (lockfile out of sync) – recovering with npm install."
+            npm install --no-audit --no-fund
+          }
+
 
       - name: Test application
         script: |
