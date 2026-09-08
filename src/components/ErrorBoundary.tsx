@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Capacitor } from "@capacitor/core";
 
 interface Props {
   children: ReactNode;
@@ -37,8 +38,8 @@ function tryRecoverFromChunkError(err: unknown): boolean {
     // Only auto-reload once per 30s window to avoid infinite loops
     if (now - last > 30_000) {
       sessionStorage.setItem(key, String(now));
-      // Drop SW caches if any survived
-      if ("caches" in window) {
+      // Web/PWA only: native Capacitor must never depend on or manipulate SW caches.
+      if (!Capacitor.isNativePlatform() && "caches" in window) {
         caches.keys().then((keys) => keys.forEach((k) => caches.delete(k))).catch(() => {});
       }
       window.location.reload();
