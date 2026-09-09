@@ -35,6 +35,7 @@ const AccountSettings = () => {
   const [obdSaving, setObdSaving] = useState(false);
   const [historySaving, setHistorySaving] = useState(false);
   const [loadingConsent, setLoadingConsent] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -277,14 +278,17 @@ const AccountSettings = () => {
             </button>
             <button
               onClick={handleDeleteAccount}
-              className="w-full text-left hover:bg-destructive/5 transition-colors"
+              disabled={deleting}
+              className="w-full text-left hover:bg-destructive/5 transition-colors disabled:opacity-60"
             >
               <Row
                 icon={Trash2}
                 title="Smazat účet"
-                desc="Pošle žádost správci, vyřídíme do 30 dnů (GDPR)."
+                desc="Účet i všechna data budou okamžitě a nevratně smazány."
               >
-                <span className="text-xs text-destructive">Požádat</span>
+                <span className="text-xs text-destructive">
+                  {deleting ? "Mažu…" : "Smazat"}
+                </span>
               </Row>
             </button>
           </div>
