@@ -35,6 +35,7 @@ const AccountSettings = () => {
   const [obdSaving, setObdSaving] = useState(false);
   const [historySaving, setHistorySaving] = useState(false);
   const [loadingConsent, setLoadingConsent] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -135,43 +136,20 @@ const AccountSettings = () => {
       "Opravdu chcete NEVRATNĚ smazat svůj účet a všechna svá data? Tato akce je nevratná. Pokračováním potvrzujete, že rozumíte, že Váš účet, vozidla, objednávky a zprávy budou trvale odstraněny.",
     );
     if (!ok) return;
+    setDeleting(true);
     try {
-      // 1) Zapíšeme žádost o smazání (audit + reviewer)
-      const { error: reqErr } = await supabase
-        .from("account_deletion_requests")
-        .insert({
-          user_id: user.id,
-          email: profile.email || user.email || null,
-          status: "pending",
-          metadata: {
-            source: "in_app",
-            requested_at: new Date().toISOString(),
-            user_agent: navigator.userAgent,
-          },
-        });
-      if (reqErr) throw reqErr;
+      // Okamžité, nevratné smazání účtu i dat (audit log zapíše server současně)
+      const { data, error } = await supabase.functions.invoke("delete-account");
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
 
-      // 2) Informujeme administrátora (fire-and-forget)
-      supabase
-        .from("notifications")
-        .insert({
-          user_id: user.id,
-          title: "Žádost o smazání účtu",
-          message: `Uživatel ${profile.email || user.id} zahájil smazání účtu přímo v aplikaci (GDPR / App Store 5.1.1(v)).`,
-        })
-        .then(() => {});
-
-      toast.success(
-        "Žádost o smazání účtu byla přijata. Budete odhlášeni. Účet bude smazán do 30 dnů.",
-      );
-
-      // 3) Odhlásíme uživatele
-      setTimeout(async () => {
-        await signOut();
-        navigate("/", { replace: true });
-      }, 1500);
+      toast.success("Váš účet a všechna data byly trvale smazány.");
+      await signOut();
+      navigate("/", { replace: true });
     } catch (e: any) {
-      toast.error("Nepodařilo se odeslat žádost: " + (e?.message || "chyba"));
+      toast.error("Nepodařilo se smazat účet: " + (e?.message || "chyba"));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -300,14 +278,17 @@ const AccountSettings = () => {
             </button>
             <button
               onClick={handleDeleteAccount}
-              className="w-full text-left hover:bg-destructive/5 transition-colors"
+              disabled={deleting}
+              className="w-full text-left hover:bg-destructive/5 transition-colors disabled:opacity-60"
             >
               <Row
                 icon={Trash2}
                 title="Smazat účet"
-                desc="Pošle žádost správci, vyřídíme do 30 dnů (GDPR)."
+                desc="Účet i všechna data budou okamžitě a nevratně smazány."
               >
-                <span className="text-xs text-destructive">Požádat</span>
+                <span className="text-xs text-destructive">
+                  {deleting ? "Mažu…" : "Smazat"}
+                </span>
               </Row>
             </button>
           </div>
