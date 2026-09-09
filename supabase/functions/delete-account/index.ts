@@ -126,7 +126,7 @@ serve(async (req) => {
       await admin.from("service_orders").delete().in("id", soIds);
     }
 
-    await admin.from("service_book_shares").delete().eq("owner_user_id", uid);
+    await admin.from("service_book_shares").delete().eq("owner_id", uid);
 
     // 3) Hlavní tabulky s user_id
     for (const table of USER_TABLES) {
