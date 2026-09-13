@@ -52,69 +52,46 @@ async function initPushNotifications() {
 
   const { PushNotifications } = await import("@capacitor/push-notifications");
   const { Device } = await import("@capacitor/device");
+  const { ensurePushToken } = await import("./push-token");
 
-  // Request permission (Android 13+ requires runtime permission)
-  const perm = await PushNotifications.requestPermissions();
+  // Otevření notifikace → navigace na odkaz.
+  PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+    const link = (action.notification.data?.link as string) || undefined;
+    if (link) {
+      try {
+        window.location.assign(link);
+      } catch {}
+    }
+  });
+
+  // Registrace se provádí přes společný helper (jediné register() + cache tokenu).
+  // Pokud uživatel ještě oprávnění nedal, iOS zobrazí dialog až v UI (Účet).
+  const perm = await PushNotifications.checkPermissions();
   if (perm.receive !== "granted") {
-    console.info("[push] permission not granted");
+    console.info("[push] permission not granted yet – čekáme na akci uživatele");
     return;
   }
 
-  // Android: kanál "default" musí existovat, jinak se notifikace nezobrazí
-  if (Capacitor.getPlatform() === "android") {
-    try {
-      await PushNotifications.createChannel({
-        id: "default",
-        name: "CHDP Garage",
-        description: "Objednávky, servis, chat a upozornění",
-        importance: 5,
-        visibility: 1,
-      } as any);
+  const token = await ensurePushToken();
 
-    } catch (e) {
-      console.warn("[push] channel create failed", e);
-    }
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const info = await Device.getInfo();
+    const id = await Device.getId();
+    await supabase.from("device_tokens").upsert(
+      {
+        user_id: user.id,
+        token,
+        platform: Capacitor.getPlatform(),
+        device_id: id.identifier,
+        model: info.model,
+        os_version: info.osVersion,
+        last_seen_at: new Date().toISOString(),
+      },
+      { onConflict: "token" }
+    );
+  } catch (e) {
+    console.warn("[push] token store failed", e);
   }
-
-  await PushNotifications.register();
-
-
-  PushNotifications.addListener("registration", async (token) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const info = await Device.getInfo();
-      const id = await Device.getId();
-      await supabase.from("device_tokens").upsert(
-        {
-          user_id: user.id,
-          token: token.value,
-          platform: Capacitor.getPlatform(),
-          device_id: id.identifier,
-          model: info.model,
-          os_version: info.osVersion,
-          last_seen_at: new Date().toISOString(),
-        },
-        { onConflict: "token" }
-      );
-    } catch (e) {
-      console.warn("[push] token store failed", e);
-    }
-  });
-
-  PushNotifications.addListener("registrationError", (err) => {
-    console.warn("[push] registration error", err);
-  });
-
-  PushNotifications.addListener(
-    "pushNotificationActionPerformed",
-    (action) => {
-      const link = (action.notification.data?.link as string) || undefined;
-      if (link) {
-        try {
-          window.location.assign(link);
-        } catch {}
-      }
-    }
-  );
 }
