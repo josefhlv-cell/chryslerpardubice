@@ -192,6 +192,10 @@ workflows:
           xcodebuild -project "$PROJECT" -scheme App -configuration Release -showBuildSettings > /tmp/chdp-build-settings.txt
           grep -q "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID" /tmp/chdp-build-settings.txt
           grep -q "CODE_SIGN_ENTITLEMENTS = App/App.entitlements" /tmp/chdp-build-settings.txt
+          # iPhone-only kontrola: efektivní build setting musí být 1 (iPhone).
+          grep -qE "TARGETED_DEVICE_FAMILY = 1$" /tmp/chdp-build-settings.txt
+          /usr/libexec/PlistBuddy -c "Print :UIDeviceFamily" "$CM_BUILD_DIR/ios/App/App/Info.plist" | grep -q "1"
+          ! /usr/libexec/PlistBuddy -c "Print :UIDeviceFamily" "$CM_BUILD_DIR/ios/App/App/Info.plist" | grep -q "2"
 
       - name: Build IPA
         script: |
