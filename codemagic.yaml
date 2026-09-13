@@ -121,10 +121,27 @@ workflows:
           sed -i '' -E '/CODE_SIGN_ENTITLEMENTS = /d' "$PROJECT_FILE"
           perl -0pi -e 's|(PRODUCT_BUNDLE_IDENTIFIER = cz\.chryslerpardubice\.chdpgarage;)|$1\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PROJECT_FILE"
 
+          # iPhone-only: Capacitor šablona generuje TARGETED_DEVICE_FAMILY = "1,2".
+          # Přepneme na 1 (iPhone) a doplníme UIDeviceFamily do Info.plist,
+          # aby App Store Connect nenabízel aplikaci na iPadu.
+          sed -i '' -E 's/TARGETED_DEVICE_FAMILY = "?[0-9,]+"?;/TARGETED_DEVICE_FAMILY = 1;/g' "$PROJECT_FILE"
+          if ! grep -q 'TARGETED_DEVICE_FAMILY = 1;' "$PROJECT_FILE"; then
+            perl -0pi -e 's|(PRODUCT_BUNDLE_IDENTIFIER = cz\.chryslerpardubice\.chdpgarage;)|$1\n\t\t\t\tTARGETED_DEVICE_FAMILY = 1;|g' "$PROJECT_FILE"
+          fi
+
+          /usr/libexec/PlistBuddy -c "Delete :UIDeviceFamily" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :UIDeviceFamily array" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :UIDeviceFamily:0 integer 1" "$PLIST"
+
+          # iPad-specific orientace nejsou pro iPhone-only build relevantní.
+          /usr/libexec/PlistBuddy -c "Delete :UISupportedInterfaceOrientations~ipad" "$PLIST" 2>/dev/null || true
+
           plutil -lint "$PLIST"
           plutil -lint "$ENTITLEMENTS"
           grep -q "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;" "$PROJECT_FILE"
           grep -q "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;" "$PROJECT_FILE"
+          grep -q "TARGETED_DEVICE_FAMILY = 1;" "$PROJECT_FILE"
+          ! grep -q 'TARGETED_DEVICE_FAMILY = "1,2"' "$PROJECT_FILE"
 
       - name: Configure signing profiles
         script: |
