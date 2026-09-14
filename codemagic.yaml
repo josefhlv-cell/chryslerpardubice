@@ -88,10 +88,10 @@ workflows:
           # `registration` / `registrationError` and the JS promise times out.
           # `.capacitorDidRegisterForRemoteNotifications` is declared by Capacitor.
           if ! grep -q "^import Capacitor" "$DELEGATE"; then
-            sed -i '' -e '1i\
-import Capacitor
-' "$DELEGATE"
+            printf 'import Capacitor\n' | cat - "$DELEGATE" > /tmp/chdp-delegate-import.swift
+            mv /tmp/chdp-delegate-import.swift "$DELEGATE"
           fi
+
 
           if ! grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"; then
 
