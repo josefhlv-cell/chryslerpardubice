@@ -8,6 +8,7 @@ import { Building2, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { getAuthRedirectUri } from "@/lib/authRedirect";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
@@ -42,6 +43,20 @@ const Auth = () => {
     }
 
     return "/";
+  };
+
+  const startSocialLogin = async (provider: "google" | "apple") => {
+    setLoading(true);
+    try {
+      const { error } = await lovable.auth.signInWithOAuth(provider, {
+        redirect_uri: getAuthRedirectUri(),
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast.error(err.message || (provider === "google" ? "Chyba při přihlášení přes Google" : "Chyba při přihlášení přes Apple"));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -227,19 +242,7 @@ const Auth = () => {
               type="button"
               variant="outline"
               className="w-full h-11 gap-3 text-sm font-medium border-border/30 hover:border-border/50"
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  const { error } = await lovable.auth.signInWithOAuth("google", {
-                    redirect_uri: window.location.origin,
-                  });
-                  if (error) throw error;
-                } catch (err: any) {
-                  toast.error(err.message || "Chyba při přihlášení přes Google");
-                } finally {
-                  setLoading(false);
-                }
-              }}
+              onClick={() => startSocialLogin("google")}
               disabled={loading}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -254,19 +257,7 @@ const Auth = () => {
             {/* Sign in with Apple - oficiální obrázek tlačítka z Apple CDN, splňuje HIG požadavky */}
             <button
               type="button"
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  const { error } = await lovable.auth.signInWithOAuth("apple", {
-                    redirect_uri: window.location.origin,
-                  });
-                  if (error) throw error;
-                } catch (err: any) {
-                  toast.error(err.message || "Chyba při přihlášení přes Apple");
-                } finally {
-                  setLoading(false);
-                }
-              }}
+              onClick={() => startSocialLogin("apple")}
               disabled={loading}
               aria-label="Sign in with Apple"
               className="w-full h-11 rounded-lg overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
