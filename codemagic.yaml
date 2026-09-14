@@ -74,6 +74,48 @@ workflows:
             -project "$PROJECT" \
             -scheme App
 
+      - name: Ensure AppDelegate forwards APNs callbacks
+        script: |
+          set -euo pipefail
+          DELEGATE="$CM_BUILD_DIR/ios/App/App/AppDelegate.swift"
+          test -f "$DELEGATE"
+          echo "=== AppDelegate before patch ==="
+          cat "$DELEGATE"
+
+          # Root cause of the 20s "APNs neodpověděl" hang: without these two
+          # UIApplicationDelegate methods the APNs device token is never posted
+          # to Capacitor, so @capacitor/push-notifications never fires
+          # `registration` / `registrationError` and the JS promise times out.
+          if ! grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"; then
+            python3 - "$DELEGATE" <<'PY'
+          import re, sys
+          path = sys.argv[1]
+          src = open(path, encoding="utf-8").read()
+          methods = '''
+              func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+                  NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+              }
+
+              func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+                  NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+              }
+          '''
+          idx = src.rstrip().rfind("}")
+          if idx == -1:
+              raise SystemExit("Cannot patch AppDelegate.swift: no closing brace found")
+          src = src[:idx] + methods + "\n" + src[idx:]
+          open(path, "w", encoding="utf-8").write(src)
+          PY
+          fi
+
+          grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"
+          grep -q "didFailToRegisterForRemoteNotificationsWithError" "$DELEGATE"
+          echo "=== AppDelegate after patch ==="
+          cat "$DELEGATE"
+          echo "APNs FORWARDING OK"
+
+
+
       - name: Generate app icons
         script: |
           set -euo pipefail
