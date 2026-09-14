@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
-import { App as CapApp } from "@capacitor/app";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
