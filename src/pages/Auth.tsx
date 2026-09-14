@@ -9,6 +9,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { getAuthRedirectUri } from "@/lib/authRedirect";
+import {
+  isNativeAppleSignInAvailable,
+  signInWithAppleNative,
+} from "@/lib/native/apple-sign-in";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
@@ -48,6 +52,22 @@ const Auth = () => {
   const startSocialLogin = async (provider: "google" | "apple") => {
     setLoading(true);
     try {
+      // iOS native: system Sign in with Apple → Supabase id_token (no WKWebView OAuth).
+      if (provider === "apple" && isNativeAppleSignInAvailable()) {
+        const result = await signInWithAppleNative();
+        if (result.canceled) {
+          toast.message("Přihlášení přes Apple bylo zrušeno.");
+          return;
+        }
+        if (result.error) throw result.error;
+        const userId = result.data?.user?.id;
+        const path = userId ? await getRedirectPath(userId) : "/";
+        toast.success("Přihlášení úspěšné!");
+        navigate(path);
+        return;
+      }
+
+      // Web / Android / Google: keep Lovable OAuth redirect flow.
       const { error } = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: getAuthRedirectUri(),
       });
