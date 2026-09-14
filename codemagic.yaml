@@ -86,7 +86,15 @@ workflows:
           # UIApplicationDelegate methods the APNs device token is never posted
           # to Capacitor, so @capacitor/push-notifications never fires
           # `registration` / `registrationError` and the JS promise times out.
+          # `.capacitorDidRegisterForRemoteNotifications` is declared by Capacitor.
+          if ! grep -q "^import Capacitor" "$DELEGATE"; then
+            sed -i '' -e '1i\
+import Capacitor
+' "$DELEGATE"
+          fi
+
           if ! grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"; then
+
             printf '%s\n' \
               '' \
               '    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {' \
