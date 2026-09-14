@@ -19,7 +19,10 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'automatic',
     backgroundColor: '#0f0f23',
-    preferredContentMode: 'mobile',
+    // "desktop" lets iPad report real tablet width so Tailwind md/lg breakpoints
+    // and the desktop sidebar work. "mobile" forced a phone layout on iPad
+    // (App Review devices + TestFlight).
+    preferredContentMode: 'desktop',
     scheme: 'chdp-servis',
     limitsNavigationsToAppBoundDomains: false,
   },

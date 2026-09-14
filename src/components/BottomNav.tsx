@@ -33,8 +33,11 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
   };
 
   return (
-    <nav ref={ref} className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/20 bg-background/95 backdrop-blur-xl safe-bottom lg:hidden">
-      <div className="flex items-center justify-around h-[60px] max-w-lg mx-auto px-2">
+    <nav
+      ref={ref}
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/20 bg-background/95 backdrop-blur-xl safe-bottom xl:hidden"
+    >
+      <div className="flex items-center justify-around h-[60px] max-w-3xl mx-auto px-2 md:px-6">
         {navItems.map((item) => {
           const active = isActive(item.path);
           const Icon = item.icon;
@@ -42,11 +45,12 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
           return (
             <button
               key={item.path}
+              type="button"
               onClick={() => navigate(item.path)}
               aria-label={item.label}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-0.5 w-14 h-12 transition-all duration-200",
+                "relative flex flex-col items-center justify-center gap-0.5 w-14 h-12 md:w-20 md:h-14 transition-all duration-200",
                 active
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
@@ -59,8 +63,8 @@ const BottomNav = forwardRef<HTMLElement>((_, ref) => {
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <Icon className="w-5 h-5" />
-              <span className="text-[9px] font-medium tracking-wide">{item.label}</span>
+              <Icon className="w-5 h-5 md:w-6 md:h-6" />
+              <span className="text-[9px] md:text-[11px] font-medium tracking-wide">{item.label}</span>
             </button>
           );
         })}

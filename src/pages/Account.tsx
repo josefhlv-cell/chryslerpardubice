@@ -15,7 +15,7 @@ const Account = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen pb-20">
+      <div className="min-h-screen pb-20 md:pb-24">
         <PageHeader title="Můj účet" />
         <div className="flex items-center justify-center py-20">
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -26,9 +26,9 @@ const Account = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen pb-20">
+      <div className="min-h-screen pb-20 md:pb-24">
         <PageHeader title="Můj účet" />
-        <div className="p-4 max-w-lg mx-auto text-center py-12 space-y-4">
+        <div className="p-4 max-w-lg md:max-w-3xl mx-auto text-center py-12 space-y-4">
           <div className="w-16 h-16 rounded-full brushed-metal border border-border/40 mx-auto flex items-center justify-center">
             <User className="w-8 h-8 text-muted-foreground/40" />
           </div>
@@ -54,9 +54,9 @@ const Account = () => {
   ];
 
   return (
-    <div className="min-h-screen pb-20">
+    <div className="min-h-screen pb-20 md:pb-24">
       <PageHeader title="Můj účet" />
-      <div className="p-4 space-y-4 max-w-lg mx-auto">
+      <div className="p-4 space-y-4 max-w-lg md:max-w-3xl mx-auto">
         {/* Profile card */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="luxury-card p-5">
