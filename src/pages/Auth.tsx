@@ -13,6 +13,10 @@ import {
   isNativeAppleSignInAvailable,
   signInWithAppleNative,
 } from "@/lib/native/apple-sign-in";
+import {
+  isNativeGoogleSignInAvailable,
+  signInWithGoogleNative,
+} from "@/lib/native/google-sign-in";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
@@ -67,7 +71,22 @@ const Auth = () => {
         return;
       }
 
-      // Web / Android / Google: keep Lovable OAuth redirect flow.
+      // iOS native: Google Sign-In SDK → Supabase id_token (avoids capacitor:// 404).
+      if (provider === "google" && isNativeGoogleSignInAvailable()) {
+        const result = await signInWithGoogleNative();
+        if (result.canceled) {
+          toast.message("Přihlášení přes Google bylo zrušeno.");
+          return;
+        }
+        if (result.error) throw result.error;
+        const userId = result.data?.user?.id;
+        const path = userId ? await getRedirectPath(userId) : "/";
+        toast.success("Přihlášení úspěšné!");
+        navigate(path);
+        return;
+      }
+
+      // Web / Android: keep Lovable OAuth redirect flow.
       const { error } = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: getAuthRedirectUri(),
       });

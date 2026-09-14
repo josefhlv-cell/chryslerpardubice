@@ -51,6 +51,15 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    // Capgo Social Login: ship Google only (Apple uses @capawesome/capacitor-apple-sign-in).
+    SocialLogin: {
+      providers: {
+        google: true,
+        apple: false,
+        facebook: false,
+        twitter: false,
+      },
+    },
   },
 };
 
