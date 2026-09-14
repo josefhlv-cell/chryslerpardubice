@@ -97,6 +97,10 @@ workflows:
           /usr/libexec/PlistBuddy -c "Set :NSLocationWhenInUseUsageDescription Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST" 2>/dev/null || \
             /usr/libexec/PlistBuddy -c "Add :NSLocationWhenInUseUsageDescription string Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST"
 
+          # ASC warning 90683: SDKs may reference Always+WhenInUse APIs even if we only use WhenInUse.
+          /usr/libexec/PlistBuddy -c "Set :NSLocationAlwaysAndWhenInUseUsageDescription Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST" 2>/dev/null || \
+            /usr/libexec/PlistBuddy -c "Add :NSLocationAlwaysAndWhenInUseUsageDescription string Poloha je potřeba pro Bluetooth a servisní služby." "$PLIST"
+
           # Export compliance: aplikace nepoužívá neosvobozené šifrování.
           # Bez tohoto klíče Apple odmítne odeslání buildu do TestFlight (422).
           /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST" 2>/dev/null || \
