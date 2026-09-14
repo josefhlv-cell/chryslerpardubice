@@ -19,6 +19,7 @@ import { Loader2 } from "lucide-react";
 // Eagerly loaded (critical path)
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
+import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 
 // Lazy loaded pages
@@ -56,6 +57,7 @@ const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
 const MyTowRequests = lazy(() => import("./pages/MyTowRequests"));
 import ProfileGate from "@/components/ProfileGate";
 import PushDeepLink from "@/components/PushDeepLink";
+import OAuthReturnHandler from "@/components/OAuthReturnHandler";
 const SupportChatWidget = lazy(() => import("@/components/support/SupportChatWidget"));
 
 const BOT_RE = /Lighthouse|PageSpeed|PTST|Googlebot|Chrome-Lighthouse/i;
@@ -89,6 +91,7 @@ const App = () => (
               <AdminDailyReport />
               <ProfileGate />
               <PushDeepLink />
+              <OAuthReturnHandler />
               <TopBar />
               <div className="flex w-full">
                 <DesktopSidebar />
@@ -125,6 +128,9 @@ const App = () => (
                     <Route path="/delphi" element={<DelphiPage />} />
                     <Route path="/presentation" element={<AppPresentation />} />
                     <Route path="/auth" element={<Auth />} />
+                    <Route path="/auth/callback" element={<AuthCallback />} />
+                    <Route path="/oauth/callback" element={<AuthCallback />} />
+                    <Route path="/login/callback" element={<AuthCallback />} />
                     <Route path="/complete-profile" element={<CompleteProfile />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/terms" element={<Terms />} />
