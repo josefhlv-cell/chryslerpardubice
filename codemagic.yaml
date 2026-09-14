@@ -166,6 +166,17 @@ workflows:
           xcode-project use-profiles \
             --project "$CM_BUILD_DIR/ios/App/App.xcodeproj"
 
+          # use-profiles can rewrite CODE_SIGN_* — re-assert entitlements for Push.
+          PROJECT_FILE="$CM_BUILD_DIR/ios/App/App.xcodeproj/project.pbxproj"
+          ENTITLEMENTS="$CM_BUILD_DIR/ios/App/App/App.entitlements"
+          test -f "$ENTITLEMENTS"
+          echo "=== App.entitlements on disk ==="
+          cat "$ENTITLEMENTS"
+          /usr/libexec/PlistBuddy -c "Print :aps-environment" "$ENTITLEMENTS" | grep -qx "production"
+          sed -i '' -E '/CODE_SIGN_ENTITLEMENTS = /d' "$PROJECT_FILE"
+          perl -0pi -e 's|(PRODUCT_BUNDLE_IDENTIFIER = cz\.chryslerpardubice\.chdpgarage;)|$1\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PROJECT_FILE"
+          grep -q "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;" "$PROJECT_FILE"
+
       - name: Set version and automatic build number
         script: |
           set -euo pipefail
@@ -225,6 +236,28 @@ workflows:
             --project "$CM_BUILD_DIR/ios/App/App.xcodeproj" \
             --scheme App \
             --config Release
+
+      - name: Verify push entitlements in IPA
+        script: |
+          set -euo pipefail
+          IPA=$(ls -1 "$CM_BUILD_DIR"/build/ios/ipa/*.ipa | head -1)
+          test -f "$IPA"
+          TMP=$(mktemp -d)
+          unzip -q "$IPA" -d "$TMP"
+          APP=$(echo "$TMP"/Payload/*.app)
+          test -d "$APP"
+          codesign -d --entitlements :- "$APP" > /tmp/chdp-entitlements.plist 2>/dev/null || true
+          echo "=== Signed entitlements ==="
+          plutil -p /tmp/chdp-entitlements.plist || cat /tmp/chdp-entitlements.plist
+          # Production TestFlight/App Store builds must embed aps-environment=production
+          /usr/libexec/PlistBuddy -c "Print :application-identifier" /tmp/chdp-entitlements.plist || true
+          APS=$(/usr/libexec/PlistBuddy -c "Print :aps-environment" /tmp/chdp-entitlements.plist 2>/dev/null || true)
+          echo "aps-environment=$APS"
+          if [ "$APS" != "production" ]; then
+            echo "ERROR: IPA missing aps-environment=production (push will hang / no Notifications in Settings)."
+            exit 1
+          fi
+          echo "PUSH ENTITLEMENTS OK"
 
     artifacts:
       - build/ios/ipa/*.ipa
