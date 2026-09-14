@@ -5,7 +5,7 @@
   "ios": {
     "contentInset": "automatic",
     "backgroundColor": "#0f0f23",
-    "preferredContentMode": "mobile",
+    "preferredContentMode": "desktop",
     "scheme": "chdp-servis",
     "limitsNavigationsToAppBoundDomains": false
   },

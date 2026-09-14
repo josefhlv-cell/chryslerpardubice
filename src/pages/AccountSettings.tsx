@@ -65,7 +65,7 @@ const AccountSettings = () => {
     return (
       <div className="min-h-screen pb-40">
         <PageHeader title="Nastavení" />
-        <div className="p-4 max-w-lg mx-auto text-center py-12 space-y-4">
+        <div className="p-4 max-w-lg md:max-w-3xl mx-auto text-center py-12 space-y-4">
           <p className="text-sm text-muted-foreground">Pro nastavení účtu se přihlaste.</p>
           <Button variant="hero" onClick={() => navigate("/auth")}>Přihlásit se</Button>
         </div>
@@ -179,7 +179,7 @@ const AccountSettings = () => {
   return (
     <div className="min-h-screen pb-40">
       <PageHeader title="Nastavení účtu" showBack />
-      <div className="p-4 space-y-4 max-w-lg mx-auto">
+      <div className="p-4 space-y-4 max-w-lg md:max-w-3xl mx-auto">
         {/* Soukromí a sdílení dat */}
         <motion.section
           initial={{ opacity: 0, y: 10 }}

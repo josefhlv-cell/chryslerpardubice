@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import { App as CapApp } from "@capacitor/app";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bell, BellOff, Loader2, Smartphone, Globe, Trash2 } from "lucide-react";
+import { Bell, BellOff, Loader2, Smartphone, Globe, Trash2, ExternalLink } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { PushPermissionDeniedError } from "@/lib/native/push-token";
 
 /**
  * Zákaznický toggle push notifikací.
- * - Native (iOS/Android APK): registruje FCM/APNs token do `device_tokens`.
- * - Web/PWA: klasické Notification API + profiles.notifications_enabled.
+ * - Native (iOS/Android): FCM/APNs token → `device_tokens` přes ensurePushToken().
+ * - Web/PWA: Notification API + profiles.notifications_enabled.
  */
 const PushNotificationToggle = () => {
   const { user } = useAuth();
@@ -20,6 +22,7 @@ const PushNotificationToggle = () => {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [loading, setLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [nativeError, setNativeError] = useState<string | null>(null);
   const [tokens, setTokens] = useState<Array<{ id: string; platform: string; model: string | null; token: string }>>([]);
 
   useEffect(() => {
@@ -29,16 +32,19 @@ const PushNotificationToggle = () => {
     }
   }, []);
 
-  useEffect(() => {
+  const refreshTokens = async () => {
     if (!user) return;
-    (async () => {
-      const { data } = await supabase
-        .from("device_tokens")
-        .select("id, platform, model, token")
-        .eq("user_id", user.id);
-      setTokens((data as any) || []);
-    })();
-  }, [user, registering]);
+    const { data } = await supabase
+      .from("device_tokens")
+      .select("id, platform, model, token")
+      .eq("user_id", user.id);
+    setTokens((data as any) || []);
+  };
+
+  useEffect(() => {
+    void refreshTokens();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const requestWebPermission = async () => {
     if (!webSupported || !user) return;
@@ -68,18 +74,39 @@ const PushNotificationToggle = () => {
     toast({ title: "Push notifikace vypnuty" });
   };
 
+  const openSystemSettings = async () => {
+    try {
+      // iOS: otevře systémové nastavení appky, kde se dají zapnout oznámení
+      await CapApp.openUrl({ url: "app-settings:" });
+    } catch {
+      toast({
+        title: "Otevřete Nastavení",
+        description: "Nastavení → CHDP Garage → Oznámení → zapněte Povolit oznámení.",
+      });
+    }
+  };
+
   const registerNative = async () => {
-    if (!isNative || !user) return;
+    if (!user) {
+      toast({ title: "Nejste přihlášeni", description: "Pro push se nejdřív přihlaste.", variant: "destructive" });
+      return;
+    }
+    if (!isNative) {
+      toast({
+        title: "Jen v mobilní aplikaci",
+        description: "Native push funguje v TestFlight / App Store buildu, ne v prohlížeči.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setRegistering(true);
     setNativeError(null);
     try {
       const { Device } = await import("@capacitor/device");
       const { ensurePushToken } = await import("@/lib/native/push-token");
 
-      // Oprávnění + APNs/FCM token řeší společný helper:
-      // jediné register(), cache tokenu, pevný timeout → loading se nezasekne.
       const token = await ensurePushToken();
-
       const info = await Device.getInfo();
       const id = await Device.getId();
 
@@ -96,10 +123,16 @@ const PushNotificationToggle = () => {
         { onConflict: "token" },
       );
       if (error) throw error;
+
       await supabase.from("profiles").update({ notifications_enabled: true }).eq("user_id", user.id);
-      toast({ title: "✅ Push notifikace aktivovány", description: `Zařízení: ${info.model || Capacitor.getPlatform()}` });
-    } catch (e: any) {
-      const message = e?.message || "Neznámá chyba. Restartujte aplikaci a zkuste znovu.";
+      await refreshTokens();
+      toast({
+        title: "✅ Push notifikace aktivovány",
+        description: `Zařízení: ${info.model || Capacitor.getPlatform()}`,
+      });
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : "Neznámá chyba. Restartujte aplikaci a zkuste znovu.";
       setNativeError(message);
       toast({
         title: "Chyba při aktivaci",
@@ -107,7 +140,6 @@ const PushNotificationToggle = () => {
         variant: "destructive",
       });
     } finally {
-      // Loading vždy skončí, i při chybě nebo timeoutu.
       setRegistering(false);
     }
   };
@@ -132,13 +164,14 @@ const PushNotificationToggle = () => {
     else toast({ title: "Test odeslán", description: "Zvonek + push by měly dorazit během vteřin." });
   };
 
+  const deniedNative = nativeError?.includes("Nastavení") || nativeError?.includes("povolen");
 
   // ────── NATIVE (APK / iOS build) ──────
   if (isNative) {
     return (
       <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Smartphone className="w-4 h-4 text-primary" />
             <h3 className="font-medium text-sm">Push notifikace (mobilní aplikace)</h3>
             {tokens.length > 0 ? (
@@ -150,12 +183,35 @@ const PushNotificationToggle = () => {
           <p className="text-xs text-muted-foreground">
             Dostávejte upozornění na stav objednávek, servisních zakázek, žádostí o odtah i zpráv od nás — i když je aplikace zavřená.
           </p>
-          <Button size="sm" className="w-full" onClick={registerNative} disabled={registering}>
+          <Button
+            type="button"
+            size="sm"
+            className="w-full"
+            onClick={() => void registerNative()}
+            disabled={registering}
+          >
             {registering ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
-            {tokens.length > 0 ? "Aktualizovat toto zařízení" : "Zapnout notifikace"}
+            {registering
+              ? "Aktivuji…"
+              : tokens.length > 0
+              ? "Aktualizovat toto zařízení"
+              : "Zapnout notifikace"}
           </Button>
+
+          {nativeError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 space-y-2">
+              <p className="text-xs text-destructive">{nativeError}</p>
+              {(deniedNative || nativeError.includes(PushPermissionDeniedError.name) || nativeError.includes("povolen")) && (
+                <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => void openSystemSettings()}>
+                  <ExternalLink className="w-3.5 h-3.5 mr-2" />
+                  Otevřít nastavení oznámení
+                </Button>
+              )}
+            </div>
+          )}
+
           {tokens.length > 0 && (
-            <Button size="sm" variant="outline" className="w-full" onClick={testPush}>
+            <Button type="button" size="sm" variant="outline" className="w-full" onClick={() => void testPush()}>
               🔔 Otestovat push notifikaci
             </Button>
           )}
@@ -166,7 +222,7 @@ const PushNotificationToggle = () => {
               {tokens.map((t) => (
                 <div key={t.id} className="flex items-center justify-between text-xs p-2 rounded bg-muted/30">
                   <span className="truncate flex-1">📱 {t.platform} · {t.model || t.token.slice(0, 20)}…</span>
-                  <Button size="icon" variant="ghost" onClick={() => removeToken(t.id)}>
+                  <Button type="button" size="icon" variant="ghost" onClick={() => void removeToken(t.id)}>
                     <Trash2 className="w-3 h-3 text-destructive" />
                   </Button>
                 </div>
@@ -217,11 +273,11 @@ const PushNotificationToggle = () => {
           </div>
         </div>
         {permission === "granted" ? (
-          <Button variant="outline" size="sm" className="w-full" onClick={disableWeb}>
+          <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => void disableWeb()}>
             Vypnout notifikace
           </Button>
         ) : permission !== "denied" ? (
-          <Button size="sm" className="w-full" onClick={requestWebPermission} disabled={loading}>
+          <Button type="button" size="sm" className="w-full" onClick={() => void requestWebPermission()} disabled={loading}>
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Bell className="w-4 h-4 mr-2" />}
             Zapnout notifikace
           </Button>

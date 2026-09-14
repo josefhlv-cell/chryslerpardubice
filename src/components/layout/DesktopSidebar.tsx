@@ -5,7 +5,7 @@ import TondaAvatar from "@/components/TondaAvatar";
 import {
   Search, Wrench, Car, User, ShoppingCart, AlertTriangle,
   BookOpen, Shield, FileText, Cpu, Activity, MessageCircle,
-  ChevronLeft, ChevronRight, Warehouse, ArrowDownUp,
+  ChevronLeft, ChevronRight, ArrowDownUp,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -51,6 +51,7 @@ const DesktopSidebar = () => {
 
   const NavItem = ({ item }: { item: { path: string; label: string; icon: any; isTonda?: boolean } }) => (
     <button
+      type="button"
       onClick={() => navigate(item.path)}
       className={cn(
         "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 relative",
@@ -88,13 +89,13 @@ const DesktopSidebar = () => {
   return (
     <aside
       className={cn(
-        "hidden lg:flex flex-col h-screen sticky top-0 border-r border-border/20 bg-sidebar-background transition-all duration-300 shrink-0",
+        // xl (1280+): true desktop. iPad keeps bottom tabs for App Review / thumb reach.
+        "hidden xl:flex flex-col h-screen sticky top-0 border-r border-border/20 bg-sidebar-background transition-all duration-300 shrink-0",
         collapsed ? "w-[60px]" : "w-[220px]"
       )}
     >
-      {/* Logo */}
       <div className="p-4 flex items-center gap-3 border-b border-border/20">
-        <button onClick={() => navigate("/catalog")} className="shrink-0">
+        <button type="button" onClick={() => navigate("/catalog")} className="shrink-0">
           <img src="/images/logo-cd-pardubice.webp" alt="Logo" className="h-9 object-contain" />
         </button>
         {!collapsed && (
@@ -104,7 +105,6 @@ const DesktopSidebar = () => {
         )}
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-6 scrollbar-hide">
         <NavSection title="Náhradní díly" items={partsNav} />
         <NavSection title="Servis" items={serviceNav} />
@@ -115,9 +115,9 @@ const DesktopSidebar = () => {
         )}
       </nav>
 
-      {/* Collapse toggle */}
       <div className="p-3 border-t border-border/20">
         <button
+          type="button"
           onClick={() => setCollapsed(!collapsed)}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
