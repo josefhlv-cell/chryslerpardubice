@@ -104,6 +104,8 @@ workflows:
           cat "$PKG"
           grep -qi "PushNotifications" "$PKG" \
             || { echo "ERROR: @capacitor/push-notifications missing from CapApp-SPM Package.swift after cap sync"; exit 1; }
+          grep -qiE "AppleSignIn|apple-sign-in|capacitor-apple-sign-in" "$PKG" \
+            || { echo "ERROR: @capawesome/capacitor-apple-sign-in missing from CapApp-SPM Package.swift after cap sync"; exit 1; }
           echo "=== AppDelegate after overwrite ==="
           cat "$DELEGATE"
           echo "APNs FORWARDING OK"
@@ -152,6 +154,10 @@ workflows:
             '<dict>' \
             '  <key>aps-environment</key>' \
             '  <string>production</string>' \
+            '  <key>com.apple.developer.applesignin</key>' \
+            '  <array>' \
+            '    <string>Default</string>' \
+            '  </array>' \
             '</dict>' \
             '</plist>' > "$ENTITLEMENTS"
 
@@ -212,6 +218,7 @@ workflows:
           echo "=== App.entitlements on disk ==="
           cat "$ENTITLEMENTS"
           /usr/libexec/PlistBuddy -c "Print :aps-environment" "$ENTITLEMENTS" | grep -qx "production"
+          /usr/libexec/PlistBuddy -c "Print :com.apple.developer.applesignin:0" "$ENTITLEMENTS" | grep -qx "Default"
           sed -i '' -E '/CODE_SIGN_ENTITLEMENTS = /d' "$PROJECT_FILE"
           perl -0pi -e 's|(PRODUCT_BUNDLE_IDENTIFIER = cz\.chryslerpardubice\.chdpgarage;)|$1\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = App/App.entitlements;|g' "$PROJECT_FILE"
           grep -q "CODE_SIGN_ENTITLEMENTS = App/App.entitlements;" "$PROJECT_FILE"
@@ -296,7 +303,14 @@ workflows:
             echo "ERROR: IPA missing aps-environment=production (push will hang / no Notifications in Settings)."
             exit 1
           fi
-          echo "PUSH ENTITLEMENTS OK"
+          # Sign in with Apple entitlement (array containing Default)
+          APPLE_SI=$(/usr/libexec/PlistBuddy -c "Print :com.apple.developer.applesignin:0" /tmp/chdp-entitlements.plist 2>/dev/null || true)
+          echo "com.apple.developer.applesignin:0=$APPLE_SI"
+          if [ "$APPLE_SI" != "Default" ]; then
+            echo "ERROR: IPA missing com.apple.developer.applesignin=Default (native Apple Sign In will fail)."
+            exit 1
+          fi
+          echo "PUSH + APPLE SIGN-IN ENTITLEMENTS OK"
 
     artifacts:
       - build/ios/ipa/*.ipa
