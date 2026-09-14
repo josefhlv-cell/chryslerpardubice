@@ -74,6 +74,56 @@ workflows:
             -project "$PROJECT" \
             -scheme App
 
+      - name: Ensure AppDelegate forwards APNs callbacks
+        script: |
+          set -euo pipefail
+          DELEGATE="$CM_BUILD_DIR/ios/App/App/AppDelegate.swift"
+          test -f "$DELEGATE"
+          echo "=== AppDelegate before patch ==="
+          cat "$DELEGATE"
+
+          # Root cause of the 20s "APNs neodpověděl" hang: without these two
+          # UIApplicationDelegate methods the APNs device token is never posted
+          # to Capacitor, so @capacitor/push-notifications never fires
+          # `registration` / `registrationError` and the JS promise times out.
+          # `.capacitorDidRegisterForRemoteNotifications` is declared by Capacitor.
+          if ! grep -q "^import Capacitor" "$DELEGATE"; then
+            printf 'import Capacitor\n' | cat - "$DELEGATE" > /tmp/chdp-delegate-import.swift
+            mv /tmp/chdp-delegate-import.swift "$DELEGATE"
+          fi
+
+
+          if ! grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"; then
+
+            printf '%s\n' \
+              '' \
+              '    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {' \
+              '        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)' \
+              '    }' \
+              '' \
+              '    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {' \
+              '        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)' \
+              '    }' \
+              > /tmp/chdp-apns-methods.swift
+
+            # Insert the methods just before the final closing brace of the class.
+            LAST_BRACE_LINE=$(grep -n '^}' "$DELEGATE" | tail -1 | cut -d: -f1)
+            test -n "$LAST_BRACE_LINE"
+            head -n "$((LAST_BRACE_LINE - 1))" "$DELEGATE" > /tmp/chdp-appdelegate.swift
+            cat /tmp/chdp-apns-methods.swift >> /tmp/chdp-appdelegate.swift
+            tail -n "+$LAST_BRACE_LINE" "$DELEGATE" >> /tmp/chdp-appdelegate.swift
+            mv /tmp/chdp-appdelegate.swift "$DELEGATE"
+          fi
+
+
+          grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"
+          grep -q "didFailToRegisterForRemoteNotificationsWithError" "$DELEGATE"
+          echo "=== AppDelegate after patch ==="
+          cat "$DELEGATE"
+          echo "APNs FORWARDING OK"
+
+
+
       - name: Generate app icons
         script: |
           set -euo pipefail

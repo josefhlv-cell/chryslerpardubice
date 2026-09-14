@@ -88,15 +88,21 @@ export async function ensurePushToken(): Promise<string> {
 
   const { PushNotifications } = await import("@capacitor/push-notifications");
 
+  // Listenery musí existovat DŘÍV, než se zavolá register().
+  // Jinak může iOS doručit `registration` event do prázdna a UI čeká zbytečně.
+  await ensureListeners();
+
   let perm = await PushNotifications.checkPermissions();
-  if (perm.receive === "prompt" || perm.receive === "prompt-with-rationale") {
+  if (perm.receive !== "granted") {
+    // Vždy voláme requestPermissions(), i když stav není přesně "prompt".
+    // Teprve tímto voláním iOS aplikaci zaregistruje do
+    // Nastavení → Oznámení → CHDP Garage.
     perm = await PushNotifications.requestPermissions();
   }
   if (perm.receive !== "granted") {
     throw new PushPermissionDeniedError();
   }
 
-  await ensureListeners();
 
   if (Capacitor.getPlatform() === "android") {
     try {

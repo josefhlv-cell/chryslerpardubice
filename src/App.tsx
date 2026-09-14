@@ -140,6 +140,12 @@ const App = () => (
                     <Route path="/admin/users/:userId" element={<AdminUser360 />} />
                     <Route path="/mechanic-dashboard" element={<MechanicDashboard />} />
                     <Route path="/index" element={<Navigate to="/" replace />} />
+                    {/* Capacitor cold start / deep link může přijít na index.html
+                        nebo na cestu s dist prefixem – nikdy nesmí skončit na 404. */}
+                    <Route path="/index.html" element={<Navigate to="/" replace />} />
+                    <Route path="/public/index.html" element={<Navigate to="/" replace />} />
+                    <Route path="/dist/index.html" element={<Navigate to="/" replace />} />
+
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                   </Suspense>
