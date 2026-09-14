@@ -79,49 +79,87 @@ workflows:
           set -euo pipefail
           DELEGATE="$CM_BUILD_DIR/ios/App/App/AppDelegate.swift"
           test -f "$DELEGATE"
-          echo "=== AppDelegate before patch ==="
+          echo "=== AppDelegate before overwrite ==="
           cat "$DELEGATE"
 
-          # Root cause of the 20s "APNs neodpověděl" hang: without these two
-          # UIApplicationDelegate methods the APNs device token is never posted
-          # to Capacitor, so @capacitor/push-notifications never fires
-          # `registration` / `registrationError` and the JS promise times out.
-          # `.capacitorDidRegisterForRemoteNotifications` is declared by Capacitor.
-          if ! grep -q "^import Capacitor" "$DELEGATE"; then
-            printf 'import Capacitor\n' | cat - "$DELEGATE" > /tmp/chdp-delegate-import.swift
-            mv /tmp/chdp-delegate-import.swift "$DELEGATE"
-          fi
+          # Write a known-good Capacitor 8 AppDelegate with APNs forwarding.
+          # Line-insertion patches can land methods outside the class body.
+          cat > "$DELEGATE" <<'CHDP_APPDELEGATE_EOF'
+import UIKit
+import Capacitor
 
+@UIApplicationMain
+class AppDelegate: UIResponder, UIApplicationDelegate {
 
-          if ! grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"; then
+    var window: UIWindow?
 
-            printf '%s\n' \
-              '' \
-              '    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {' \
-              '        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)' \
-              '    }' \
-              '' \
-              '    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {' \
-              '        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)' \
-              '    }' \
-              > /tmp/chdp-apns-methods.swift
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        return true
+    }
 
-            # Insert the methods just before the final closing brace of the class.
-            LAST_BRACE_LINE=$(grep -n '^}' "$DELEGATE" | tail -1 | cut -d: -f1)
-            test -n "$LAST_BRACE_LINE"
-            head -n "$((LAST_BRACE_LINE - 1))" "$DELEGATE" > /tmp/chdp-appdelegate.swift
-            cat /tmp/chdp-apns-methods.swift >> /tmp/chdp-appdelegate.swift
-            tail -n "+$LAST_BRACE_LINE" "$DELEGATE" >> /tmp/chdp-appdelegate.swift
-            mv /tmp/chdp-appdelegate.swift "$DELEGATE"
-          fi
+    func applicationWillResignActive(_ application: UIApplication) {
+    }
 
+    func applicationDidEnterBackground(_ application: UIApplication) {
+    }
 
+    func applicationWillEnterForeground(_ application: UIApplication) {
+    }
+
+    func applicationDidBecomeActive(_ application: UIApplication) {
+    }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+    }
+
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+    }
+
+    func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    }
+
+    // Required for @capacitor/push-notifications — without these, APNs token never reaches JS.
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
+    }
+
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
+    }
+
+}
+CHDP_APPDELEGATE_EOF
+
+          grep -q "import Capacitor" "$DELEGATE"
           grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"
           grep -q "didFailToRegisterForRemoteNotificationsWithError" "$DELEGATE"
-          echo "=== AppDelegate after patch ==="
+          grep -q "capacitorDidRegisterForRemoteNotifications" "$DELEGATE"
+
+          # Methods must appear inside AppDelegate class body.
+          if ! awk '
+            /class AppDelegate/ { in_class=1 }
+            in_class && /didRegisterForRemoteNotificationsWithDeviceToken/ { found=1 }
+            in_class && /^}$/ { if (found) { ok=1; exit 0 } }
+            END { exit ok ? 0 : 1 }
+          ' "$DELEGATE"; then
+            echo "ERROR: APNs register method not inside AppDelegate class"
+            exit 1
+          fi
+          echo "AppDelegate class body OK"
+
+          # Push plugin must be wired into CapApp-SPM after cap sync
+          PKG="$CM_BUILD_DIR/ios/App/CapApp-SPM/Package.swift"
+          test -f "$PKG"
+          echo "=== CapApp-SPM Package.swift ==="
+          cat "$PKG"
+          grep -qi "PushNotifications" "$PKG" \
+            || { echo "ERROR: @capacitor/push-notifications missing from CapApp-SPM Package.swift after cap sync"; exit 1; }
+
+          echo "=== AppDelegate after overwrite ==="
           cat "$DELEGATE"
           echo "APNs FORWARDING OK"
-
 
 
       - name: Generate app icons
