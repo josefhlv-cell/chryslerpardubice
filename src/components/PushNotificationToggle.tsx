@@ -77,7 +77,7 @@ const PushNotificationToggle = () => {
   const openSystemSettings = async () => {
     try {
       // iOS: otevře systémové nastavení appky, kde se dají zapnout oznámení
-      await CapApp.openUrl({ url: "app-settings:" });
+      window.open("app-settings:", "_system");
     } catch {
       toast({
         title: "Otevřete Nastavení",
@@ -85,6 +85,7 @@ const PushNotificationToggle = () => {
       });
     }
   };
+
 
   const registerNative = async () => {
     if (!user) {

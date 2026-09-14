@@ -87,26 +87,26 @@ workflows:
           # to Capacitor, so @capacitor/push-notifications never fires
           # `registration` / `registrationError` and the JS promise times out.
           if ! grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"; then
-            python3 - "$DELEGATE" <<'PY'
-          import re, sys
-          path = sys.argv[1]
-          src = open(path, encoding="utf-8").read()
-          methods = '''
-              func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-                  NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
-              }
+            printf '%s\n' \
+              '' \
+              '    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {' \
+              '        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)' \
+              '    }' \
+              '' \
+              '    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {' \
+              '        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)' \
+              '    }' \
+              > /tmp/chdp-apns-methods.swift
 
-              func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-                  NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
-              }
-          '''
-          idx = src.rstrip().rfind("}")
-          if idx == -1:
-              raise SystemExit("Cannot patch AppDelegate.swift: no closing brace found")
-          src = src[:idx] + methods + "\n" + src[idx:]
-          open(path, "w", encoding="utf-8").write(src)
-          PY
+            # Insert the methods just before the final closing brace of the class.
+            LAST_BRACE_LINE=$(grep -n '^}' "$DELEGATE" | tail -1 | cut -d: -f1)
+            test -n "$LAST_BRACE_LINE"
+            head -n "$((LAST_BRACE_LINE - 1))" "$DELEGATE" > /tmp/chdp-appdelegate.swift
+            cat /tmp/chdp-apns-methods.swift >> /tmp/chdp-appdelegate.swift
+            tail -n "+$LAST_BRACE_LINE" "$DELEGATE" >> /tmp/chdp-appdelegate.swift
+            mv /tmp/chdp-appdelegate.swift "$DELEGATE"
           fi
+
 
           grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"
           grep -q "didFailToRegisterForRemoteNotificationsWithError" "$DELEGATE"
