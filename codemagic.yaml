@@ -85,6 +85,8 @@ workflows:
           cat "$DELEGATE"
           cp "$SRC" "$DELEGATE"
           grep -q "import Capacitor" "$DELEGATE"
+          grep -q "import GoogleSignIn" "$DELEGATE"
+          grep -q "GIDSignIn.sharedInstance.handle" "$DELEGATE"
           grep -q "didRegisterForRemoteNotificationsWithDeviceToken" "$DELEGATE"
           grep -q "didFailToRegisterForRemoteNotificationsWithError" "$DELEGATE"
           grep -q "capacitorDidRegisterForRemoteNotifications" "$DELEGATE"
@@ -106,6 +108,8 @@ workflows:
             || { echo "ERROR: @capacitor/push-notifications missing from CapApp-SPM Package.swift after cap sync"; exit 1; }
           grep -qiE "AppleSignIn|apple-sign-in|capacitor-apple-sign-in" "$PKG" \
             || { echo "ERROR: @capawesome/capacitor-apple-sign-in missing from CapApp-SPM Package.swift after cap sync"; exit 1; }
+          grep -qiE "SocialLogin|capacitor-social-login|CapgoSocialLogin" "$PKG" \
+            || { echo "ERROR: @capgo/capacitor-social-login missing from CapApp-SPM Package.swift after cap sync"; exit 1; }
           echo "=== AppDelegate after overwrite ==="
           cat "$DELEGATE"
           echo "APNs FORWARDING OK"
@@ -194,6 +198,23 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PLIST"
           /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string chdp-servis" "$PLIST"
 
+          # Google Sign-In: reversed iOS client ID URL scheme + GIDClientID.
+          # Set VITE_GOOGLE_IOS_CLIENT_ID in Codemagic (e.g. 123-abc.apps.googleusercontent.com).
+          # Reversed form: com.googleusercontent.apps.123-abc
+          GOOGLE_IOS_CLIENT_ID="${VITE_GOOGLE_IOS_CLIENT_ID:-}"
+          if [ -n "$GOOGLE_IOS_CLIENT_ID" ]; then
+            GOOGLE_REVERSED="com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID%.apps.googleusercontent.com}"
+            echo "Adding Google URL scheme: $GOOGLE_REVERSED"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:1 dict" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:1:CFBundleURLName string google-sign-in" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:1:CFBundleURLSchemes array" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:1:CFBundleURLSchemes:0 string $GOOGLE_REVERSED" "$PLIST"
+            /usr/libexec/PlistBuddy -c "Delete :GIDClientID" "$PLIST" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :GIDClientID string $GOOGLE_IOS_CLIENT_ID" "$PLIST"
+          else
+            echo "WARNING: VITE_GOOGLE_IOS_CLIENT_ID not set – Google native Sign-In URL scheme skipped."
+          fi
+
           # Fail fast if Capacitor config lost desktop iPad mode.
           grep -q "preferredContentMode: 'desktop'" "$CM_BUILD_DIR/capacitor.config.ts" \
             || grep -q 'preferredContentMode: "desktop"' "$CM_BUILD_DIR/capacitor.config.ts" \
@@ -274,6 +295,13 @@ workflows:
           grep -q "1" /tmp/chdp-ui-device-family.txt
           grep -q "2" /tmp/chdp-ui-device-family.txt
           /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes:0" "$CM_BUILD_DIR/ios/App/App/Info.plist" | grep -q "chdp-servis"
+          if [ -n "${VITE_GOOGLE_IOS_CLIENT_ID:-}" ]; then
+            EXPECTED_REVERSED="com.googleusercontent.apps.${VITE_GOOGLE_IOS_CLIENT_ID%.apps.googleusercontent.com}"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:1:CFBundleURLSchemes:0" "$CM_BUILD_DIR/ios/App/App/Info.plist" | grep -qx "$EXPECTED_REVERSED" \
+              || { echo "ERROR: Google reversed client ID URL scheme missing from Info.plist"; exit 1; }
+            /usr/libexec/PlistBuddy -c "Print :GIDClientID" "$CM_BUILD_DIR/ios/App/App/Info.plist" | grep -qx "$VITE_GOOGLE_IOS_CLIENT_ID" \
+              || { echo "ERROR: GIDClientID missing from Info.plist"; exit 1; }
+          fi
 
       - name: Build IPA
         script: |
