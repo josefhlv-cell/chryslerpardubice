@@ -88,6 +88,14 @@ const Auth = () => {
         return;
       }
 
+      // Native build without Google client IDs: hosted Google login in the system
+      // browser, back into the app via the chdp-servis:// deep link.
+      if (provider === "google" && Capacitor.isNativePlatform()) {
+        const { error } = await signInWithGoogleBrowserFallback();
+        if (error) throw error;
+        return;
+      }
+
       // Web / Android: keep Lovable OAuth redirect flow.
       const { error } = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: getAuthRedirectUri(),
