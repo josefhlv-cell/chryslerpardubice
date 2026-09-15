@@ -337,6 +337,12 @@ const Auth = () => {
             </button>
           )}
         </div>
+
+        {/* Apple 5.1.1(i): zásady ochrany osobních údajů musí být dostupné i v aplikaci */}
+        <div className="pt-4 text-center text-[11px] text-muted-foreground space-x-3">
+          <Link to="/privacy" className="underline hover:text-foreground">Zásady ochrany osobních údajů</Link>
+          <Link to="/terms" className="underline hover:text-foreground">Obchodní podmínky</Link>
+        </div>
       </motion.div>
     </div>
   );
