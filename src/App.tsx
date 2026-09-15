@@ -135,6 +135,7 @@ const App = () => (
                     <Route path="/complete-profile" element={<CompleteProfile />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/terms" element={<Terms />} />
+                    <Route path="/privacy" element={<Privacy />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/admin/compatibility" element={<AdminCompatibility />} />
                     <Route path="/admin/users" element={<AdminUser360 />} />
