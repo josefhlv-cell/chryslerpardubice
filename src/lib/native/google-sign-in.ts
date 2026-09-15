@@ -9,8 +9,55 @@
 import { Capacitor } from "@capacitor/core";
 import type { Session, User } from "@supabase/supabase-js";
 
+/** True only when both Google OAuth client IDs are baked into the build. */
+export function isNativeGoogleConfigured(): boolean {
+  const { webClientId, iOSClientId } = getGoogleClientIds();
+  return !!webClientId && !!iOSClientId;
+}
+
+/**
+ * Native Google SDK path is only usable on iOS AND when the client IDs exist.
+ * Without them the plugin throws and the user sees "Chybí Google OAuth klienty",
+ * which is exactly the failure reported from TestFlight. In that case we fall
+ * back to the hosted Google OAuth flow opened in the system browser.
+ */
 export function isNativeGoogleSignInAvailable(): boolean {
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios";
+  return (
+    Capacitor.isNativePlatform() &&
+    Capacitor.getPlatform() === "ios" &&
+    isNativeGoogleConfigured()
+  );
+}
+
+/**
+ * Fallback for native builds without Google client IDs: start Supabase's hosted
+ * Google OAuth in the system browser and come back through the app's custom
+ * URL scheme (handled by OAuthReturnHandler / AuthCallback).
+ */
+export async function signInWithGoogleBrowserFallback(): Promise<{ error: Error | null }> {
+  try {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: "chdp-servis://auth/callback",
+        skipBrowserRedirect: true,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+    if (error) return { error };
+    if (!data?.url) return { error: new Error("Google nevrátil přihlašovací adresu.") };
+
+    try {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: data.url, presentationStyle: "popover" });
+    } catch {
+      window.open(data.url, "_system");
+    }
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e : new Error(String(e)) };
+  }
 }
 
 export type NativeGoogleSignInResult = {

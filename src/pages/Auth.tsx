@@ -16,7 +16,9 @@ import {
 import {
   isNativeGoogleSignInAvailable,
   signInWithGoogleNative,
+  signInWithGoogleBrowserFallback,
 } from "@/lib/native/google-sign-in";
+import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
@@ -83,6 +85,14 @@ const Auth = () => {
         const path = userId ? await getRedirectPath(userId) : "/";
         toast.success("Přihlášení úspěšné!");
         navigate(path);
+        return;
+      }
+
+      // Native build without Google client IDs: hosted Google login in the system
+      // browser, back into the app via the chdp-servis:// deep link.
+      if (provider === "google" && Capacitor.isNativePlatform()) {
+        const { error } = await signInWithGoogleBrowserFallback();
+        if (error) throw error;
         return;
       }
 
