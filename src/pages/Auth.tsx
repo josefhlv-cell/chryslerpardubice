@@ -16,9 +16,7 @@ import {
 import {
   isNativeGoogleSignInAvailable,
   signInWithGoogleNative,
-  signInWithGoogleBrowserFallback,
 } from "@/lib/native/google-sign-in";
-import { Capacitor } from "@capacitor/core";
 import { toast } from "sonner";
 
 type ViewMode = "login" | "register" | "forgot";
