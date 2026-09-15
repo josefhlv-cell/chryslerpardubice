@@ -39,6 +39,7 @@ const MyVehicles = lazy(() => import("./pages/MyVehicles"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const AiMechanic = lazy(() => import("./pages/AiMechanic"));
 const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Emergency = lazy(() => import("./pages/Emergency"));
 const ServicePlan = lazy(() => import("./pages/ServicePlan"));
 const ServiceBook = lazy(() => import("./pages/ServiceBook"));
