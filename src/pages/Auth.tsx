@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,7 @@ const Auth = () => {
   const [ico, setIco] = useState("");
   const [dic, setDic] = useState("");
   const [loading, setLoading] = useState(false);
+  const [appleImageFailed, setAppleImageFailed] = useState(false);
 
   const getRedirectPath = async (userId: string): Promise<string> => {
     const { data: emp } = await supabase
@@ -297,20 +298,32 @@ const Auth = () => {
               Pokračovat přes Google
             </Button>
 
-            {/* Sign in with Apple - oficiální obrázek tlačítka z Apple CDN, splňuje HIG požadavky */}
+            {/* Sign in with Apple - oficiální obrázek tlačítka z Apple CDN, splňuje HIG požadavky.
+                Pokud se obrázek nenačte (offline / blokovaná síť), zobrazí se textová varianta
+                ve stejném vzhledu, aby tlačítko nikdy nebylo prázdné. */}
             <button
               type="button"
               onClick={() => startSocialLogin("apple")}
               disabled={loading}
               aria-label="Sign in with Apple"
-              className="w-full h-11 rounded-lg overflow-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full h-11 rounded-lg overflow-hidden bg-black text-white flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <img
-                src="https://appleid.cdn-apple.com/appleid/button?height=44&width=375&color=black&border=false&type=sign-in&border_radius=8&scale=2&locale=cs_CZ"
-                alt="Sign in with Apple"
-                className="w-full h-full object-contain block"
-                draggable={false}
-              />
+              {appleImageFailed ? (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M16.36 12.78c.02 2.6 2.28 3.47 2.31 3.48-.02.06-.36 1.23-1.2 2.44-.72 1.05-1.47 2.09-2.66 2.11-1.16.02-1.54-.69-2.87-.69-1.33 0-1.75.67-2.85.71-1.14.04-2.01-1.11-2.74-2.15-1.58-2.29-2.79-6.47-1.17-9.29.81-1.4 2.25-2.29 3.82-2.31 1.12-.02 2.17.75 2.86.75.68 0 1.97-.93 3.32-.79.56.02 2.15.2 3.17 1.71-.08.05-1.89 1.11-1.87 3.32M14.2 4.64c.61-.74 1.02-1.77.91-2.79-.88.04-1.95.59-2.58 1.32-.57.65-1.05 1.7-.92 2.7.98.08 1.98-.5 2.59-1.23"/>
+                  </svg>
+                  Sign in with Apple
+                </>
+              ) : (
+                <img
+                  src="https://appleid.cdn-apple.com/appleid/button?height=44&width=375&color=black&border=false&type=sign-in&border_radius=8&scale=2&locale=cs_CZ"
+                  alt="Sign in with Apple"
+                  className="w-full h-full object-contain block"
+                  draggable={false}
+                  onError={() => setAppleImageFailed(true)}
+                />
+              )}
             </button>
           </div>
         )}
@@ -336,6 +349,12 @@ const Auth = () => {
               Zpět na přihlášení
             </button>
           )}
+        </div>
+
+        {/* Apple 5.1.1(i): zásady ochrany osobních údajů musí být dostupné i v aplikaci */}
+        <div className="pt-4 text-center text-[11px] text-muted-foreground space-x-3">
+          <Link to="/privacy" className="underline hover:text-foreground">Zásady ochrany osobních údajů</Link>
+          <Link to="/terms" className="underline hover:text-foreground">Obchodní podmínky</Link>
         </div>
       </motion.div>
     </div>

@@ -39,6 +39,7 @@ const MyVehicles = lazy(() => import("./pages/MyVehicles"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const AiMechanic = lazy(() => import("./pages/AiMechanic"));
 const Terms = lazy(() => import("./pages/Terms"));
+const Privacy = lazy(() => import("./pages/Privacy"));
 const Emergency = lazy(() => import("./pages/Emergency"));
 const ServicePlan = lazy(() => import("./pages/ServicePlan"));
 const ServiceBook = lazy(() => import("./pages/ServiceBook"));
@@ -134,6 +135,7 @@ const App = () => (
                     <Route path="/complete-profile" element={<CompleteProfile />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/terms" element={<Terms />} />
+                    <Route path="/privacy" element={<Privacy />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/admin/compatibility" element={<AdminCompatibility />} />
                     <Route path="/admin/users" element={<AdminUser360 />} />

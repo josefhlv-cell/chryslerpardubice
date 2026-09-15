@@ -3,7 +3,7 @@
  * Sekce: Soukromí (OBD sdílení), Notifikace, Servisní historie, Účet.
  */
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Switch } from "@/components/ui/switch";
@@ -297,6 +297,11 @@ const AccountSettings = () => {
         <p className="text-[10px] text-muted-foreground text-center pt-2">
           Změny soukromí se projeví okamžitě.
         </p>
+
+        <div className="pt-2 text-center text-[11px] text-muted-foreground space-x-3">
+          <Link to="/privacy" className="underline hover:text-foreground">Zásady ochrany osobních údajů</Link>
+          <Link to="/terms" className="underline hover:text-foreground">Obchodní podmínky</Link>
+        </div>
       </div>
     </div>
   );
