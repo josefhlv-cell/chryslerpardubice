@@ -34,6 +34,7 @@ const Auth = () => {
   const [ico, setIco] = useState("");
   const [dic, setDic] = useState("");
   const [loading, setLoading] = useState(false);
+  const [appleImageFailed, setAppleImageFailed] = useState(false);
 
   const getRedirectPath = async (userId: string): Promise<string> => {
     const { data: emp } = await supabase
