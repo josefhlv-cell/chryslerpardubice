@@ -3,7 +3,7 @@
  * Sekce: Soukromí (OBD sdílení), Notifikace, Servisní historie, Účet.
  */
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import PageHeader from "@/components/PageHeader";
 import { Switch } from "@/components/ui/switch";
