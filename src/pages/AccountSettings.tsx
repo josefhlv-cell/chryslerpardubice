@@ -297,6 +297,11 @@ const AccountSettings = () => {
         <p className="text-[10px] text-muted-foreground text-center pt-2">
           Změny soukromí se projeví okamžitě.
         </p>
+
+        <div className="pt-2 text-center text-[11px] text-muted-foreground space-x-3">
+          <Link to="/privacy" className="underline hover:text-foreground">Zásady ochrany osobních údajů</Link>
+          <Link to="/terms" className="underline hover:text-foreground">Obchodní podmínky</Link>
+        </div>
       </div>
     </div>
   );
