@@ -60,12 +60,29 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "Missing user_ids or title" }, 400);
     }
 
-    const { data: tokens } = await admin
-      .from("device_tokens")
-      .select("token, platform")
-      .in("user_id", user_ids);
+    // Tokeny žijí ve dvou tabulkách: legacy `device_tokens` a `user_push_tokens`,
+    // do které ukládá mobilní aplikace. Dřív se čtelo jen z `device_tokens`,
+    // takže reálná zařízení nikdy push nedostala. Čteme obojí a deduplikujeme.
+    const [legacy, appTokens] = await Promise.all([
+      admin.from("device_tokens").select("token, platform").in("user_id", user_ids),
+      admin
+        .from("user_push_tokens")
+        .select("token, platform, enabled")
+        .in("user_id", user_ids),
+    ]);
 
-    if (!tokens?.length) {
+    const byToken = new Map<string, { token: string; platform: string }>();
+    for (const t of legacy.data ?? []) {
+      if (t?.token) byToken.set(t.token, { token: t.token, platform: String(t.platform) });
+    }
+    for (const t of (appTokens.data ?? []) as Array<{ token: string; platform: string; enabled: boolean | null }>) {
+      if (t?.token && t.enabled !== false) {
+        byToken.set(t.token, { token: t.token, platform: String(t.platform) });
+      }
+    }
+    const tokens = [...byToken.values()];
+
+    if (!tokens.length) {
       return json({ ok: true, sent: 0, skipped: "no_tokens" });
     }
 
