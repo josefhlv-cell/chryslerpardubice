@@ -462,7 +462,7 @@ workflows:
           done
           if [ "$missing" = "1" ]; then
             echo "ERROR: Android keystore is not attached to this workflow."
-            echo "Upload it in Codemagic UI and reference it as 'chdp-garage'."
+            echo "Upload it in Codemagic UI and reference it as 'chdp_garage_keystore'."
             exit 1
           fi
           test -f "$CM_KEYSTORE_PATH"
