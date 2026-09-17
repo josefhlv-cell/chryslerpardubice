@@ -387,7 +387,7 @@ workflows:
       # Codemagic exports CM_KEYSTORE_PATH / CM_KEYSTORE_PASSWORD /
       # CM_KEY_ALIAS / CM_KEY_PASSWORD, which android/app/build.gradle reads.
       android_signing:
-        - chdp-garage
+        - chdp_garage_keystore
       vars:
         ANDROID_APPLICATION_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
         VERSION_NAME: "1.0.0"
@@ -462,7 +462,7 @@ workflows:
           done
           if [ "$missing" = "1" ]; then
             echo "ERROR: Android keystore is not attached to this workflow."
-            echo "Upload it in Codemagic UI and reference it as 'chdp-garage'."
+            echo "Upload it in Codemagic UI and reference it as 'chdp_garage_keystore'."
             exit 1
           fi
           test -f "$CM_KEYSTORE_PATH"
