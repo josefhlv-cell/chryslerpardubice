@@ -1,11 +1,11 @@
 {
-	"appId": "app.lovable.c6d932101224420590deeec3ccc6923f",
+	"appId": "cz.chryslerpardubice.chdpgarage",
 	"appName": "CHDP Garage",
 	"webDir": "dist",
 	"ios": {
 		"contentInset": "automatic",
 		"backgroundColor": "#0f0f23",
-		"preferredContentMode": "mobile",
+		"preferredContentMode": "desktop",
 		"scheme": "chdp-servis",
 		"limitsNavigationsToAppBoundDomains": false
 	},
@@ -32,7 +32,19 @@
 			"overlaysWebView": false
 		},
 		"PushNotifications": {
-			"presentationOptions": ["badge", "sound", "alert"]
+			"presentationOptions": [
+				"badge",
+				"sound",
+				"alert"
+			]
+		},
+		"SocialLogin": {
+			"providers": {
+				"google": true,
+				"apple": false,
+				"facebook": false,
+				"twitter": false
+			}
 		}
 	}
 }
