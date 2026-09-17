@@ -453,14 +453,45 @@ workflows:
           echo "BUILD_NUMBER=$BUILD_NUMBER"
           echo "VERSION_NAME=$VERSION_NAME"
 
-      - name: Build Android AAB + APK
+      - name: Verify release signing is available
+        script: |
+          set -euo pipefail
+          missing=0
+          for v in CM_KEYSTORE_PATH CM_KEYSTORE_PASSWORD CM_KEY_ALIAS CM_KEY_PASSWORD; do
+            if [ -z "${!v:-}" ]; then echo "MISSING $v"; missing=1; fi
+          done
+          if [ "$missing" = "1" ]; then
+            echo "ERROR: Android keystore is not attached to this workflow."
+            echo "Upload it in Codemagic UI and reference it as 'chdp_garage_keystore'."
+            exit 1
+          fi
+          test -f "$CM_KEYSTORE_PATH"
+          echo "Release signing configured (alias: $CM_KEY_ALIAS)"
+
+      - name: Build signed Android APK + AAB
         script: |
           set -euo pipefail
           chmod +x android/gradlew
           cd android
           ./gradlew --no-daemon clean assembleRelease bundleRelease
 
+      - name: Verify APK is signed
+        script: |
+          set -euo pipefail
+          APK=$(find android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          echo "APK = $APK"
+          case "$APK" in
+            *unsigned*) echo "ERROR: unsigned APK produced – signing config not applied."; exit 1;;
+          esac
+          BT=$(ls -1d "$ANDROID_SDK_ROOT"/build-tools/* 2>/dev/null | sort -V | tail -1)
+          if [ -n "${BT:-}" ] && [ -x "$BT/apksigner" ]; then
+            "$BT/apksigner" verify --print-certs "$APK"
+          else
+            echo "apksigner unavailable – skipped deep verification."
+          fi
+          echo "SIGNED APK OK"
+
     artifacts:
-      - android/app/build/outputs/**/*.aab
-      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
       - android/app/build/reports/**
