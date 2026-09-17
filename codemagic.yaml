@@ -383,6 +383,11 @@ workflows:
     environment:
       node: 22
       java: 21
+      # Keystore uploaded in Codemagic UI under this reference name.
+      # Codemagic exports CM_KEYSTORE_PATH / CM_KEYSTORE_PASSWORD /
+      # CM_KEY_ALIAS / CM_KEY_PASSWORD, which android/app/build.gradle reads.
+      android_signing:
+        - chdp_garage_keystore
       vars:
         ANDROID_APPLICATION_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
         VERSION_NAME: "1.0.0"
