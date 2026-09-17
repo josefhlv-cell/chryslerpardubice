@@ -374,3 +374,88 @@ workflows:
           grep -q "preferredContentMode: 'desktop'" capacitor.config.ts || grep -q 'preferredContentMode: "desktop"' capacitor.config.ts
           grep -q "scheme: 'chdp-servis'" capacitor.config.ts || grep -q 'scheme: "chdp-servis"' capacitor.config.ts
           echo "CODEMAGIC CONFIGURATION OK"
+
+
+  android-release:
+    name: CHDP Garage – Android (AAB + APK)
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      node: 22
+      java: 21
+      vars:
+        ANDROID_APPLICATION_ID: "app.lovable.c6d932101224420590deeec3ccc6923f"
+        VERSION_NAME: "1.0.0"
+    cache:
+      cache_paths:
+        - "$HOME/.npm"
+        - "$HOME/.gradle/caches"
+        - "$HOME/.gradle/wrapper"
+
+    scripts:
+      - name: Install dependencies
+        script: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund || {
+            echo "npm ci failed (lockfile out of sync) – recovering with npm install."
+            npm install --no-audit --no-fund
+          }
+
+      - name: Test application
+        script: |
+          set -euo pipefail
+          npm test -- --run
+
+      - name: Build web application
+        script: |
+          set -euo pipefail
+          npm run build
+          test -f dist/index.html
+
+      - name: Sync Capacitor Android project
+        script: |
+          set -euo pipefail
+          # The android/ project is committed and keeps its historic
+          # applicationId (app.lovable...) so the existing Firebase/FCM
+          # registration and any Play Store listing stay valid.
+          npx cap sync android
+
+          # cap sync copies appId from capacitor.config.ts (iOS bundle id).
+          # Force the Android runtime config back to the Android package name.
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = 'android/app/src/main/assets/capacitor.config.json';
+          const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+          cfg.appId = process.env.ANDROID_APPLICATION_ID;
+          fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+          console.log('android appId =', cfg.appId);
+          NODE
+
+          test -f android/app/src/main/assets/public/index.html
+          grep -q "$ANDROID_APPLICATION_ID" android/app/build.gradle
+          echo "CAPACITOR ANDROID SYNC OK"
+
+      - name: Verify Firebase configuration
+        script: |
+          set -euo pipefail
+          test -f android/app/google-services.json
+          grep -q "$ANDROID_APPLICATION_ID" android/app/google-services.json
+          echo "google-services.json matches $ANDROID_APPLICATION_ID"
+
+      - name: Set version code
+        script: |
+          set -euo pipefail
+          echo "BUILD_NUMBER=$BUILD_NUMBER"
+          echo "VERSION_NAME=$VERSION_NAME"
+
+      - name: Build Android AAB + APK
+        script: |
+          set -euo pipefail
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon clean assembleRelease bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+      - android/app/build/outputs/**/*.apk
+      - android/app/build/reports/**
