@@ -19,7 +19,10 @@ const FCM_SA = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON"); // JSON s private_key +
 const APNS_KEY = Deno.env.get("APNS_AUTH_KEY"); // .p8 obsah
 const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID");
 const APNS_TEAM_ID = Deno.env.get("APNS_TEAM_ID");
-const APNS_BUNDLE_ID = Deno.env.get("APNS_BUNDLE_ID") ?? "cz.chryslerpardubice.chdpgarage";
+// Bundle ID iOS aplikace je pevně daný. Secret APNS_BUNDLE_ID obsahoval starý
+// identifikátor (app.lovable...), Apple proto vracel DeviceTokenNotForTopic.
+const IOS_BUNDLE_ID = "cz.chryslerpardubice.chdpgarage";
+const APNS_BUNDLE_ID = IOS_BUNDLE_ID;
 const APNS_HOST = Deno.env.get("APNS_HOST") ?? "api.push.apple.com"; // prod; sandbox: api.sandbox.push.apple.com
 
 interface Payload {
@@ -106,7 +109,9 @@ Deno.serve(async (req) => {
     if (apnsTokens.length) {
       if (APNS_KEY && APNS_KEY_ID && APNS_TEAM_ID) {
         try {
+          apnsErrors.length = 0;
           results.apns = await sendAPNS(apnsTokens, { title, body: body ?? "", link: link ?? "/" });
+          results.errors.push(...apnsErrors.map((e) => `apns ${e}`));
         } catch (e) {
           results.errors.push(`apns: ${e instanceof Error ? e.message : String(e)}`);
         }
@@ -212,6 +217,7 @@ async function getAPNSJWT(): Promise<string> {
   return `${unsigned}.${sig}`;
 }
 
+const apnsErrors: string[] = [];
 async function sendAPNS(tokens: string[], msg: { title: string; body: string; link: string }): Promise<number> {
   const jwt = await getAPNSJWT();
   let ok = 0;
@@ -230,7 +236,11 @@ async function sendAPNS(tokens: string[], msg: { title: string; body: string; li
       }),
     });
     if (res.ok) ok++;
-    else console.warn("APNs send fail", t.slice(0, 10), res.status, await res.text());
+    else {
+      const txt = await res.text();
+      console.warn("APNs send fail", t.slice(0, 10), res.status, txt);
+      apnsErrors.push(`${t.slice(0, 10)}: ${res.status} ${txt}`);
+    }
   }
   return ok;
 }
