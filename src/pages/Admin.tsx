@@ -512,16 +512,22 @@ const Admin = () => {
               {bookings.length === 0 && <p className="text-sm text-muted-foreground">Žádné rezervace</p>}
               {bookings.map((b) => (
                 <Card key={b.id} className="cursor-pointer hover:border-primary/40" onClick={() => openBookingEdit(b)}>
-                  <CardContent className="p-4 flex items-start justify-between gap-2">
+                  <CardContent className="p-4 flex flex-col sm:flex-row items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-sm">{b.service_type}</p>
-                      <p className="text-xs text-primary">{b.profile_name || "—"} · {b.profile_email || b.profile_phone || "—"}</p>
+                      <p className="text-xs text-primary break-words">{b.profile_name || "—"}</p>
+                      <p className="text-xs break-all">{b.profile_email || "E-mail neuveden"}</p>
+                      <p className="text-xs">Telefon: {b.profile_phone || "Neuveden"}</p>
                       <p className="text-xs text-muted-foreground">{b.vehicle_brand || "—"} {b.vehicle_model || ""}</p>
                       <p className="text-xs text-muted-foreground mt-1">Požadováno: {fmtDate(b.preferred_date)}</p>
+                      <p className="text-xs mt-2 whitespace-pre-wrap break-words"><strong>Poznámka zákazníka:</strong> {b.note || "Neuvedena"}</p>
                     </div>
-                    <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                    <div className="text-right flex flex-wrap sm:flex-col items-center sm:items-end gap-2 shrink-0">
                       <Badge className={statusColors[b.status] || ""}>{statusLabel[b.status] || b.status}</Badge>
                       {b.final_price && <p className="text-sm font-semibold">{b.final_price.toLocaleString("cs")} Kč</p>}
+                      <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); openBookingEdit(b); }}>
+                        <FileText className="w-4 h-4 mr-1" /> Detail
+                      </Button>
                       <ArchiveInlineButton table="service_bookings" id={b.id} onDone={fetchAll} />
                     </div>
                   </CardContent>
@@ -755,11 +761,23 @@ const Admin = () => {
       </Suspense>
 
       <Dialog open={!!editBooking} onOpenChange={() => setEditBooking(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Upravit rezervaci</DialogTitle></DialogHeader>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Rezervace servisu — detail a úprava</DialogTitle></DialogHeader>
           {editBooking && (
             <div className="space-y-3">
-              <p className="text-sm font-medium">{editBooking.service_type}</p>
+              <dl className="text-sm space-y-2 min-w-0">
+                <div><dt className="text-muted-foreground">Zákazník</dt><dd className="break-words">{editBooking.profile_name || "Neuvedeno"}</dd></div>
+                <div><dt className="text-muted-foreground">Telefon</dt><dd>{editBooking.profile_phone ? <a className="text-primary underline" href={`tel:${editBooking.profile_phone}`}>{editBooking.profile_phone}</a> : "Neuveden"}</dd></div>
+                <div><dt className="text-muted-foreground">E-mail</dt><dd className="break-all">{editBooking.profile_email ? <a className="text-primary underline" href={`mailto:${editBooking.profile_email}`}>{editBooking.profile_email}</a> : "Neuveden"}</dd></div>
+                <div><dt className="text-muted-foreground">Vozidlo</dt><dd>{editBooking.vehicle_brand || "—"} {editBooking.vehicle_model || ""}</dd></div>
+                <div><dt className="text-muted-foreground">Typ servisu</dt><dd>{editBooking.service_type}</dd></div>
+                <div><dt className="text-muted-foreground">Požadovaný termín (orientační)</dt><dd>{fmtDate(editBooking.preferred_date)}</dd></div>
+                <div><dt className="text-muted-foreground">Vytvořeno</dt><dd>{new Date(editBooking.created_at).toLocaleString("cs-CZ")}</dd></div>
+                <div><dt className="text-muted-foreground">Poznámka zákazníka</dt><dd className="whitespace-pre-wrap break-words">{editBooking.note || "Neuvedena"}</dd></div>
+                <div><dt className="text-muted-foreground">Požadováno náhradní vozidlo</dt><dd>{editBooking.wants_replacement_vehicle ? "Ano" : "Ne"}</dd></div>
+                <div><dt className="text-muted-foreground">Sleva</dt><dd>{editBooking.discount_amount == null ? "Neuvedena" : `${editBooking.discount_amount.toLocaleString("cs-CZ")} Kč`}</dd></div>
+              </dl>
+              <label className="text-xs">Stav rezervace</label>
               <Select value={formStatus} onValueChange={setFormStatus}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -780,6 +798,22 @@ const Admin = () => {
                   <Input type="number" value={formFinalPrice} onChange={(e) => setFormFinalPrice(e.target.value)} />
                 </div>
               </div>
+              <div>
+                <label className="text-xs">Odhadovaná cena (Kč)</label>
+                <Input type="number" value={formEstimatedPrice} onChange={(e) => setFormEstimatedPrice(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs">Potvrzení náhradního vozidla</label>
+                <Select value={formReplacementConfirmed || "undecided"} onValueChange={(value) => setFormReplacementConfirmed(value === "undecided" ? "" : value)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="undecided">Dosud nerozhodnuto</SelectItem>
+                    <SelectItem value="yes">Potvrzeno</SelectItem>
+                    <SelectItem value="no">Nepotvrzeno</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <label className="text-xs">Poznámka administrátora</label>
               <Textarea placeholder="Admin poznámka" value={formNote} onChange={(e) => setFormNote(e.target.value)} />
             </div>
           )}
