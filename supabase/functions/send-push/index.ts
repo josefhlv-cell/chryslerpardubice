@@ -16,8 +16,8 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const FCM_SA = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON"); // JSON s private_key + client_email + project_id
-const APNS_KEY = Deno.env.get("APNS_AUTH_KEY"); // .p8 obsah
-const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID");
+const APNS_KEY = Deno.env.get("APNS_P8_V2") ?? Deno.env.get("APNS_AUTH_KEY"); // .p8 obsah
+const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID_V2") ?? Deno.env.get("APNS_KEY_ID");
 const APNS_TEAM_ID = Deno.env.get("APNS_TEAM_ID");
 // Bundle ID iOS aplikace je pevně daný. Secret APNS_BUNDLE_ID obsahoval starý
 // identifikátor (app.lovable...), Apple proto vracel DeviceTokenNotForTopic.
