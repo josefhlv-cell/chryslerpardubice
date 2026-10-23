@@ -1,3 +1,4 @@
+import DeliveryDetails from "@/components/DeliveryDetails";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ type OrderRow = {
   unit_price: number | null; discount_percent: number | null;
   discounted_price: number | null; price_with_vat: number | null;
   status: string; admin_note: string | null; customer_note: string | null;
-  catalog_source: string | null; created_at: string;
+  catalog_source: string | null; created_at: string; delivery_details?: any;
 };
 
 type Profile = { user_id: string; full_name: string | null; email: string | null; phone: string | null; company_name: string | null; ico: string | null; dic: string | null; account_type: string; };
@@ -208,6 +209,7 @@ export default function AdminOrderDetail({
               ) : <p className="text-xs text-muted-foreground">Načítám…</p>}
             </section>
 
+            {order.delivery_details && <section className="border p-3"><DeliveryDetails details={order.delivery_details} /></section>}
             {/* === VOZIDLO === */}
             <section className="rounded-md border p-3">
               <h3 className="text-sm font-semibold flex items-center gap-2 mb-2"><Car className="w-4 h-4" />Vozidla zákazníka ({vehicles.length})</h3>

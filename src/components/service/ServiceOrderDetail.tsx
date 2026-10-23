@@ -56,6 +56,7 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
   const { isEnabled } = useFeatureFlags();
   const [order, setOrder] = useState(initialOrder);
   const [newStatus, setNewStatus] = useState(order.status);
+  const [deciding, setDeciding] = useState(false);
   const [statusNote, setStatusNote] = useState("");
 
   const vehicle = vehicles.find(v => v.id === order.vehicle_id);
@@ -144,18 +145,12 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
   };
 
   const handleApproval = async (approved: boolean) => {
-    await supabase.from("service_orders").update({
-      customer_approved: approved,
-      status: (approved ? "in_repair" : "received") as any,
-    } as any).eq("id", order.id);
-
-    await supabase.from("service_order_status_history").insert({
-      service_order_id: order.id,
-      old_status: "waiting_approval",
-      new_status: approved ? "in_repair" : "received",
-      changed_by: user?.id,
-      note: approved ? "Zákazník schválil opravu" : "Zákazník neschválil opravu",
-    } as any);
+    if (deciding) return;
+    setDeciding(true);
+    try {
+    const { data, error } = await supabase.rpc("customer_service_decision", { p_order_id: order.id, p_approved: approved });
+    if (error || !data) throw error ?? new Error("Rozhodnutí nebylo uloženo");
+    setOrder(data);
 
     if (isEnabled("notifications")) {
       // Notify admins
@@ -173,10 +168,13 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
 
     toast({ title: approved ? "Oprava schválena" : "Oprava zamítnuta" });
     fetchOrder();
+    } catch (err: any) { toast({ title: "Rozhodnutí se nepodařilo uložit", description: err.message, variant: "destructive" }); }
+    finally { setDeciding(false); }
   };
 
   return (
     <div className="space-y-4">
+      {isAdmin && <><Button variant="outline" size="sm" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-1" />Zpět na seznam</Button><div className="text-sm space-y-1 break-words"><p>{initialOrder.profile_name || "Zákazník"}</p>{initialOrder.profile_phone && <p><a href={`tel:${initialOrder.profile_phone}`} className="text-primary underline">{initialOrder.profile_phone}</a></p>}{initialOrder.profile_email && <p><a href={`mailto:${initialOrder.profile_email}`} className="text-primary underline">{initialOrder.profile_email}</a></p>}</div></>}
       {/* Order header */}
       <Card className="glass-card-elevated border-border/40">
         <CardContent className="p-4">
@@ -208,10 +206,10 @@ const ServiceOrderDetail = ({ order: initialOrder, vehicles, onBack, isAdmin }: 
           <CardContent className="p-4">
             <p className="text-sm font-semibold mb-2">Servis čeká na vaše schválení opravy</p>
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => handleApproval(true)} className="flex-1">
+              <Button size="sm" disabled={deciding} onClick={() => handleApproval(true)} className="flex-1">
                 <CheckCircle className="w-4 h-4 mr-1" /> Schvaluji opravu
               </Button>
-              <Button size="sm" variant="destructive" onClick={() => handleApproval(false)} className="flex-1">
+              <Button size="sm" variant="destructive" disabled={deciding} onClick={() => handleApproval(false)} className="flex-1">
                 <XCircle className="w-4 h-4 mr-1" /> Neschvaluji
               </Button>
             </div>
