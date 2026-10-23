@@ -63,8 +63,14 @@ const EPC = () => {
     }
   }, []);
 
-  const handlePhotoClick = (oem: string) => {
-    setPhotoDialog({ open: true, oem, loading: false, urls: [] });
+  const handlePhotoClick = async (oem: string) => {
+    setPhotoDialog({ open: true, oem, loading: true, urls: [] });
+    try {
+      const { data, error } = await supabase.from("parts_new_public").select("image_urls").eq("oem_number", oem).limit(10);
+      if (error) throw error;
+      const urls = [...new Set((data || []).flatMap(p => p.image_urls || []))];
+      setPhotoDialog(prev => prev.oem === oem ? { ...prev, loading: false, urls } : prev);
+    } catch { toast.error("Fotografie se nepodařilo načíst."); setPhotoDialog(prev => prev.oem === oem ? { ...prev, loading: false } : prev); }
   };
 
   const handleOrderNew = async (part: PartResult) => {

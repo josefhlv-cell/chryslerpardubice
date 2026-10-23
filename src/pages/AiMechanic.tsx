@@ -1,3 +1,4 @@
+import { withPhotos, requireSaved } from "@/lib/practicalReliability";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { classifyIntent } from "@/services/ai.service";
@@ -82,7 +83,7 @@ const AiMechanic = () => {
     if (!user) return;
     const vehicle = getVehicle();
     try {
-      await supabase.from("fault_reports" as any).insert({
+      requireSaved(await supabase.from("fault_reports" as any).insert({
         user_id: user.id,
         vehicle_id: vehicle?.id || null,
         vin: vehicle?.vin || null,
@@ -94,8 +95,8 @@ const AiMechanic = () => {
         photos: uploadedPhotos,
         ai_analysis: aiAnalysis || null,
         ai_risk_level: riskLevel || "unknown",
-      } as any);
-    } catch {}
+      } as any).select("id").single());
+    } catch { toast.error("Hlášení poruchy se nepodařilo uložit do servisu."); return; }
 
     // Notify admins via edge function
     supabase.functions.invoke("notify-admin", {
@@ -123,7 +124,7 @@ const AiMechanic = () => {
   };
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isLoading || uploading) return;
     const photoContext = uploadedPhotos.length > 0 ? `\n[Zákazník přiložil ${uploadedPhotos.length} fotografii/e]` : "";
     const fullText = text + photoContext;
     const userMsg: Msg = { role: "user", content: fullText };
@@ -137,37 +138,25 @@ const AiMechanic = () => {
     // Create fault report immediately
     await createFaultReport(text);
 
-    // Auto-create service booking
-    if (user) {
-      const vehicle = getVehicle();
-      try {
-        await supabase.from("service_bookings").insert({
-          user_id: user.id,
-          vehicle_brand: vehicle?.brand || "Neznámá",
-          vehicle_model: vehicle?.model || "Neznámý",
-          service_type: "Diagnostika – hlášení poruchy",
-          preferred_date: new Date().toISOString().split("T")[0],
-          note: `AI hlášení: ${text.substring(0, 300)}${uploadedPhotos.length > 0 ? `\nFotky: ${uploadedPhotos.join(", ")}` : ""}`,
-          wants_replacement_vehicle: false,
-        });
-      } catch {}
-    }
 
     let assistantSoFar = "";
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) throw new Error("Pro konzultaci se přihlaste.");
       const resp = await fetch(CHAT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${sessionData.session.access_token}`,
         },
-        body: JSON.stringify({ messages: allMessages, vehicle: getVehicle() }),
+        body: JSON.stringify({ messages: withPhotos(allMessages, uploadedPhotos), vehicle: getVehicle() }),
       });
 
       if (!resp.ok || !resp.body) {
         const err = await resp.json().catch(() => ({ error: "Chyba" }));
         const errorMsg = err.error || "Chyba AI služby";
         setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${errorMsg}\n\nMůžete zavolat přímo do servisu na ${SERVICE_PHONE}.` }]);
+        setInput(text);
         setIsLoading(false);
         return;
       }

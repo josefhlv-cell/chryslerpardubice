@@ -13,6 +13,8 @@
  * čtena přes Supabase JS — RLS zajistí přístup pouze adminům
  * (has_role(uid,'admin')).
  */
+import BookingDetails from "@/components/BookingDetails";
+import DeliveryDetails from "@/components/DeliveryDetails";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -898,6 +900,9 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
               <div>
                 <p className="font-semibold">{o.part_name || "—"} <span className="text-muted-foreground">× {o.quantity}</span></p>
                 <p className="text-muted-foreground">OEM: {o.oem_number || "—"} · {fmt(o.created_at)}</p>
+                <DeliveryDetails details={o.delivery_details} />
+                {o.customer_note && <p className="whitespace-pre-wrap break-words">Poznámka zákazníka: {o.customer_note}</p>}
+                {o.admin_note && <p className="whitespace-pre-wrap break-words">Poznámka servisu: {o.admin_note}</p>}
               </div>
               <div className="text-right">
                 <Badge variant="outline">{o.status}</Badge>
@@ -912,8 +917,10 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
           {serviceOrders.map((s) => (
             <Card key={s.id}><CardContent className="p-3 text-xs flex justify-between">
               <div>
-                <p className="font-semibold">{s.title || s.service_type || "Zakázka"}</p>
+                <p className="font-semibold">{s.description || s.planned_work || "Zakázka"}</p>
                 <p className="text-muted-foreground">{fmt(s.created_at)}</p>
+                {s.planned_work && <p className="whitespace-pre-wrap">Plán práce: {s.planned_work}</p>}
+                {s.eta_completion && <p>Dokončení: {fmt(s.eta_completion)}</p>}
               </div>
               <Badge variant="outline">{s.status}</Badge>
             </CardContent></Card>
@@ -927,6 +934,7 @@ function UserDetail({ userId, onBack }: { userId: string; onBack: () => void }) 
               <div>
                 <p className="font-semibold">{b.service_type}</p>
                 <p className="text-muted-foreground">{b.vehicle_brand} {b.vehicle_model} · {fmt(b.preferred_date)}</p>
+                <details><summary className="cursor-pointer text-primary">Detail rezervace</summary><BookingDetails booking={b} /></details>
               </div>
               <Badge variant="outline">{b.status}</Badge>
             </CardContent></Card>
@@ -1144,7 +1152,7 @@ function HistoryTimeline({
       date: s.created_at,
       kind: "service",
       title: "Servisní zakázka",
-      description: s.title || s.service_type || "Zakázka",
+      description: s.description || s.planned_work || "Zakázka",
       badge: s.status,
     });
   });
