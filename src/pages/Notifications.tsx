@@ -24,6 +24,8 @@ const Notifications = () => {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,10 +35,12 @@ const Notifications = () => {
   const fetchNotifications = async () => {
     if (!user) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const data = await apiFetchNotifications(user.id);
       setNotifications(data);
     } catch (err) {
+      setLoadError(true);
       console.error("Notifications fetch failed", err);
     } finally {
       setLoading(false);
@@ -92,7 +96,8 @@ const Notifications = () => {
         }
       />
       <div className="p-4 space-y-2.5 max-w-lg mx-auto">
-        {notifications.length === 0 && (
+        {loadError && <div role="alert" className="text-sm text-destructive">Oznámení se nepodařilo načíst.<Button variant="outline" onClick={fetchNotifications}>Zkusit znovu</Button></div>}
+        {!loadError && notifications.length === 0 && (
           <div className="text-center py-16">
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <Bell className="w-8 h-8 text-muted-foreground" />
@@ -110,12 +115,13 @@ const Notifications = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.02 }}
             >
-              <button
+              <Button variant="ghost"
                 onClick={() => {
-                  if (!n.is_read) markRead(n.id);
+                  if (!n.is_read) void markRead(n.id).catch(() => {});
+                  setExpanded(current => current === n.id ? null : n.id);
                   if (n.link) navigate(n.link);
                 }}
-                className={`w-full text-left glass-card p-4 flex items-start gap-3.5 transition-all ${
+                className={`w-full h-auto whitespace-normal text-left glass-card p-4 flex items-start gap-3.5 transition-all ${
                   !n.is_read ? "border-primary/30 bg-primary/[0.03]" : "opacity-60"
                 }`}
               >
@@ -127,12 +133,12 @@ const Notifications = () => {
                     <p className="font-display font-semibold text-sm">{n.title}</p>
                     {!n.is_read && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                  <p className={`text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-words ${expanded === n.id ? "" : "line-clamp-2"}`}>{n.message}</p>
                   <p className="text-[10px] text-muted-foreground/50 mt-1.5">
                     {new Date(n.created_at).toLocaleString("cs-CZ")}
                   </p>
                 </div>
-              </button>
+              </Button>
             </motion.div>
           );
         })}

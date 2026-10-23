@@ -43,6 +43,7 @@ const Service = () => {
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = async () => {
+    if (submitting) return;
     if (!serviceType || !date) {
       toast.error("Vyberte typ servisu a termín");
       return;
@@ -60,7 +61,7 @@ const Service = () => {
         vehicle_brand: brand || null,
         vehicle_model: model || null,
         preferred_date: format(date, "yyyy-MM-dd"),
-        note: note || null,
+        note: [year ? `Rok výroby: ${year}` : "", note].filter(Boolean).join("\n") || null,
         wants_replacement_vehicle: false,
       });
 

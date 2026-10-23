@@ -18,12 +18,14 @@ export default function TowRequestDialog({ open, onOpenChange }: Props) {
   const [problem, setProblem] = useState("");
   const [phone, setPhone] = useState("");
   const [passengers, setPassengers] = useState("1");
-  const [coords, setCoords] = useState<{ lat: number; lng: number; acc?: number } | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number; acc?: number; capturedAt: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    let active = true;
+    setCoords(null);
     setLocating(true);
     if (!navigator.geolocation) {
       setLocating(false);
@@ -31,10 +33,13 @@ export default function TowRequestDialog({ open, onOpenChange }: Props) {
     }
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setCoords({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy });
+        if (!active) return;
+        setCoords({ lat: p.coords.latitude, lng: p.coords.longitude, acc: p.coords.accuracy, capturedAt: Date.now() });
         setLocating(false);
       },
       (err) => {
+        if (!active) return;
+        setCoords(null);
         console.warn("geo err", err);
         setLocating(false);
         toast.error("Nepodařilo se získat polohu. Vyplňte ji ručně do popisu poruchy.");
@@ -46,17 +51,25 @@ export default function TowRequestDialog({ open, onOpenChange }: Props) {
       const { data: u } = await supabase.auth.getUser();
       if (u.user?.id) {
         const { data } = await supabase.from("profiles").select("phone").eq("user_id", u.user.id).maybeSingle();
-        if (data?.phone) setPhone(data.phone);
+        if (active && data?.phone) setPhone(data.phone);
       }
     })();
+    return () => { active = false; };
   }, [open]);
 
   const submit = async () => {
+    if (submitting || locating) return;
+    if (coords && Date.now() - coords.capturedAt > 5 * 60 * 1000) {
+      setCoords(null);
+      toast.error("GPS poloha je starší než 5 minut. Otevřete žádost znovu nebo zadejte aktuální místo do popisu.");
+      return;
+    }
     if (!vehicle.trim() || !problem.trim() || !phone.trim()) {
       toast.error("Vyplňte prosím vozidlo, popis poruchy a telefon.");
       return;
     }
     setSubmitting(true);
+    try {
     const { data: u } = await supabase.auth.getUser();
     if (!u.user?.id) {
       toast.error("Musíte být přihlášeni.");
@@ -82,6 +95,8 @@ export default function TowRequestDialog({ open, onOpenChange }: Props) {
     toast.success("Žádost o odtah byla odeslána. Servis vás bude kontaktovat.");
     setVehicle(""); setProblem(""); setPassengers("1");
     onOpenChange(false);
+    } catch { toast.error("Žádost se nepodařilo odeslat. Vyplněné údaje zůstaly zachovány."); }
+    finally { setSubmitting(false); }
   };
 
   return (
@@ -101,7 +116,7 @@ export default function TowRequestDialog({ open, onOpenChange }: Props) {
             {locating ? (
               <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Získávám polohu…</span>
             ) : coords ? (
-              <span>GPS: {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc || 0)} m)</span>
+              <span>GPS: {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)} (±{Math.round(coords.acc || 0)} m), {new Date(coords.capturedAt).toLocaleTimeString("cs-CZ")}</span>
             ) : (
               <span className="text-destructive">Poloha není k dispozici</span>
             )}
@@ -124,7 +139,7 @@ export default function TowRequestDialog({ open, onOpenChange }: Props) {
               <Input id="tow-pax" type="number" min={1} max={9} value={passengers} onChange={(e) => setPassengers(e.target.value)} />
             </div>
           </div>
-          <Button className="w-full" onClick={submit} disabled={submitting}>
+          <Button className="w-full" onClick={submit} disabled={submitting || locating}>
             {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Truck className="w-4 h-4 mr-2" />}
             Odeslat žádost o odtah
           </Button>

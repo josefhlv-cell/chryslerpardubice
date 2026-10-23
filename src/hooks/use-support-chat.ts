@@ -21,6 +21,8 @@ export function useSupportChat() {
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const [unread, setUnread] = useState(0);
   const channelRef = useRef<any>(null);
 
@@ -29,42 +31,50 @@ export function useSupportChat() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!user) { setLoading(false); return; }
+      if (!user) { setConversationId(null); setMessages([]); setUnread(0); setLoading(false); return; }
       setLoading(true);
-      const { data: existing } = await supabase
+      setError(null);
+      setConversationId(null);
+      try {
+      const { data: existing, error: existingError } = await supabase
         .from("support_conversations" as any)
         .select("id")
         .eq("user_id", user.id)
         .maybeSingle();
 
+      if (existingError) throw existingError;
       let convId: string | null = (existing as any)?.id ?? null;
       if (!convId) {
-        const { data: created } = await supabase
+        const { data: created, error: createError } = await supabase
           .from("support_conversations" as any)
           .insert({ user_id: user.id } as any)
           .select("id")
           .single();
+        if (createError) throw createError;
         convId = (created as any)?.id ?? null;
       }
       if (cancelled) return;
-      setConversationId(convId);
+      if (!convId) throw new Error("Konverzace není dostupná");
 
       if (convId) {
-        const { data: msgs } = await supabase
+        const { data: msgs, error: messagesError } = await supabase
           .from("support_messages" as any)
           .select("*")
           .eq("conversation_id", convId)
           .order("created_at", { ascending: true });
+        if (messagesError) throw messagesError;
         if (!cancelled) {
+          setConversationId(convId);
           const list = ((msgs as any) || []) as SupportMessage[];
           setMessages(list);
           setUnread(list.filter((m) => m.is_from_admin && !m.read_at).length);
         }
       }
-      setLoading(false);
+      } catch { if (!cancelled) setError("Chat se nepodařilo načíst."); }
+      finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, retry]);
 
   // Realtime
   useEffect(() => {
@@ -102,18 +112,22 @@ export function useSupportChat() {
   }, [conversationId]);
 
   const send = useCallback(async (text: string, isFromAdmin = false) => {
-    if (!user || !conversationId || !text.trim()) return;
+    if (!user || !conversationId || loading || sending) throw new Error("Chat zatím není připraven");
+    if (!text.trim()) return;
     setSending(true);
-    const { error } = await supabase.from("support_messages" as any).insert({
+    try {
+    const { data, error } = await supabase.from("support_messages" as any).insert({
       conversation_id: conversationId,
       sender_id: user.id,
       is_from_admin: isFromAdmin,
       message: text.trim(),
-    } as any);
-    setSending(false);
-    if (error) throw error;
-  }, [user, conversationId]);
+    } as any).select("*").single();
+    if (error || !data) throw error ?? new Error("Zpráva nebyla uložena");
+    const saved = data as unknown as SupportMessage;
+    setMessages(prev => prev.some(m => m.id === saved.id) ? prev : [...prev, saved]);
+    } finally { setSending(false); }
+  }, [user, conversationId, loading, sending]);
 
-  return { conversationId, messages, loading, sending, send, unread, markRead };
+  return { conversationId, messages, loading, sending, send, unread, markRead, error, retry: () => setRetry(n => n + 1) };
 
 }
