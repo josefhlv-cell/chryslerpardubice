@@ -1,3 +1,4 @@
+import { inSchedulePeriod } from "@/lib/practicalReliability";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -83,7 +84,7 @@ const AdminServiceScheduler = () => {
 
   const getWeekDays = () => {
     const start = new Date(selectedDate);
-    start.setDate(start.getDate() - start.getDay() + 1); // Monday
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // Monday
     return Array.from({ length: view === "week" ? 7 : 1 }, (_, i) => {
       const d = new Date(view === "week" ? start : selectedDate);
       if (view === "week") d.setDate(start.getDate() + i);
@@ -92,6 +93,8 @@ const AdminServiceScheduler = () => {
   };
 
   const days = getWeekDays();
+  const visibleOrders = orders.filter(o => o.status !== "completed" && !((o as any).archived_at) && inSchedulePeriod(o.eta_completion, selectedDate, view));
+  const unscheduled = orders.filter(o => o.status !== "completed" && !((o as any).archived_at) && !o.eta_completion);
   const dateStr = (d: Date) => d.toLocaleDateString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric" });
 
   // Group mechanics by workload
@@ -163,9 +166,11 @@ const AdminServiceScheduler = () => {
         ))}
       </div>
 
+      <p className="text-xs text-muted-foreground">Termíny dokončení · {visibleOrders.length} zakázek v období</p>
+      {unscheduled.length > 0 && <details><summary className="text-sm cursor-pointer">Bez termínu dokončení ({unscheduled.length})</summary>{unscheduled.map(o => <p key={o.id} className="text-xs py-2 whitespace-pre-wrap">{getVehicle(o.vehicle_id)?.brand} {getVehicle(o.vehicle_id)?.model} · {o.description || o.planned_work || "Zakázka"}</p>)}</details>}
       {/* Orders list */}
       <div className="space-y-2">
-        {orders.filter(o => o.status !== "completed").map(order => {
+        {visibleOrders.map(order => {
           const v = getVehicle(order.vehicle_id);
           const m = getMechanic(order.mechanic_id);
           const l = getLift(order.lift_id);
@@ -219,8 +224,8 @@ const AdminServiceScheduler = () => {
           );
         })}
 
-        {orders.filter(o => o.status !== "completed").length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-8">Žádné aktivní zakázky</p>
+        {visibleOrders.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-8">Žádné zakázky s termínem dokončení v tomto období</p>
         )}
       </div>
     </div>

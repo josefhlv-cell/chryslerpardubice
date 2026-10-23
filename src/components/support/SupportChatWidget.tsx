@@ -3,6 +3,7 @@
  * Ikona je vždy vidět vpravo dole (poloprůhledná), skrývá se jen pro adminy
  * nebo když je feature flag live chatu vypnutý.
  */
+import { toast } from "sonner";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, Send, X, Loader2 } from "lucide-react";
@@ -21,7 +22,7 @@ export default function SupportChatWidget() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const { messages, loading, sending, send, unread, markRead } = useSupportChat();
+  const { messages, loading, sending, send, unread, markRead, conversationId, error, retry } = useSupportChat();
 
   useEffect(() => { if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, open]);
   useEffect(() => { if (open && unread > 0) markRead(); }, [open, unread, markRead]);
@@ -30,9 +31,9 @@ export default function SupportChatWidget() {
 
   const handleSend = async () => {
     const t = text.trim();
-    if (!t) return;
-    setText("");
-    try { await send(t, false); } catch { setText(t); }
+    if (!t || loading || sending || !conversationId) return;
+    try { await send(t, false); setText(current => current.trim() === t ? "" : current); }
+    catch { toast.error("Zprávu se nepodařilo odeslat. Text zůstal zachován."); }
   };
 
   const openChat = () => {
@@ -43,7 +44,7 @@ export default function SupportChatWidget() {
   return (
     <>
       {!open && (
-        <button
+        <Button variant="ghost"
           onClick={openChat}
           className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-primary/40 hover:bg-primary/80 text-primary-foreground backdrop-blur-md border border-primary/50 shadow-lg flex items-center justify-center transition-all hover:scale-105 opacity-80 hover:opacity-100"
           aria-label="Otevřít chat se servisem"
@@ -54,7 +55,7 @@ export default function SupportChatWidget() {
               {unread > 9 ? "9+" : unread}
             </span>
           )}
-        </button>
+        </Button>
       )}
       {open && (
         <Card className="fixed bottom-20 right-4 z-40 w-[92vw] max-w-sm h-[70vh] max-h-[500px] flex flex-col shadow-xl border-primary/30 bg-card/95 backdrop-blur-md">
@@ -73,7 +74,8 @@ export default function SupportChatWidget() {
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-muted/20">
             {loading && <Loader2 className="w-4 h-4 animate-spin mx-auto mt-4" />}
-            {!loading && messages.length === 0 && (
+            {error && <div role="alert" className="text-sm text-destructive">{error}<Button variant="outline" size="sm" onClick={retry}>Zkusit znovu</Button></div>}
+            {!loading && !error && messages.length === 0 && (
               <p className="text-xs text-muted-foreground text-center py-6">
                 Napište nám dotaz, tým Chrysler Pardubice odpoví hned, jak to půjde.
               </p>
@@ -86,7 +88,7 @@ export default function SupportChatWidget() {
                     : "bg-primary text-primary-foreground"
                 }`}>
                   {m.is_from_admin && <p className="text-[10px] font-semibold mb-0.5 opacity-70">Servis</p>}
-                  <p className="whitespace-pre-wrap">{m.message}</p>
+                  <p className="whitespace-pre-wrap break-words">{m.message}</p>
                   <p className="text-[10px] opacity-50 mt-1">
                     {new Date(m.created_at).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
                   </p>
@@ -102,9 +104,9 @@ export default function SupportChatWidget() {
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Napište zprávu..."
               className="text-sm"
-              disabled={sending}
+              disabled={sending || loading || !conversationId}
             />
-            <Button size="icon" onClick={handleSend} disabled={sending || !text.trim()}>
+            <Button size="icon" onClick={handleSend} disabled={sending || loading || !conversationId || !text.trim()}>
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>

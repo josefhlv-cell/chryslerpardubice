@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
@@ -19,15 +20,21 @@ const Garage = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [activeOrder, setActiveOrder] = useState<any>(null);
 
-  useEffect(() => {
+  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const load = async () => {
     if (!user) return;
-    fetchUserVehicles(user.id).then(setVehicles).catch(() => {});
-    fetchActiveServiceOrder(user.id).then(setActiveOrder).catch(() => {});
-  }, [user]);
+    setLoading(true); setLoadError(false);
+    const results = await Promise.allSettled([fetchUserVehicles(user.id), fetchActiveServiceOrder(user.id)]);
+    if (results[0].status === "fulfilled") setVehicles(results[0].value);
+    if (results[1].status === "fulfilled") setActiveOrder(results[1].value);
+    setLoadError(results.some(r => r.status === "rejected")); setLoading(false);
+  };
+  useEffect(() => { void load(); }, [user]);
 
   const garageItems = [
-    { path: "/my-vehicles", label: "Moje vozidla", sub: `${vehicles.length} vozidel`, icon: Car, color: "text-primary" },
-    { path: "/my-service-orders", label: "Servisní zakázky", sub: activeOrder ? "Aktivní zakázka" : "Žádné aktivní", icon: FileText, color: "text-primary" },
+    { path: "/my-vehicles", label: "Moje vozidla", sub: loading ? "Načítání…" : loadError ? "Údaje nejsou kompletní" : `${vehicles.length} vozidel`, icon: Car, color: "text-primary" },
+    { path: "/my-service-orders", label: "Servisní zakázky", sub: loading ? "Načítání…" : loadError ? "Údaje nejsou kompletní" : activeOrder ? "Aktivní zakázka" : "Žádné aktivní", icon: FileText, color: "text-primary" },
     { path: "/service-book", label: "Servisní knížka", sub: "Historie servisu", icon: BookOpen, color: "text-primary" },
     { path: "/service-plan", label: "Plán údržby", sub: "Intervaly a připomínky", icon: Wrench, color: "text-primary" },
     { path: "/obd", label: "OBD Diagnostika", sub: "Bluetooth diagnostika", icon: Activity, color: "text-primary" },
@@ -44,6 +51,7 @@ const Garage = () => {
           <p className="text-xs text-muted-foreground mt-1">Vaše vozidla, servis a nástroje</p>
         </motion.div>
 
+        {loadError && <div role="alert" className="text-sm text-destructive">Část údajů garáže se nepodařilo načíst.<Button variant="outline" onClick={load}>Zkusit znovu</Button></div>}
         {/* Primary vehicle card */}
         {vehicles.length > 0 && (
           <motion.div

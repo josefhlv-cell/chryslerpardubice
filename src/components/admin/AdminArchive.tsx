@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -216,21 +217,29 @@ const CONFIGS: ArchiveSectionConfig[] = [
 
 function ArchiveSection({ config }: { config: ArchiveSectionConfig }) {
   const [rows, setRows] = useState<Row[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+  const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<Row | null>(null);
   const [loading, setLoading] = useState(false);
   const { restore, hardDelete, busy } = useArchive(config.key, () => load());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (append = false, offset = 0) => {
     setLoading(true);
+    setLoadError(false);
+    try {
     const orderCol = config.orderBy || "archived_at";
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from(config.key as any)
-      .select("*")
+      .select("*", { count: "exact" })
       .not("archived_at", "is", null)
       .order(orderCol as any, { ascending: false })
-      .limit(200);
-    setLoading(false);
-    if (!error) setRows((data as any) || []);
+      .order("id", { ascending: false })
+      .range(offset, offset + 199);
+    if (error) throw error;
+    setTotal(count ?? 0);
+    setRows(prev => append ? [...prev, ...((data as any) || [])] : (data as any) || []);
+    } catch { setLoadError(true); } finally { setLoading(false); }
   }, [config]);
 
   useEffect(() => {
@@ -241,7 +250,7 @@ function ArchiveSection({ config }: { config: ArchiveSectionConfig }) {
     <>
       <CollapsibleAdminSection
         title={config.title}
-        count={rows.length}
+        count={total}
         icon={config.icon}
         actions={
           <Button
@@ -257,12 +266,14 @@ function ArchiveSection({ config }: { config: ArchiveSectionConfig }) {
           </Button>
         }
       >
+        <Input placeholder="Hledat v načteném archivu…" value={search} onChange={e => setSearch(e.target.value)} />
+        {loadError && <div role="alert" className="text-xs text-destructive">Archiv se nepodařilo načíst.<Button variant="outline" size="sm" onClick={() => load()}>Zkusit znovu</Button></div>}
         {loading && rows.length === 0 ? (
           <p className="text-xs text-muted-foreground">Načítám…</p>
         ) : rows.length === 0 ? (
           <p className="text-xs text-muted-foreground">Nic archivovaného.</p>
         ) : (
-          rows.map((r) => (
+          rows.filter(r => !search || Object.values(r).some(v => String(v ?? "").toLocaleLowerCase().includes(search.toLocaleLowerCase()))).map((r) => (
             <div
               key={r.id}
               className="flex items-start justify-between gap-2 p-2 rounded border border-border/40 bg-card"
@@ -311,6 +322,7 @@ function ArchiveSection({ config }: { config: ArchiveSectionConfig }) {
             </div>
           ))
         )}
+        {rows.length < total && <Button variant="outline" disabled={loading} onClick={() => load(true, rows.length)}>Načíst další ({rows.length}/{total})</Button>}
       </CollapsibleAdminSection>
 
       <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>

@@ -21,6 +21,8 @@ type Catalog = {
 export default function GraphicalCatalog() {
   const navigate = useNavigate();
   const { user, isAdmin, isLoading } = useAuth();
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [data, setData] = useState<Catalog | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activePos, setActivePos] = useState<number | null>(null);
@@ -33,13 +35,15 @@ export default function GraphicalCatalog() {
   }, [isLoading, user, isAdmin, navigate]);
 
   useEffect(() => {
+    setLoadError(false);
     fetch("/jm_graphical_catalog.json")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error("Katalog není dostupný"); return r.json(); })
       .then((d: Catalog) => {
+        if (!Array.isArray(d.sections)) throw new Error("Neplatná data katalogu");
         setData(d);
       })
-      .catch(console.error);
-  }, []);
+      .catch(() => setLoadError(true));
+  }, [retry]);
 
   const filteredSections = useMemo(() => {
     if (!data) return [];
@@ -149,7 +153,7 @@ export default function GraphicalCatalog() {
   if (!data) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center text-muted-foreground">
-        Načítání grafického katalogu…
+        {loadError ? <div role="alert" className="text-sm text-destructive">Grafický katalog se nepodařilo načíst.<Button variant="outline" onClick={() => setRetry(n => n + 1)}>Zkusit znovu</Button></div> : "Načítání grafického katalogu…"}
       </div>
     );
   }

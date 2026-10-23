@@ -32,6 +32,8 @@ const statusColor: Record<string, string> = {
 const MyTowRequests = () => {
   const { user, isLoading } = useAuth();
   const [rows, setRows] = useState<TowRow[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sp] = useSearchParams();
   const navigate = useNavigate();
@@ -44,15 +46,18 @@ const MyTowRequests = () => {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data } = await supabase
+      setLoading(true); setLoadError(false);
+      try {
+      const { data, error } = await supabase
         .from("tow_requests")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+      if (error) throw error;
       setRows((data as TowRow[]) || []);
-      setLoading(false);
+      } catch { setLoadError(true); } finally { setLoading(false); }
     })();
-  }, [user]);
+  }, [user, retry]);
 
   useEffect(() => {
     if (focusId) {
@@ -76,7 +81,9 @@ const MyTowRequests = () => {
         <ChevronLeft className="w-4 h-4 mr-1" /> Zpět
       </Button>
       <h1 className="text-xl font-display font-semibold">Moje žádosti o odtah</h1>
-      {rows.length === 0 && (
+      <Button variant="outline" asChild><a href="tel:+420603372911"><Phone className="w-4 h-4 mr-2" />Volat servis / odtah</a></Button>
+      {loadError && <div role="alert" className="text-sm text-destructive">Žádosti o odtah se nepodařilo načíst.<Button variant="outline" onClick={() => setRetry(n => n + 1)}>Zkusit znovu</Button></div>}
+      {!loadError && rows.length === 0 && (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
             Zatím jste neodeslali žádnou žádost o odtah.
@@ -95,7 +102,7 @@ const MyTowRequests = () => {
                 <p className="font-semibold text-sm">{r.vehicle_info}</p>
                 <p className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString("cs-CZ")}</p>
               </div>
-              <Badge className={statusColor[r.status] || ""}>{r.status}</Badge>
+              <Badge className={statusColor[r.status] || ""}>{({ new: "Nová žádost", pending: "Čeká na přijetí", accepted: "Přijato", dispatched: "Odtah na cestě", completed: "Dokončeno", cancelled: "Zrušeno" } as Record<string,string>)[r.status] || r.status}</Badge>
             </div>
             <p className="text-sm">{r.problem_type}</p>
             <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -112,8 +119,9 @@ const MyTowRequests = () => {
                 </a>
               )}
             </div>
+            {r.location_text && <p className="text-xs whitespace-pre-wrap break-words">Místo: {r.location_text}</p>}
             {r.admin_note && (
-              <div className="mt-2 p-2 rounded bg-muted/30 text-xs">
+              <div className="mt-2 p-2 rounded bg-muted/30 text-xs whitespace-pre-wrap break-words">
                 <span className="font-semibold">Poznámka: </span>{r.admin_note}
               </div>
             )}

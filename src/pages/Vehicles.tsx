@@ -14,7 +14,7 @@ const Vehicles = () => {
   const [brandFilter, setBrandFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: vehicles = [], isLoading } = useQuery({
+  const { data: vehicles = [], isLoading, error, refetch } = useQuery({
     queryKey: ["vehicles", brandFilter, searchQuery],
     queryFn: () => fetchVehicles({ brand: brandFilter, search: searchQuery }),
   });
@@ -58,6 +58,7 @@ const Vehicles = () => {
           </div>
         </motion.div>
 
+        {error && <div role="alert" className="text-sm text-destructive">Nabídku vozů se nepodařilo načíst.<Button variant="outline" onClick={() => refetch()}>Zkusit znovu</Button></div>}
         {isLoading ? (
           <div className="text-center py-12 text-muted-foreground">Načítám vozy...</div>
         ) : (
@@ -119,7 +120,7 @@ const Vehicles = () => {
           </div>
         )}
 
-        {!isLoading && vehicles.length === 0 && (
+        {!isLoading && !error && vehicles.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <p>Žádné vozy nenalezeny</p>
           </div>

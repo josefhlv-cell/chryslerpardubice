@@ -1,3 +1,5 @@
+import BookingDetails from "@/components/BookingDetails";
+import { requireSaved } from "@/lib/practicalReliability";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchUserServiceOrders, fetchUserReviews, subscribeToServiceOrders } from "@/api/serviceOrdersAPI";
@@ -51,6 +53,8 @@ const MyServiceOrders = () => {
   const [reviews, setReviews] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [bookings, setBookings] = useState<any[]>([]);
 
   useEffect(() => {
@@ -60,32 +64,35 @@ const MyServiceOrders = () => {
   const fetchData = async () => {
     if (!user) return;
     setLoading(true);
-    const [ordersData, vehiclesData, reviewsData, bookingsData] = await Promise.all([
+    setLoadError(false);
+    try {
+    const results = await Promise.allSettled([
       fetchUserServiceOrders(user.id),
       fetchUserVehicles(user.id),
       fetchUserReviews(user.id),
-      fetchMyBookings(user.id).catch(() => []),
+      fetchMyBookings(user.id),
     ]);
-    setOrders(ordersData);
-    setVehicles(vehiclesData);
-    setBookings(bookingsData || []);
-    const reviewMap: Record<string, any> = {};
-    reviewsData.forEach((r: any) => { reviewMap[r.service_order_id] = r; });
-    setReviews(reviewMap);
-    setLoading(false);
+    const [orderResult, vehicleResult, reviewResult, bookingResult] = results;
+    if (orderResult.status === "fulfilled") setOrders(orderResult.value);
+    if (vehicleResult.status === "fulfilled") setVehicles(vehicleResult.value);
+    if (bookingResult.status === "fulfilled") setBookings(bookingResult.value || []);
+    if (reviewResult.status === "fulfilled") {
+      const reviewMap: Record<string, any> = {};
+      reviewResult.value.forEach((r: any) => { reviewMap[r.service_order_id] = r; });
+      setReviews(reviewMap);
+    }
+    setLoadError(results.some(r => r.status === "rejected"));
+    } catch { setLoadError(true); } finally { setLoading(false); }
   };
 
   const cancelBooking = async (id: string) => {
-    const { error } = await supabase
-      .from("service_bookings")
-      .update({ status: "cancelled" as any, admin_note: "Zrušeno na žádost zákazníka" })
-      .eq("id", id);
-    if (error) {
-      toast.error("Nepodařilo se zrušit rezervaci", { description: error.message });
-      return;
-    }
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+    requireSaved(await supabase.from("service_bookings").update({ status: "cancelled" as any }).eq("id", id).in("status", ["pending", "confirmed"]).select("id").single());
     toast.success("Rezervace zrušena");
     setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)));
+    } catch { toast.error("Rezervaci se nepodařilo zrušit. Zkuste obnovit seznam."); } finally { setCancelling(false); }
   };
 
 
@@ -117,11 +124,12 @@ const MyServiceOrders = () => {
       <div className="min-h-screen pb-20 bg-background">
         <PageHeader 
           title="Detail zakázky" 
+          onBack={() => { setSelectedOrder(null); void fetchData(); }}
           showBack 
           rightElement={
-            <button onClick={() => { setSelectedOrder(null); fetchData(); }} className="text-sm text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedOrder(null); fetchData(); }} className="text-sm text-muted-foreground">
               Zpět na seznam
-            </button>
+            </Button>
           }
         />
         <div className="p-4 max-w-lg mx-auto">
@@ -136,12 +144,15 @@ const MyServiceOrders = () => {
     );
   }
 
-  const activeBookings = bookings.filter((b) => b.status === "pending" || b.status === "confirmed");
+  const activeBookings = bookings.filter((b) => !b.archived_at && ["pending", "confirmed", "in_progress"].includes(b.status));
+  const pastBookings = bookings.filter(b => b.archived_at || !["pending", "confirmed", "in_progress"].includes(b.status));
 
   return (
     <div className="min-h-screen pb-20 bg-background">
       <PageHeader title="Servisní zakázky" showBack />
       <div className="p-4 max-w-lg mx-auto space-y-3">
+        {loadError && <div role="alert" className="text-sm text-destructive">Část servisních údajů se nepodařilo načíst.<Button variant="outline" onClick={fetchData}>Zkusit znovu</Button></div>}
+        {pastBookings.length > 0 && <details className="space-y-3"><summary className="cursor-pointer text-sm font-semibold">Historie rezervací ({pastBookings.length})</summary>{pastBookings.map(b => <div key={b.id} className="glass-card p-4 space-y-2"><p className="font-semibold text-sm">{b.service_type} · {({ cancelled: "Zrušeno", completed: "Dokončeno", in_progress: "Probíhá" } as Record<string,string>)[b.status] || b.status}</p><p className="text-xs">{b.vehicle_brand} {b.vehicle_model}</p><BookingDetails booking={b} /></div>)}</details>}
         {activeBookings.length > 0 && (
           <div className="space-y-2">
             <h2 className="text-xs uppercase tracking-wide text-muted-foreground font-semibold px-1">Moje rezervace</h2>
@@ -166,9 +177,10 @@ const MyServiceOrders = () => {
                     {b.status === "confirmed" ? "Potvrzeno" : "Čeká"}
                   </Badge>
                 </div>
-                <AlertDialog>
+                <details><summary className="cursor-pointer text-xs text-primary">Detail rezervace</summary><div className="pt-3"><BookingDetails booking={b} /></div></details>
+                {["pending", "confirmed"].includes(b.status) && <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button size="sm" variant="outline" className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
+                    <Button size="sm" variant="outline" disabled={cancelling} className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
                       <X className="w-3.5 h-3.5 mr-1" /> Zrušit rezervaci
                     </Button>
                   </AlertDialogTrigger>
@@ -186,13 +198,13 @@ const MyServiceOrders = () => {
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
-                </AlertDialog>
+                </AlertDialog>}
               </div>
             ))}
           </div>
         )}
 
-        {orders.length === 0 && activeBookings.length === 0 ? (
+        {!loadError && orders.length === 0 && activeBookings.length === 0 && pastBookings.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
               <Wrench className="w-8 h-8 text-muted-foreground" />
@@ -207,9 +219,9 @@ const MyServiceOrders = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
             >
-              <button
+              <Button variant="ghost"
                 onClick={() => setSelectedOrder(o)}
-                className="w-full text-left glass-card-elevated p-4 space-y-3 hover:border-primary/20 transition-all active:scale-[0.99]"
+                className="w-full h-auto whitespace-normal block text-left glass-card-elevated p-4 space-y-3 hover:border-primary/20 transition-all active:scale-[0.99]"
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
@@ -229,7 +241,7 @@ const MyServiceOrders = () => {
                 <p className="text-[10px] text-muted-foreground/50">
                   {new Date(o.created_at).toLocaleDateString("cs-CZ")}
                 </p>
-              </button>
+              </Button>
               {o.status === "completed" && isEnabled("service_reviews") && (
                 <div className="mt-2">
                   <ServiceReviewForm

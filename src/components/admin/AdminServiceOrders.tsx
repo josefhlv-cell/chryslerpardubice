@@ -22,7 +22,7 @@ type ServiceOrder = {
   labor_price: number | null; parts_total: number | null; total_price: number | null;
   customer_approved: boolean | null; created_at: string; updated_at: string;
   mechanic_id: string | null; lift_id: string | null;
-  profile_name?: string | null; profile_email?: string | null;
+  profile_name?: string | null; profile_email?: string | null; profile_phone?: string | null;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -83,6 +83,7 @@ const AdminServiceOrders = () => {
       ...o,
       profile_name: profileMap.get(o.user_id)?.full_name || null,
       profile_email: profileMap.get(o.user_id)?.email || null,
+      profile_phone: profileMap.get(o.user_id)?.phone || null,
     })));
     setLoading(false);
   };
@@ -166,6 +167,7 @@ const AdminServiceOrders = () => {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold truncate">{getVehicleLabel(o.vehicle_id)}</p>
                   <p className="text-xs text-primary font-medium truncate">{o.profile_name || "–"} · {o.profile_email || "–"}</p>
+                  <p className="text-xs text-primary">Telefon: {o.profile_phone ? <a href={`tel:${o.profile_phone}`} onClick={e => e.stopPropagation()}>{o.profile_phone}</a> : "Neuveden"}</p>
                   <p className="text-xs text-muted-foreground truncate">{o.description || o.planned_work || "—"}</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {new Date(o.created_at).toLocaleDateString("cs-CZ")}

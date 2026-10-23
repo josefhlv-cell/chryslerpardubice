@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.98.0');
     const authClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: authHeader } } });
     const { data: claimsData, error: claimsError } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
     if (claimsError || !claimsData?.claims?.sub) {
@@ -77,12 +77,15 @@ Deno.serve(async (req) => {
     const userId = claimsData.claims.sub as string;
 
     const { messages, vehicle } = await req.json();
+    if (!Array.isArray(messages) || messages.length < 1 || messages.length > 100 || messages.some((m: any) => !["user", "assistant"].includes(m.role) || !(typeof m.content === "string" || (Array.isArray(m.content) && m.content.every((p: any) => p.type === "text" ? typeof p.text === "string" : p.type === "image_url" && typeof p.image_url?.url === "string" && /^https:\/\//.test(p.image_url.url)))))) {
+      return new Response(JSON.stringify({ error: "Neplatný obsah konzultace." }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
 
     // Classify the latest user message
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
-    const intent = lastUserMsg ? classifyIntent(lastUserMsg.content) : { type: "unknown" as IntentType, riskLevel: "info" as RiskLevel, contextHint: "" };
+    const intent = lastUserMsg ? classifyIntent(typeof lastUserMsg.content === "string" ? lastUserMsg.content : lastUserMsg.content.filter((p: any) => p.type === "text").map((p: any) => p.text).join("\n")) : { type: "unknown" as IntentType, riskLevel: "info" as RiskLevel, contextHint: "" };
 
     console.log(`[AI-Mechanic] Intent: ${intent.type}, Risk: ${intent.riskLevel}`);
 
@@ -163,14 +166,10 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
-        status: 503,
+      let safeMessage = 'AI konzultaci se nepodařilo dokončit.';
+      try { const parsed = JSON.parse(errText); safeMessage = parsed.message || parsed.error?.message || safeMessage; } catch { /* Non-JSON upstream error. */ }
+      return new Response(JSON.stringify({ error: safeMessage }), {
+        status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

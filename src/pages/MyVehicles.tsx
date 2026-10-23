@@ -50,6 +50,7 @@ const MyVehicles = () => {
   const { isEnabled } = useFeatureFlags();
   const navigate = useNavigate();
   const [vehicles, setVehicles] = useState<UserVehicle[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editVehicle, setEditVehicle] = useState<UserVehicle | null>(null);
@@ -87,6 +88,7 @@ const MyVehicles = () => {
   const fetchVehicles = async () => {
     if (!user) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const { data, error } = await supabase
         .from("user_vehicles")
@@ -96,6 +98,7 @@ const MyVehicles = () => {
       if (error) throw error;
       setVehicles((data as UserVehicle[]) || []);
     } catch (err: any) {
+      setLoadError(true);
       console.error("fetchVehicles failed", err);
     } finally {
       setLoading(false);
@@ -184,6 +187,7 @@ const MyVehicles = () => {
     } catch (err: any) {
       toast({ title: "Chyba OCR", description: err.message, variant: "destructive" });
     }
+    setVinLoading(false);
     setOcrLoading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -318,7 +322,8 @@ const MyVehicles = () => {
           <Plus className="w-4 h-4 mr-2" />Přidat vozidlo
         </Button>
 
-        {vehicles.length === 0 && (
+        {loadError && <div role="alert" className="text-sm text-destructive">Vozidla se nepodařilo načíst.<Button variant="outline" onClick={fetchVehicles}>Zkusit znovu</Button></div>}
+        {!loadError && vehicles.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <Car className="w-10 h-10 mx-auto mb-2 opacity-40" />
             <p>Zatím nemáte žádné vozidlo</p>

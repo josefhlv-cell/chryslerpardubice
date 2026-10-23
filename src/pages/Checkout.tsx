@@ -11,11 +11,12 @@ import { ArrowLeft, ArrowRight, Check, Truck, MapPin, Package } from "lucide-rea
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { sendNotificationSafe } from "@/api/notificationsAPI";
+import { requireSaved, savedItemIndexes } from "@/lib/practicalReliability";
 import { logger } from "@/lib/logger";
 
 const Checkout = () => {
   const navigate = useNavigate();
-  const { items, totalPrice, discountPercent, clearCart } = useCart();
+  const { items, totalPrice, discountPercent, removeItem } = useCart();
   const { user, isLoading: authLoading } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -61,7 +62,7 @@ const Checkout = () => {
   };
 
   const handleConfirm = async () => {
-    if (submitting) return;
+    if (submitting || !validateStep1()) return;
     setSubmitting(true);
 
     try {
@@ -78,20 +79,23 @@ const Checkout = () => {
             order_type: item.type === "used" ? "used" as const : "new" as const,
             catalog_source: item.catalog_source || null,
             customer_note: `Doprava: ${shipping}`,
+            delivery_details: { name: name.trim(), email: email.trim(), phone: phone.trim(), shipping, street: shipping === "pickup" ? "" : street.trim(), city: shipping === "pickup" ? "" : city.trim(), zip: shipping === "pickup" ? "" : zip.trim() },
           })
-          .select("id")
-          .single()
+          .select("id, price_with_vat")
+          .single().then(requireSaved)
       );
 
       const results = await Promise.allSettled(orderPromises);
-      const succeeded = results.filter((r) => r.status === "fulfilled").length;
-      const failed = results.filter((r) => r.status === "rejected").length;
+      const savedIndexes = savedItemIndexes(results);
+      const succeeded = savedIndexes.length;
+      const failed = items.length - succeeded;
+      const savedTotal = results.reduce((sum, r, i) => r.status === "fulfilled" ? sum + Number(r.value.price_with_vat ?? 0) * items[i].quantity : sum, 0);
 
       if (failed > 0) {
         logger.error("Checkout", "ORDER_PARTIAL_FAIL", new Error(`${failed}/${items.length} orders failed`), { succeeded, failed });
       }
       if (succeeded > 0) {
-        logger.info("Checkout", "ORDER_CREATED", { count: succeeded, total: finalPrice });
+        logger.info("Checkout", "ORDER_CREATED", { count: succeeded, total: savedTotal });
       }
 
       if (succeeded === 0) {
@@ -105,17 +109,17 @@ const Checkout = () => {
         {
           user_id: userId,
           title: "Objednávka přijata",
-          message: `Vaše objednávka (${succeeded} položek) byla odeslána. Celkem: ${finalPrice.toLocaleString("cs")} Kč`,
+          message: `Vaše objednávka (${succeeded} položek) byla odeslána. Cena uložených dílů s DPH: ${savedTotal.toLocaleString("cs")} Kč (doprava zvlášť).`,
         },
       ]);
 
       toast.success(
         failed > 0
-          ? `Objednávka částečně odeslána (${succeeded}/${items.length}). Potvrzení obdržíte na email.`
-          : "Objednávka odeslána! Potvrzení obdržíte na email."
+          ? `Uloženo ${succeeded}/${items.length} položek. Neodeslané položky zůstávají v košíku.`
+          : "Objednávka odeslána! Najdete ji v Moje objednávky."
       );
-      clearCart();
-      navigate("/orders");
+      savedIndexes.forEach(i => removeItem(items[i].id));
+      if (failed === 0) navigate("/orders");
     } catch (err) {
       logger.error("Checkout", "ORDER_FAILED", err instanceof Error ? err : new Error(String(err)));
       toast.error("Odeslání objednávky selhalo. Zkuste to prosím znovu.");

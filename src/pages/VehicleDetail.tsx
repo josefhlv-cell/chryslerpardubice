@@ -12,12 +12,12 @@ import { useAuth } from "@/contexts/AuthContext";
 const VehicleDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [inquiryLoading, setInquiryLoading] = useState(false);
 
-  const { data: vehicle, isLoading, error } = useQuery({
+  const { data: vehicle, isLoading, error, refetch } = useQuery({
     queryKey: ["vehicle", id],
-    queryFn: () => fetchVehicleById(id!),
+    queryFn: () => id ? fetchVehicleById(id) : Promise.resolve(null),
     enabled: !!id,
   });
 
@@ -33,8 +33,8 @@ const VehicleDetail = () => {
   if (error || !vehicle) {
     return (
       <div className="min-h-screen pb-20">
-        <PageHeader title="Vůz nenalezen" showBack />
-        <div className="p-4 text-center text-muted-foreground">Tento vůz neexistuje.</div>
+        <PageHeader title={error ? "Chyba načítání" : "Vůz nenalezen"} showBack />
+        <div className="p-4 text-center text-muted-foreground">{error ? "Detail vozu se nepodařilo načíst." : "Tento vůz neexistuje."}{error && <Button variant="outline" onClick={() => refetch()}>Zkusit znovu</Button>}</div>
       </div>
     );
   }
@@ -149,13 +149,15 @@ const VehicleDetail = () => {
       <div className="fixed bottom-16 left-0 right-0 p-4 bg-background/95 backdrop-blur-xl border-t border-border">
         <div className="flex gap-3 max-w-lg mx-auto">
           <Button variant="hero" size="lg" className="flex-1" disabled={inquiryLoading} onClick={async () => {
-            if (!vehicle) return;
+            if (!vehicle || inquiryLoading) return;
+            if (!user) { navigate("/auth"); return; }
             setInquiryLoading(true);
             try {
               await createVehicleInquiry({
                 vehicle_id: vehicle.id,
                 user_id: user?.id,
-                name: user?.email?.split("@")[0] || undefined,
+                name: profile?.full_name || undefined,
+                phone: profile?.phone || undefined,
                 email: user?.email || undefined,
               });
               toast.success("Poptávka odeslána! Budeme vás kontaktovat.");

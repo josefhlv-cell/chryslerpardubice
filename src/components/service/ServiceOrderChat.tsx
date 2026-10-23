@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,16 +28,21 @@ const ServiceOrderChat = ({ orderId, isAdmin }: Props) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [open, setOpen] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = async () => {
-    const { data } = await supabase
+    setLoading(true);
+    setLoadError(false);
+    try {
+    const { data, error } = await supabase
       .from("service_order_messages")
       .select("*")
       .eq("service_order_id", orderId)
       .order("created_at", { ascending: true });
+    if (error) throw error;
     if (data) setMessages(data as Message[]);
-    setLoading(false);
+    } catch { setLoadError(true); } finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -50,7 +56,7 @@ const ServiceOrderChat = ({ orderId, isAdmin }: Props) => {
         table: "service_order_messages",
         filter: `service_order_id=eq.${orderId}`,
       }, (payload) => {
-        setMessages(prev => [...prev, payload.new as Message]);
+        setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new as Message]);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -61,16 +67,21 @@ const ServiceOrderChat = ({ orderId, isAdmin }: Props) => {
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMsg.trim() || !user) return;
+    if (!newMsg.trim() || !user || sending) return;
+    const draft = newMsg.trim();
     setSending(true);
-    await supabase.from("service_order_messages").insert({
+    try {
+    const { data, error } = await supabase.from("service_order_messages").insert({
       service_order_id: orderId,
       sender_id: user.id,
-      message: newMsg.trim(),
+      message: draft,
       is_from_service: isAdmin,
-    } as any);
-    setNewMsg("");
-    setSending(false);
+    } as any).select("*").single();
+    if (error || !data) throw error ?? new Error("Zpráva nebyla uložena");
+    setMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data as Message]);
+    setNewMsg(current => current.trim() === draft ? "" : current);
+    } catch { toast.error("Zprávu se nepodařilo odeslat. Text zůstal zachován."); }
+    finally { setSending(false); }
   };
 
   if (!open) {
@@ -94,7 +105,8 @@ const ServiceOrderChat = ({ orderId, isAdmin }: Props) => {
 
         <div className="max-h-64 overflow-y-auto space-y-2 bg-muted/30 rounded-lg p-3">
           {loading && <Loader2 className="w-4 h-4 animate-spin mx-auto" />}
-          {!loading && messages.length === 0 && (
+          {loadError && <div role="alert" className="text-xs text-destructive">Zprávy se nepodařilo načíst.<Button variant="outline" size="sm" onClick={fetchMessages}>Zkusit znovu</Button></div>}
+          {!loading && !loadError && messages.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-4">Zatím žádné zprávy</p>
           )}
           {messages.map((m) => (
@@ -107,7 +119,7 @@ const ServiceOrderChat = ({ orderId, isAdmin }: Props) => {
                 {m.is_from_service && m.sender_id !== user?.id && (
                   <p className="text-[10px] font-semibold mb-0.5 opacity-70">Servis</p>
                 )}
-                <p>{m.message}</p>
+                <p className="whitespace-pre-wrap break-words">{m.message}</p>
                 <p className="text-[10px] opacity-50 mt-1">
                   {new Date(m.created_at).toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" })}
                 </p>
@@ -119,6 +131,7 @@ const ServiceOrderChat = ({ orderId, isAdmin }: Props) => {
 
         <div className="flex gap-2">
           <Input
+            disabled={sending}
             placeholder="Napište zprávu..."
             value={newMsg}
             onChange={e => setNewMsg(e.target.value)}

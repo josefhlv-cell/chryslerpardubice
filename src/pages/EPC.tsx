@@ -4,6 +4,7 @@
  * Integrates: vin-decode-ai, epc-diagram, oem-crossref, scrape-7zap
  */
 
+import { epcSelectionReady, requireSaved } from "@/lib/practicalReliability";
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BookOpen, ArrowLeft } from "lucide-react";
@@ -40,7 +41,7 @@ const EPC = () => {
 
   const isBusinessActive = profile?.account_type === "business" && profile?.status === "active";
   const discountPercent = isBusinessActive ? (profile?.discount_percent ?? 0) : 0;
-  const hasVehicle = !!brand;
+  const hasVehicle = inputMode === "vin" ? Boolean(brand && model) : epcSelectionReady(brand, model, year, engine);
 
   const handleVinDecoded = useCallback((params: { brand: string; model: string; year: string; engine: string }) => {
     setBrand(params.brand);
@@ -62,9 +63,14 @@ const EPC = () => {
     }
   }, []);
 
-  const handlePhotoClick = (oem: string) => {
+  const handlePhotoClick = async (oem: string) => {
     setPhotoDialog({ open: true, oem, loading: true, urls: [] });
-    setTimeout(() => setPhotoDialog((prev) => ({ ...prev, loading: false })), 1000);
+    try {
+      const { data, error } = await supabase.from("parts_new_public").select("image_urls").eq("oem_number", oem).limit(10);
+      if (error) throw error;
+      const urls = [...new Set((data || []).flatMap(p => p.image_urls || []))];
+      setPhotoDialog(prev => prev.oem === oem ? { ...prev, loading: false, urls } : prev);
+    } catch { toast.error("Fotografie se nepodařilo načíst."); setPhotoDialog(prev => prev.oem === oem ? { ...prev, loading: false } : prev); }
   };
 
   const handleOrderNew = async (part: PartResult) => {
@@ -73,28 +79,31 @@ const EPC = () => {
     if (!canPlaceOrder) { toast.error("Váš účet zatím nebyl schválen."); return; }
     setSubmitting(true);
     try {
-      await supabase.from("orders").insert({
+      requireSaved(await supabase.from("orders").insert({
         user_id: user.id, part_id: part.id.startsWith("catalog-") ? null : part.id,
         order_type: "new" as const, quantity: 1,
         unit_price: part.price_without_vat, part_name: part.name, oem_number: part.oem_number,
         catalog_source: part.catalog_source || null,
-      });
+      }).select("id").single());
       toast.success(`Objednávka "${part.name}" vytvořena!`);
     } catch (err: any) { toast.error(err.message); }
     finally { setSubmitting(false); }
   };
 
   const handleOrderUsed = async (part: PartResult) => {
+    if (submitting) return;
     if (!user) { navigate("/auth"); return; }
     if (!canPlaceOrder) { toast.error("Účet není schválen."); return; }
+    setSubmitting(true);
     try {
-      await supabase.from("orders").insert({
+      requireSaved(await supabase.from("orders").insert({
         user_id: user.id, order_type: "used" as const, quantity: 1,
         part_name: part.name, oem_number: part.oem_number,
         catalog_source: part.catalog_source || null,
-      });
+      }).select("id").single());
       toast.success("Poptávka odeslána!");
     } catch (err: any) { toast.error(err.message); }
+    finally { setSubmitting(false); }
   };
 
   const handleReset = () => {

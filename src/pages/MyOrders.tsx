@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import DeliveryDetails from "@/components/DeliveryDetails";
+import { requireSaved } from "@/lib/practicalReliability";
 import PageHeader from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ interface Order {
   status: string;
   customer_note: string | null;
   admin_note: string | null;
+  delivery_details?: any;
   created_at: string;
 }
 
@@ -49,6 +52,9 @@ const MyOrders = () => {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [cancelling, setCancelling] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,6 +65,7 @@ const MyOrders = () => {
     if (!user) return;
     const fetch = async () => {
       setLoading(true);
+      setLoadError(false);
       try {
         const { data, error } = await supabase
           .from("orders")
@@ -68,27 +75,25 @@ const MyOrders = () => {
         if (error) throw error;
         setOrders((data as Order[]) || []);
       } catch (err: any) {
+        setLoadError(true);
         console.error("MyOrders fetch failed", err);
       } finally {
         setLoading(false);
       }
     };
     fetch();
-  }, [user]);
+  }, [user, retry]);
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("cs-CZ");
 
   const cancelOrder = async (id: string) => {
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "zrusena" as any, admin_note: "Storno na žádost zákazníka" })
-      .eq("id", id);
-    if (error) {
-      toast.error("Nepodařilo se stornovat", { description: error.message });
-      return;
-    }
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+    requireSaved(await supabase.from("orders").update({ status: "zrusena" as any }).eq("id", id).in("status", ["nova", "prijata", "zpracovava_se"]).select("id").single());
     toast.success("Objednávka stornována");
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "zrusena" } : o)));
+    } catch { toast.error("Storno se nepodařilo uložit. Stav objednávky se mohl změnit."); setRetry(n => n + 1); } finally { setCancelling(false); }
   };
 
   if (authLoading || loading) {
@@ -104,7 +109,8 @@ const MyOrders = () => {
     <div className="min-h-screen pb-20">
       <PageHeader title="Moje objednávky" showBack />
       <div className="p-4 space-y-3 max-w-lg mx-auto">
-        {orders.length === 0 && (
+        {loadError && <div role="alert" className="text-sm text-destructive">Objednávky se nepodařilo načíst.<Button variant="outline" onClick={() => setRetry(n => n + 1)}>Zkusit znovu</Button></div>}
+        {!loadError && orders.length === 0 && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
             <ShoppingCart className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-muted-foreground text-sm">Zatím nemáte žádné objednávky</p>
@@ -164,11 +170,12 @@ const MyOrders = () => {
             )}
 
             {o.order_type === "used" && (
-              <p className="text-xs text-muted-foreground italic">Poptávka – cena bude sdělena</p>
+              <p className="text-xs text-muted-foreground italic whitespace-pre-wrap break-words">Poptávka – cena bude sdělena</p>
             )}
 
+            <DeliveryDetails details={o.delivery_details} />
             {o.customer_note && (
-              <p className="text-xs text-muted-foreground italic">"{o.customer_note}"</p>
+              <p className="text-xs text-muted-foreground italic whitespace-pre-wrap break-words">"{o.customer_note}"</p>
             )}
             {o.admin_note && (
               <div className="text-xs bg-primary/10 rounded-lg p-2 border border-primary/20">
@@ -179,7 +186,7 @@ const MyOrders = () => {
             {CANCELABLE.has(o.status) && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
+                  <Button size="sm" variant="outline" disabled={cancelling} className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
                     <X className="w-3.5 h-3.5 mr-1" /> Stornovat objednávku
                   </Button>
                 </AlertDialogTrigger>

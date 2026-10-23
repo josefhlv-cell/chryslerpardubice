@@ -1,3 +1,4 @@
+import { maintenanceStatus } from "@/lib/practicalReliability";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -142,15 +143,7 @@ const ServicePlan = () => {
 
   const getStatus = (plan: ServicePlanItem) => {
     const vehicle = vehicles.find(v => v.id === selectedVehicle);
-    const currentKm = vehicle?.current_mileage || 0;
-    const lastKm = plan.last_service_km || 0;
-    const intervalKm = plan.interval_km || 999999;
-    const kmSinceLast = currentKm - lastKm;
-    const remaining = intervalKm - kmSinceLast;
-
-    if (remaining <= 0) return { label: "Překročeno!", color: "destructive" as const, urgent: true };
-    if (remaining <= intervalKm * 0.2) return { label: `Zbývá ${remaining.toLocaleString("cs")} km`, color: "secondary" as const, urgent: true };
-    return { label: `Zbývá ${remaining.toLocaleString("cs")} km`, color: "outline" as const, urgent: false };
+    return maintenanceStatus(plan, vehicle?.current_mileage ?? null);
   };
 
   const vehicle = vehicles.find(v => v.id === selectedVehicle);
@@ -212,7 +205,7 @@ const ServicePlan = () => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        {status.urgent ? <AlertTriangle className="w-4 h-4 text-destructive shrink-0" /> : <CheckCircle className="w-4 h-4 text-success shrink-0" />}
+                        {status.missing && !status.urgent ? <Clock className="w-4 h-4 text-muted-foreground shrink-0" /> : status.urgent ? <AlertTriangle className="w-4 h-4 text-destructive shrink-0" /> : <CheckCircle className="w-4 h-4 text-success shrink-0" />}
                         <p className="font-semibold text-sm">{plan.service_name}</p>
                       </div>
                       <div className="flex gap-2 mt-1.5 flex-wrap">
