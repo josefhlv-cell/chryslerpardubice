@@ -219,7 +219,10 @@ const AiMechanic = () => {
       }
     } catch (e) {
       console.error(e);
+      setInput(text);
       toast.error("Chyba spojení s AI");
+      setIsLoading(false);
+      return;
     }
     setIsLoading(false);
     setUploadedPhotos([]);

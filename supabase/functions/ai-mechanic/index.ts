@@ -166,14 +166,10 @@ Vždy odpovídej česky. Buď stručný ale odborný.`;
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
-          status: 402,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ error: 'AI mechanik je momentálně nedostupný. Zkuste to prosím později.' }), {
-        status: 503,
+      let safeMessage = 'AI konzultaci se nepodařilo dokončit.';
+      try { const parsed = JSON.parse(errText); safeMessage = parsed.message || parsed.error?.message || safeMessage; } catch { /* Non-JSON upstream error. */ }
+      return new Response(JSON.stringify({ error: safeMessage }), {
+        status: response.status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
