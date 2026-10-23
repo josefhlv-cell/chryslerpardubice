@@ -3194,6 +3194,7 @@ export type Database = {
           catalog_source: string | null
           created_at: string
           customer_note: string | null
+          delivery_details: Json | null
           discount_percent: number | null
           discounted_price: number | null
           id: string
@@ -3214,6 +3215,7 @@ export type Database = {
           catalog_source?: string | null
           created_at?: string
           customer_note?: string | null
+          delivery_details?: Json | null
           discount_percent?: number | null
           discounted_price?: number | null
           id?: string
@@ -3234,6 +3236,7 @@ export type Database = {
           catalog_source?: string | null
           created_at?: string
           customer_note?: string | null
+          delivery_details?: Json | null
           discount_percent?: number | null
           discounted_price?: number | null
           id?: string
@@ -5398,6 +5401,36 @@ export type Database = {
       }
       can_place_order: { Args: { _user_id: string }; Returns: boolean }
       cleanup_expired_api_cache: { Args: never; Returns: number }
+      customer_service_decision: {
+        Args: { p_approved: boolean; p_order_id: string }
+        Returns: {
+          archived_at: string | null
+          created_at: string
+          customer_approved: boolean | null
+          description: string | null
+          estimated_price: number | null
+          eta_completion: string | null
+          id: string
+          labor_price: number | null
+          lift_id: string | null
+          mechanic_id: string | null
+          mileage: number | null
+          parts_total: number | null
+          planned_work: string | null
+          status: Database["public"]["Enums"]["service_order_status"]
+          total_price: number | null
+          updated_at: string
+          user_id: string
+          vat_rate: number | null
+          vehicle_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "service_orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       dedupe_catalog_compat: {
         Args: never
         Returns: {
