@@ -83,7 +83,7 @@ const AiMechanic = () => {
     if (!user) return;
     const vehicle = getVehicle();
     try {
-      requireSaved(await supabase.from("fault_reports" as any).insert({
+      requireSaved(await supabase.from("fault_reports").insert({
         user_id: user.id,
         vehicle_id: vehicle?.id || null,
         vin: vehicle?.vin || null,
@@ -95,7 +95,7 @@ const AiMechanic = () => {
         photos: uploadedPhotos,
         ai_analysis: aiAnalysis || null,
         ai_risk_level: riskLevel || "unknown",
-      } as any).select("id").single());
+      }).select("id").single());
     } catch { toast.error("Hlášení poruchy se nepodařilo uložit do servisu."); return; }
 
     // Notify admins via edge function
