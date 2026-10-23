@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Bell, Check, Loader2, Wrench, ShoppingCart, AlertTriangle, Info } from "lucide-react";
 
 const getNotificationIcon = (title: string) => {
@@ -59,14 +60,18 @@ const Notifications = () => {
   }, [user]);
 
   const markRead = async (id: string) => {
+    try {
     await markNotificationRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch { toast.error("Přečtení oznámení se nepodařilo uložit."); }
   };
 
   const markAllRead = async () => {
     if (!user) return;
+    try {
     await markAllNotificationsRead(user.id);
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch { toast.error("Přečtení oznámení se nepodařilo uložit."); }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;

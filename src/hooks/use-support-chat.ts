@@ -35,6 +35,8 @@ export function useSupportChat() {
       setLoading(true);
       setError(null);
       setConversationId(null);
+      setMessages([]);
+      setUnread(0);
       try {
       const { data: existing, error: existingError } = await supabase
         .from("support_conversations" as any)
@@ -98,17 +100,21 @@ export function useSupportChat() {
 
   const markRead = useCallback(async () => {
     if (!conversationId) return;
-    setUnread(0);
-    await supabase
+    try {
+    const { error: messageError } = await supabase
       .from("support_messages" as any)
       .update({ read_at: new Date().toISOString() } as any)
       .eq("conversation_id", conversationId)
       .eq("is_from_admin", true)
       .is("read_at", null);
-    await supabase
+    if (messageError) throw messageError;
+    const { error: conversationError } = await supabase
       .from("support_conversations" as any)
       .update({ unread_customer_count: 0 } as any)
       .eq("id", conversationId);
+    if (conversationError) throw conversationError;
+    setUnread(0);
+    } catch { setError("Přečtení zpráv se nepodařilo uložit."); }
   }, [conversationId]);
 
   const send = useCallback(async (text: string, isFromAdmin = false) => {

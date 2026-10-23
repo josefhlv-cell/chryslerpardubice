@@ -178,7 +178,7 @@ const MyServiceOrders = () => {
                   </Badge>
                 </div>
                 <details><summary className="cursor-pointer text-xs text-primary">Detail rezervace</summary><div className="pt-3"><BookingDetails booking={b} /></div></details>
-                <AlertDialog>
+                {["pending", "confirmed"].includes(b.status) && <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button size="sm" variant="outline" disabled={cancelling} className="w-full text-destructive hover:bg-destructive/10 border-destructive/30">
                       <X className="w-3.5 h-3.5 mr-1" /> Zrušit rezervaci
@@ -198,7 +198,7 @@ const MyServiceOrders = () => {
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
-                </AlertDialog>
+                </AlertDialog>}
               </div>
             ))}
           </div>
