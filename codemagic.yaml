@@ -4,7 +4,7 @@ definitions:
     node: 22
     vars:
       BUNDLE_ID: "cz.chryslerpardubice.chdpgarage"
-      MARKETING_VERSION: "1.0.0"
+      MARKETING_VERSION: "1.0.1"
       APP_STORE_APPLE_ID: "6807151165"
     ios_signing:
       distribution_type: app_store
