@@ -4,7 +4,7 @@
  * One round-trip to jm-proxy `partsForEngine`, then OEM-first locally.
  */
 import { forwardRef, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronRight, ChevronLeft, ChevronDown, Loader2, Car, Wrench, Cog, Package,
   Snowflake, Zap, Filter as FilterIcon, Droplet, Disc, Gauge, Settings, Box,
@@ -103,6 +103,7 @@ const isAxleRelevantCategory = (label?: string | null) =>
   !!label && /(brzd|tlumi|pruzin|pružin|naprav|lozisk|ložisk|kotouc|kotouč|destic|destič)/i.test(label);
 
 const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, canPlaceOrder, isAdmin } = useAuth();
 
@@ -358,6 +359,7 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
 
       <div className="max-w-[1400px] mx-auto px-4 py-8">
         <VinAndOemSearch
+          initialOem={searchParams.get("search") || ""}
           onOrder={handleOrder}
           onVehicleSelected={({ brand: b, model: m, engine: e }) => {
             const matchedBrand = brands.find((x) => x.toLowerCase() === b.toLowerCase()) || b;

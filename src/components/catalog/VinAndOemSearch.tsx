@@ -8,7 +8,7 @@
  * /catalogs/items-finding-by-code that returns aftermarket items carrying the
  * requested OEM code in their oe_numbers).
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Search, Loader2, Car, Hash, ShoppingCart, ShieldCheck, RefreshCw, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,18 +25,20 @@ const formatPrice = (n: number | null | undefined) =>
     : new Intl.NumberFormat("cs-CZ", { style: "currency", currency: "CZK", maximumFractionDigits: 0 }).format(n);
 
 interface Props {
+  initialOem?: string;
   onOrder: (p: CatalogPart) => void;
   onVehicleSelected: (s: { brand: string; model: string; engine?: string }) => void;
 }
 
-const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
+const VinAndOemSearch = ({ onOrder, onVehicleSelected, initialOem = "" }: Props) => {
   // VIN
   const [vin, setVin] = useState("");
   const [vinLoading, setVinLoading] = useState(false);
   const [vinResult, setVinResult] = useState<ParsedVinResult | null>(null);
 
   // OEM
-  const [oemQ, setOemQ] = useState("");
+  const [oemQ, setOemQ] = useState(initialOem);
+  const [oemError, setOemError] = useState(false);
   const [oemLoading, setOemLoading] = useState(false);
   const [oemHits, setOemHits] = useState<CatalogPart[]>([]);
   const [jmHits, setJmHits] = useState<CatalogPart[]>([]);
@@ -72,21 +74,27 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
     }
   };
 
-  const searchOem = async () => {
-    const q = oemQ.trim();
+  const searchOem = async (query = oemQ) => {
+    const q = query.trim();
     if (!q) return;
     setOemLoading(true);
     setOemSearched(true);
+    setOemError(false);
     try {
       const { oem, jm } = await globalOemSearch(q);
       setOemHits(oem);
       setJmHits(jm);
     } catch (e: any) {
+      setOemError(true);
       toast.error("Hledání selhalo: " + (e?.message || "neznámá chyba"));
     } finally {
       setOemLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (initialOem.trim()) { setOemQ(initialOem); void searchOem(initialOem); }
+  }, [initialOem]);
 
   const resetOem = () => {
     setOemQ("");
@@ -159,7 +167,7 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
               <X className="w-3.5 h-3.5" />
             </Button>
           )}
-          <Button onClick={searchOem} disabled={oemLoading || !oemQ.trim()} size="sm" className="h-8 text-xs px-3">
+          <Button onClick={() => searchOem()} disabled={oemLoading || !oemQ.trim()} size="sm" className="h-8 text-xs px-3">
             {oemLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
           </Button>
         </div>
@@ -171,7 +179,8 @@ const VinAndOemSearch = ({ onOrder, onVehicleSelected }: Props) => {
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Hledám originál + náhrady…
               </div>
             )}
-            {!oemLoading && oemHits.length === 0 && jmHits.length === 0 && (
+            {oemError && <div role="alert" className="text-xs text-destructive">Hledání se nepodařilo dokončit.<Button variant="outline" size="sm" onClick={() => searchOem()}>Zkusit znovu</Button></div>}
+            {!oemLoading && !oemError && oemHits.length === 0 && jmHits.length === 0 && (
               <p className="text-center text-xs text-muted-foreground py-3">
                 Nic nenalezeno. Zkontrolujte zápis OEM kódu.
               </p>
