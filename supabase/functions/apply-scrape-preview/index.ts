@@ -20,10 +20,10 @@ Deno.serve(async (req) => {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.45.0');
 
     const authClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: authHeader } } });
-    const { data: claims } = await authClient.auth.getClaims(authHeader.replace('Bearer ', ''));
-    if (!claims?.claims?.sub) return j({ success: false, error: 'Unauthorized' }, 401);
+    const { data: authData, error: authError } = await authClient.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (authError || !authData.user) return j({ success: false, error: 'Unauthorized' }, 401);
     const admin = createClient(SUPABASE_URL, SERVICE);
-    const { data: role } = await admin.from('user_roles').select('role').eq('user_id', claims.claims.sub).eq('role', 'admin').maybeSingle();
+    const { data: role } = await admin.from('user_roles').select('role').eq('user_id', authData.user.id).eq('role', 'admin').maybeSingle();
     if (!role) return j({ success: false, error: 'Forbidden' }, 403);
 
     const { job_id, exclude_oems = [] } = await req.json();
