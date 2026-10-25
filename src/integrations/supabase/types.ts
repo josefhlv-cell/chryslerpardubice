@@ -1908,6 +1908,30 @@ export type Database = {
           },
         ]
       }
+      jm_parts_snapshots: {
+        Row: {
+          data: Json
+          engine_id: number | null
+          fetched_at: string
+          item_count: number
+          vehicle_key: string
+        }
+        Insert: {
+          data: Json
+          engine_id?: number | null
+          fetched_at?: string
+          item_count?: number
+          vehicle_key: string
+        }
+        Update: {
+          data?: Json
+          engine_id?: number | null
+          fetched_at?: string
+          item_count?: number
+          vehicle_key?: string
+        }
+        Relationships: []
+      }
       jm_schema_cache: {
         Row: {
           byte_size: number | null
