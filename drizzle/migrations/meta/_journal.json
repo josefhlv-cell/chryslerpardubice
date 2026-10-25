@@ -8,6 +8,13 @@
       "when": 1792794984021,
       "tag": "0000_practical_order_details_and_atomic_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792932018604,
+      "tag": "0001_jm_parts_snapshots",
+      "breakpoints": true
     }
   ]
 }
