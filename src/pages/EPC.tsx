@@ -80,7 +80,7 @@ const EPC = () => {
     setSubmitting(true);
     try {
       requireSaved(await supabase.from("orders").insert({
-        user_id: user.id, part_id: part.id.startsWith("catalog-") ? null : part.id,
+        user_id: user.id, part_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(part.id) ? part.id : null,
         order_type: "new" as const, quantity: 1,
         unit_price: part.price_without_vat, part_name: part.name, oem_number: part.oem_number,
         catalog_source: part.catalog_source || null,
