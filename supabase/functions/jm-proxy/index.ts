@@ -2797,6 +2797,23 @@ Deno.serve(async (req) => {
               sectionsHit: 0, totalRawHits: 0, durationMs, partial: true,
             });
             // STALE-WHILE-ERROR: pokud máme starší úspěšná data v cache, vrátíme je s flagem stale=true
+            // Durable snapshot fallback: same vehicle first, then any vehicle sharing this engineID.
+            if (!lastKnownCache) {
+              try {
+                const { data: snap } = await adminClient.from('jm_parts_snapshots')
+                  .select('data, fetched_at').eq('vehicle_key', cacheKey).maybeSingle();
+                let picked: any = snap;
+                if (!picked && resolvedEngineID > 0) {
+                  const { data: byEngine } = await adminClient.from('jm_parts_snapshots')
+                    .select('data, fetched_at').eq('engine_id', resolvedEngineID)
+                    .order('fetched_at', { ascending: false }).limit(1).maybeSingle();
+                  picked = byEngine;
+                }
+                if (picked && Array.isArray((picked.data as any)?.items) && (picked.data as any).items.length > 0) {
+                  lastKnownCache = { data: picked.data, created_at: picked.fetched_at as string };
+                }
+              } catch (_) { /* non-blocking */ }
+            }
             if (lastKnownCache && Array.isArray(lastKnownCache.data?.items) && lastKnownCache.data.items.length > 0) {
               const ageHours = Math.round((Date.now() - new Date(lastKnownCache.created_at).getTime()) / 3600000);
               result = {
@@ -2861,6 +2878,15 @@ Deno.serve(async (req) => {
               created_at: new Date().toISOString(),
             }, { onConflict: 'cache_type,cache_key' });
           } catch (_) { /* non-blocking */ }
+          // Persist non-empty results permanently (never auto-expired) for quota outages.
+          if (enriched.length > 0) {
+            try {
+              await adminClient.from('jm_parts_snapshots').upsert({
+                vehicle_key: cacheKey, engine_id: resolvedEngineID, data: out,
+                item_count: enriched.length, fetched_at: new Date().toISOString(),
+              }, { onConflict: 'vehicle_key' });
+            } catch (_) { /* non-blocking */ }
+          }
           await writeScanProgress(adminClient, cacheKey, {
             phase: 'done', engineID: resolvedEngineID,
             sectionsTotal: TECDOC_SECTIONS.length, sectionsDone: TECDOC_SECTIONS.length,
