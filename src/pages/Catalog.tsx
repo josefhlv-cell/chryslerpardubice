@@ -253,7 +253,8 @@ const Catalog = forwardRef<HTMLDivElement>((_, ref) => {
       }
       const { error } = await supabase.from("orders").insert({
         user_id: user.id,
-        part_id: isLiveJm ? null : p.id,
+        // Only real parts_new UUIDs may be linked; virtual ids (kitoem-, jm-, …) are stored by OEM/name only.
+        part_id: !isLiveJm && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id) ? p.id : null,
         order_type: isInquiry ? ("inquiry" as const) : ("new" as const),
         quantity: 1,
         unit_price: unitPrice,
