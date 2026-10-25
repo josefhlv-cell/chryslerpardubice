@@ -2683,6 +2683,14 @@ Deno.serve(async (req) => {
                     created_at: new Date().toISOString(),
                   }, { onConflict: 'cache_type,cache_key' });
                 } catch (_) { /* non-blocking */ }
+                if (out.items.length > 0) {
+                  try {
+                    await adminClient.from('jm_parts_snapshots').upsert({
+                      vehicle_key: cacheKey, engine_id: resolvedEngineID, data: out,
+                      item_count: out.items.length, fetched_at: new Date().toISOString(),
+                    }, { onConflict: 'vehicle_key' });
+                  } catch (_) { /* non-blocking */ }
+                }
                 result = out;
                 break;
               }
